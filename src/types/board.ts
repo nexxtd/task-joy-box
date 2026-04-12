@@ -1,5 +1,6 @@
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 export type LabelColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink';
+export type ViewType = 'board' | 'list' | 'calendar';
 
 export interface Label {
   id: string;
@@ -57,10 +58,10 @@ export const DEFAULT_LABELS: Label[] = [
 ];
 
 export const PRIORITY_CONFIG: Record<Exclude<Priority, 'none'>, { label: string; className: string }> = {
-  urgent: { label: 'דחוף', className: 'bg-priority-urgent' },
-  high: { label: 'גבוה', className: 'bg-priority-high' },
-  medium: { label: 'בינוני', className: 'bg-priority-medium' },
-  low: { label: 'נמוך', className: 'bg-priority-low' },
+  urgent: { label: 'Urgent', className: 'bg-priority-urgent' },
+  high: { label: 'High', className: 'bg-priority-high' },
+  medium: { label: 'Medium', className: 'bg-priority-medium' },
+  low: { label: 'Low', className: 'bg-priority-low' },
 };
 
 export const LABEL_COLORS: Record<LabelColor, string> = {

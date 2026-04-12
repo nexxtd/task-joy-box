@@ -2,27 +2,27 @@ import { Board } from '@/types/board';
 
 export const initialBoard: Board = {
   id: 'board-1',
-  title: 'הפרויקט שלי',
+  title: 'My Project',
   columns: [
-    { id: 'col-1', title: 'לביצוע', order: 0, color: 'hsl(var(--muted-foreground))' },
-    { id: 'col-2', title: 'בתהליך', order: 1, color: 'hsl(var(--label-blue))' },
-    { id: 'col-3', title: 'בבדיקה', order: 2, color: 'hsl(var(--label-yellow))' },
-    { id: 'col-4', title: 'הושלם', order: 3, color: 'hsl(var(--label-green))' },
+    { id: 'col-1', title: 'To Do', order: 0, color: 'hsl(var(--muted-foreground))' },
+    { id: 'col-2', title: 'In Progress', order: 1, color: 'hsl(var(--label-blue))' },
+    { id: 'col-3', title: 'Review', order: 2, color: 'hsl(var(--label-yellow))' },
+    { id: 'col-4', title: 'Completed', order: 3, color: 'hsl(var(--label-green))' },
   ],
   tasks: [
     {
       id: 'task-1',
-      title: 'עיצוב דף הבית',
-      description: 'לעצב את דף הבית הראשי של האפליקציה כולל header ו-footer',
+      title: 'Design Homepage',
+      description: 'Design the main homepage including header and footer',
       priority: 'high',
       labels: [{ id: 'l4', name: 'Design', color: 'purple' }],
       checklists: [{
         id: 'cl-1',
-        title: 'שלבי עיצוב',
+        title: 'Design Steps',
         items: [
-          { id: 'ci-1', text: 'עיצוב Header', completed: true },
-          { id: 'ci-2', text: 'עיצוב Footer', completed: false },
-          { id: 'ci-3', text: 'עיצוב תפריט', completed: false },
+          { id: 'ci-1', text: 'Design Header', completed: true },
+          { id: 'ci-2', text: 'Design Footer', completed: false },
+          { id: 'ci-3', text: 'Design Navigation', completed: false },
         ],
       }],
       dueDate: '2026-04-20',
@@ -32,8 +32,8 @@ export const initialBoard: Board = {
     },
     {
       id: 'task-2',
-      title: 'תיקון באג בהתחברות',
-      description: 'המשתמשים מדווחים על בעיה בהתחברות דרך Google',
+      title: 'Fix Login Bug',
+      description: 'Users reporting issues with Google login',
       priority: 'urgent',
       labels: [{ id: 'l1', name: 'Bug', color: 'red' }, { id: 'l3', name: 'Urgent', color: 'orange' }],
       checklists: [],
@@ -44,7 +44,7 @@ export const initialBoard: Board = {
     },
     {
       id: 'task-3',
-      title: 'כתיבת תיעוד API',
+      title: 'Write API Documentation',
       description: '',
       priority: 'low',
       labels: [{ id: 'l5', name: 'Documentation', color: 'green' }],
@@ -55,8 +55,8 @@ export const initialBoard: Board = {
     },
     {
       id: 'task-4',
-      title: 'הוספת חיפוש מתקדם',
-      description: 'להוסיף אפשרות חיפוש עם פילטרים',
+      title: 'Add Advanced Search',
+      description: 'Add search functionality with filters',
       priority: 'medium',
       labels: [{ id: 'l2', name: 'Feature', color: 'blue' }],
       checklists: [],
@@ -67,8 +67,8 @@ export const initialBoard: Board = {
     },
     {
       id: 'task-5',
-      title: 'שיפור ביצועים',
-      description: 'אופטימיזציה של טעינת הדף',
+      title: 'Performance Optimization',
+      description: 'Optimize page load times',
       priority: 'medium',
       labels: [{ id: 'l6', name: 'Enhancement', color: 'yellow' }],
       checklists: [],
