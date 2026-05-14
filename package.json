@@ -15,10 +15,10 @@
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:tunnel:full": "concurrently \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:tunnel\"",
     "db:push": "npx drizzle-kit push",
-    "build:server": "npx tsc -p tsconfig.server.json",
+    "build:server": "npx tsc -p tsconfig.server.json && node scripts/write-server-package.cjs",
     "build:client": "tsc -b && vite build",
     "build": "npm run build:client && npm run build:server",
-    "start": "node -e \"process.env.NODE_ENV='production'; require('./dist-server/server/index.js');\""
+    "start": "cross-env NODE_ENV=production node dist-server/server/index.js"
   },
   "dependencies": {
     "cross-env": "^7.0.3",
