@@ -74,6 +74,7 @@ const queryClient = new QueryClient();
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
+  const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
 
   if (loading) {
     return (
@@ -87,7 +88,6 @@ function ProtectedRoutes() {
 
   // Check if tutorial should be shown
   const shouldShowTutorial = user && !localStorage.getItem('tutorial_completed');
-  const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
 
   return (
     <BoardProvider>

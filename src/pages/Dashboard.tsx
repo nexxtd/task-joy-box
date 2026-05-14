@@ -9,13 +9,10 @@ import {
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
 
-import { useToast } from '@/hooks/use-toast';
-
 const Dashboard: React.FC = () => {
   const { board, addTask } = useBoardContext();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -35,7 +32,6 @@ const Dashboard: React.FC = () => {
     const col = board.columns.find(c => c.id === t.columnId);
     return col && col.title !== 'Completed' && !t.completed;
   });
-  const todayTasks = board.tasks.filter(t => t.dueDate === todayStr);
   const completedTasks = board.tasks.filter(t => {
     const col = board.columns.find(c => c.id === t.columnId);
     return (col && col.title === 'Completed') || t.completed;
