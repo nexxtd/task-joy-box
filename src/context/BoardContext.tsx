@@ -1,0 +1,479 @@
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { Board, Task, Column, Checklist, ChecklistItem } from '@/types/board';
+import { emptyBoard } from '@/data/initialBoard';
+import { useAuth } from '@/context/AuthContext';
+
+interface BoardContextType {
+  board: Board;
+  addTask: (columnId: string, title: string, details?: Partial<Task>) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => void;
+  deleteTask: (taskId: string) => void;
+  moveTask: (taskId: string, toColumnId: string, newOrder: number) => void;
+  addColumn: (title: string) => void;
+  updateColumn: (columnId: string, updates: Partial<Column>) => void;
+  deleteColumn: (columnId: string) => void;
+  reorderColumns: (startIndex: number, endIndex: number) => void;
+  addChecklist: (taskId: string, title: string) => void;
+  toggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
+  addChecklistItem: (taskId: string, checklistId: string, text: string) => void;
+  deleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
+  // AI helper methods
+  findTasksByTitle: (title: string) => Task[];
+  findDuplicates: () => Map<string, Task[]>;
+  getColumnByName: (name: string) => Column | undefined;
+  bulkDeleteTasks: (taskIds: string[]) => void;
+  reorderTasks: (orderedIds: string[]) => void;
+  // Sync status
+  lastSyncTime: Date | null;
+  syncStatus: 'synced' | 'syncing' | 'offline';
+}
+
+const BoardContext = createContext<BoardContextType | null>(null);
+
+export const useBoardContext = () => {
+  const ctx = useContext(BoardContext);
+  if (!ctx) throw new Error('useBoardContext must be used within BoardProvider');
+  return ctx;
+};
+
+const genId = () => crypto.randomUUID();
+
+function getBoardKey(userId: number) {
+  return `board_${userId}`;
+}
+
+async function loadBoard(userId: number): Promise<Board> {
+  try {
+    const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.board) {
+        localStorage.setItem(getBoardKey(userId), JSON.stringify(data.board));
+        return data.board;
+      }
+    }
+  } catch {}
+  // Fallback to localStorage
+  try {
+    const saved = localStorage.getItem(getBoardKey(userId));
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { ...emptyBoard };
+}
+
+async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<boolean> {
+  try {
+    // Always save to localStorage first for immediate persistence
+    localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+
+    // Sync to server with retry logic
+    const response = await fetch('/api/boards/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ boardData: board }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Failed to save board to server:', err);
+
+    // Retry up to 3 times with exponential backoff
+    if (retryCount < 3) {
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+      return saveBoard(userId, board, retryCount + 1);
+    }
+
+    return false;
+  }
+}
+
+const calculateNextDate = (dateStr: string, pattern: string) => {
+  const d = new Date(dateStr);
+  if (pattern === 'daily') d.setDate(d.getDate() + 1);
+  else if (pattern === 'weekly') d.setDate(d.getDate() + 7);
+  else if (pattern === 'monthly') d.setMonth(d.getMonth() + 1);
+  return d.toISOString().split('T')[0];
+};
+
+export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const [board, setBoard] = useState<Board>({ ...emptyBoard });
+  const [loading, setLoading] = useState(true);
+
+  // Track sync status for cross-device sync
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      loadBoard(user.id).then(loaded => {
+        setBoard(loaded);
+        setLoading(false);
+        setLastSyncTime(new Date());
+      }).catch(() => {
+        setBoard({ ...emptyBoard });
+        setLoading(false);
+      });
+    } else {
+      setBoard({ ...emptyBoard });
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  // Periodic sync to server (every 30 seconds) for cross-device consistency
+  useEffect(() => {
+    if (!user) return;
+
+    const syncInterval = setInterval(async () => {
+      const success = await saveBoard(user.id, board);
+      if (success) {
+        setLastSyncTime(new Date());
+      }
+    }, 30000); // Sync every 30 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [user?.id, board]);
+
+  // Sync when window regains focus (user returns from another device/tab)
+  useEffect(() => {
+    if (!user) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        // Refresh board from server when returning to the app
+        try {
+          const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.board) {
+              // Only update if server data is newer or different
+              const serverBoard = data.board;
+              const localBoardStr = JSON.stringify(board);
+              const serverBoardStr = JSON.stringify(serverBoard);
+
+              if (serverBoardStr !== localBoardStr) {
+                setBoard(serverBoard);
+                localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
+                setLastSyncTime(new Date());
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to sync on visibility change:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user?.id, board]);
+
+  const persist = useCallback((updater: (b: Board) => Board) => {
+    setBoard(prev => {
+      const next = updater(prev);
+      if (user) saveBoard(user.id, next);
+      return next;
+    });
+  }, [user]);
+
+  const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
+    const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+    if (!isPro) return b;
+    
+    const toCol = b.columns.find(c => c.id === toColumnId);
+    if (!toCol || toCol.title.toLowerCase().trim() !== 'completed') return b;
+    if (!task.recurrencePattern) return b;
+
+    const nextDate = calculateNextDate(task.dueDate || new Date().toISOString().split('T')[0], task.recurrencePattern);
+    const firstCol = b.columns[0];
+    if (!firstCol) return b;
+
+    const newTask: Task = {
+      ...task,
+      id: genId(),
+      columnId: firstCol.id,
+      dueDate: nextDate,
+      order: b.tasks.filter(t => t.columnId === firstCol.id).length,
+      createdAt: new Date().toISOString().split('T')[0],
+      checklists: task.checklists.map(cl => ({
+        ...cl,
+        id: genId(),
+        items: cl.items.map(it => ({ ...it, id: genId(), completed: false }))
+      })),
+      subtasks: task.subtasks.map(st => ({ ...st, id: genId(), completed: false })),
+      attachments: [],
+    };
+
+    return { ...b, tasks: [...b.tasks, newTask] };
+  }, []);
+
+  const addTask = useCallback((columnId: string, title: string, details: Partial<Task> = {}) => {
+    const taskId = details.id || genId();
+    persist(b => {
+      const tasksInCol = b.tasks.filter(t => t.columnId === columnId);
+      const newTask: Task = {
+        id: taskId,
+        title,
+        description: details.description || '',
+        priority: details.priority || 'none',
+        labels: details.labels || [],
+        checklists: details.checklists || [],
+        subtasks: details.subtasks || [],
+        createdAt: new Date().toISOString().split('T')[0],
+        columnId,
+        order: tasksInCol.length,
+        dueDate: details.dueDate,
+        dueTime: details.dueTime,
+        startTime: details.startTime,
+        duration: details.duration,
+        sessionsNeeded: details.sessionsNeeded,
+        subject: details.subject,
+        color: details.color,
+        icon: details.icon,
+        completed: details.completed || false,
+        completedAt: details.completedAt,
+        recurrencePattern: details.recurrencePattern,
+        attachments: details.attachments || [],
+      };
+      return { ...b, tasks: [...b.tasks, newTask] };
+    });
+  }, [persist]);
+
+  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
+    persist(b => ({
+      ...b,
+      tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t),
+    }));
+  }, [persist]);
+
+  const deleteTask = useCallback((taskId: string) => {
+    persist(b => ({ ...b, tasks: b.tasks.filter(t => t.id !== taskId) }));
+  }, [persist]);
+
+  const moveTask = useCallback((taskId: string, toColumnId: string, newOrder: number) => {
+    persist(b => {
+      const task = b.tasks.find(t => t.id === taskId);
+      if (!task) return b;
+      
+      // Check if moving to a 'Completed' column
+      const toCol = b.columns.find(c => c.id === toColumnId);
+      const isCompletedCol = toCol?.title.toLowerCase().trim() === 'completed';
+      
+      const otherTasks = b.tasks.filter(t => t.id !== taskId);
+      const movedTask = { 
+        ...task, 
+        columnId: toColumnId,
+        completed: isCompletedCol ? true : task.completed,
+        completedAt: isCompletedCol && !task.completedAt ? new Date().toISOString() : task.completedAt,
+      };
+      const colTasks = otherTasks.filter(t => t.columnId === toColumnId).sort((a, c) => a.order - c.order);
+      colTasks.splice(newOrder, 0, movedTask);
+      const reordered = colTasks.map((t, i) => ({ ...t, order: i }));
+      
+      let nextBoard = { 
+        ...b, 
+        tasks: otherTasks.filter(t => t.columnId !== toColumnId).concat(reordered) 
+      };
+      
+      const updatedTask = reordered.find(t => t.id === taskId);
+      if (updatedTask) {
+        nextBoard = handleRecurrence(nextBoard, updatedTask, toColumnId);
+      }
+      
+      return nextBoard;
+    });
+  }, [persist, handleRecurrence]);
+
+  // Auto-delete completed tasks after 5 days
+  useEffect(() => {
+    const cleanup = () => {
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      
+      setBoard(prev => {
+        const hasOld = prev.tasks.some(t => {
+          if (!t.completed || !t.completedAt) return false;
+          return new Date(t.completedAt) < fiveDaysAgo;
+        });
+        
+        if (!hasOld) return prev;
+        
+        const next = {
+          ...prev,
+          tasks: prev.tasks.filter(t => {
+            if (!t.completed || !t.completedAt) return true;
+            return new Date(t.completedAt) >= fiveDaysAgo;
+          }),
+        };
+        if (user) saveBoard(user.id, next);
+        return next;
+      });
+    };
+    
+    cleanup(); // Run on mount
+    const timer = setInterval(cleanup, 60 * 60 * 1000); // Check every hour
+    return () => clearInterval(timer);
+  }, [user]);
+
+  const addColumn = useCallback((title: string) => {
+    const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
+    persist(b => {
+      // Free users are limited to 2 columns (projects)
+      if (isFree && b.columns.length >= 2) return b;
+      const newCol: Column = { id: genId(), title, order: b.columns.length, color: 'hsl(var(--muted-foreground))' };
+      return { ...b, columns: [...b.columns, newCol] };
+    });
+  }, [persist, user?.subscriptionTier]);
+
+  const updateColumn = useCallback((columnId: string, updates: Partial<Column>) => {
+    persist(b => ({
+      ...b,
+      columns: b.columns.map(c => c.id === columnId ? { ...c, ...updates } : c),
+    }));
+  }, [persist]);
+
+  const deleteColumn = useCallback((columnId: string) => {
+    persist(b => ({
+      ...b,
+      columns: b.columns.filter(c => c.id !== columnId),
+      tasks: b.tasks.filter(t => t.columnId !== columnId),
+    }));
+  }, [persist]);
+
+  const reorderColumns = useCallback((startIndex: number, endIndex: number) => {
+    persist(b => {
+      const cols = [...b.columns].sort((a, c) => a.order - c.order);
+      const [moved] = cols.splice(startIndex, 1);
+      cols.splice(endIndex, 0, moved);
+      return { ...b, columns: cols.map((c, i) => ({ ...c, order: i })) };
+    });
+  }, [persist]);
+
+  const addChecklist = useCallback((taskId: string, title: string) => {
+    const newChecklist: Checklist = { id: genId(), title, items: [] };
+    persist(b => ({
+      ...b,
+      tasks: b.tasks.map(t => t.id === taskId ? { ...t, checklists: [...t.checklists, newChecklist] } : t),
+    }));
+  }, [persist]);
+
+  const toggleChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
+    persist(b => ({
+      ...b,
+      tasks: b.tasks.map(t => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          checklists: t.checklists.map(cl => {
+            if (cl.id !== checklistId) return cl;
+            return { ...cl, items: cl.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i) };
+          }),
+        };
+      }),
+    }));
+  }, [persist]);
+
+  const addChecklistItem = useCallback((taskId: string, checklistId: string, text: string) => {
+    const newItem: ChecklistItem = { id: genId(), text, completed: false };
+    persist(b => ({
+      ...b,
+      tasks: b.tasks.map(t => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          checklists: t.checklists.map(cl => {
+            if (cl.id !== checklistId) return cl;
+            return { ...cl, items: [...cl.items, newItem] };
+          }),
+        };
+      }),
+    }));
+  }, [persist]);
+
+  const deleteChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
+    persist(b => ({
+      ...b,
+      tasks: b.tasks.map(t => {
+        if (t.id !== taskId) return t;
+        return {
+          ...t,
+          checklists: t.checklists.map(cl => {
+            if (cl.id !== checklistId) return cl;
+            return { ...cl, items: cl.items.filter(i => i.id !== itemId) };
+          }),
+        };
+      }),
+    }));
+  }, [persist]);
+
+  const findTasksByTitle = useCallback((title: string): Task[] => {
+    const lower = title.toLowerCase().trim();
+    return board.tasks.filter(t =>
+      t.title.toLowerCase().includes(lower) || lower.includes(t.title.toLowerCase())
+    );
+  }, [board.tasks]);
+
+  const findDuplicates = useCallback((): Map<string, Task[]> => {
+    const groups = new Map<string, Task[]>();
+    for (const task of board.tasks) {
+      const key = task.title.toLowerCase().trim();
+      const list = groups.get(key) || [];
+      list.push(task);
+      groups.set(key, list);
+    }
+    const duplicates = new Map<string, Task[]>();
+    groups.forEach((tasks, key) => {
+      if (tasks.length > 1) duplicates.set(key, tasks);
+    });
+    return duplicates;
+  }, [board.tasks]);
+
+  const getColumnByName = useCallback((name: string): Column | undefined => {
+    const lower = name.toLowerCase().trim();
+    return board.columns.find(c => c.title.toLowerCase().trim() === lower);
+  }, [board.columns]);
+
+  const bulkDeleteTasks = useCallback((taskIds: string[]) => {
+    persist(b => ({ ...b, tasks: b.tasks.filter(t => !taskIds.includes(t.id)) }));
+  }, [persist]);
+
+  const reorderTasks = useCallback((orderedIds: string[]) => {
+    persist(b => {
+      const taskMap = new Map(b.tasks.map(t => [t.id, t]));
+      const newTasks: Task[] = [];
+      
+      orderedIds.forEach((id, index) => {
+        const task = taskMap.get(id);
+        if (task) {
+          newTasks.push({ ...task, order: index });
+          taskMap.delete(id);
+        }
+      });
+      
+      const remainingTasks = Array.from(taskMap.values()).map((t, index) => ({
+        ...t,
+        order: orderedIds.length + index
+      }));
+      
+      return { ...b, tasks: [...newTasks, ...remainingTasks] };
+    });
+  }, [persist]);
+
+  return (
+    <BoardContext.Provider value={{
+      board, addTask, updateTask, deleteTask, moveTask,
+      addColumn, updateColumn, deleteColumn, reorderColumns,
+      addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
+      findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks,
+      lastSyncTime, syncStatus,
+    }}>
+      {children}
+    </BoardContext.Provider>
+  );
+};

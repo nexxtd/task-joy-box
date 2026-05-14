@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: task-joy-box
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://postgres:Orel123yy%40%40@db.csjxuecznqdwhzgudnvk.supabase.co:5432/postgres
+      - key: JWT_SECRET
+        value: 7f7fd507eb1a291128e98e02aba7986cb500dc80803f2f4bf53322047c5ecd50
+      - key: SESSION_SECRET
+        value: myplanner_session_secret
+      - key: GOOGLE_CLIENT_ID
+        value: 920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com
+      - key: GOOGLE_CLIENT_SECRET
+        value: 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
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://task-joy-box.onrender.com
+      - key: BACKEND_URL
+        value: https://task-joy-box.onrender.com
+      - key: PORT
+        value: 10000
