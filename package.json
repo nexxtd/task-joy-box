@@ -18,6 +18,7 @@
     "build:server": "npx tsc -p tsconfig.server.json && node scripts/write-server-package.cjs",
     "build:client": "tsc -b && vite build",
     "build": "npm run build:client && npm run build:server",
+    "prestart": "node scripts/write-server-package.cjs",
     "start": "cross-env NODE_ENV=production node dist-server/server/index.js"
   },
   "dependencies": {
