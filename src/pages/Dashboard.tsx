@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import {
   CheckSquare, Target, Clock, Flame, Plus, ArrowRight,
-  Sparkles, TrendingUp, Cloud, Bot, Calendar, Zap, X
+  TrendingUp, Cloud, Bot, Calendar, Zap, X
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
 
@@ -27,7 +27,6 @@ const Dashboard: React.FC = () => {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const todayStr = now.toISOString().split('T')[0];
   const activeTasks = board.tasks.filter(t => {
     const col = board.columns.find(c => c.id === t.columnId);
     return col && col.title !== 'Completed' && !t.completed;
@@ -48,39 +47,35 @@ const Dashboard: React.FC = () => {
     })
     .slice(0, 5);
 
-  // Calculate real weekly activity data using UTC dates
+  // Calculate weekly activity from actual completion timestamps
   const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const weeklyData = (() => {
-    const data: number[] = [];
+    const data = new Array(7).fill(0);
     const today = new Date();
-    const dayOfWeek = today.getUTCDay(); // 0=Sun, 1=Mon...
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfWeek = new Date(today);
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(today.getDate() + mondayOffset);
 
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(today);
-      day.setUTCDate(today.getUTCDate() + mondayOffset + i);
-      const dayStr = `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`;
+    for (const task of board.tasks) {
+      const col = board.columns.find(c => c.id === task.columnId);
+      const isCompleted = Boolean(task.completed || col?.title?.toLowerCase() === 'completed');
+      if (!isCompleted) continue;
 
-      // Count completed tasks for this day - check completedAt timestamp
-      const count = board.tasks.filter(t => {
-        // Check if task has completion timestamp matching this day
-        if (t.completedAt) {
-          const completedDate = new Date(t.completedAt);
-          const completedStr = `${completedDate.getUTCFullYear()}-${String(completedDate.getUTCMonth() + 1).padStart(2, '0')}-${String(completedDate.getUTCDate()).padStart(2, '0')}`;
-          if (completedStr === dayStr) return true;
-        }
-        // Also count tasks in Completed column that were moved today
-        const col = board.columns.find(c => c.id === t.columnId);
-        if ((col?.title?.toLowerCase() === 'completed' || t.completed) && t.updatedAt) {
-          const updatedDate = new Date(t.updatedAt);
-          const updatedStr = `${updatedDate.getUTCFullYear()}-${String(updatedDate.getUTCMonth() + 1).padStart(2, '0')}-${String(updatedDate.getUTCDate()).padStart(2, '0')}`;
-          if (updatedStr === dayStr) return true;
-        }
-        return false;
-      }).length;
+      const completionSource = task.completedAt ?? task.updatedAt;
+      if (!completionSource) continue;
+      const completedAt = new Date(completionSource);
+      if (Number.isNaN(completedAt.getTime())) continue;
 
-      data.push(count);
+      const dayStart = new Date(completedAt);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayIndex = Math.floor((dayStart.getTime() - startOfWeek.getTime()) / (24 * 60 * 60 * 1000));
+      if (dayIndex >= 0 && dayIndex <= 6) {
+        data[dayIndex] += 1;
+      }
     }
+
     return data;
   })();
   
@@ -170,19 +165,6 @@ const Dashboard: React.FC = () => {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* AI Insight */}
-        <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/20 rounded-xl animate-fade-in">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Sparkles className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-primary uppercase tracking-wider">AI Insight</p>
-            <p className="text-sm text-foreground mt-1">
-              Start with your highest priority task. Small wins build momentum!
-            </p>
-          </div>
-        </div>
-
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat, i) => (
@@ -280,11 +262,6 @@ const Dashboard: React.FC = () => {
                           }`}
                           style={{ height: `${height}px`, animationDelay: `${500 + i * 50}ms` }}
                         />
-                        {i === peakDay && (
-                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] text-primary font-semibold">
-                            Peak
-                          </span>
-                        )}
                       </div>
                       <span className="text-[10px] text-muted-foreground">{day}</span>
                     </div>

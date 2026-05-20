@@ -1,6 +1,6 @@
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 export type LabelColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink';
-export type ViewType = 'board' | 'list' | 'calendar';
+export type ViewType = 'board' | 'list' | 'calendar' | 'whiteboard';
 
 export interface Label {
   id: string;

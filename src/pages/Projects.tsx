@@ -6,8 +6,9 @@ import BoardColumn from '@/components/BoardColumn';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import ListView from '@/components/ListView';
 import CalendarView from '@/components/CalendarView';
+import Whiteboard from '@/components/Whiteboard'; // Import the new Whiteboard component
 import { Task, ViewType } from '@/types/board';
-import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock } from 'lucide-react';
+import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, SquareGantt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -22,7 +23,7 @@ const Projects: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
-  const [currentView, setCurrentView] = useState<ViewType>('board');
+  const [currentView, setCurrentView] = useState<ViewType>('board'); // Updated to include whiteboard
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
@@ -126,6 +127,7 @@ const Projects: React.FC = () => {
     { id: 'board' as ViewType, label: 'Board', icon: LayoutDashboard },
     { id: 'list' as ViewType,  label: 'List',  icon: List },
     { id: 'calendar' as ViewType, label: 'Calendar', icon: CalendarDays },
+    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: SquareGantt }, // Added whiteboard view
   ];
 
   const zoomPct = Math.round(zoom * 100);
@@ -308,7 +310,7 @@ const Projects: React.FC = () => {
                         data-no-pan="true"
                         onClick={handleAddColumnClick}
                         className={cn(
-                          'flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 text-sm border border-dashed rounded-lg transition-all duration-200',
+                          'flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 text-sm border-dashed rounded-lg transition-all duration-200',
                           isFree && board.columns.length >= FREE_COL_LIMIT
                             ? 'text-amber-600 border-amber-400/50 hover:border-amber-400 hover:bg-amber-500/5'
                             : 'text-muted-foreground border-border hover:text-foreground hover:border-foreground/30 hover:scale-[1.01]'
@@ -330,6 +332,9 @@ const Projects: React.FC = () => {
 
       {currentView === 'list' && <div className="animate-fade-in flex-1"><ListView onTaskClick={setSelectedTask} /></div>}
       {currentView === 'calendar' && <div className="animate-fade-in flex-1"><CalendarView onTaskClick={setSelectedTask} /></div>}
+      
+      {/* Added Whiteboard view */}
+      {currentView === 'whiteboard' && <div className="animate-fade-in flex-1"><Whiteboard /></div>}
 
       {/* Task detail modal */}
       {currentTask && (
