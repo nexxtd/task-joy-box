@@ -166,7 +166,7 @@ export const sharedTasks = pgTable('shared_tasks', {
   title: text('title').notNull(),
   description: text('description'),
   assignedToUserId: integer('assigned_to_user_id').references(() => users.id),
-  assignedToGroupId: integer('assigned_to_group_id').references(() => groups.id),
+  assignedToGroupId: integer('group_id').references(() => groups.id),
   createdByUserId: integer('created_by_user_id').references(() => users.id).notNull(),
   priority: text('priority').default('none'),
   dueDate: text('due_date'),
@@ -308,6 +308,46 @@ export const transactions = pgTable('transactions', {
   providerTransactionId: text('provider_transaction_id').notNull().unique(),
   couponId: integer('coupon_id').references(() => coupons.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+// New table for whiteboards
+export const whiteboards = pgTable('whiteboards', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+// New table for whiteboard items
+export const whiteboardItems = pgTable('whiteboard_items', {
+  id: serial('id').primaryKey(),
+  whiteboardId: integer('whiteboard_id').references(() => whiteboards.id).notNull(),
+  type: text('type').notNull(), // 'sticky-note', 'text', 'document', 'image', 'shape', 'task', 'mindmap', 'file'
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  width: integer('width').default(200),
+  height: integer('height').default(150),
+  content: text('content'), // For text content
+  color: text('color'), // For color properties
+  title: text('title'), // For titles
+  tasks: text('tasks'), // JSON string for task lists
+  imageUrl: text('image_url'), // For image URLs
+  fileUrl: text('file_url'), // For file URLs
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+// New table for whiteboard connections
+export const whiteboardConnections = pgTable('whiteboard_connections', {
+  id: serial('id').primaryKey(),
+  whiteboardId: integer('whiteboard_id').references(() => whiteboards.id).notNull(),
+  sourceItemId: integer('source_item_id').references(() => whiteboardItems.id).notNull(),
+  targetItemId: integer('target_item_id').references(() => whiteboardItems.id).notNull(),
+  connectionType: text('connection_type').default('curved'), // 'straight', 'curved', 'elbow', 'dotted'
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 // Types exported via any to avoid inference issues on Render

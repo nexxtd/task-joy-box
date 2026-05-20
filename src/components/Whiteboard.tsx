@@ -23,8 +23,14 @@ import {
   Star,
   ArrowRight,
   AlignLeft,
-  CheckSquare
+  CheckSquare,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Save,
+  Download
 } from 'lucide-react';
+import { createWhiteboard, getWhiteboardById, updateWhiteboard } from '@/services/whiteboardService';
 
 interface Tool {
   id: string;
@@ -48,6 +54,8 @@ interface CanvasItem {
   connections?: ConnectionPoint[];
   title?: string;
   tasks?: Array<{ id: string; text: string; completed: boolean }>;
+  imageUrl?: string; // For images
+  fileUrl?: string; // For file attachments
 }
 
 interface Connection {
@@ -66,6 +74,10 @@ interface ConnectionPoint {
   y: number;
   connected: boolean;
 }
+
+const MIN_ZOOM = 0.35;
+const MAX_ZOOM = 1.5;
+const ZOOM_STEP = 0.1;
 
 const Whiteboard: React.FC = () => {
   // Define available tools
@@ -93,15 +105,37 @@ const Whiteboard: React.FC = () => {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [whiteboardId, setWhiteboardId] = useState<number | null>(null);
+  const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
   const canvasRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+
+  const handleZoomIn = () => {
+    setZoom(z => clampZoom(+(z + ZOOM_STEP).toFixed(2)));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(z => clampZoom(+(z - ZOOM_STEP).toFixed(2)));
+  };
+
+  const resetView = () => {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  };
 
   // Handle canvas click to create items
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!canvasRef.current) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - offset.x;
-    const y = e.clientY - rect.top - offset.y;
+    const x = (e.clientX - rect.left - offset.x) / zoom;
+    const y = (e.clientY - rect.top - offset.y) / zoom;
 
     // Only create items when not dragging and with non-select tools
     if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
@@ -153,17 +187,11 @@ const Whiteboard: React.FC = () => {
         break;
         
       case 'image':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 200,
-          height: 150,
-          title: 'Image Placeholder',
-          connections: [],
-        };
-        break;
+        // Trigger file input for image upload
+        if (imageInputRef.current) {
+          imageInputRef.current.click();
+        }
+        return;
         
       case 'shape':
         newItem = {
@@ -210,23 +238,83 @@ const Whiteboard: React.FC = () => {
         break;
         
       case 'file':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 180,
-          height: 120,
-          title: 'File Attachment',
-          connections: [],
-        };
-        break;
+        // Trigger file input for general file upload
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
+        }
+        return;
         
       default:
         return; // Don't create an item for select or connector tools
     }
 
+    // Only add to items if it's not an image or file (those are handled separately)
+    if (!['image', 'file'].includes(activeTool)) {
+      setItems(prev => [...prev, newItem]);
+    }
+  };
+
+  // Handle image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !canvasRef.current) return;
+    
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (!event.target?.result || typeof event.target.result !== 'string' || !canvasRef.current) return;
+      
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = (rect.width / 2 - 100) / zoom; // Center on canvas
+      const y = (rect.height / 2 - 75) / zoom; // Center on canvas
+      
+      const newItem: CanvasItem = {
+        id: `item-${Date.now()}`,
+        type: 'image',
+        x,
+        y,
+        width: 200,
+        height: 150,
+        imageUrl: event.target.result,
+        title: file.name,
+        connections: [],
+      };
+      
+      setItems(prev => [...prev, newItem]);
+    };
+    
+    reader.readAsDataURL(file);
+    e.target.value = ''; // Reset input
+  };
+
+  // Handle file upload
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !canvasRef.current) return;
+    
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // For demo purposes, we're not actually uploading to a server
+    // In a real implementation, you'd upload to Supabase storage
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (rect.width / 2 - 90) / zoom; // Center on canvas
+    const y = (rect.height / 2 - 60) / zoom; // Center on canvas
+    
+    const newItem: CanvasItem = {
+      id: `item-${Date.now()}`,
+      type: 'file',
+      x,
+      y,
+      width: 180,
+      height: 120,
+      title: file.name,
+      fileUrl: URL.createObjectURL(file), // Temporary URL
+      connections: [],
+    };
+    
     setItems(prev => [...prev, newItem]);
+    e.target.value = ''; // Reset input
   };
 
   // Handle item selection
@@ -240,8 +328,8 @@ const Whiteboard: React.FC = () => {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
         setDragOffset({
-          x: e.clientX - rect.left - offset.x - item.x,
-          y: e.clientY - rect.top - offset.y - item.y
+          x: (e.clientX - rect.left - offset.x) / zoom - item.x,
+          y: (e.clientY - rect.top - offset.y) / zoom - item.y
         });
       }
     }
@@ -261,10 +349,10 @@ const Whiteboard: React.FC = () => {
         
         if (sourceItem && targetItem) {
           // Calculate connection points
-          const sourceX = sourceItem.x + offset.x + (sourceItem.width || 0) / 2;
-          const sourceY = sourceItem.y + offset.y + (sourceItem.height || 0) / 2;
-          const targetX = targetItem.x + offset.x + (targetItem.width || 0) / 2;
-          const targetY = targetItem.y + offset.y + (targetItem.height || 0) / 2;
+          const sourceX = sourceItem.x * zoom + offset.x + (sourceItem.width || 0) * zoom / 2;
+          const sourceY = sourceItem.y * zoom + offset.y + (sourceItem.height || 0) * zoom / 2;
+          const targetX = targetItem.x * zoom + offset.x + (targetItem.width || 0) * zoom / 2;
+          const targetY = targetItem.y * zoom + offset.y + (targetItem.height || 0) * zoom / 2;
           
           const newConnection: Connection = {
             id: `conn-${Date.now()}`,
@@ -313,8 +401,8 @@ const Whiteboard: React.FC = () => {
       // Moving an item
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        const newX = e.clientX - rect.left - offset.x - dragOffset.x;
-        const newY = e.clientY - rect.top - offset.y - dragOffset.y;
+        const newX = (e.clientX - rect.left - offset.x) / zoom - dragOffset.x;
+        const newY = (e.clientY - rect.top - offset.y) / zoom - dragOffset.y;
         
         setItems(prev => prev.map(item => 
           item.id === selectedItem ? { ...item, x: newX, y: newY } : item
@@ -342,16 +430,16 @@ const Whiteboard: React.FC = () => {
         return {
           ...conn,
           sourcePoint: { 
-            x: newX + offset.x + (item.width || 0) / 2, 
-            y: newY + offset.y + (item.height || 0) / 2 
+            x: newX * zoom + offset.x + (item.width || 0) * zoom / 2, 
+            y: newY * zoom + offset.y + (item.height || 0) * zoom / 2 
           }
         };
       } else if (conn.targetId === itemId) {
         return {
           ...conn,
           targetPoint: { 
-            x: newX + offset.x + (item.width || 0) / 2, 
-            y: newY + offset.y + (item.height || 0) / 2 
+            x: newX * zoom + offset.x + (item.width || 0) * zoom / 2, 
+            y: newY * zoom + offset.y + (item.height || 0) * zoom / 2 
           }
         };
       }
@@ -366,12 +454,13 @@ const Whiteboard: React.FC = () => {
   };
 
   // Reset view
-  const resetView = () => {
+  const resetViewAndItems = () => {
     setItems([]);
     setConnections([]);
     setSelectedItem(null);
     setConnecting(null);
     setOffset({ x: 0, y: 0 });
+    setZoom(1);
   };
 
   // Delete selected item
@@ -404,6 +493,38 @@ const Whiteboard: React.FC = () => {
     }));
   };
 
+  // Load whiteboard data if an ID is provided
+  useEffect(() => {
+    const loadWhiteboard = async () => {
+      if (whiteboardId) {
+        setIsLoading(true);
+        try {
+          const data = await getWhiteboardById(whiteboardId);
+          setItems(data.items);
+          setConnections(data.connections);
+          setWhiteboardName(data.name);
+        } catch (error) {
+          console.error('Error loading whiteboard:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadWhiteboard();
+  }, [whiteboardId]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    const saveTimeout = setTimeout(() => {
+      if (items.length > 0 || connections.length > 0) {
+        saveWhiteboard();
+      }
+    }, 2000); // Save after 2 seconds of inactivity
+
+    return () => clearTimeout(saveTimeout);
+  }, [items, connections]);
+
   // Cleanup event listeners
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -425,16 +546,31 @@ const Whiteboard: React.FC = () => {
       }
     };
 
+    // Handle wheel for zooming
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        setZoom(z => clampZoom(+(z - e.deltaY * 0.001).toFixed(3)));
+      }
+    };
+
+    if (canvasRef.current) {
+      canvasRef.current.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
     if (isDragging || isPanning || connecting) {
       window.addEventListener('mousemove', handleGlobalMouseMove);
       window.addEventListener('mouseup', handleGlobalMouseUp);
     }
 
     return () => {
+      if (canvasRef.current) {
+        canvasRef.current.removeEventListener('wheel', handleWheel);
+      }
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isDragging, isPanning, connecting, selectedItem, dragOffset, offset]);
+  }, [isDragging, isPanning, connecting, selectedItem, dragOffset, offset, zoom]);
 
   // Render different item types
   const renderItem = (item: CanvasItem) => {
@@ -454,36 +590,36 @@ const Whiteboard: React.FC = () => {
     const getConnectionPoints = () => {
       if (!showConnectionPoints) return null;
       
-      const centerX = item.x + offset.x + (item.width || 0) / 2;
-      const centerY = item.y + offset.y + (item.height || 0) / 2;
+      const centerX = item.x * zoom + offset.x + (item.width || 0) * zoom / 2;
+      const centerY = item.y * zoom + offset.y + (item.height || 0) * zoom / 2;
       
       return (
         <>
           {/* Top center */}
           <div 
             className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: centerX, top: item.y + offset.y }}
+            style={{ left: centerX, top: item.y * zoom + offset.y }}
             onClick={(e) => handleConnectionPointClick(item.id, 'top', e)}
           />
           
           {/* Right center */}
           <div 
             className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: item.x + offset.x + (item.width || 0), top: centerY }}
+            style={{ left: item.x * zoom + offset.x + (item.width || 0) * zoom, top: centerY }}
             onClick={(e) => handleConnectionPointClick(item.id, 'right', e)}
           />
           
           {/* Bottom center */}
           <div 
             className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: centerX, top: item.y + offset.y + (item.height || 0) }}
+            style={{ left: centerX, top: item.y * zoom + offset.y + (item.height || 0) * zoom }}
             onClick={(e) => handleConnectionPointClick(item.id, 'bottom', e)}
           />
           
           {/* Left center */}
           <div 
             className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: item.x + offset.x, top: centerY }}
+            style={{ left: item.x * zoom + offset.x, top: centerY }}
             onClick={(e) => handleConnectionPointClick(item.id, 'left', e)}
           />
         </>
@@ -497,10 +633,10 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "rounded-lg shadow-sm")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
                 backgroundColor: item.color,
                 transform: isHovered ? 'translateY(-5px)' : 'none',
                 transition: 'transform 0.2s ease'
@@ -510,7 +646,7 @@ const Whiteboard: React.FC = () => {
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="p-3 h-full rounded-lg border border-white/50">
+              <div className="p-3 h-full rounded-lg border border-white/50" style={{ fontSize: 14 * zoom }}>
                 <textarea
                   className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
                   defaultValue={item.content || 'Click to edit...'}
@@ -528,17 +664,17 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="p-4 h-full rounded-lg">
+              <div className="p-4 h-full rounded-lg" style={{ fontSize: 14 * zoom }}>
                 <textarea
                   className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
                   defaultValue={item.content || 'Type your text here...'}
@@ -555,17 +691,17 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-md border-2 border-gray-200")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="p-4 h-full rounded-lg border-t-2 border-gray-300">
+              <div className="p-4 h-full rounded-lg border-t-2 border-gray-300" style={{ fontSize: 14 * zoom }}>
                 <div className="flex flex-col h-full">
                   <div className="font-bold mb-2 text-gray-700">Document Title</div>
                   <textarea
@@ -583,20 +719,30 @@ const Whiteboard: React.FC = () => {
         return (
           <React.Fragment key={item.id}>
             <div
-              className={cn(baseClasses, "bg-gray-100 rounded-lg shadow-sm border-2 border-dashed flex flex-col items-center justify-center")}
+              className={cn(baseClasses, "bg-gray-100 rounded-lg shadow-sm border flex flex-col items-center justify-center overflow-hidden")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <Image className="w-12 h-12 text-gray-400" />
-              <span className="mt-2 text-gray-500 text-sm">Drop image here</span>
+              {item.imageUrl ? (
+                <img 
+                  src={item.imageUrl} 
+                  alt={item.title} 
+                  className="object-contain w-full h-full p-1"
+                />
+              ) : (
+                <>
+                  <Image className="w-12 h-12 text-gray-400" />
+                  <span className="mt-2 text-gray-500 text-sm">Loading image...</span>
+                </>
+              )}
             </div>
             {getConnectionPoints()}
           </React.Fragment>
@@ -608,17 +754,17 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-blue-100 rounded-lg shadow-sm border-2 border-blue-300 flex items-center justify-center")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <Square className="w-8 h-8 text-blue-500 opacity-70" />
+              <Square className="w-8 h-8 text-blue-500 opacity-70" style={{ width: 8 * zoom, height: 8 * zoom }} />
             </div>
             {getConnectionPoints()}
           </React.Fragment>
@@ -630,17 +776,17 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="p-3 h-full rounded-lg border">
+              <div className="p-3 h-full rounded-lg border" style={{ fontSize: 14 * zoom }}>
                 <div className="font-bold text-sm mb-2 text-gray-800">{item.title}</div>
                 <div className="space-y-2">
                   {item.tasks?.map(task => (
@@ -650,6 +796,7 @@ const Whiteboard: React.FC = () => {
                         checked={task.completed}
                         onChange={() => toggleTaskCompletion(item.id, task.id)}
                         className="mr-2 h-4 w-4 text-blue-600 rounded"
+                        style={{ transform: `scale(${zoom})` }}
                       />
                       <span className={cn("text-sm", task.completed ? "line-through text-gray-400" : "text-gray-700")}>
                         {task.text}
@@ -669,10 +816,10 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-purple-100 rounded-full shadow-sm border-2 border-purple-200 flex items-center justify-center")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
                 backgroundColor: item.backgroundColor
               }}
               onClick={(e) => handleItemClick(item.id, e)}
@@ -680,7 +827,7 @@ const Whiteboard: React.FC = () => {
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="text-center px-4 py-2">
+              <div className="text-center px-4 py-2" style={{ fontSize: 14 * zoom }}>
                 <div className="text-sm font-medium text-purple-700">{item.content}</div>
               </div>
             </div>
@@ -694,10 +841,10 @@ const Whiteboard: React.FC = () => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x + offset.x,
-                top: item.y + offset.y,
-                width: item.width,
-                height: item.height,
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -705,9 +852,11 @@ const Whiteboard: React.FC = () => {
               onMouseLeave={() => setHoveredItem(null)}
             >
               <div className="p-3 h-full rounded-lg border border-gray-200 flex flex-col items-center justify-center">
-                <Paperclip className="w-8 h-8 text-gray-400" />
-                <div className="mt-2 text-sm text-gray-700 font-medium">{item.title}</div>
-                <div className="text-xs text-gray-500 mt-1">PDF Document</div>
+                <Paperclip className="w-8 h-8 text-gray-400" style={{ width: 8 * zoom, height: 8 * zoom }} />
+                <div className="mt-2 text-sm text-gray-700 font-medium truncate max-w-full" style={{ fontSize: 12 * zoom }}>
+                  {item.title}
+                </div>
+                <div className="text-xs text-gray-500 mt-1" style={{ fontSize: 10 * zoom }}>File</div>
               </div>
             </div>
             {getConnectionPoints()}
@@ -719,8 +868,35 @@ const Whiteboard: React.FC = () => {
     }
   };
 
+  const zoomPercent = Math.round(zoom * 100);
+
   return (
-    <div className="flex h-full w-full bg-gray-50">
+    <div className="flex h-full w-full bg-gray-50 relative">
+      {/* Hidden file inputs */}
+      <input 
+        type="file" 
+        accept="image/*" 
+        ref={imageInputRef} 
+        onChange={handleImageUpload} 
+        className="hidden" 
+      />
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileUpload} 
+        className="hidden" 
+      />
+      
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-lg shadow-lg flex items-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
+            <span>Loading whiteboard...</span>
+          </div>
+        </div>
+      )}
+    
       {/* Left Sidebar Tool Selector */}
       <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-2">
         {tools.map(tool => (
@@ -741,10 +917,24 @@ const Whiteboard: React.FC = () => {
         
         <div className="flex-grow"></div>
         
+        {/* Save button */}
+        <button
+          className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+          onClick={saveWhiteboard}
+          title="Save whiteboard"
+          disabled={saving}
+        >
+          {saving ? (
+            <div className="w-4 h-4 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+        </button>
+        
         {/* Reset button */}
         <button
           className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-          onClick={resetView}
+          onClick={resetViewAndItems}
           title="Reset whiteboard"
         >
           <RotateCcw className="w-4 h-4" />
@@ -760,20 +950,42 @@ const Whiteboard: React.FC = () => {
         onMouseUp={handleMouseUp}
         style={{ 
           backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
+          backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
+          backgroundPosition: `${offset.x}px ${offset.y}px`,
           cursor: isPanning ? 'grabbing' : 'default'
         }}
       >
-        {/* Render all items */}
-        {items.map(item => renderItem(item))}
+        {/* Apply zoom transformation to all items */}
+        <div 
+          className="absolute top-0 left-0 w-full h-full"
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+          }}
+        >
+          {/* Render all items */}
+          {items.map(item => renderItem(item))}
+        </div>
         
-        {/* Render connections */}
-        <svg className="absolute top-0 left-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
+        {/* Render connections - also apply transformations */}
+        <svg 
+          className="absolute top-0 left-0 w-full h-full pointer-events-none" 
+          style={{ 
+            zIndex: 1,
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+          }}
+        >
           {connections.map(conn => {
-            const sourceX = conn.sourcePoint.x;
-            const sourceY = conn.sourcePoint.y;
-            const targetX = conn.targetPoint.x;
-            const targetY = conn.targetPoint.y;
+            const sourceItem = items.find(i => i.id === conn.sourceId);
+            const targetItem = items.find(i => i.id === conn.targetId);
+            
+            if (!sourceItem || !targetItem) return null;
+            
+            const sourceX = sourceItem.x * zoom + (sourceItem.width || 0) * zoom / 2;
+            const sourceY = sourceItem.y * zoom + (sourceItem.height || 0) * zoom / 2;
+            const targetX = targetItem.x * zoom + (targetItem.width || 0) * zoom / 2;
+            const targetY = targetItem.y * zoom + (targetItem.height || 0) * zoom / 2;
             
             // Calculate control points for curved lines
             const midX = (sourceX + targetX) / 2;
@@ -837,6 +1049,41 @@ const Whiteboard: React.FC = () => {
             Click on another item to connect
           </div>
         )}
+        
+        {/* Zoom controls */}
+        <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-1 flex">
+          <button
+            onClick={handleZoomOut}
+            disabled={zoom <= MIN_ZOOM}
+            title="Zoom out (Ctrl + scroll)"
+            className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
+          >
+            <ZoomOut className="w-4 h-4 text-muted-foreground" />
+          </button>
+
+          <button
+            onClick={resetView}
+            title="Reset view"
+            className="px-2.5 py-1 text-xs font-bold tabular-nums text-foreground hover:text-primary rounded-lg hover:bg-background transition-all min-w-[44px] text-center"
+          >
+            {zoomPercent}%
+          </button>
+
+          <button
+            onClick={handleZoomIn}
+            disabled={zoom >= MAX_ZOOM}
+            title="Zoom in (Ctrl + scroll)"
+            className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
+          >
+            <ZoomIn className="w-4 h-4 text-muted-foreground" />
+          </button>
+
+          <div className="w-px h-6 bg-border mx-0.5" />
+
+          <button onClick={resetView} title="Reset to 100%" className="p-1.5 rounded-lg hover:bg-background transition-all">
+            <Maximize2 className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
       </div>
     </div>
   );
