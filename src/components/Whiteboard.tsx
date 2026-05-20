@@ -525,6 +525,36 @@ const Whiteboard: React.FC = () => {
     return () => clearTimeout(saveTimeout);
   }, [items, connections]);
 
+  const saveWhiteboard = async () => {
+    if (saving) return; // Prevent duplicate saves
+    
+    setSaving(true);
+    try {
+      if (whiteboardId) {
+        // Update existing whiteboard
+        await updateWhiteboard(whiteboardId, {
+          name: whiteboardName,
+          description: 'A collaborative whiteboard',
+          items,
+          connections
+        });
+      } else {
+        // Create new whiteboard
+        const result = await createWhiteboard({
+          name: whiteboardName,
+          description: 'A collaborative whiteboard',
+          items,
+          connections
+        });
+        setWhiteboardId(result.id);
+      }
+    } catch (error) {
+      console.error('Error saving whiteboard:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Cleanup event listeners
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {

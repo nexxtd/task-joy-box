@@ -1,4 +1,39 @@
-import { CanvasItem, Connection } from '@/components/Whiteboard';
+export interface CanvasItem {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  content?: string;
+  color?: string;
+  rotation?: number;
+  fontSize?: number;
+  borderColor?: string;
+  backgroundColor?: string;
+  connections?: ConnectionPoint[];
+  title?: string;
+  tasks?: Array<{ id: string; text: string; completed: boolean }>;
+  imageUrl?: string; // For images
+  fileUrl?: string; // For file attachments
+}
+
+export interface Connection {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  sourcePoint: { x: number; y: number };
+  targetPoint: { x: number; y: number };
+  type: 'straight' | 'curved' | 'elbow' | 'dotted';
+}
+
+interface ConnectionPoint {
+  id: string;
+  itemId: string;
+  x: number;
+  y: number;
+  connected: boolean;
+}
 
 export interface WhiteboardData {
   id: number;
