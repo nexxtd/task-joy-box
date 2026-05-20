@@ -2,14 +2,14 @@ import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { whiteboards, whiteboardItems, whiteboardConnections } from '../../shared/schema';
-import { useAuth } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
 // Get all whiteboards for the authenticated user
-router.get('/', useAuth, async (req, res) => {
+router.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = req.userId!;
     
     const userWhiteboards = await db
       .select()
@@ -24,10 +24,10 @@ router.get('/', useAuth, async (req, res) => {
 });
 
 // Get a specific whiteboard by ID
-router.get('/:id', useAuth, async (req, res) => {
+router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const whiteboardId = parseInt(req.params.id, 10);
-    const userId = req.user!.id;
+    const userId = req.userId!;
     
     const whiteboard = await db.query.whiteboards.findFirst({
       where: (wb) => eq(wb.id, whiteboardId),
@@ -65,10 +65,10 @@ router.get('/:id', useAuth, async (req, res) => {
 });
 
 // Create a new whiteboard
-router.post('/', useAuth, async (req, res) => {
+router.post('/', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { name, description, items = [], connections = [] } = req.body;
-    const userId = req.user!.id;
+    const userId = req.userId!;
     
     // Validate required fields
     if (!name) {
@@ -93,7 +93,7 @@ router.post('/', useAuth, async (req, res) => {
       
       // Create items if provided
       if (items && items.length > 0) {
-        const itemsToInsert = items.map(item => ({
+        const itemsToInsert = items.map((item: any) => ({
           whiteboardId: newWhiteboard.id,
           type: item.type,
           x: Math.round(item.x),
@@ -113,7 +113,7 @@ router.post('/', useAuth, async (req, res) => {
       
       // Create connections if provided
       if (connections && connections.length > 0) {
-        const connectionsToInsert = connections.map(conn => ({
+        const connectionsToInsert = connections.map((conn: any) => ({
           whiteboardId: newWhiteboard.id,
           sourceItemId: conn.sourceId,
           targetItemId: conn.targetId,
@@ -134,11 +134,11 @@ router.post('/', useAuth, async (req, res) => {
 });
 
 // Update an existing whiteboard
-router.put('/:id', useAuth, async (req, res) => {
+router.put('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const whiteboardId = parseInt(req.params.id, 10);
     const { name, description, items = [], connections = [] } = req.body;
-    const userId = req.user!.id;
+    const userId = req.userId!;
     
     // Verify the whiteboard belongs to the user
     const existingWhiteboard = await db.query.whiteboards.findFirst({
@@ -181,7 +181,7 @@ router.put('/:id', useAuth, async (req, res) => {
       
       // Insert updated items
       if (items && items.length > 0) {
-        const itemsToInsert = items.map(item => ({
+        const itemsToInsert = items.map((item: any) => ({
           whiteboardId,
           type: item.type,
           x: Math.round(item.x),
@@ -201,7 +201,7 @@ router.put('/:id', useAuth, async (req, res) => {
       
       // Insert updated connections
       if (connections && connections.length > 0) {
-        const connectionsToInsert = connections.map(conn => ({
+        const connectionsToInsert = connections.map((conn: any) => ({
           whiteboardId,
           sourceItemId: conn.sourceId,
           targetItemId: conn.targetId,
@@ -220,10 +220,10 @@ router.put('/:id', useAuth, async (req, res) => {
 });
 
 // Delete a whiteboard
-router.delete('/:id', useAuth, async (req, res) => {
+router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const whiteboardId = parseInt(req.params.id, 10);
-    const userId = req.user!.id;
+    const userId = req.userId!;
     
     // Verify the whiteboard belongs to the user
     const existingWhiteboard = await db.query.whiteboards.findFirst({

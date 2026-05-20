@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { 
   StickyNote, 
@@ -15,56 +15,17 @@ import {
   Move,
   RotateCcw,
   Trash2,
-  GripVertical,
-  Minus,
-  Circle,
-  Triangle,
-  SquareIcon,
-  Star,
-  ArrowRight,
-  AlignLeft,
-  CheckSquare,
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Save,
-  Download
+  Save
 } from 'lucide-react';
-import { createWhiteboard, getWhiteboardById, updateWhiteboard } from '@/services/whiteboardService';
+import { createWhiteboard, getWhiteboardById, updateWhiteboard, CanvasItem, Connection } from '@/services/whiteboardService';
 
 interface Tool {
   id: string;
   name: string;
   icon: React.ReactNode;
-}
-
-interface CanvasItem {
-  id: string;
-  type: string;
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  content?: string;
-  color?: string;
-  rotation?: number;
-  fontSize?: number;
-  borderColor?: string;
-  backgroundColor?: string;
-  connections?: ConnectionPoint[];
-  title?: string;
-  tasks?: Array<{ id: string; text: string; completed: boolean }>;
-  imageUrl?: string; // For images
-  fileUrl?: string; // For file attachments
-}
-
-interface Connection {
-  id: string;
-  sourceId: string;
-  targetId: string;
-  sourcePoint: { x: number; y: number };
-  targetPoint: { x: number; y: number };
-  type: 'straight' | 'curved' | 'elbow' | 'dotted';
 }
 
 interface ConnectionPoint {
@@ -106,10 +67,8 @@ const Whiteboard: React.FC = () => {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [whiteboardId, setWhiteboardId] = useState<number | null>(null);
-  const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +86,47 @@ const Whiteboard: React.FC = () => {
   const resetView = () => {
     setZoom(1);
     setOffset({ x: 0, y: 0 });
+  };
+
+  // Auto-save functionality
+  useEffect(() => {
+    const saveTimeout = setTimeout(() => {
+      if (items.length > 0 || connections.length > 0) {
+        saveWhiteboard();
+      }
+    }, 2000); // Save after 2 seconds of inactivity
+
+    return () => clearTimeout(saveTimeout);
+  }, [items, connections]);
+
+  const saveWhiteboard = async () => {
+    if (saving) return; // Prevent duplicate saves
+    
+    setSaving(true);
+    try {
+      if (whiteboardId) {
+        // Update existing whiteboard
+        await updateWhiteboard(whiteboardId, {
+          name: 'Untitled Whiteboard',
+          description: 'A collaborative whiteboard',
+          items,
+          connections
+        });
+      } else {
+        // Create new whiteboard
+        const result = await createWhiteboard({
+          name: 'Untitled Whiteboard',
+          description: 'A collaborative whiteboard',
+          items,
+          connections
+        });
+        setWhiteboardId(result.id);
+      }
+    } catch (error) {
+      console.error('Error saving whiteboard:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Handle canvas click to create items
@@ -296,7 +296,6 @@ const Whiteboard: React.FC = () => {
     if (!file) return;
     
     // For demo purposes, we're not actually uploading to a server
-    // In a real implementation, you'd upload to Supabase storage
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (rect.width / 2 - 90) / zoom; // Center on canvas
     const y = (rect.height / 2 - 60) / zoom; // Center on canvas
@@ -407,9 +406,6 @@ const Whiteboard: React.FC = () => {
         setItems(prev => prev.map(item => 
           item.id === selectedItem ? { ...item, x: newX, y: newY } : item
         ));
-        
-        // Update connections when item moves
-        updateConnectionsAfterItemMove(selectedItem, newX, newY);
       }
     } else if (isPanning) {
       // Panning the canvas
@@ -418,33 +414,6 @@ const Whiteboard: React.FC = () => {
         y: e.clientY - panStart.y
       });
     }
-  };
-
-  // Update connections when an item moves
-  const updateConnectionsAfterItemMove = (itemId: string, newX: number, newY: number) => {
-    setConnections(prev => prev.map(conn => {
-      const item = items.find(i => i.id === itemId);
-      if (!item) return conn;
-      
-      if (conn.sourceId === itemId) {
-        return {
-          ...conn,
-          sourcePoint: { 
-            x: newX * zoom + offset.x + (item.width || 0) * zoom / 2, 
-            y: newY * zoom + offset.y + (item.height || 0) * zoom / 2 
-          }
-        };
-      } else if (conn.targetId === itemId) {
-        return {
-          ...conn,
-          targetPoint: { 
-            x: newX * zoom + offset.x + (item.width || 0) * zoom / 2, 
-            y: newY * zoom + offset.y + (item.height || 0) * zoom / 2 
-          }
-        };
-      }
-      return conn;
-    }));
   };
 
   // Stop dragging or panning
@@ -491,68 +460,6 @@ const Whiteboard: React.FC = () => {
       }
       return item;
     }));
-  };
-
-  // Load whiteboard data if an ID is provided
-  useEffect(() => {
-    const loadWhiteboard = async () => {
-      if (whiteboardId) {
-        setIsLoading(true);
-        try {
-          const data = await getWhiteboardById(whiteboardId);
-          setItems(data.items);
-          setConnections(data.connections);
-          setWhiteboardName(data.name);
-        } catch (error) {
-          console.error('Error loading whiteboard:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadWhiteboard();
-  }, [whiteboardId]);
-
-  // Auto-save functionality
-  useEffect(() => {
-    const saveTimeout = setTimeout(() => {
-      if (items.length > 0 || connections.length > 0) {
-        saveWhiteboard();
-      }
-    }, 2000); // Save after 2 seconds of inactivity
-
-    return () => clearTimeout(saveTimeout);
-  }, [items, connections]);
-
-  const saveWhiteboard = async () => {
-    if (saving) return; // Prevent duplicate saves
-    
-    setSaving(true);
-    try {
-      if (whiteboardId) {
-        // Update existing whiteboard
-        await updateWhiteboard(whiteboardId, {
-          name: whiteboardName,
-          description: 'A collaborative whiteboard',
-          items,
-          connections
-        });
-      } else {
-        // Create new whiteboard
-        const result = await createWhiteboard({
-          name: whiteboardName,
-          description: 'A collaborative whiteboard',
-          items,
-          connections
-        });
-        setWhiteboardId(result.id);
-      }
-    } catch (error) {
-      console.error('Error saving whiteboard:', error);
-    } finally {
-      setSaving(false);
-    }
   };
 
   // Cleanup event listeners
@@ -917,16 +824,6 @@ const Whiteboard: React.FC = () => {
         className="hidden" 
       />
       
-      {/* Loading indicator */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-lg shadow-lg flex items-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-3"></div>
-            <span>Loading whiteboard...</span>
-          </div>
-        </div>
-      )}
-    
       {/* Left Sidebar Tool Selector */}
       <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-2">
         {tools.map(tool => (

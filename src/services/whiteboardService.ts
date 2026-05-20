@@ -1,3 +1,4 @@
+// Define types locally to avoid import issues
 export interface CanvasItem {
   id: string;
   type: string;
