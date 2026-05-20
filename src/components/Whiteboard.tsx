@@ -100,28 +100,131 @@ const Whiteboard: React.FC = () => {
     if (!canvasRef.current) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX - rect.left - offset.x;
+    const y = e.clientY - rect.top - offset.y;
 
     // Only create items when not dragging and with non-select tools
-    if (isDragging || activeTool === 'select' || activeTool === 'connector') return;
+    if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
 
     // Create new item based on active tool
-    const newItem: CanvasItem = {
-      id: `item-${Date.now()}`,
-      type: activeTool,
-      x,
-      y,
-      width: activeTool === 'sticky-note' ? 180 : 250,
-      height: activeTool === 'sticky-note' ? 180 : 200,
-      content: activeTool === 'sticky-note' || activeTool === 'text' 
-        ? 'Double click to edit...' 
-        : undefined,
-      color: activeTool === 'sticky-note' 
-        ? ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6'][Math.floor(Math.random() * 4)] 
-        : undefined,
-      connections: [],
-    };
+    let newItem: CanvasItem;
+    
+    switch(activeTool) {
+      case 'sticky-note':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 180,
+          height: 180,
+          content: 'Click to edit...',
+          color: ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6'][Math.floor(Math.random() * 4)],
+          connections: [],
+        };
+        break;
+        
+      case 'text':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 250,
+          height: 200,
+          content: 'Type your text here...',
+          backgroundColor: 'white',
+          connections: [],
+        };
+        break;
+        
+      case 'document':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 300,
+          height: 250,
+          content: 'Long-form content here...',
+          backgroundColor: 'white',
+          connections: [],
+        };
+        break;
+        
+      case 'image':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 200,
+          height: 150,
+          title: 'Image Placeholder',
+          connections: [],
+        };
+        break;
+        
+      case 'shape':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 120,
+          height: 120,
+          title: 'Shape',
+          connections: [],
+        };
+        break;
+        
+      case 'task':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 250,
+          height: 150,
+          title: 'New Task',
+          tasks: [
+            { id: 'task-1', text: 'Sample task', completed: false },
+            { id: 'task-2', text: 'Another task', completed: false }
+          ],
+          connections: [],
+        };
+        break;
+        
+      case 'mindmap':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 150,
+          height: 100,
+          content: 'Main Idea',
+          backgroundColor: '#f3e8ff', // soft purple
+          connections: [],
+        };
+        break;
+        
+      case 'file':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 180,
+          height: 120,
+          title: 'File Attachment',
+          connections: [],
+        };
+        break;
+        
+      default:
+        return; // Don't create an item for select or connector tools
+    }
 
     setItems(prev => [...prev, newItem]);
   };
@@ -158,10 +261,10 @@ const Whiteboard: React.FC = () => {
         
         if (sourceItem && targetItem) {
           // Calculate connection points
-          const sourceX = sourceItem.x + (sourceItem.width || 0) / 2;
-          const sourceY = sourceItem.y + (sourceItem.height || 0) / 2;
-          const targetX = targetItem.x + (targetItem.width || 0) / 2;
-          const targetY = targetItem.y + (targetItem.height || 0) / 2;
+          const sourceX = sourceItem.x + offset.x + (sourceItem.width || 0) / 2;
+          const sourceY = sourceItem.y + offset.y + (sourceItem.height || 0) / 2;
+          const targetX = targetItem.x + offset.x + (targetItem.width || 0) / 2;
+          const targetY = targetItem.y + offset.y + (targetItem.height || 0) / 2;
           
           const newConnection: Connection = {
             id: `conn-${Date.now()}`,
@@ -204,37 +307,51 @@ const Whiteboard: React.FC = () => {
     e.preventDefault();
   };
 
-  // Handle dragging
+  // Handle mouse movements for dragging items or panning
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !selectedItem || !canvasRef.current) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - dragOffset.x;
-    const y = e.clientY - rect.top - dragOffset.y;
-    
-    setItems(prev => prev.map(item => 
-      item.id === selectedItem ? { ...item, x, y } : item
-    ));
-    
-    // Update connections when item moves
+    if (isDragging && selectedItem) {
+      // Moving an item
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const newX = e.clientX - rect.left - offset.x - dragOffset.x;
+        const newY = e.clientY - rect.top - offset.y - dragOffset.y;
+        
+        setItems(prev => prev.map(item => 
+          item.id === selectedItem ? { ...item, x: newX, y: newY } : item
+        ));
+        
+        // Update connections when item moves
+        updateConnectionsAfterItemMove(selectedItem, newX, newY);
+      }
+    } else if (isPanning) {
+      // Panning the canvas
+      setOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+    }
+  };
+
+  // Update connections when an item moves
+  const updateConnectionsAfterItemMove = (itemId: string, newX: number, newY: number) => {
     setConnections(prev => prev.map(conn => {
-      const sourceItem = items.find(i => i.id === conn.sourceId);
-      const targetItem = items.find(i => i.id === conn.targetId);
+      const item = items.find(i => i.id === itemId);
+      if (!item) return conn;
       
-      if (sourceItem && sourceItem.id === selectedItem) {
+      if (conn.sourceId === itemId) {
         return {
           ...conn,
           sourcePoint: { 
-            x: sourceItem.x + (sourceItem.width || 0) / 2, 
-            y: sourceItem.y + (sourceItem.height || 0) / 2 
+            x: newX + offset.x + (item.width || 0) / 2, 
+            y: newY + offset.y + (item.height || 0) / 2 
           }
         };
-      } else if (targetItem && targetItem.id === selectedItem) {
+      } else if (conn.targetId === itemId) {
         return {
           ...conn,
           targetPoint: { 
-            x: targetItem.x + (targetItem.width || 0) / 2, 
-            y: targetItem.y + (targetItem.height || 0) / 2 
+            x: newX + offset.x + (item.width || 0) / 2, 
+            y: newY + offset.y + (item.height || 0) / 2 
           }
         };
       }
@@ -242,9 +359,10 @@ const Whiteboard: React.FC = () => {
     }));
   };
 
-  // Stop dragging
+  // Stop dragging or panning
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsPanning(false);
   };
 
   // Reset view
@@ -269,6 +387,21 @@ const Whiteboard: React.FC = () => {
     ));
     
     setSelectedItem(null);
+  };
+
+  // Toggle task completion
+  const toggleTaskCompletion = (itemId: string, taskId: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id === itemId && item.tasks) {
+        return {
+          ...item,
+          tasks: item.tasks?.map(task => 
+            task.id === taskId ? { ...task, completed: !task.completed } : task
+          )
+        };
+      }
+      return item;
+    }));
   };
 
   // Cleanup event listeners
@@ -321,35 +454,35 @@ const Whiteboard: React.FC = () => {
     const getConnectionPoints = () => {
       if (!showConnectionPoints) return null;
       
-      const centerX = item.x + (item.width || 0) / 2;
-      const centerY = item.y + (item.height || 0) / 2;
+      const centerX = item.x + offset.x + (item.width || 0) / 2;
+      const centerY = item.y + offset.y + (item.height || 0) / 2;
       
       return (
         <>
           {/* Top center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2"
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: centerX, top: item.y + offset.y }}
             onClick={(e) => handleConnectionPointClick(item.id, 'top', e)}
           />
           
           {/* Right center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2"
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: item.x + offset.x + (item.width || 0), top: centerY }}
             onClick={(e) => handleConnectionPointClick(item.id, 'right', e)}
           />
           
           {/* Bottom center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2"
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: centerX, top: item.y + offset.y + (item.height || 0) }}
             onClick={(e) => handleConnectionPointClick(item.id, 'bottom', e)}
           />
           
           {/* Left center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2"
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ left: item.x + offset.x, top: centerY }}
             onClick={(e) => handleConnectionPointClick(item.id, 'left', e)}
           />
@@ -596,7 +729,7 @@ const Whiteboard: React.FC = () => {
             className={cn(
               "p-2.5 rounded-lg transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
               activeTool === tool.id 
-                ? "bg-blue-100 text-blue-600 border border-blue-300" 
+                ? "bg-blue-100 text-blue-600 border border-blue-300 shadow-sm" 
                 : "text-gray-600"
             )}
             onClick={() => setActiveTool(tool.id)}
@@ -674,6 +807,7 @@ const Whiteboard: React.FC = () => {
                 strokeWidth="2"
                 fill="none"
                 strokeDasharray={conn.type === 'dotted' ? "5,5" : "none"}
+                className="transition-all duration-300"
               />
             );
           })}

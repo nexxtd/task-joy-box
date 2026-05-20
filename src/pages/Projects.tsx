@@ -8,7 +8,7 @@ import ListView from '@/components/ListView';
 import CalendarView from '@/components/CalendarView';
 import Whiteboard from '@/components/Whiteboard'; // Import the new Whiteboard component
 import { Task, ViewType } from '@/types/board';
-import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, SquareGantt } from 'lucide-react';
+import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, LayoutTemplate } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 
@@ -127,7 +127,7 @@ const Projects: React.FC = () => {
     { id: 'board' as ViewType, label: 'Board', icon: LayoutDashboard },
     { id: 'list' as ViewType,  label: 'List',  icon: List },
     { id: 'calendar' as ViewType, label: 'Calendar', icon: CalendarDays },
-    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: SquareGantt }, // Added whiteboard view
+    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: LayoutTemplate }, // Changed to a valid icon
   ];
 
   const zoomPct = Math.round(zoom * 100);
