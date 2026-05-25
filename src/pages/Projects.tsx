@@ -404,7 +404,7 @@ const Projects: React.FC = () => {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="flex gap-6 items-start"
+                    className="flex flex-nowrap gap-6 items-start min-w-max h-full"
                     data-no-pan="true"
                     onMouseDown={e => e.stopPropagation()}
                   >

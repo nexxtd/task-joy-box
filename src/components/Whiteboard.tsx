@@ -12,6 +12,7 @@ import {
   Paperclip,
   Plus,
   MousePointer2,
+  FolderKanban,
   Move,
   RotateCcw,
   Trash2,
@@ -59,6 +60,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     { id: 'task', name: 'Task Block', icon: <SquareCheckBig className="w-4 h-4" /> },
     { id: 'mindmap', name: 'Mindmap', icon: <GitBranch className="w-4 h-4" /> },
     { id: 'file', name: 'File Upload', icon: <Paperclip className="w-4 h-4" /> },
+    { id: 'board-column', name: 'Board Column', icon: <FolderKanban className="w-4 h-4" /> },
   ];
 
   const [activeTool, setActiveTool] = useState<string>('select');
@@ -309,6 +311,24 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         }
         return;
         
+      case 'board-column':
+        newItem = {
+          id: `item-${Date.now()}`,
+          type: activeTool,
+          x,
+          y,
+          width: 280,
+          height: 400,
+          title: 'Project Column',
+          tasks: [
+            { id: 'task-1', text: 'Analyze requirements', completed: true },
+            { id: 'task-2', text: 'Design UI/UX', completed: false },
+            { id: 'task-3', text: 'Implement core logic', completed: false }
+          ],
+          connections: [],
+        };
+        break;
+
       default:
         return; // Don't create an item for select or connector tools
     }
@@ -966,6 +986,65 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           </React.Fragment>
         );
         
+      case 'board-column':
+        return (
+          <React.Fragment key={item.id}>
+            <div
+              className={cn(baseClasses, "bg-background rounded-xl shadow-xl border-2 border-border overflow-hidden flex flex-col")}
+              style={{
+                left: item.x * zoom + offset.x,
+                top: item.y * zoom + offset.y,
+                width: (item.width || 0) * zoom,
+                height: (item.height || 0) * zoom,
+              }}
+              onClick={(e) => handleItemClick(item.id, e)}
+              onMouseDown={handleItemMouseDown}
+              onMouseEnter={() => setHoveredItem(item.id)}
+              onMouseLeave={() => setHoveredItem(null)}
+            >
+              <div className="bg-muted/50 p-3 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-primary" />
+                  <input
+                    type="text"
+                    value={item.title || 'Project Column'}
+                    className="bg-transparent font-bold text-xs uppercase tracking-wider text-foreground focus:outline-none"
+                    style={{ fontSize: 10 * zoom }}
+                    onChange={(e) => {
+                      setItems(prev => prev.map(i => 
+                        i.id === item.id ? { ...i, title: e.target.value } : i
+                      ));
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] text-muted-foreground font-bold">{(item.tasks?.length || 0)}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/10">
+                {item.tasks?.map(task => (
+                  <div key={task.id} className="bg-card border border-border p-2.5 rounded-lg shadow-sm hover:border-primary/30 transition-colors">
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() => toggleTaskCompletion(item.id, task.id)}
+                        className="mt-1 h-3 w-3 rounded-full border-border accent-primary"
+                        style={{ transform: `scale(${zoom})` }}
+                      />
+                      <span className={cn("text-xs font-medium leading-tight", task.completed ? "line-through text-muted-foreground" : "text-foreground")} style={{ fontSize: 11 * zoom }}>
+                        {task.text}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <button className="w-full py-2 border border-dashed border-border rounded-lg text-[10px] text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
+                  + Add Card
+                </button>
+              </div>
+            </div>
+            {getConnectionPoints()}
+          </React.Fragment>
+        );
+
       default:
         return null;
     }
@@ -1187,15 +1266,29 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             }
             
             return (
-              <path
-                key={conn.id}
-                d={pathData}
-                stroke="#94a3b8"
-                strokeWidth="2"
-                fill="none"
-                strokeDasharray={conn.type === 'dotted' ? "5,5" : "none"}
-                className="transition-all duration-300"
-              />
+              <g key={conn.id}>
+                <defs>
+                  <marker
+                    id={`arrowhead-${conn.id}`}
+                    markerWidth="10"
+                    markerHeight="7"
+                    refX="9"
+                    refY="3.5"
+                    orient="auto"
+                  >
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
+                  </marker>
+                </defs>
+                <path
+                  d={pathData}
+                  stroke="#000"
+                  strokeWidth="2"
+                  fill="none"
+                  markerEnd={`url(#arrowhead-${conn.id})`}
+                  strokeDasharray={conn.type === 'dotted' ? "5,5" : "none"}
+                  className="transition-all duration-300"
+                />
+              </g>
             );
           })}
         </svg>
