@@ -109,7 +109,56 @@ export async function initDatabase() {
     // Columns table new columns
     await addColumnIfNotExists('columns', 'icon', 'TEXT');
 
-    console.log('Database initialization complete');
+    // --- WHITEBOARD TABLES ---
+    console.log('Verifying whiteboard tables...');
+    
+    // Whiteboards table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whiteboards (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // Whiteboard Items table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whiteboard_items (
+        id SERIAL PRIMARY KEY,
+        whiteboard_id INTEGER NOT NULL REFERENCES whiteboards(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL,
+        width INTEGER DEFAULT 200,
+        height INTEGER DEFAULT 150,
+        content TEXT,
+        color TEXT,
+        title TEXT,
+        tasks TEXT,
+        image_url TEXT,
+        file_url TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // Whiteboard Connections table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS whiteboard_connections (
+        id SERIAL PRIMARY KEY,
+        whiteboard_id INTEGER NOT NULL REFERENCES whiteboards(id) ON DELETE CASCADE,
+        source_item_id INTEGER NOT NULL REFERENCES whiteboard_items(id) ON DELETE CASCADE,
+        target_item_id INTEGER NOT NULL REFERENCES whiteboard_items(id) ON DELETE CASCADE,
+        connection_type TEXT DEFAULT 'curved',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    console.log('Whiteboard tables verified');
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails

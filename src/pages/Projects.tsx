@@ -160,11 +160,14 @@ const Projects: React.FC = () => {
         connections: []
       });
       setWhiteboards([...whiteboards, newWhiteboard]);
-      // Automatically select the newly created whiteboard
+      // Automatically select and switch to the newly created whiteboard
       setSelectedWhiteboardId(newWhiteboard.id);
+      setCurrentView('whiteboard');
       setShowWhiteboardDropdown(false);
     } catch (error) {
       console.error('Failed to create whiteboard:', error);
+      // Optional: Add a toast notification here
+      alert('Failed to create whiteboard. Please try again.');
     }
   };
 
