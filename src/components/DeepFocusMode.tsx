@@ -233,7 +233,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             </div>
           </div>
           <button
-            onClick={() => document.body.dispatchEvent(new CustomEvent('closeDeepFocus'))}
+            onClick={() => document.dispatchEvent(new CustomEvent('closeDeepFocus'))}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all"
           >
             <X className="w-4 h-4" />

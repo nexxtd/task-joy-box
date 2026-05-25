@@ -1,4 +1,5 @@
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
+export type TaskStatus = 'to_do' | 'in_progress' | 'review' | 'completed';
 export type LabelColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink';
 export type ViewType = 'board' | 'list' | 'whiteboard' | 'calendar';
 
@@ -44,6 +45,7 @@ export interface Task {
   id: string;
   title: string;
   description: string;
+  status?: TaskStatus;
   priority: Priority;
   labels: Label[];
   checklists: Checklist[];

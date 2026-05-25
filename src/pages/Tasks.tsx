@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
-import { Attachment, Priority, PRIORITY_CONFIG, Task } from '@/types/board';
+import { Attachment, Priority, PRIORITY_CONFIG, Task, TaskStatus } from '@/types/board';
 import {
   ArrowDownAz,
+  BarChart3,
   Brain,
   CalendarClock,
   CheckCircle2,
@@ -13,15 +14,28 @@ import {
   MoreHorizontal,
   Paperclip,
   Plus,
-  RefreshCw,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
+const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
+  { value: 'completed', label: 'Completed' },
+  { value: 'review', label: 'Review' },
+  { value: 'to_do', label: 'To Do' },
+  { value: 'in_progress', label: 'In Progress' },
+];
+
+type AnalysisType = 'overview' | 'duration' | 'deadlines' | 'focus';
+
+interface AnalysisResult {
+  title: string;
+  summary: string;
+  lines: string[];
+}
 
 const formatDate = (value?: string) => {
   if (!value) return 'No due date';
@@ -31,7 +45,16 @@ const formatDate = (value?: string) => {
 };
 
 const isTaskCompleted = (task: Task, completedColumnIds: Set<string>) => {
-  return Boolean(task.completed || completedColumnIds.has(task.columnId));
+  return Boolean(task.completed || task.status === 'completed' || completedColumnIds.has(task.columnId));
+};
+
+const getTaskStatus = (task: Task): TaskStatus => {
+  if (task.status) return task.status;
+  return task.completed ? 'completed' : 'to_do';
+};
+
+const getStatusLabel = (status: TaskStatus) => {
+  return STATUS_OPTIONS.find(option => option.value === status)?.label || 'To Do';
 };
 
 const daysUntilAutoDelete = (completedAt?: string) => {
@@ -55,12 +78,10 @@ const Tasks: React.FC = () => {
     board,
     addTask,
     updateTask,
-    reorderTasks,
     toggleChecklistItem,
     addChecklistItem,
     deleteChecklistItem,
   } = useBoardContext();
-  const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -75,6 +96,7 @@ const Tasks: React.FC = () => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+  const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
@@ -86,8 +108,10 @@ const Tasks: React.FC = () => {
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
 
-  const [prioritizing, setPrioritizing] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(true);
+  const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
   const completedColumnIds = useMemo(() => {
     return new Set(
@@ -96,8 +120,6 @@ const Tasks: React.FC = () => {
         .map(c => c.id)
     );
   }, [board.columns]);
-
-  const isPremium = user?.subscriptionTier === 'premium';
 
   const filtered = useMemo(() => {
     const bySearch = board.tasks.filter(task =>
@@ -146,34 +168,105 @@ const Tasks: React.FC = () => {
 
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
 
-  const handleAiPrioritize = async () => {
-    if (!isPremium || prioritizing) return;
-    setPrioritizing(true);
-    try {
-      const res = await fetch('/api/ai/premium/ai-prioritize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ tasks: board.tasks }),
-      });
-      if (res.ok) {
-        const orderedIds = await res.json();
-        reorderTasks(orderedIds);
-      }
-    } catch (err) {
-      console.error('AI Prioritize error:', err);
-    } finally {
-      setPrioritizing(false);
+  const runTaskAnalysis = (type: AnalysisType) => {
+    setAnalysisLoading(true);
+    setAnalysisPanelOpen(true);
+
+    const scope = [...filtered.active, ...filtered.completed];
+    const activeScope = scope.filter(task => !isTaskCompleted(task, completedColumnIds));
+    const now = new Date();
+
+    let result: AnalysisResult;
+
+    if (type === 'overview') {
+      const completedCount = scope.filter(task => isTaskCompleted(task, completedColumnIds)).length;
+      const reviewCount = scope.filter(task => getTaskStatus(task) === 'review').length;
+      const withSubtasks = scope.filter(task => (task.subtasks || []).length > 0).length;
+      const withChecklist = scope.filter(task => task.checklists.some(cl => cl.items.length > 0)).length;
+
+      result = {
+        title: 'Task Overview',
+        summary: `${scope.length} tasks in current view`,
+        lines: [
+          `${activeScope.length} active`,
+          `${completedCount} completed`,
+          `${reviewCount} in review`,
+          `${withSubtasks} with sub-tasks`,
+          `${withChecklist} with checklist items`,
+        ],
+      };
+    } else if (type === 'duration') {
+      const mismatches = activeScope
+        .map(task => {
+          const estimated = Math.max(0, Number(task.duration) || 0);
+          const subtaskTotal = (task.subtasks || []).reduce((sum, st) => sum + Math.max(0, Number(st.durationMinutes) || 0), 0);
+          return { task, estimated, subtaskTotal };
+        })
+        .filter(item => item.estimated !== item.subtaskTotal)
+        .slice(0, 8);
+
+      result = {
+        title: 'Duration Check',
+        summary: mismatches.length === 0 ? 'All visible tasks match estimated duration.' : `${mismatches.length} tasks need duration review`,
+        lines: mismatches.length === 0
+          ? ['No mismatches found.']
+          : mismatches.map(item => `${item.task.title}: estimate ${item.estimated} min vs sub-tasks ${item.subtaskTotal} min`),
+      };
+    } else if (type === 'deadlines') {
+      const urgentDeadlines = activeScope
+        .filter(task => !!task.dueDate)
+        .map(task => {
+          const due = new Date(`${task.dueDate}T${task.dueTime || '23:59'}`);
+          return { task, due };
+        })
+        .filter(item => !Number.isNaN(item.due.getTime()))
+        .sort((a, b) => a.due.getTime() - b.due.getTime())
+        .slice(0, 8);
+
+      result = {
+        title: 'Deadline Risk',
+        summary: urgentDeadlines.length === 0 ? 'No due dates in current view.' : 'Closest deadlines first',
+        lines: urgentDeadlines.length === 0
+          ? ['Add due dates to get deadline analysis.']
+          : urgentDeadlines.map(item => {
+              const overdue = item.due.getTime() < now.getTime();
+              return `${item.task.title}: ${overdue ? 'overdue' : formatDate(item.task.dueDate)} (${getStatusLabel(getTaskStatus(item.task))})`;
+            }),
+      };
+    } else {
+      const focusCandidates = activeScope
+        .map(task => {
+          const priorityWeight = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 }[task.priority];
+          const dueWeight = task.dueDate ? Math.max(0, 100000000000 - new Date(`${task.dueDate}T${task.dueTime || '23:59'}`).getTime()) : 0;
+          const checklistTotal = task.checklists.reduce((sum, list) => sum + list.items.length, 0);
+          const checklistDone = task.checklists.reduce((sum, list) => sum + list.items.filter(item => item.completed).length, 0);
+          const completionPenalty = checklistTotal > 0 ? checklistDone / checklistTotal : 0;
+          const score = priorityWeight * 100 + dueWeight / 1000000000 - completionPenalty * 10;
+          return { task, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+
+      result = {
+        title: 'Focus Candidates',
+        summary: focusCandidates.length === 0 ? 'No active tasks to analyze.' : 'Suggested tasks to tackle next',
+        lines: focusCandidates.length === 0
+          ? ['Create active tasks to generate suggestions.']
+          : focusCandidates.map(item => `${item.task.title} (${getStatusLabel(getTaskStatus(item.task))}, ${item.task.priority})`),
+      };
     }
+
+    setAnalysisResult(result);
+    setAnalysisLoading(false);
   };
 
   const toggleTaskCompletion = (task: Task) => {
     const currentlyCompleted = isTaskCompleted(task, completedColumnIds);
     if (currentlyCompleted) {
-      updateTask(task.id, { completed: false, completedAt: undefined });
+      updateTask(task.id, { completed: false, completedAt: undefined, status: 'to_do' });
       return;
     }
-    updateTask(task.id, { completed: true, completedAt: new Date().toISOString() });
+    updateTask(task.id, { completed: true, completedAt: new Date().toISOString(), status: 'completed' });
   };
 
   const toggleExpand = (taskId: string) => {
@@ -206,6 +299,7 @@ const Tasks: React.FC = () => {
     setNewTaskTitle('');
     setNewTaskDescription('');
     setNewTaskPriority('medium');
+    setNewTaskStatus('to_do');
     setNewTaskDueDate('');
     setNewTaskDueTime('');
     setNewTaskDuration(60);
@@ -233,6 +327,7 @@ const Tasks: React.FC = () => {
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
+      status: newTaskStatus,
       priority: newTaskPriority,
       dueDate: newTaskDueDate || undefined,
       dueTime: newTaskDueTime || undefined,
@@ -246,7 +341,8 @@ const Tasks: React.FC = () => {
       checklists: checklistItems.length
         ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
         : [],
-      completed: false,
+      completed: newTaskStatus === 'completed',
+      completedAt: newTaskStatus === 'completed' ? new Date().toISOString() : undefined,
     });
 
     if (newFiles.length > 0) {
@@ -358,15 +454,11 @@ const Tasks: React.FC = () => {
               Sort by Due Date
             </button>
             <button
-              onClick={handleAiPrioritize}
-              disabled={prioritizing || !isPremium}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all ${
-                (!isPremium || prioritizing) && 'opacity-50 cursor-not-allowed'
-              }`}
-              title={!isPremium ? 'Premium feature: AI Prioritization' : ''}
+              onClick={() => setAnalysisPanelOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
             >
-              {prioritizing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              {prioritizing ? 'Prioritizing...' : 'AI Prioritise'}
+              <BarChart3 className="w-3.5 h-3.5" />
+              Task Analysis
             </button>
           </div>
         </div>
@@ -386,31 +478,35 @@ const Tasks: React.FC = () => {
             const isOverdue = Boolean(task.dueDate && new Date(task.dueDate) < new Date());
             const isExpanded = expandedTaskIds.includes(task.id);
             const subtasksDone = (task.subtasks || []).length > 0 && task.subtasks.every(st => st.completed);
+            const status = getTaskStatus(task);
+            const subtaskCount = task.subtasks?.length || 0;
+            const checklistCount = task.checklists.reduce((sum, list) => sum + list.items.length, 0);
 
             return (
               <div
                 key={task.id}
+                onClick={() => setOpenTaskId(task.id)}
                 className="border border-border rounded-xl bg-card transition-all duration-300"
               >
                 <div className="flex items-center gap-3 px-4 py-3">
                   <button
-                    onClick={() => toggleTaskCompletion(task)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTaskCompletion(task);
+                    }}
                     className="text-muted-foreground hover:text-label-green transition-colors"
                     title="Mark complete"
                   >
                     <Circle className="w-5 h-5" />
                   </button>
 
-                  <button
-                    onClick={() => setOpenTaskId(task.id)}
-                    className="text-sm font-medium text-left text-foreground hover:text-primary truncate"
-                  >
+                  <span className="text-sm font-medium text-left text-foreground hover:text-primary truncate">
                     {task.title}
-                  </button>
+                  </span>
 
                   <div className="flex items-center gap-2 ml-2">
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      In Progress
+                      {getStatusLabel(status)}
                     </span>
                     {task.dueDate && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${isOverdue ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
@@ -420,6 +516,16 @@ const Tasks: React.FC = () => {
                     {subtasksDone && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                         All sub-tasks done
+                      </span>
+                    )}
+                    {subtaskCount > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {checklistCount > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        {checklistCount} checklist
                       </span>
                     )}
                   </div>
@@ -434,14 +540,20 @@ const Tasks: React.FC = () => {
                       </span>
                     )}
                     <button
-                      onClick={() => toggleExpand(task.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpand(task.id);
+                      }}
                       className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
                       title={isExpanded ? 'Collapse' : 'Expand'}
                     >
                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                     <button
-                      onClick={() => openDeepFocus(task)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeepFocus(task);
+                      }}
                       className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
                       title="Open Deep Focus"
                     >
@@ -451,7 +563,15 @@ const Tasks: React.FC = () => {
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/20">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="border-t border-border px-4 py-3 space-y-4 bg-muted/20"
+                  >
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Description</h4>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
+                    </div>
+
                     <div>
                       <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
                       {task.subtasks.length === 0 ? (
@@ -503,11 +623,6 @@ const Tasks: React.FC = () => {
                     </div>
 
                     <div>
-                      <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Description</h4>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
-                    </div>
-
-                    <div>
                       <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Attachments</h4>
                       {(!task.attachments || task.attachments.length === 0) ? (
                         <p className="text-xs text-muted-foreground">No attachments</p>
@@ -533,7 +648,8 @@ const Tasks: React.FC = () => {
           })}
 
           {(filtered.completed.length > 0 || completedOpen) && (
-            <div className="border border-border rounded-xl bg-card">
+            <div className="mt-8 pt-6 border-t border-border/80">
+              <div className="border border-border rounded-xl bg-card">
               <button
                 onClick={() => setCompletedOpen(prev => !prev)}
                 className="w-full flex items-center justify-between px-4 py-3"
@@ -548,21 +664,25 @@ const Tasks: React.FC = () => {
                     <p className="text-xs text-muted-foreground px-2 py-3">No completed tasks</p>
                   )}
                   {filtered.completed.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/40">
+                    <div
+                      key={task.id}
+                      onClick={() => setOpenTaskId(task.id)}
+                      className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/40 cursor-pointer"
+                    >
                       <button
-                        onClick={() => toggleTaskCompletion(task)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTaskCompletion(task);
+                        }}
                         className="text-label-green"
                         title="Mark active"
                       >
                         <CheckCircle2 className="w-5 h-5" />
                       </button>
 
-                      <button
-                        onClick={() => setOpenTaskId(task.id)}
-                        className="text-sm text-left text-muted-foreground line-through hover:text-primary"
-                      >
+                      <span className="text-sm text-left text-muted-foreground line-through hover:text-primary">
                         {task.title}
-                      </button>
+                      </span>
 
                       <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                         {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'} left
@@ -571,6 +691,7 @@ const Tasks: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           )}
         </div>
@@ -605,12 +726,12 @@ const Tasks: React.FC = () => {
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
                   <select
-                    value={newTaskColumnId || board.columns[0]?.id || ''}
-                    onChange={e => setNewTaskColumnId(e.target.value)}
+                    value={newTaskStatus}
+                    onChange={e => setNewTaskStatus(e.target.value as TaskStatus)}
                     className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                   >
-                    {board.columns.map(column => (
-                      <option key={column.id} value={column.id}>{column.title}</option>
+                    {STATUS_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </div>
@@ -692,7 +813,7 @@ const Tasks: React.FC = () => {
                     const previousDuration = newTaskSubtasks
                       .slice(0, index)
                       .reduce((sum, st) => sum + st.durationMinutes, 0);
-                    const remaining = Math.max(0, newTaskDuration - previousDuration);
+                    const remaining = Math.max(0, newTaskDuration - (previousDuration + subtask.durationMinutes));
 
                     return (
                       <div key={subtask.id} className="grid grid-cols-[1fr_120px_120px] gap-2 items-center">
@@ -789,6 +910,62 @@ const Tasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      {analysisPanelOpen && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="absolute inset-0 bg-black/10 pointer-events-auto" onClick={() => setAnalysisPanelOpen(false)} />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-sm bg-card border-l border-border shadow-[-10px_0_30px_rgba(0,0,0,0.08)] pointer-events-auto flex flex-col">
+            <header className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Task Analysis</h3>
+              </div>
+              <button onClick={() => setAnalysisPanelOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </header>
+
+            <div className="p-4 space-y-2 border-b border-border">
+              <button onClick={() => runTaskAnalysis('overview')} className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 hover:bg-muted text-sm">
+                Overview
+              </button>
+              <button onClick={() => runTaskAnalysis('duration')} className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 hover:bg-muted text-sm">
+                Duration Check
+              </button>
+              <button onClick={() => runTaskAnalysis('deadlines')} className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 hover:bg-muted text-sm">
+                Deadline Risk
+              </button>
+              <button onClick={() => runTaskAnalysis('focus')} className="w-full text-left px-3 py-2 rounded-lg bg-muted/40 hover:bg-muted text-sm">
+                Focus Suggestions
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {analysisLoading && (
+                <p className="text-sm text-muted-foreground">Analyzing tasks...</p>
+              )}
+              {!analysisLoading && !analysisResult && (
+                <p className="text-sm text-muted-foreground">Choose an analysis action.</p>
+              )}
+              {!analysisLoading && analysisResult && (
+                <div className="space-y-3">
+                  <h4 className="text-base font-semibold text-foreground">{analysisResult.title}</h4>
+                  <p className="text-sm text-muted-foreground">{analysisResult.summary}</p>
+                  <div className="space-y-2">
+                    {analysisResult.lines.map((line, idx) => (
+                      <div key={`${line}-${idx}`} className="text-sm text-foreground bg-muted/30 rounded-lg px-3 py-2">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 };
@@ -818,9 +995,26 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [newCommentText, setNewCommentText] = useState('');
   const [subtaskMenuOpenId, setSubtaskMenuOpenId] = useState<string | null>(null);
   const [subtaskMenuValue, setSubtaskMenuValue] = useState<number>(0);
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [editingChecklistText, setEditingChecklistText] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [uploading, setUploading] = useState(false);
 
   const checklist = task.checklists[0];
+  const taskDuration = Math.max(0, Number(task.duration) || 0);
+  const getSubtaskDuration = (subtask: Task['subtasks'][number]) => Math.max(0, Number(subtask.durationMinutes) || 0);
+  const getRemainingBefore = (index: number) => {
+    const usedBefore = (task.subtasks || [])
+      .slice(0, index)
+      .reduce((sum, item) => sum + getSubtaskDuration(item), 0);
+    return Math.max(0, taskDuration - usedBefore);
+  };
+  const getRemainingAfter = (index: number) => {
+    const remainingBefore = getRemainingBefore(index);
+    const currentDuration = getSubtaskDuration(task.subtasks[index]);
+    return Math.max(0, remainingBefore - currentDuration);
+  };
 
   const dueWarning = useMemo(() => {
     if (!task.dueDate || !task.dueTime) return null;
@@ -833,8 +1027,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     return null;
   }, [task.dueDate, task.dueTime]);
 
-  const subtaskTotal = (task.subtasks || []).reduce((sum, subtask) => sum + (subtask.durationMinutes || 0), 0);
-  const durationMismatch = (task.duration || 0) !== subtaskTotal;
+  const subtaskTotal = (task.subtasks || []).reduce((sum, subtask) => sum + getSubtaskDuration(subtask), 0);
+  const durationMismatch = taskDuration !== subtaskTotal;
   const allSubtasksDone = (task.subtasks || []).length > 0 && task.subtasks.every(subtask => subtask.completed);
 
   const updateSubtask = (subtaskId: string, updates: Partial<Task['subtasks'][number]>) => {
@@ -879,29 +1073,75 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     setNewChecklistText('');
   };
 
+  const saveChecklistItemEdit = (itemId: string) => {
+    if (!checklist) return;
+    const next = editingChecklistText.trim();
+    if (!next) {
+      setEditingChecklistItemId(null);
+      setEditingChecklistText('');
+      return;
+    }
+    const updatedChecklists = task.checklists.map(list => {
+      if (list.id !== checklist.id) return list;
+      return {
+        ...list,
+        items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
+      };
+    });
+    onUpdateTask(task.id, { checklists: updatedChecklists });
+    setEditingChecklistItemId(null);
+    setEditingChecklistText('');
+  };
+
+  const removeSubtask = (subtaskId: string) => {
+    const updated = (task.subtasks || []).filter(subtask => subtask.id !== subtaskId);
+    onUpdateTask(task.id, { subtasks: updated });
+  };
+
+  const saveSubtaskEdit = (subtaskId: string) => {
+    const next = editingSubtaskText.trim();
+    if (!next) {
+      setEditingSubtaskId(null);
+      setEditingSubtaskText('');
+      return;
+    }
+    updateSubtask(subtaskId, { text: next });
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
+    const uploaded: Attachment[] = [];
 
-    try {
-      const res = await fetch(`/api/attachments/${task.id}`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      if (res.ok) {
-        const attachment: Attachment = await res.json();
-        onUpdateTask(task.id, { attachments: [...(task.attachments || []), attachment] });
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch(`/api/attachments/${task.id}`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+        if (res.ok) {
+          const attachment: Attachment = await res.json();
+          uploaded.push(attachment);
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
       }
-    } catch (error) {
-      console.error('Error uploading file:', error);
-    } finally {
-      setUploading(false);
     }
+
+    if (uploaded.length > 0) {
+      onUpdateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
+    }
+
+    setUploading(false);
+    e.currentTarget.value = '';
   };
 
   const deleteAttachment = async (attachmentId: string) => {
@@ -950,12 +1190,19 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             <div>
               <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
               <select
-                value={task.columnId}
-                onChange={e => onUpdateTask(task.id, { columnId: e.target.value })}
+                value={getTaskStatus(task)}
+                onChange={e => {
+                  const nextStatus = e.target.value as TaskStatus;
+                  onUpdateTask(task.id, {
+                    status: nextStatus,
+                    completed: nextStatus === 'completed',
+                    completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
+                  });
+                }}
                 className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
               >
-                {boardColumns.map(column => (
-                  <option key={column.id} value={column.id}>{column.title}</option>
+                {STATUS_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </div>
@@ -1046,38 +1293,65 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
             <div className="space-y-2">
               {(task.subtasks || []).map((subtask, index) => {
-                const previousDuration = task.subtasks
-                  .slice(0, index)
-                  .reduce((sum, item) => sum + (item.durationMinutes || 0), 0);
-                const remaining = Math.max(0, (task.duration || 0) - previousDuration);
+                const remainingBefore = getRemainingBefore(index);
+                const remainingAfter = getRemainingAfter(index);
+                const isEditingSubtask = editingSubtaskId === subtask.id;
 
                 return (
-                  <div key={subtask.id} className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 relative">
+                  <div key={subtask.id} className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 relative">
                     <button onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}>
                       {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-label-green" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
                     </button>
-                    <input
-                      value={subtask.text}
-                      onChange={e => updateSubtask(subtask.id, { text: e.target.value })}
-                      className={`bg-transparent text-sm focus:outline-none ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                    />
-                    <span className="text-xs text-muted-foreground">{subtask.durationMinutes || 0} min</span>
-                    <span className="text-xs text-muted-foreground">{remaining} min left</span>
+                    {isEditingSubtask ? (
+                      <input
+                        value={editingSubtaskText}
+                        onChange={e => setEditingSubtaskText(e.target.value)}
+                        onBlur={() => saveSubtaskEdit(subtask.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveSubtaskEdit(subtask.id);
+                          if (e.key === 'Escape') {
+                            setEditingSubtaskId(null);
+                            setEditingSubtaskText('');
+                          }
+                        }}
+                        className={`bg-transparent text-sm border-b border-border focus:outline-none ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingSubtaskId(subtask.id);
+                          setEditingSubtaskText(subtask.text);
+                        }}
+                        className={`text-left text-sm ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
+                      >
+                        {subtask.text}
+                      </button>
+                    )}
+                    <span className="text-xs text-muted-foreground">{getSubtaskDuration(subtask)} min</span>
+                    <span className="text-xs text-muted-foreground">{remainingAfter} min left</span>
                     <button
                       onClick={() => {
                         setSubtaskMenuOpenId(prev => prev === subtask.id ? null : subtask.id);
-                        setSubtaskMenuValue(subtask.durationMinutes || 0);
+                        setSubtaskMenuValue(getSubtaskDuration(subtask));
                       }}
                       className="p-1 rounded hover:bg-muted"
                     >
                       <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
                     </button>
+                    <button
+                      onClick={() => removeSubtask(subtask.id)}
+                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                      title="Delete sub-task"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
 
                     {subtaskMenuOpenId === subtask.id && (
                       <div className="absolute right-2 top-9 z-10 w-64 bg-popover border border-border rounded-xl shadow-xl p-3 space-y-2">
-                        <div className="text-xs text-muted-foreground">Current: {subtask.durationMinutes || 0} min</div>
-                        <div className="text-xs text-muted-foreground">Task total: {task.duration || 0} min</div>
-                        <div className="text-xs text-muted-foreground">Remaining: {remaining} min</div>
+                        <div className="text-xs text-muted-foreground">Current: {getSubtaskDuration(subtask)} min</div>
+                        <div className="text-xs text-muted-foreground">Task total: {taskDuration} min</div>
+                        <div className="text-xs text-muted-foreground">Remaining after this: {remainingAfter} min</div>
                         <input
                           type="number"
                           min={0}
@@ -1141,12 +1415,39 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                       onChange={() => onToggleChecklistItem(task.id, checklist.id, item.id)}
                       className="w-4 h-4 rounded border-border accent-primary"
                     />
-                    <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
+                    {editingChecklistItemId === item.id ? (
+                      <input
+                        value={editingChecklistText}
+                        onChange={e => setEditingChecklistText(e.target.value)}
+                        onBlur={() => saveChecklistItemEdit(item.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveChecklistItemEdit(item.id);
+                          if (e.key === 'Escape') {
+                            setEditingChecklistItemId(null);
+                            setEditingChecklistText('');
+                          }
+                        }}
+                        className="flex-1 bg-transparent border-b border-border text-sm focus:outline-none text-foreground"
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingChecklistItemId(item.id);
+                          setEditingChecklistText(item.text);
+                        }}
+                        className={`flex-1 text-left ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
+                        title="Click to edit item"
+                      >
+                        {item.text}
+                      </button>
+                    )}
                     <button
                       onClick={() => onDeleteChecklistItem(task.id, checklist.id, item.id)}
-                      className="ml-auto text-muted-foreground hover:text-destructive"
+                      className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                      title="Delete checklist item"
                     >
-                      <X className="w-3 h-3" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -1166,17 +1467,19 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-            <input type="file" onChange={handleFileUpload} disabled={uploading} className="text-sm" />
+            <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="text-sm" />
             {uploading && <p className="text-xs text-muted-foreground">Uploading...</p>}
             <div className="space-y-1">
               {(task.attachments || []).map(attachment => (
                 <div key={attachment.id} className="flex items-center gap-2 text-sm">
-                  <button
-                    onClick={() => window.open(`/api/attachments/file/${attachment.id}`, '_blank')}
-                    className="text-primary hover:underline"
+                  <a
+                    href={`/api/attachments/file/${attachment.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline break-all"
                   >
                     {attachment.fileName}
-                  </button>
+                  </a>
                   <button
                     onClick={() => deleteAttachment(attachment.id)}
                     className="text-xs text-muted-foreground hover:text-destructive"

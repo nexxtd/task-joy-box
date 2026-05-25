@@ -197,7 +197,10 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newTask: Task = {
       ...task,
       id: genId(),
+      status: 'to_do',
       columnId: firstCol.id,
+      completed: false,
+      completedAt: undefined,
       dueDate: nextDate,
       order: b.tasks.filter(t => t.columnId === firstCol.id).length,
       createdAt: new Date().toISOString().split('T')[0],
@@ -221,8 +224,9 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newTask: Task = {
         id: taskId,
         title,
-        description: details.description || '',
-        priority: details.priority || 'none',
+      description: details.description || '',
+      status: details.status || 'to_do',
+      priority: details.priority || 'none',
         labels: details.labels || [],
         checklists: details.checklists || [],
         subtasks: details.subtasks || [],
