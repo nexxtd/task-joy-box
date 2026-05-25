@@ -475,7 +475,14 @@ const Projects: React.FC = () => {
       {/* Removed calendar view */}
       
       {/* Added Whiteboard view */}
-      {currentView === 'whiteboard' && <div className="animate-fade-in flex-1"><Whiteboard whiteboardId={selectedWhiteboardId} /></div>}
+      {currentView === 'whiteboard' && (
+        <div className="animate-fade-in flex-1">
+          <Whiteboard 
+            key={selectedWhiteboardId} 
+            whiteboardId={selectedWhiteboardId || undefined} 
+          />
+        </div>
+      )}
 
       {/* Task detail modal */}
       {currentTask && (

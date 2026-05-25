@@ -79,7 +79,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const [localWhiteboardId, setLocalWhiteboardId] = useState<number | null>(whiteboardId || null);
   const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
   const [isEditingName, setIsEditingName] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(true);
+  const [showTutorial, setShowTutorial] = useState(false); // Default to false if we have an ID
+  const [isLoading, setIsLoading] = useState(!!whiteboardId);
   const [tempItemPos, setTempItemPos] = useState<{x: number, y: number} | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,22 +106,32 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   useEffect(() => {
     if (localWhiteboardId) {
       const loadWhiteboard = async () => {
+        setIsLoading(true);
         try {
           const data = await getWhiteboardById(localWhiteboardId);
-          setItems(data.items);
-          setConnections(data.connections);
-          setWhiteboardName(data.name);
+          setItems(data.items || []);
+          setConnections(data.connections || []);
+          setWhiteboardName(data.name || 'Untitled Whiteboard');
         } catch (error) {
           console.error('Error loading whiteboard:', error);
+        } finally {
+          setIsLoading(false);
+          // Only show tutorial for new whiteboards if no items exist
+          if (items.length === 0) setShowTutorial(true);
         }
       };
 
       loadWhiteboard();
+    } else {
+      setIsLoading(false);
+      setShowTutorial(true);
     }
   }, [localWhiteboardId]);
 
   // Auto-save functionality
   useEffect(() => {
+    if (isLoading) return; // Don't auto-save while loading
+
     const saveTimeout = setTimeout(() => {
       if (items.length > 0 || connections.length > 0) {
         saveWhiteboard();
@@ -130,10 +141,12 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     // Cleanup function - runs when component unmounts
     return () => {
       clearTimeout(saveTimeout);
-      // Save one final time when component unmounts
-      saveWhiteboard();
+      // Save one final time when component unmounts if not loading
+      if (!isLoading) {
+        saveWhiteboard();
+      }
     };
-  }, [items, connections, whiteboardName]);
+  }, [items, connections, whiteboardName, isLoading]);
 
   // Handle visibility change (when user switches tabs/windows) to save whiteboard
   useEffect(() => {
@@ -151,7 +164,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   }, [items, connections, whiteboardName, localWhiteboardId]);
 
   const saveWhiteboard = async () => {
-    if (saving) return; // Prevent duplicate saves
+    if (saving || isLoading) return; // Prevent duplicate saves or saving while loading
     
     setSaving(true);
     try {
@@ -1055,6 +1068,15 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
 
   return (
     <div className="flex h-full w-full bg-gray-50 relative">
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-[110] bg-background/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+            <p className="text-sm font-medium text-muted-foreground">Loading your canvas...</p>
+          </div>
+        </div>
+      )}
       {/* Hidden file inputs */}
       <input 
         type="file" 
