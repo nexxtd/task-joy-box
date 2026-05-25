@@ -44,8 +44,8 @@ const formatDate = (value?: string) => {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-const isTaskCompleted = (task: Task, completedColumnIds: Set<string>) => {
-  return Boolean(task.completed || task.status === 'completed' || completedColumnIds.has(task.columnId));
+const isTaskCompleted = (task: Task) => {
+  return Boolean(task.completed || task.status === 'completed');
 };
 
 const getTaskStatus = (task: Task): TaskStatus => {
@@ -113,14 +113,6 @@ const Tasks: React.FC = () => {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
-  const completedColumnIds = useMemo(() => {
-    return new Set(
-      board.columns
-        .filter(c => c.title.toLowerCase().trim() === 'completed')
-        .map(c => c.id)
-    );
-  }, [board.columns]);
-
   const filtered = useMemo(() => {
     const bySearch = board.tasks.filter(task =>
       task.title.toLowerCase().includes(search.toLowerCase().trim())
@@ -136,8 +128,8 @@ const Tasks: React.FC = () => {
       return task.columnId === groupFilterId;
     });
 
-    const active = byGroup.filter(task => !isTaskCompleted(task, completedColumnIds));
-    const completed = byGroup.filter(task => isTaskCompleted(task, completedColumnIds));
+    const active = byGroup.filter(task => !isTaskCompleted(task));
+    const completed = byGroup.filter(task => isTaskCompleted(task));
 
     const sortByDue = (a: Task, b: Task) => {
       const aDate = a.dueDate ? new Date(`${a.dueDate}T${a.dueTime || '23:59'}`) : null;
@@ -162,7 +154,7 @@ const Tasks: React.FC = () => {
     });
 
     return { active: activeSorted, completed: completedSorted };
-  }, [board.tasks, completedColumnIds, groupFilterId, priorityFilter, search, sortByDueDate]);
+  }, [board.tasks, groupFilterId, priorityFilter, search, sortByDueDate]);
 
   const matchingCount = filtered.active.length + filtered.completed.length;
 
@@ -173,13 +165,13 @@ const Tasks: React.FC = () => {
     setAnalysisPanelOpen(true);
 
     const scope = [...filtered.active, ...filtered.completed];
-    const activeScope = scope.filter(task => !isTaskCompleted(task, completedColumnIds));
+    const activeScope = scope.filter(task => !isTaskCompleted(task));
     const now = new Date();
 
     let result: AnalysisResult;
 
     if (type === 'overview') {
-      const completedCount = scope.filter(task => isTaskCompleted(task, completedColumnIds)).length;
+      const completedCount = scope.filter(task => isTaskCompleted(task)).length;
       const reviewCount = scope.filter(task => getTaskStatus(task) === 'review').length;
       const withSubtasks = scope.filter(task => (task.subtasks || []).length > 0).length;
       const withChecklist = scope.filter(task => task.checklists.some(cl => cl.items.length > 0)).length;
@@ -261,7 +253,7 @@ const Tasks: React.FC = () => {
   };
 
   const toggleTaskCompletion = (task: Task) => {
-    const currentlyCompleted = isTaskCompleted(task, completedColumnIds);
+    const currentlyCompleted = isTaskCompleted(task);
     if (currentlyCompleted) {
       updateTask(task.id, { completed: false, completedAt: undefined, status: 'to_do' });
       return;
@@ -365,20 +357,6 @@ const Tasks: React.FC = () => {
     resetTaskDraft();
     setAddingTask(false);
   };
-
-  if (openTask) {
-    return (
-      <TaskFullView
-        task={openTask}
-        onBack={() => setOpenTaskId(null)}
-        boardColumns={board.columns}
-        onUpdateTask={updateTask}
-        onToggleChecklistItem={toggleChecklistItem}
-        onAddChecklistItem={addChecklistItem}
-        onDeleteChecklistItem={deleteChecklistItem}
-      />
-    );
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -966,6 +944,18 @@ const Tasks: React.FC = () => {
           </aside>
         </div>
       )}
+
+      {openTask && (
+        <TaskFullView
+          task={openTask}
+          onClose={() => setOpenTaskId(null)}
+          boardColumns={board.columns}
+          onUpdateTask={updateTask}
+          onToggleChecklistItem={toggleChecklistItem}
+          onAddChecklistItem={addChecklistItem}
+          onDeleteChecklistItem={deleteChecklistItem}
+        />
+      )}
     </div>
   );
 };
@@ -973,7 +963,7 @@ const Tasks: React.FC = () => {
 interface TaskFullViewProps {
   task: Task;
   boardColumns: Array<{ id: string; title: string; color: string }>;
-  onBack: () => void;
+  onClose: () => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   onToggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   onAddChecklistItem: (taskId: string, checklistId: string, text: string) => void;
@@ -983,7 +973,7 @@ interface TaskFullViewProps {
 const TaskFullView: React.FC<TaskFullViewProps> = ({
   task,
   boardColumns,
-  onBack,
+  onClose,
   onUpdateTask,
   onToggleChecklistItem,
   onAddChecklistItem,
@@ -1001,18 +991,23 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  const checklist = task.checklists[0];
+  const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
+  const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
+  const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
+    ? task.subtasks
+    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
+  const primaryChecklist = checklistLists[0];
   const taskDuration = Math.max(0, Number(task.duration) || 0);
   const getSubtaskDuration = (subtask: Task['subtasks'][number]) => Math.max(0, Number(subtask.durationMinutes) || 0);
   const getRemainingBefore = (index: number) => {
-    const usedBefore = (task.subtasks || [])
+    const usedBefore = effectiveSubtasks
       .slice(0, index)
       .reduce((sum, item) => sum + getSubtaskDuration(item), 0);
     return Math.max(0, taskDuration - usedBefore);
   };
   const getRemainingAfter = (index: number) => {
     const remainingBefore = getRemainingBefore(index);
-    const currentDuration = getSubtaskDuration(task.subtasks[index]);
+    const currentDuration = getSubtaskDuration(effectiveSubtasks[index]);
     return Math.max(0, remainingBefore - currentDuration);
   };
 
@@ -1027,21 +1022,28 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     return null;
   }, [task.dueDate, task.dueTime]);
 
-  const subtaskTotal = (task.subtasks || []).reduce((sum, subtask) => sum + getSubtaskDuration(subtask), 0);
+  const subtaskTotal = effectiveSubtasks.reduce((sum, subtask) => sum + getSubtaskDuration(subtask), 0);
   const durationMismatch = taskDuration !== subtaskTotal;
-  const allSubtasksDone = (task.subtasks || []).length > 0 && task.subtasks.every(subtask => subtask.completed);
+  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(subtask => subtask.completed);
+
+  const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
+    const nextChecklists = legacySubtasksChecklist
+      ? task.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
+      : task.checklists;
+    onUpdateTask(task.id, { subtasks: nextSubtasks, checklists: nextChecklists });
+  };
 
   const updateSubtask = (subtaskId: string, updates: Partial<Task['subtasks'][number]>) => {
-    const updated = task.subtasks.map(subtask =>
+    const updated = effectiveSubtasks.map(subtask =>
       subtask.id === subtaskId ? { ...subtask, ...updates } : subtask
     );
-    onUpdateTask(task.id, { subtasks: updated });
+    persistSubtasks(updated);
   };
 
   const addSubtask = () => {
     if (!newSubtaskText.trim()) return;
     const updated = [
-      ...(task.subtasks || []),
+      ...effectiveSubtasks,
       {
         id: crypto.randomUUID(),
         text: newSubtaskText.trim(),
@@ -1049,14 +1051,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0),
       },
     ];
-    onUpdateTask(task.id, { subtasks: updated });
+    persistSubtasks(updated);
     setNewSubtaskText('');
     setNewSubtaskDuration(10);
   };
 
   const addChecklistItemToTask = () => {
     if (!newChecklistText.trim()) return;
-    if (!checklist) {
+    if (!primaryChecklist) {
       const newChecklist = {
         id: crypto.randomUUID(),
         title: 'Checklist',
@@ -1064,17 +1066,16 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           { id: crypto.randomUUID(), text: newChecklistText.trim(), completed: false },
         ],
       };
-      onUpdateTask(task.id, { checklists: [newChecklist] });
+      onUpdateTask(task.id, { checklists: [...checklistLists, newChecklist] });
       setNewChecklistText('');
       return;
     }
 
-    onAddChecklistItem(task.id, checklist.id, newChecklistText.trim());
+    onAddChecklistItem(task.id, primaryChecklist.id, newChecklistText.trim());
     setNewChecklistText('');
   };
 
-  const saveChecklistItemEdit = (itemId: string) => {
-    if (!checklist) return;
+  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
     const next = editingChecklistText.trim();
     if (!next) {
       setEditingChecklistItemId(null);
@@ -1082,7 +1083,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       return;
     }
     const updatedChecklists = task.checklists.map(list => {
-      if (list.id !== checklist.id) return list;
+      if (list.id !== checklistId) return list;
       return {
         ...list,
         items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
@@ -1094,8 +1095,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const removeSubtask = (subtaskId: string) => {
-    const updated = (task.subtasks || []).filter(subtask => subtask.id !== subtaskId);
-    onUpdateTask(task.id, { subtasks: updated });
+    const updated = effectiveSubtasks.filter(subtask => subtask.id !== subtaskId);
+    persistSubtasks(updated);
   };
 
   const saveSubtaskEdit = (subtaskId: string) => {
@@ -1175,16 +1176,19 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <button onClick={onBack} className="text-sm text-primary hover:underline">Back to task list</button>
-
-        <div className="bg-card border border-border rounded-2xl p-5 space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
           <input
             value={task.title}
             onChange={e => onUpdateTask(task.id, { title: e.target.value })}
             className="w-full bg-transparent text-2xl font-semibold text-foreground focus:outline-none"
           />
+          <button onClick={onClose} className="ml-3 p-2 rounded-lg hover:bg-muted text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
@@ -1292,7 +1296,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             )}
 
             <div className="space-y-2">
-              {(task.subtasks || []).map((subtask, index) => {
+              {effectiveSubtasks.map((subtask, index) => {
                 const remainingBefore = getRemainingBefore(index);
                 const remainingAfter = getRemainingAfter(index);
                 const isEditingSubtask = editingSubtaskId === subtask.id;
@@ -1404,51 +1408,58 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-            {!checklist && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-            {checklist && (
+            {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+            {checklistLists.length > 0 && (
               <div className="space-y-1.5">
-                {checklist.items.map(item => (
-                  <div key={item.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={item.completed}
-                      onChange={() => onToggleChecklistItem(task.id, checklist.id, item.id)}
-                      className="w-4 h-4 rounded border-border accent-primary"
-                    />
-                    {editingChecklistItemId === item.id ? (
-                      <input
-                        value={editingChecklistText}
-                        onChange={e => setEditingChecklistText(e.target.value)}
-                        onBlur={() => saveChecklistItemEdit(item.id)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') saveChecklistItemEdit(item.id);
-                          if (e.key === 'Escape') {
-                            setEditingChecklistItemId(null);
-                            setEditingChecklistText('');
-                          }
-                        }}
-                        className="flex-1 bg-transparent border-b border-border text-sm focus:outline-none text-foreground"
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingChecklistItemId(item.id);
-                          setEditingChecklistText(item.text);
-                        }}
-                        className={`flex-1 text-left ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
-                        title="Click to edit item"
-                      >
-                        {item.text}
-                      </button>
+                {checklistLists.map(list => (
+                  <div key={list.id} className="space-y-1.5">
+                    {checklistLists.length > 1 && (
+                      <div className="text-[11px] uppercase text-muted-foreground font-semibold">{list.title}</div>
                     )}
-                    <button
-                      onClick={() => onDeleteChecklistItem(task.id, checklist.id, item.id)}
-                      className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
-                      title="Delete checklist item"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {list.items.map(item => (
+                      <div key={item.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={item.completed}
+                          onChange={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                          className="w-4 h-4 rounded border-border accent-primary"
+                        />
+                        {editingChecklistItemId === item.id ? (
+                          <input
+                            value={editingChecklistText}
+                            onChange={e => setEditingChecklistText(e.target.value)}
+                            onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveChecklistItemEdit(list.id, item.id);
+                              if (e.key === 'Escape') {
+                                setEditingChecklistItemId(null);
+                                setEditingChecklistText('');
+                              }
+                            }}
+                            className="flex-1 bg-transparent border-b border-border text-sm focus:outline-none text-foreground"
+                            autoFocus
+                          />
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingChecklistItemId(item.id);
+                              setEditingChecklistText(item.text);
+                            }}
+                            className={`flex-1 text-left ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
+                            title="Click to edit item"
+                          >
+                            {item.text}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                          className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
+                          title="Delete checklist item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -1521,7 +1532,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             )}
             <span className="text-xs text-muted-foreground">Due: {formatDate(task.dueDate)}</span>
           </div>
-        </div>
       </div>
     </div>
   );
