@@ -138,6 +138,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const uploadingItemId = useRef<string | null>(null);
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
   const zoomPercent = Math.round(zoom * 100);
@@ -651,10 +652,24 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     const reader = new FileReader();
     reader.onload = ev => {
       const src = ev.target?.result as string;
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const pos = tempItemPos ?? { x: (rect.width / 2 - 100) / zoom, y: (rect.height / 2 - 75) / zoom };
-      setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'image', ...pos, width: 200, height: 150, imageUrl: src, title: file.name, connections: [] }]);
-      setTempItemPos(null);
+      
+      // If uploading to a specific item, update that item
+      if (uploadingItemId.current) {
+        setItems(prev => prev.map(item => {
+          if (item.id === uploadingItemId.current) {
+            const newImage = { id: `img-${Date.now()}`, url: src, description: '' };
+            return { ...item, images: [...(item.images || []), newImage] };
+          }
+          return item;
+        }));
+        uploadingItemId.current = null;
+      } else {
+        // Otherwise create a new image item (legacy behavior)
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const pos = tempItemPos ?? { x: (rect.width / 2 - 100) / zoom, y: (rect.height / 2 - 75) / zoom };
+        setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'image', ...pos, width: 200, height: 150, imageUrl: src, title: file.name, connections: [] }]);
+        setTempItemPos(null);
+      }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -663,10 +678,23 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const pos = tempItemPos ?? { x: (rect.width / 2 - 90) / zoom, y: (rect.height / 2 - 60) / zoom };
-    setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: URL.createObjectURL(file), connections: [] }]);
-    setTempItemPos(null);
+    
+    // If uploading to a specific item, update that item
+    if (uploadingItemId.current) {
+      setItems(prev => prev.map(item => {
+        if (item.id === uploadingItemId.current) {
+          return { ...item, fileUrl: URL.createObjectURL(file), title: file.name };
+        }
+        return item;
+      }));
+      uploadingItemId.current = null;
+    } else {
+      // Otherwise create a new file item (legacy behavior)
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const pos = tempItemPos ?? { x: (rect.width / 2 - 90) / zoom, y: (rect.height / 2 - 60) / zoom };
+      setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: URL.createObjectURL(file), connections: [] }]);
+      setTempItemPos(null);
+    }
     e.target.value = '';
   };
 
@@ -890,7 +918,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                 <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-700 truncate">{item.title || 'Document'}</span>
                   <div className="flex gap-1">
-                    <button onClick={e => { stopEdit(e); fileInputRef.current?.click(); }} className="p-1 hover:bg-gray-200 rounded">
+                    <button onClick={e => { stopEdit(e); uploadingItemId.current = item.id; fileInputRef.current?.click(); }} className="p-1 hover:bg-gray-200 rounded">
                       <Edit3 className="w-3 h-3" />
                     </button>
                     <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, fileUrl: '' } : i)); }} className="p-1 hover:bg-red-100 rounded text-red-500">
@@ -911,7 +939,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center bg-gray-50">
-                <button onClick={e => { stopEdit(e); fileInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                <button onClick={e => { stopEdit(e); uploadingItemId.current = item.id; fileInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
                   <FileText className="w-8 h-8 text-gray-400" />
                   <span className="text-sm text-gray-500">Upload file</span>
                 </button>
@@ -942,7 +970,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           >
             {imageCount === 0 ? (
               <div className="flex-1 flex items-center justify-center bg-gray-50">
-                <button onClick={e => { stopEdit(e); imageInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                <button onClick={e => { stopEdit(e); uploadingItemId.current = item.id; imageInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
                   <Image className="w-8 h-8 text-gray-400" />
                   <span className="text-sm text-gray-500">Add image</span>
                 </button>
@@ -977,7 +1005,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             )}
             {imageCount < 5 && (
               <button
-                onClick={e => { stopEdit(e); imageInputRef.current?.click(); }}
+                onClick={e => { stopEdit(e); uploadingItemId.current = item.id; imageInputRef.current?.click(); }}
                 className="border-t border-gray-200 py-2 text-xs text-gray-400 hover:text-primary hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Add Image
