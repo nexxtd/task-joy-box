@@ -135,6 +135,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [showConnectionToolbar, setShowConnectionToolbar] = useState(false);
 
+  // Dropdown states
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showBlockMenu, setShowBlockMenu] = useState(false);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +177,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     });
   };
 
-  // ── Tutorial (once per user) ─────────────────────────────────────────────
+  // ── Auto-save with debounce ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoading && whiteboardId) {
+        saveWhiteboard();
+      }
+    }, 1000); // Auto-save 1 second after last change
+
+    return () => clearTimeout(timer);
+  }, [items, connections, whiteboardName, isLoading, whiteboardId]);
   useEffect(() => {
     const seen = localStorage.getItem('whiteboard-tutorial-seen');
     if (!seen) {
@@ -515,6 +528,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     setConnections(prev => prev.filter(c => c.sourceId !== selectedItem && c.targetId !== selectedItem));
     setSelectedItem(null);
     addToHistory();
+    saveWhiteboard();
   };
 
   // ── Global block actions ───────────────────────────────────────────────────
@@ -531,28 +545,33 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     setItems(prev => [...prev, newItem]);
     setSelectedItem(newItem.id);
     addToHistory();
+    saveWhiteboard();
   };
 
   const lockItem = (itemId: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, locked: !i.locked } : i));
     addToHistory();
+    saveWhiteboard();
   };
 
   const bringForward = (itemId: string) => {
     const maxZ = Math.max(...items.map(i => i.zIndex || 1));
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, zIndex: maxZ + 1 } : i));
     addToHistory();
+    saveWhiteboard();
   };
 
   const sendBackward = (itemId: string) => {
     const minZ = Math.min(...items.map(i => i.zIndex || 1));
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, zIndex: Math.max(1, minZ - 1) } : i));
     addToHistory();
+    saveWhiteboard();
   };
 
   const changeItemColor = (itemId: string, color: string) => {
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, color, backgroundColor: color } : i));
     addToHistory();
+    saveWhiteboard();
   };
 
   // ── Connection actions ─────────────────────────────────────────────────────
@@ -561,16 +580,19 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     setSelectedConnection(null);
     setShowConnectionToolbar(false);
     addToHistory();
+    saveWhiteboard();
   };
 
   const changeConnectionColor = (connectionId: string, color: string) => {
     setConnections(prev => prev.map(c => c.id === connectionId ? { ...c, color } : c));
     addToHistory();
+    saveWhiteboard();
   };
 
   const changeConnectionThickness = (connectionId: string, thickness: 'thin' | 'medium' | 'thick') => {
     setConnections(prev => prev.map(c => c.id === connectionId ? { ...c, thickness } : c));
     addToHistory();
+    saveWhiteboard();
   };
 
   // ── Export functionality ─────────────────────────────────────────────────────
@@ -663,12 +685,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           return item;
         }));
         uploadingItemId.current = null;
+        addToHistory();
+        saveWhiteboard();
       } else {
         // Otherwise create a new image item (legacy behavior)
         const rect = canvasRef.current!.getBoundingClientRect();
         const pos = tempItemPos ?? { x: (rect.width / 2 - 100) / zoom, y: (rect.height / 2 - 75) / zoom };
         setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'image', ...pos, width: 200, height: 150, imageUrl: src, title: file.name, connections: [] }]);
         setTempItemPos(null);
+        addToHistory();
+        saveWhiteboard();
       }
     };
     reader.readAsDataURL(file);
@@ -688,12 +714,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         return item;
       }));
       uploadingItemId.current = null;
+      addToHistory();
+      saveWhiteboard();
     } else {
       // Otherwise create a new file item (legacy behavior)
       const rect = canvasRef.current!.getBoundingClientRect();
       const pos = tempItemPos ?? { x: (rect.width / 2 - 90) / zoom, y: (rect.height / 2 - 60) / zoom };
       setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: URL.createObjectURL(file), connections: [] }]);
       setTempItemPos(null);
+      addToHistory();
+      saveWhiteboard();
     }
     e.target.value = '';
   };
@@ -758,20 +788,25 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         </div>
         
         {/* Color picker */}
-        <div className="relative group">
-          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+        <div className="relative">
+          <button 
+            onClick={() => setShowColorPicker(!showColorPicker)}
+            className="p-1.5 text-gray-500 hover:text-gray-700"
+          >
             <Palette className="w-4 h-4" />
           </button>
-          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-5 gap-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-            {colors.map(color => (
-              <button
-                key={color}
-                onClick={() => changeItemColor(item.id, color)}
-                className={`w-6 h-6 rounded ${item.color === color ? 'ring-2 ring-blue-500' : ''}`}
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
+          {showColorPicker && (
+            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-5 gap-1 z-50">
+              {colors.map(color => (
+                <button
+                  key={color}
+                  onClick={() => { changeItemColor(item.id, color); setShowColorPicker(false); }}
+                  className={`w-6 h-6 rounded ${item.color === color ? 'ring-2 ring-blue-500' : ''}`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+          )}
         </div>
         
         {/* Delete */}
@@ -782,25 +817,30 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         <div className="w-px h-4 bg-gray-200 mx-1" />
         
         {/* Three-dot menu */}
-        <div className="relative group">
-          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+        <div className="relative">
+          <button 
+            onClick={() => setShowBlockMenu(!showBlockMenu)}
+            className="p-1.5 text-gray-500 hover:text-gray-700"
+          >
             <MoreVertical className="w-4 h-4" />
           </button>
-          <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity min-w-[150px]">
-            <button onClick={() => lockItem(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-              {item.locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              {item.locked ? 'Unlock' : 'Lock'}
-            </button>
-            <button onClick={() => duplicateItem(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-              <Copy className="w-4 h-4" /> Duplicate
-            </button>
-            <button onClick={() => bringForward(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-              <ArrowUp className="w-4 h-4" /> Bring Forward
-            </button>
-            <button onClick={() => sendBackward(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
-              <ArrowDown className="w-4 h-4" /> Send Backward
-            </button>
-          </div>
+          {showBlockMenu && (
+            <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 min-w-[150px]">
+              <button onClick={() => { lockItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                {item.locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                {item.locked ? 'Unlock' : 'Lock'}
+              </button>
+              <button onClick={() => { duplicateItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                <Copy className="w-4 h-4" /> Duplicate
+              </button>
+              <button onClick={() => { bringForward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                <ArrowUp className="w-4 h-4" /> Bring Forward
+              </button>
+              <button onClick={() => { sendBackward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+                <ArrowDown className="w-4 h-4" /> Send Backward
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1059,19 +1099,19 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             {isSelected && (
               <>
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) + 15 } : i))} className="p-1 hover:bg-gray-100 rounded">
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) + 15 } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded">
                     <RotateCw className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) - 15 } : i))} className="p-1 hover:bg-gray-100 rounded">
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) - 15 } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded">
                     <RotateCcw className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="absolute -right-12 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
-                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
                 </div>
               </>
             )}
@@ -1441,9 +1481,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 w-64 z-30">
               <div className="p-2 border-b border-gray-100">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setShowWhiteboardDropdown(false);
-                    // Create new whiteboard logic
+                    const newWhiteboard = await createWhiteboard({
+                      name: 'Untitled Whiteboard',
+                      items: [],
+                      connections: [],
+                    });
+                    if (newWhiteboard) {
+                      window.location.href = `/whiteboard/${newWhiteboard.id}`;
+                    }
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-primary"
                 >
@@ -1486,7 +1533,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   {['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#64748b'].map(color => (
                     <button
                       key={color}
-                      onClick={() => setWhiteboardColor(color)}
+                      onClick={() => { setWhiteboardColor(color); saveWhiteboard(); }}
                       className={`w-6 h-6 rounded-full border-2 ${whiteboardColor === color ? 'border-gray-900' : 'border-transparent'}`}
                       style={{ backgroundColor: color }}
                     />
