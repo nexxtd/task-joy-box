@@ -143,6 +143,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const [showTextFormatPopup, setShowTextFormatPopup] = useState(false);
   const [showTextTypePopup, setShowTextTypePopup] = useState(false);
+  const [showShapeSelector, setShowShapeSelector] = useState(false);
+  const [showShapeEditPopup, setShowShapeEditPopup] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -836,6 +838,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const renderBlockToolbar = (item: CanvasItem) => {
     const colors = ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6', '#f3e8ff', '#ffedd5', '#e0f2fe', '#dcfce7', '#fee2e2', '#f1f5f9'];
     const isTextBlock = item.type === 'text' || item.type === 'sticky-note';
+    const isShapeBlock = item.type === 'shape';
     
     return (
       <div className="absolute -top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
@@ -907,6 +910,17 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           </div>
         )}
         
+        {/* Shape edit button for shape blocks */}
+        {isShapeBlock && (
+          <button
+            onClick={() => setShowShapeEditPopup(!showShapeEditPopup)}
+            className="p-1.5 text-gray-500 hover:text-gray-700"
+            title="Edit shape"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
+        )}
+        
         {/* Delete */}
         <button onClick={() => deleteSelectedItem()} className="p-1.5 text-gray-500 hover:text-red-500">
           <Trash2 className="w-4 h-4" />
@@ -940,6 +954,92 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             </div>
           )}
         </div>
+        
+        {/* Shape edit popup */}
+        {isShapeBlock && showShapeEditPopup && (
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 w-64">
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Fill colour</label>
+                <div className="flex gap-1 flex-wrap">
+                  {colors.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => { changeItemColor(item.id, color); }}
+                      className={`w-6 h-6 rounded border-2 ${item.color === color ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-300'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Border colour</label>
+                <div className="flex gap-1 flex-wrap">
+                  {colors.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderColor: color } : i)); }}
+                      className={`w-6 h-6 rounded border-2 ${item.borderColor === color ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-300'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Border thickness</label>
+                <div className="flex gap-1">
+                  {['thin', 'medium', 'thick'].map(thickness => (
+                    <button
+                      key={thickness}
+                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderThickness: thickness } : i)); }}
+                      className={`px-2 py-1 text-xs rounded ${item.borderThickness === thickness ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                    >
+                      {thickness}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Border style</label>
+                <div className="flex gap-1">
+                  {['solid', 'dashed', 'dotted'].map(style => (
+                    <button
+                      key={style}
+                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderStyle: style } : i)); }}
+                      className={`px-2 py-1 text-xs rounded ${item.borderStyle === style ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Opacity: {item.opacity || 100}%</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={item.opacity || 100}
+                  onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, opacity: parseInt(e.target.value) } : i))}
+                  className="w-full"
+                />
+              </div>
+              {(item.shapeType === 'square' || item.shapeType === 'rectangle') && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Corner radius: {item.borderRadius || 0}px</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    value={item.borderRadius || 0}
+                    onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderRadius: parseInt(e.target.value) } : i))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1061,18 +1161,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           >
             {item.fileUrl ? (
               <>
-                <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700 truncate">{item.title || 'Document'}</span>
-                  <div className="flex gap-1">
-                    <button onClick={e => { stopEdit(e); uploadingItemId.current = item.id; fileInputRef.current?.click(); }} className="p-1 hover:bg-gray-200 rounded">
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                    <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, fileUrl: '' } : i)); }} className="p-1 hover:bg-red-100 rounded text-red-500">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex-1 p-3 flex items-center justify-center bg-gray-50">
+                <div className="relative flex-1 p-3 flex items-center justify-center bg-gray-50">
                   {item.fileUrl.endsWith('.pdf') || item.fileUrl.endsWith('.doc') || item.fileUrl.endsWith('.docx') ? (
                     <div className="text-center">
                       <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -1081,6 +1170,23 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   ) : (
                     <img src={item.fileUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
                   )}
+                  {/* File controls in top right */}
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    <button
+                      onClick={e => { stopEdit(e); uploadingItemId.current = item.id; fileInputRef.current?.click(); }}
+                      className="p-1 bg-white rounded shadow hover:bg-gray-100"
+                      title="Edit file"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, fileUrl: '' } : i)); }}
+                      className="p-1 bg-white rounded shadow hover:bg-red-100"
+                      title="Delete file"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </>
             ) : (
