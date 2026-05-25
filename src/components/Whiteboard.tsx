@@ -748,9 +748,11 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             >
               <div className="p-3 h-full rounded-lg border border-white/50" style={{ fontSize: 14 * zoom }}>
                 <textarea
-                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
-                  defaultValue={item.content || 'Click to edit...'}
+                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans cursor-text"
+                  value={item.content ?? 'Click to edit...'}
                   style={{ fontFamily: "'Comic Sans MS', cursive, sans-serif" }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     setItems(prev => prev.map(i => 
                       i.id === item.id ? { ...i, content: e.target.value } : i
@@ -781,8 +783,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             >
               <div className="p-4 h-full rounded-lg" style={{ fontSize: 14 * zoom }}>
                 <textarea
-                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
-                  defaultValue={item.content || 'Type your text here...'}
+                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans cursor-text"
+                  value={item.content ?? 'Type your text here...'}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     setItems(prev => prev.map(i => 
                       i.id === item.id ? { ...i, content: e.target.value } : i
@@ -815,8 +819,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                 <div className="flex flex-col h-full">
                   <div className="font-bold mb-2 text-gray-700">Document Title</div>
                   <textarea
-                    className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans flex-grow"
-                    defaultValue={item.content || 'Document content goes here...'}
+                    className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans flex-grow cursor-text"
+                    value={item.content ?? 'Document content goes here...'}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       setItems(prev => prev.map(i => 
                         i.id === item.id ? { ...i, content: e.target.value } : i
@@ -906,7 +912,9 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   <input
                     type="text"
                     value={item.title || 'New Task'}
-                    className="w-full bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 cursor-text"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       setItems(prev => prev.map(i => 
                         i.id === item.id ? { ...i, title: e.target.value } : i
@@ -921,6 +929,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                         type="checkbox"
                         checked={task.completed}
                         onChange={() => toggleTaskCompletion(item.id, task.id)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                         className="mr-2 h-4 w-4 text-blue-600 rounded"
                         style={{ transform: `scale(${zoom})` }}
                       />
@@ -957,9 +967,11 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
               <div className="w-full h-full flex items-center justify-center px-4" style={{ fontSize: 14 * zoom }}>
                 <input
                   type="text"
-                  className="w-full bg-transparent text-center outline-none font-bold text-primary placeholder:text-primary/40"
+                  className="w-full bg-transparent text-center outline-none font-bold text-primary placeholder:text-primary/40 cursor-text"
                   placeholder="Central Topic"
                   value={item.content || ''}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={(e) => {
                     setItems(prev => prev.map(i => 
                       i.id === item.id ? { ...i, content: e.target.value } : i
@@ -1022,8 +1034,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   <input
                     type="text"
                     value={item.title || 'Project Column'}
-                    className="bg-transparent font-bold text-xs uppercase tracking-wider text-foreground focus:outline-none"
+                    className="bg-transparent font-bold text-xs uppercase tracking-wider text-foreground focus:outline-none cursor-text"
                     style={{ fontSize: 10 * zoom }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => {
                       setItems(prev => prev.map(i => 
                         i.id === item.id ? { ...i, title: e.target.value } : i
@@ -1041,6 +1055,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                         type="checkbox"
                         checked={task.completed}
                         onChange={() => toggleTaskCompletion(item.id, task.id)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-1 h-3 w-3 rounded-full border-border accent-primary"
                         style={{ transform: `scale(${zoom})` }}
                       />
