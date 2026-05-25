@@ -1,19 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { 
-  StickyNote, 
-  Type, 
-  FileText, 
-  Image, 
-  Link, 
-  Square, 
-  SquareCheckBig,
-  GitBranch,
+import {
+  StickyNote,
+  Type,
+  FileText,
+  Image,
+  Link as LinkIcon,
   Paperclip,
-  Plus,
+  Square,
+  SquareCheckBig,
   MousePointer2,
-  FolderKanban,
-  Move,
+  Hand,
+  Table as TableIcon,
+  MessageSquare,
   RotateCcw,
   Trash2,
   ZoomIn,
@@ -21,9 +20,36 @@ import {
   Maximize2,
   Save,
   Edit3,
-  X
+  X,
+  Plus,
+  GripVertical,
+  ChevronDown,
+  Copy,
+  Lock,
+  Unlock,
+  Layers,
+  Download,
+  Undo,
+  Redo,
+  Move,
+  Palette,
+  MoreVertical,
+  ArrowUp,
+  ArrowDown,
+  Star,
+  Triangle,
+  Diamond,
+  Hexagon,
+  ArrowRight,
+  RotateCw,
+  Calendar,
+  CheckSquare,
+  AlertTriangle,
+  Brain,
 } from 'lucide-react';
 import { createWhiteboard, getWhiteboardById, updateWhiteboard, CanvasItem, Connection } from '@/services/whiteboardService';
+import TaskCard from '@/components/TaskCard';
+import { Task } from '@/types/board';
 
 interface Tool {
   id: string;
@@ -31,1384 +57,1515 @@ interface Tool {
   icon: React.ReactNode;
 }
 
-interface ConnectionPoint {
-  id: string;
-  itemId: string;
-  x: number;
-  y: number;
-  connected: boolean;
-}
-
-const MIN_ZOOM = 0.35;
-const MAX_ZOOM = 1.5;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
+const DRAG_THRESHOLD = 2; // px before drag starts
 
 interface WhiteboardProps {
   whiteboardId?: number;
 }
 
 const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
-  // Define available tools
   const tools: Tool[] = [
-    { id: 'select', name: 'Select', icon: <MousePointer2 className="w-4 h-4" /> },
-    { id: 'sticky-note', name: 'Sticky Note', icon: <StickyNote className="w-4 h-4" /> },
-    { id: 'text', name: 'Text Section', icon: <Type className="w-4 h-4" /> },
-    { id: 'document', name: 'Document Block', icon: <FileText className="w-4 h-4" /> },
-    { id: 'image', name: 'Image', icon: <Image className="w-4 h-4" /> },
-    { id: 'connector', name: 'Connector', icon: <Link className="w-4 h-4" /> },
-    { id: 'shape', name: 'Shape', icon: <Square className="w-4 h-4" /> },
-    { id: 'task', name: 'Task Block', icon: <SquareCheckBig className="w-4 h-4" /> },
-    { id: 'mindmap', name: 'Mindmap', icon: <GitBranch className="w-4 h-4" /> },
-    { id: 'file', name: 'File Upload', icon: <Paperclip className="w-4 h-4" /> },
-    { id: 'board-column', name: 'Board Column', icon: <FolderKanban className="w-4 h-4" /> },
+    { id: 'select',       name: 'Select',        icon: <MousePointer2 className="w-4 h-4" /> },
+    { id: 'hand',         name: 'Hand',          icon: <Hand className="w-4 h-4" /> },
+    { id: 'sticky-note',  name: 'Sticky Note',   icon: <StickyNote className="w-4 h-4" /> },
+    { id: 'text',         name: 'Text',          icon: <Type className="w-4 h-4" /> },
+    { id: 'document',     name: 'Document',      icon: <FileText className="w-4 h-4" /> },
+    { id: 'image',        name: 'Image',         icon: <Image className="w-4 h-4" /> },
+    { id: 'shape',        name: 'Shape',         icon: <Square className="w-4 h-4" /> },
+    { id: 'task',         name: 'Task Block',    icon: <SquareCheckBig className="w-4 h-4" /> },
+    { id: 'table',        name: 'Table',         icon: <TableIcon className="w-4 h-4" /> },
+    { id: 'link',         name: 'Link',          icon: <LinkIcon className="w-4 h-4" /> },
+    { id: 'comment',      name: 'Comment',       icon: <MessageSquare className="w-4 h-4" /> },
   ];
 
-  const [activeTool, setActiveTool] = useState<string>('select');
+  // ── Core state ──────────────────────────────────────────────────────────────
+  const [activeTool, setActiveTool] = useState('select');
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState<{ sourceId: string, pointId: string } | null>(null);
+
+  // Drag
   const [isDragging, setIsDragging] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const mouseDownOnItem = useRef<{ itemId: string; clientX: number; clientY: number } | null>(null);
+
+  // Resize
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef<{ handle: string; startX: number; startY: number; origW: number; origH: number; origX: number; origY: number } | null>(null);
+
+  // Pan
+  const [isPanning, setIsPanning] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const panStart = useRef({ x: 0, y: 0 });
+
+  // Connector
+  const [connecting, setConnecting] = useState<{ sourceId: string } | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // raw client coords for live-preview line
+
+  // Hover
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+
+  // Zoom
   const [zoom, setZoom] = useState(1);
+
+  // Board name
+  const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
+  const [whiteboardColor, setWhiteboardColor] = useState('#6366f1');
+  const [whiteboardIcon, setWhiteboardIcon] = useState('square');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  const [showWhiteboardDropdown, setShowWhiteboardDropdown] = useState(false);
+  const [showEditPopup, setShowEditPopup] = useState(false);
+
+  // Misc
   const [saving, setSaving] = useState(false);
   const [localWhiteboardId, setLocalWhiteboardId] = useState<number | null>(whiteboardId || null);
-  const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false); // Default to false if we have an ID
   const [isLoading, setIsLoading] = useState(!!whiteboardId);
-  const [tempItemPos, setTempItemPos] = useState<{x: number, y: number} | null>(null);
+  const [tempItemPos, setTempItemPos] = useState<{ x: number; y: number } | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // Undo/Redo
+  const [history, setHistory] = useState<{ items: CanvasItem[], connections: Connection[] }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Connection selection
+  const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
+  const [showConnectionToolbar, setShowConnectionToolbar] = useState(false);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+  const zoomPercent = Math.round(zoom * 100);
 
-  const handleZoomIn = () => {
-    setZoom(z => clampZoom(+(z + ZOOM_STEP).toFixed(2)));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(z => clampZoom(+(z - ZOOM_STEP).toFixed(2)));
-  };
-
-  const resetView = () => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
-  };
-
-  // Load whiteboard data if an ID is provided
+  // ── Tutorial (once per user) ─────────────────────────────────────────────
   useEffect(() => {
-    if (localWhiteboardId) {
-      const loadWhiteboard = async () => {
-        setIsLoading(true);
-        try {
-          const data = await getWhiteboardById(localWhiteboardId);
-          setItems(data.items || []);
-          setConnections(data.connections || []);
-          setWhiteboardName(data.name || 'Untitled Whiteboard');
-        } catch (error) {
-          console.error('Error loading whiteboard:', error);
-        } finally {
-          setIsLoading(false);
-          // Only show tutorial for new whiteboards if no items exist
-          if (items.length === 0) setShowTutorial(true);
-        }
-      };
-
-      loadWhiteboard();
-    } else {
-      setIsLoading(false);
-      setShowTutorial(true);
+    const seen = localStorage.getItem('whiteboard-tutorial-seen');
+    if (!seen) {
+      // Small delay to show tutorial after component mounts
+      const timer = setTimeout(() => {
+        setShowTutorial(true);
+      }, 500);
+      return () => clearTimeout(timer);
     }
+  }, []);
+
+  const dismissTutorial = () => {
+    localStorage.setItem('whiteboard-tutorial-seen', 'true');
+    setShowTutorial(false);
+  };
+
+  // ── Load whiteboard ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!localWhiteboardId) {
+      setIsLoading(false);
+      return;
+    }
+    (async () => {
+      setIsLoading(true);
+      try {
+        const data = await getWhiteboardById(localWhiteboardId);
+        setItems(data.items || []);
+        setConnections(data.connections || []);
+        setWhiteboardName(data.name || 'Untitled Whiteboard');
+      } catch (e) {
+        console.error('Error loading whiteboard:', e);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
   }, [localWhiteboardId]);
 
-  // Auto-save functionality
-  useEffect(() => {
-    if (isLoading) return; // Don't auto-save while loading
-
-    const saveTimeout = setTimeout(() => {
-      if (items.length > 0 || connections.length > 0) {
-        saveWhiteboard();
-      }
-    }, 2000); // Save after 2 seconds of inactivity
-
-    // Cleanup function - runs when component unmounts
-    return () => {
-      clearTimeout(saveTimeout);
-      // Save one final time when component unmounts if not loading
-      if (!isLoading) {
-        saveWhiteboard();
-      }
-    };
-  }, [items, connections, whiteboardName, isLoading]);
-
-  // Handle visibility change (when user switches tabs/windows) to save whiteboard
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        saveWhiteboard();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [items, connections, whiteboardName, localWhiteboardId]);
-
-  const saveWhiteboard = async () => {
-    if (saving || isLoading) return; // Prevent duplicate saves or saving while loading
-    
+  // ── Save ─────────────────────────────────────────────────────────────────
+  const saveWhiteboard = useCallback(async (nameOverride?: string) => {
+    if (saving || isLoading) return;
     setSaving(true);
+    const name = nameOverride ?? whiteboardName;
     try {
       if (localWhiteboardId) {
-        // Update existing whiteboard
         const result = await updateWhiteboard(localWhiteboardId, {
-          name: whiteboardName,
+          name,
           description: 'A collaborative whiteboard',
           items,
-          connections
+          connections,
         });
-        setWhiteboardName(result.name); // Update name in case it was changed
+        setWhiteboardName(result.name);
       } else {
-        // Create new whiteboard
-        const result = await createWhiteboard({
-          name: whiteboardName,
-          description: 'A collaborative whiteboard',
-          items,
-          connections
-        });
+        const result = await createWhiteboard({ name, description: 'A collaborative whiteboard', items, connections });
         setLocalWhiteboardId(result.id);
       }
-    } catch (error) {
-      console.error('Error saving whiteboard:', error);
+    } catch (e) {
+      console.error('Error saving:', e);
     } finally {
       setSaving(false);
     }
-  };
+  }, [saving, isLoading, whiteboardName, localWhiteboardId, items, connections]);
 
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    if (!canvasRef.current) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left - offset.x) / zoom;
-    const y = (e.clientY - rect.top - offset.y) / zoom;
-
-    // Deselect if active tool is select and we clicked the background
-    if (activeTool === 'select' && selectedItem) {
-      setSelectedItem(null);
-      return;
-    }
-
-    // Only create items when not dragging and with non-select tools
-    if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
-
-    // Create item directly at click position
-    createNewItem(x, y);
-    return;
-  };
-
-  // Create new item at specified position
-  const createNewItem = (x: number, y: number) => {
-    let newItem: CanvasItem;
-    
-    switch(activeTool) {
-      case 'sticky-note':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 180,
-          height: 180,
-          content: 'Click to edit...',
-          color: ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6'][Math.floor(Math.random() * 4)],
-          connections: [],
-        };
-        break;
-        
-      case 'text':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 250,
-          height: 200,
-          content: 'Type your text here...',
-          backgroundColor: 'white',
-          connections: [],
-        };
-        break;
-        
-      case 'document':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 300,
-          height: 250,
-          content: 'Long-form content here...',
-          backgroundColor: 'white',
-          connections: [],
-        };
-        break;
-        
-      case 'image':
-        // Trigger file input for image upload
-        if (imageInputRef.current) {
-          imageInputRef.current.click();
-          // Store the position for when the image is uploaded
-          setTempItemPos({x, y});
-        }
-        return;
-        
-      case 'shape':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 120,
-          height: 120,
-          title: 'Shape',
-          connections: [],
-        };
-        break;
-        
-      case 'task':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 250,
-          height: 150,
-          title: 'New Task',
-          tasks: [
-            { id: 'task-1', text: 'Sample task', completed: false },
-            { id: 'task-2', text: 'Another task', completed: false }
-          ],
-          connections: [],
-        };
-        break;
-        
-      case 'mindmap':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 150,
-          height: 100,
-          content: 'Main Idea',
-          backgroundColor: '#f3e8ff', // soft purple
-          connections: [],
-        };
-        break;
-        
-      case 'file':
-        // Trigger file input for general file upload
-        if (fileInputRef.current) {
-          fileInputRef.current.click();
-          // Store the position for when the file is uploaded
-          setTempItemPos({x, y});
-        }
-        return;
-        
-      case 'board-column':
-        newItem = {
-          id: `item-${Date.now()}`,
-          type: activeTool,
-          x,
-          y,
-          width: 280,
-          height: 400,
-          title: 'Project Column',
-          tasks: [
-            { id: 'task-1', text: 'Analyze requirements', completed: true },
-            { id: 'task-2', text: 'Design UI/UX', completed: false },
-            { id: 'task-3', text: 'Implement core logic', completed: false }
-          ],
-          connections: [],
-        };
-        break;
-
-      default:
-        return; // Don't create an item for select or connector tools
-    }
-
-    // Only add to items if it's not an image or file (those are handled separately)
-    if (!['image', 'file'].includes(activeTool)) {
-      setItems(prev => [...prev, newItem]);
-      setTempItemPos(null);
-    }
-  };
-
-  // Handle image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !canvasRef.current) return;
-    
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (!event.target?.result || typeof event.target.result !== 'string' || !canvasRef.current) return;
-      
-      if (!tempItemPos) {
-        // If no position was set, place in the center
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = (rect.width / 2 - 100) / zoom;
-        const y = (rect.height / 2 - 75) / zoom;
-        
-        const newItem: CanvasItem = {
-          id: `item-${Date.now()}`,
-          type: 'image',
-          x,
-          y,
-          width: 200,
-          height: 150,
-          imageUrl: event.target.result as string,
-          title: file.name,
-          connections: [],
-        };
-        
-        setItems(prev => [...prev, newItem]);
-      } else {
-        // Use the stored position
-        const newItem: CanvasItem = {
-          id: `item-${Date.now()}`,
-          type: 'image',
-          x: tempItemPos.x,
-          y: tempItemPos.y,
-          width: 200,
-          height: 150,
-          imageUrl: event.target.result as string,
-          title: file.name,
-          connections: [],
-        };
-        
-        setItems(prev => [...prev, newItem]);
-        setTempItemPos(null);
-      }
-    };
-    
-    reader.readAsDataURL(file);
-    e.target.value = ''; // Reset input
-  };
-
-  // Handle file upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !canvasRef.current) return;
-    
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (!tempItemPos) {
-      // If no position was set, place in the center
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = (rect.width / 2 - 90) / zoom;
-      const y = (rect.height / 2 - 60) / zoom;
-      
-      const newItem: CanvasItem = {
-        id: `item-${Date.now()}`,
-        type: 'file',
-        x,
-        y,
-        width: 180,
-        height: 120,
-        title: file.name,
-        fileUrl: URL.createObjectURL(file), // Temporary URL
-        connections: [],
-      };
-      
-      setItems(prev => [...prev, newItem]);
-    } else {
-      // Use the stored position
-      const newItem: CanvasItem = {
-        id: `item-${Date.now()}`,
-        type: 'file',
-        x: tempItemPos.x,
-        y: tempItemPos.y,
-        width: 180,
-        height: 120,
-        title: file.name,
-        fileUrl: URL.createObjectURL(file), // Temporary URL
-        connections: [],
-      };
-      
-      setItems(prev => [...prev, newItem]);
-      setTempItemPos(null);
-    }
-    
-    e.target.value = ''; // Reset input
-  };
-
-  // Handle item selection
-  const handleItemClick = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedItem(id);
-    
-    // Set drag offset
-    const item = items.find(i => i.id === id);
-    if (item) {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect) {
-        setDragOffset({
-          x: (e.clientX - rect.left - offset.x) / zoom - item.x,
-          y: (e.clientY - rect.top - offset.y) / zoom - item.y
-        });
-      }
-    }
-  };
-
-  // Start connecting
-  const handleConnectionPointClick = (itemId: string, pointId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!connecting) {
-      setConnecting({ sourceId: itemId, pointId });
-    } else {
-      // Create connection if both points are selected
-      if (connecting.sourceId !== itemId) {
-        // Find the items
-        const sourceItem = items.find(i => i.id === connecting.sourceId);
-        const targetItem = items.find(i => i.id === itemId);
-        
-        if (sourceItem && targetItem) {
-          // Calculate connection points in RAW coordinates
-          const sourceX = sourceItem.x + (sourceItem.width || 0) / 2;
-          const sourceY = sourceItem.y + (sourceItem.height || 0) / 2;
-          const targetX = targetItem.x + (targetItem.width || 0) / 2;
-          const targetY = targetItem.y + (targetItem.height || 0) / 2;
-          
-          const newConnection: Connection = {
-            id: `conn-${Date.now()}`,
-            sourceId: connecting.sourceId,
-            targetId: itemId,
-            sourcePoint: { x: sourceX, y: sourceY },
-            targetPoint: { x: targetX, y: targetY },
-            type: 'curved'
-          };
-          
-          setConnections(prev => [...prev, newConnection]);
-        }
-      }
-      setConnecting(null);
-    }
-  };
-
-  // Start dragging an item
-  const handleItemMouseDown = (e: React.MouseEvent) => {
-    if (selectedItem) {
-      setIsDragging(true);
-      e.stopPropagation();
-    }
-  };
-
-  // Start panning the canvas
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left mouse button
-    
-    // Only pan if clicking on the canvas background (not on an item)
-    if ((e.target as HTMLElement).classList.contains('canvas-item')) {
-      return;
-    }
-    
-    setIsPanning(true);
-    setPanStart({
-      x: e.clientX - offset.x,
-      y: e.clientY - offset.y
-    });
-    e.preventDefault();
-  };
-
-  // Handle mouse movements for dragging items or panning
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && selectedItem) {
-      // Moving an item
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect) {
-        const newX = (e.clientX - rect.left - offset.x) / zoom - dragOffset.x;
-        const newY = (e.clientY - rect.top - offset.y) / zoom - dragOffset.y;
-        
-        setItems(prev => prev.map(item => 
-          item.id === selectedItem ? { ...item, x: newX, y: newY } : item
-        ));
-      }
-    } else if (isPanning) {
-      // Panning the canvas
-      setOffset({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y
-      });
-    }
-  };
-
-  // Stop dragging or panning
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setIsPanning(false);
-  };
-
-  // Reset view
-  const resetViewAndItems = () => {
-    setItems([]);
-    setConnections([]);
-    setSelectedItem(null);
-    setConnecting(null);
-    setOffset({ x: 0, y: 0 });
-    setZoom(1);
-    setTempItemPos(null);
-  };
-
-  // Delete selected item
-  const deleteSelectedItem = () => {
-    if (!selectedItem) return;
-    
-    // Remove item
-    setItems(prev => prev.filter(item => item.id !== selectedItem));
-    
-    // Remove connections related to this item
-    setConnections(prev => prev.filter(
-      conn => conn.sourceId !== selectedItem && conn.targetId !== selectedItem
-    ));
-    
-    setSelectedItem(null);
-  };
-
-  // Toggle task completion
-  const toggleTaskCompletion = (itemId: string, taskId: string) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === itemId && item.tasks) {
-        return {
-          ...item,
-          tasks: item.tasks?.map(task => 
-            task.id === taskId ? { ...task, completed: !task.completed } : task
-          )
-        };
-      }
-      return item;
-    }));
-  };
-
-  // Rename whiteboard
-  const renameWhiteboardHandler = () => {
-    setIsEditingName(true);
-  };
-
-  const handleRenameConfirm = () => {
-    if (nameInputRef.current) {
-      setWhiteboardName(nameInputRef.current.value);
-      setIsEditingName(false);
-      saveWhiteboard(); // Save the new name
-    }
-  };
-
-  const handleRenameCancel = () => {
-    setIsEditingName(false);
-  };
-
-  // Cleanup event listeners
+  // Auto-save
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (isDragging || isPanning) {
-        const mouseEvent = new MouseEvent('mousemove', {
-          clientX: e.clientX,
-          clientY: e.clientY
-        });
-        handleMouseMove(mouseEvent as unknown as React.MouseEvent);
-      }
-    };
+    if (isLoading) return;
+    const t = setTimeout(() => {
+      if (items.length > 0 || connections.length > 0) saveWhiteboard();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [items, connections, whiteboardName, isLoading]);
 
-    const handleGlobalMouseUp = () => {
-      if (isDragging || isPanning) {
-        handleMouseUp();
-      }
-      if (connecting) {
-        setConnecting(null);
-      }
-    };
-
-    // Handle wheel for zooming
-    const handleWheel = (e: WheelEvent) => {
+  // ── Zoom with scroll ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         setZoom(z => clampZoom(+(z - e.deltaY * 0.001).toFixed(3)));
       }
     };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
-    if (canvasRef.current) {
-      canvasRef.current.addEventListener('wheel', handleWheel, { passive: false });
-    }
-
-    if (isDragging || isPanning || connecting) {
-      window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-    }
-
-    // Focus the input when editing starts
-    if (isEditingName && nameInputRef.current) {
-      nameInputRef.current.focus();
-      nameInputRef.current.select();
-    }
-
-    return () => {
-      // Save before unmounting
-      saveWhiteboard();
-      
-      if (canvasRef.current) {
-        canvasRef.current.removeEventListener('wheel', handleWheel);
-      }
-      window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
+  // ── Coordinate helpers ───────────────────────────────────────────────────
+  const clientToCanvas = (clientX: number, clientY: number) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - offset.x) / zoom,
+      y: (clientY - rect.top - offset.y) / zoom,
     };
-  }, [isDragging, isPanning, connecting, selectedItem, dragOffset, offset, zoom, isEditingName]);
+  };
 
-  // Render different item types
+  // ── Canvas click ─────────────────────────────────────────────────────────
+  const handleCanvasClick = (e: React.MouseEvent) => {
+    if (isDragging || isResizing || isPanning) return;
+
+    // Deselect connection if clicking elsewhere
+    if (selectedConnection) {
+      setSelectedConnection(null);
+      setShowConnectionToolbar(false);
+    }
+
+    // Hand tool: just pan, don't create items
+    if (activeTool === 'hand') {
+      return;
+    }
+
+    if (activeTool === 'select') {
+      setSelectedItem(null);
+      return;
+    }
+
+    const { x, y } = clientToCanvas(e.clientX, e.clientY);
+    createNewItem(x, y);
+  };
+
+  // ── Create new item ──────────────────────────────────────────────────────
+  const createNewItem = (x: number, y: number) => {
+    const id = `item-${Date.now()}`;
+    let newItem: CanvasItem | null = null;
+
+    switch (activeTool) {
+      case 'sticky-note':
+        newItem = { id, type: activeTool, x, y, width: 240, height: 240, title: '', description: '', color: '#fef3c7', backgroundColor: '#fef3c7', locked: false, zIndex: 1 };
+        break;
+      case 'text':
+        newItem = { id, type: activeTool, x, y, width: 320, height: 200, title: '', description: '', textType: 'header-description', backgroundColor: 'white', locked: false, zIndex: 1 };
+        break;
+      case 'document':
+        newItem = { id, type: activeTool, x, y, width: 360, height: 320, title: '', description: '', fileUrl: '', backgroundColor: 'white', locked: false, zIndex: 1 };
+        break;
+      case 'shape':
+        newItem = { id, type: activeTool, x, y, width: 140, height: 140, title: '', shapeType: 'square', fillColor: '#6366f1', borderColor: '#4f46e5', borderThickness: 'medium', borderStyle: 'solid', opacity: 100, cornerRadius: 0, rotation: 0, locked: false, zIndex: 1 };
+        break;
+      case 'task':
+        newItem = { id, type: activeTool, x, y, width: 300, height: 280, title: 'Task Block', tasks: [], backgroundColor: 'white', locked: false, zIndex: 1 };
+        break;
+      case 'table':
+        newItem = { id, type: activeTool, x, y, width: 400, height: 300, rows: 3, columns: 3, cells: [], backgroundColor: 'white', locked: false, zIndex: 1 };
+        break;
+      case 'link':
+        newItem = { id, type: activeTool, x, y, width: 320, height: 200, url: '', title: '', description: '', imageUrl: '', backgroundColor: 'white', locked: false, zIndex: 1 };
+        break;
+      case 'comment':
+        newItem = { id, type: activeTool, x, y, width: 280, height: 120, description: '', color: '#fef3c7', backgroundColor: '#fef3c7', locked: false, zIndex: 1 };
+        break;
+      case 'image':
+        imageInputRef.current?.click();
+        setTempItemPos({ x, y });
+        return;
+      default:
+        return;
+    }
+
+    if (newItem) {
+      setItems(prev => [...prev, newItem!]);
+      addToHistory();
+    }
+  };
+
+  // ── Undo/Redo ─────────────────────────────────────────────────────────────
+  const addToHistory = () => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push({ items: [...items], connections: [...connections] });
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      const prevState = history[historyIndex - 1];
+      setItems(prevState.items);
+      setConnections(prevState.connections);
+      setHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      const nextState = history[historyIndex + 1];
+      setItems(nextState.items);
+      setConnections(nextState.connections);
+      setHistoryIndex(historyIndex + 1);
+    }
+  };
+
+  // ── Item interaction ─────────────────────────────────────────────────────
+  const handleItemPointerDown = (e: React.PointerEvent, itemId: string) => {
+    if (activeTool === 'connector') {
+      e.stopPropagation();
+      if (!connecting) {
+        setConnecting({ sourceId: itemId });
+      } else if (connecting.sourceId !== itemId) {
+        // Complete connection
+        const src = items.find(i => i.id === connecting.sourceId);
+        const tgt = items.find(i => i.id === itemId);
+        if (src && tgt) {
+          // Check if connection already exists
+          const existingConnection = connections.find(
+            c => (c.sourceId === connecting.sourceId && c.targetId === itemId) ||
+                 (c.sourceId === itemId && c.targetId === connecting.sourceId)
+          );
+          
+          if (!existingConnection) {
+            const newConn: Connection = {
+              id: `conn-${Date.now()}`,
+              sourceId: connecting.sourceId,
+              targetId: itemId,
+              sourcePoint: { x: src.x + (src.width || 0) / 2, y: src.y + (src.height || 0) / 2 },
+              targetPoint: { x: tgt.x + (tgt.width || 0) / 2, y: tgt.y + (tgt.height || 0) / 2 },
+              type: 'curved',
+            };
+            setConnections(prev => [...prev, newConn]);
+          }
+        }
+        setConnecting(null);
+      }
+      return;
+    }
+
+    if (activeTool !== 'select') return;
+
+    e.stopPropagation();
+    setSelectedItem(itemId);
+
+    const { x, y } = clientToCanvas(e.clientX, e.clientY);
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+
+    mouseDownOnItem.current = { itemId, clientX: e.clientX, clientY: e.clientY };
+    setDragOffset({ x: x - item.x, y: y - item.y });
+
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleItemPointerMove = (e: React.PointerEvent, itemId: string) => {
+    if (!mouseDownOnItem.current || mouseDownOnItem.current.itemId !== itemId) return;
+
+    const dx = e.clientX - mouseDownOnItem.current.clientX;
+    const dy = e.clientY - mouseDownOnItem.current.clientY;
+
+    if (!isDragging && Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+      setIsDragging(true);
+    }
+
+    if (isDragging) {
+      const { x, y } = clientToCanvas(e.clientX, e.clientY);
+      setItems(prev => prev.map(item =>
+        item.id === itemId ? { ...item, x: x - dragOffset.x, y: y - dragOffset.y } : item
+      ));
+    }
+  };
+
+  const handleItemPointerUp = () => {
+    mouseDownOnItem.current = null;
+    setIsDragging(false);
+  };
+
+  // ── Resize handles ───────────────────────────────────────────────────────
+  const handleResizePointerDown = (e: React.PointerEvent, handle: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const item = items.find(i => i.id === selectedItem);
+    if (!item) return;
+    resizeRef.current = {
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      origW: item.width || 200,
+      origH: item.height || 200,
+      origX: item.x,
+      origY: item.y,
+    };
+    setIsResizing(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!isResizing || !resizeRef.current || !selectedItem) return;
+    const { handle, startX, startY, origW, origH, origX, origY } = resizeRef.current;
+    const dx = (e.clientX - startX) / zoom;
+    const dy = (e.clientY - startY) / zoom;
+    const MIN_SIZE = 80;
+
+    setItems(prev => prev.map(item => {
+      if (item.id !== selectedItem) return item;
+      let w = origW, h = origH, x = origX, y = origY;
+
+      if (handle.includes('e')) w = Math.max(MIN_SIZE, origW + dx);
+      if (handle.includes('s')) h = Math.max(MIN_SIZE, origH + dy);
+      if (handle.includes('w')) {
+        const newW = Math.max(MIN_SIZE, origW - dx);
+        x = origX + (origW - newW);
+        w = newW;
+      }
+      if (handle.includes('n')) {
+        const newH = Math.max(MIN_SIZE, origH - dy);
+        y = origY + (origH - newH);
+        h = newH;
+      }
+
+      return { ...item, x, y, width: Math.round(w), height: Math.round(h) };
+    }));
+  };
+
+  const handleResizePointerUp = () => {
+    resizeRef.current = null;
+    setIsResizing(false);
+  };
+
+  // ── Canvas pan ───────────────────────────────────────────────────────────
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('.canvas-item,.resize-handle')) return;
+    setIsPanning(true);
+    panStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleCanvasPointerMove = (e: React.PointerEvent) => {
+    // Track mouse for connector preview line
+    setMousePos({ x: e.clientX, y: e.clientY });
+
+    if (isPanning) {
+      setOffset({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
+    }
+  };
+
+  const handleCanvasPointerUp = () => {
+    setIsPanning(false);
+  };
+
+  // ── Delete ───────────────────────────────────────────────────────────────
+  const deleteSelectedItem = () => {
+    if (!selectedItem) return;
+    setItems(prev => prev.filter(i => i.id !== selectedItem));
+    setConnections(prev => prev.filter(c => c.sourceId !== selectedItem && c.targetId !== selectedItem));
+    setSelectedItem(null);
+    addToHistory();
+  };
+
+  // ── Global block actions ───────────────────────────────────────────────────
+  const duplicateItem = (itemId: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    const newItem = {
+      ...item,
+      id: `item-${Date.now()}`,
+      x: item.x + 20,
+      y: item.y + 20,
+      zIndex: (item.zIndex || 1) + 1,
+    };
+    setItems(prev => [...prev, newItem]);
+    setSelectedItem(newItem.id);
+    addToHistory();
+  };
+
+  const lockItem = (itemId: string) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, locked: !i.locked } : i));
+    addToHistory();
+  };
+
+  const bringForward = (itemId: string) => {
+    const maxZ = Math.max(...items.map(i => i.zIndex || 1));
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, zIndex: maxZ + 1 } : i));
+    addToHistory();
+  };
+
+  const sendBackward = (itemId: string) => {
+    const minZ = Math.min(...items.map(i => i.zIndex || 1));
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, zIndex: Math.max(1, minZ - 1) } : i));
+    addToHistory();
+  };
+
+  const changeItemColor = (itemId: string, color: string) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, color, backgroundColor: color } : i));
+    addToHistory();
+  };
+
+  // ── Connection actions ─────────────────────────────────────────────────────
+  const deleteConnection = (connectionId: string) => {
+    setConnections(prev => prev.filter(c => c.id !== connectionId));
+    setSelectedConnection(null);
+    setShowConnectionToolbar(false);
+    addToHistory();
+  };
+
+  const changeConnectionColor = (connectionId: string, color: string) => {
+    setConnections(prev => prev.map(c => c.id === connectionId ? { ...c, color } : c));
+    addToHistory();
+  };
+
+  const changeConnectionThickness = (connectionId: string, thickness: 'thin' | 'medium' | 'thick') => {
+    setConnections(prev => prev.map(c => c.id === connectionId ? { ...c, thickness } : c));
+    addToHistory();
+  };
+
+  // ── Export functionality ─────────────────────────────────────────────────────
+  const exportWhiteboard = () => {
+    const data = {
+      name: whiteboardName,
+      items: items,
+      connections: connections,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${whiteboardName.replace(/\s+/g, '_')}_export.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedItem) {
+        const active = document.activeElement?.tagName;
+        if (active === 'INPUT' || active === 'TEXTAREA') return;
+        deleteSelectedItem();
+      }
+      if (e.key === 'Escape') {
+        setConnecting(null);
+        setSelectedItem(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedItem, items, connections]);
+
+  // ── Task helpers ─────────────────────────────────────────────────────────
+  const toggleTask = (itemId: string, taskId: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId || !item.tasks) return item;
+      return { ...item, tasks: item.tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t) };
+    }));
+  };
+
+  const updateTaskText = (itemId: string, taskId: string, text: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId || !item.tasks) return item;
+      return { ...item, tasks: item.tasks.map(t => t.id === taskId ? { ...t, text } : t) };
+    }));
+  };
+
+  const addTask = (itemId: string) => {
+    const newTask = { id: `t-${Date.now()}`, text: 'New card', completed: false };
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId) return item;
+      return { ...item, tasks: [...(item.tasks || []), newTask] };
+    }));
+  };
+
+  const deleteTask = (itemId: string, taskId: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId || !item.tasks) return item;
+      return { ...item, tasks: item.tasks.filter(t => t.id !== taskId) };
+    }));
+  };
+
+  const updateTaskType = (itemId: string, taskId: string, taskType: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== itemId || !item.tasks) return item;
+      return { ...item, tasks: item.tasks.map(t => t.id === taskId ? { ...t, taskType } : t) };
+    }));
+  };
+
+  // ── Image/file uploads ───────────────────────────────────────────────────
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const src = ev.target?.result as string;
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const pos = tempItemPos ?? { x: (rect.width / 2 - 100) / zoom, y: (rect.height / 2 - 75) / zoom };
+      setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'image', ...pos, width: 200, height: 150, imageUrl: src, title: file.name, connections: [] }]);
+      setTempItemPos(null);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const rect = canvasRef.current!.getBoundingClientRect();
+    const pos = tempItemPos ?? { x: (rect.width / 2 - 90) / zoom, y: (rect.height / 2 - 60) / zoom };
+    setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: URL.createObjectURL(file), connections: [] }]);
+    setTempItemPos(null);
+    e.target.value = '';
+  };
+
+  // ── Name editing ─────────────────────────────────────────────────────────
+  const startEditName = () => {
+    setEditingNameValue(whiteboardName);
+    setIsEditingName(true);
+  };
+
+  const confirmEditName = () => {
+    const name = editingNameValue.trim() || 'Untitled Whiteboard';
+    setWhiteboardName(name);
+    setIsEditingName(false);
+    saveWhiteboard(name);
+  };
+
+  // ── Connector SVG live preview ────────────────────────────────────────────
+  const getConnectorPreview = () => {
+    if (!connecting) return null;
+    const src = items.find(i => i.id === connecting.sourceId);
+    if (!src) return null;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    const sx = src.x * zoom + offset.x + (src.width || 0) * zoom / 2;
+    const sy = src.y * zoom + offset.y + (src.height || 0) * zoom / 2;
+    const tx = mousePos.x - rect.left;
+    const ty = mousePos.y - rect.top;
+
+    return (
+      <svg className="absolute inset-0 w-full h-full pointer-events-none z-30">
+        <line x1={sx} y1={sy} x2={tx} y2={ty} stroke="#6366f1" strokeWidth="3" strokeDasharray="8,4" />
+        <circle cx={sx} cy={sy} r="8" fill="#6366f1" />
+        <circle cx={tx} cy={ty} r="6" fill="#6366f1" opacity="0.5" />
+      </svg>
+    );
+  };
+
+  // ── Resize handles for selected item ─────────────────────────────────────
+  const renderResizeHandles = (item: CanvasItem) => {
+    const w = item.width || 200;
+    const h = item.height || 200;
+    // Only bottom-right corner resize handle as per spec
+    return (
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none"
+        onPointerDown={e => handleResizePointerDown(e, 'se')}
+      />
+    );
+  };
+
+  // ── Global block toolbar ─────────────────────────────────────────────────
+  const renderBlockToolbar = (item: CanvasItem) => {
+    const colors = ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6', '#f3e8ff', '#ffedd5', '#e0f2fe', '#dcfce7', '#fee2e2', '#f1f5f9'];
+    
+    return (
+      <div className="absolute -top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
+        {/* Move handle */}
+        <div className="p-1.5 cursor-grab text-gray-500 hover:text-gray-700">
+          <Move className="w-4 h-4" />
+        </div>
+        
+        {/* Color picker */}
+        <div className="relative group">
+          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+            <Palette className="w-4 h-4" />
+          </button>
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-5 gap-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+            {colors.map(color => (
+              <button
+                key={color}
+                onClick={() => changeItemColor(item.id, color)}
+                className={`w-6 h-6 rounded ${item.color === color ? 'ring-2 ring-blue-500' : ''}`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </div>
+        
+        {/* Delete */}
+        <button onClick={() => deleteSelectedItem()} className="p-1.5 text-gray-500 hover:text-red-500">
+          <Trash2 className="w-4 h-4" />
+        </button>
+        
+        <div className="w-px h-4 bg-gray-200 mx-1" />
+        
+        {/* Three-dot menu */}
+        <div className="relative group">
+          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity min-w-[150px]">
+            <button onClick={() => lockItem(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              {item.locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              {item.locked ? 'Unlock' : 'Lock'}
+            </button>
+            <button onClick={() => duplicateItem(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <Copy className="w-4 h-4" /> Duplicate
+            </button>
+            <button onClick={() => bringForward(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <ArrowUp className="w-4 h-4" /> Bring Forward
+            </button>
+            <button onClick={() => sendBackward(item.id)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <ArrowDown className="w-4 h-4" /> Send Backward
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render item ──────────────────────────────────────────────────────────
   const renderItem = (item: CanvasItem) => {
     const isSelected = selectedItem === item.id;
     const isHovered = hoveredItem === item.id;
-    
-    const baseClasses = cn(
-      "absolute border border-transparent group canvas-item",
-      isSelected && "border-blue-400 ring-2 ring-blue-400 ring-opacity-50 z-10",
-      !isSelected && "z-0"
+    const isConnectorSource = connecting?.sourceId === item.id;
+    const zIndex = item.zIndex || 1;
+
+    const wrapperCls = cn(
+      'canvas-item absolute select-none',
+      isSelected && 'ring-2 ring-blue-400 ring-offset-1',
+      isConnectorSource && 'ring-2 ring-indigo-500',
+      activeTool === 'connector' && 'cursor-crosshair',
+      activeTool === 'select' && !isDragging && !item.locked && 'cursor-grab',
+      isDragging && isSelected && 'cursor-grabbing',
+      item.locked && 'cursor-not-allowed opacity-80',
     );
 
-    // Show connection points when item is selected or hovered
-    const showConnectionPoints = isSelected || isHovered || (connecting?.sourceId === item.id);
+    const stopEdit = (e: React.MouseEvent) => e.stopPropagation();
 
-    // Generate connection points around the item
-    const getConnectionPoints = () => {
-      if (!showConnectionPoints) return null;
-      
-      const centerX = item.x * zoom + offset.x + (item.width || 0) * zoom / 2;
-      const centerY = item.y * zoom + offset.y + (item.height || 0) * zoom / 2;
-      
-      return (
-        <>
-          {/* Top center */}
-          <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-20"
-            style={{ left: item.width ? item.width / 2 : 0, top: 0 }}
-            onClick={(e) => handleConnectionPointClick(item.id, 'top', e)}
-          />
-          
-          {/* Right center */}
-          <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform translate-x-1/2 -translate-y-1/2 z-20"
-            style={{ left: item.width || 0, top: item.height ? item.height / 2 : 0 }}
-            onClick={(e) => handleConnectionPointClick(item.id, 'right', e)}
-          />
-          
-          {/* Bottom center */}
-          <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 translate-y-1/2 z-20"
-            style={{ left: item.width ? item.width / 2 : 0, top: item.height || 0 }}
-            onClick={(e) => handleConnectionPointClick(item.id, 'bottom', e)}
-          />
-          
-          {/* Left center */}
-          <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-20"
-            style={{ left: 0, top: item.height ? item.height / 2 : 0 }}
-            onClick={(e) => handleConnectionPointClick(item.id, 'left', e)}
-          />
-        </>
-      );
+    const sharedHandlers = {
+      onPointerDown: (e: React.PointerEvent) => handleItemPointerDown(e, item.id),
+      onPointerMove: (e: React.PointerEvent) => handleItemPointerMove(e, item.id),
+      onPointerUp: handleItemPointerUp,
+      onMouseEnter: () => setHoveredItem(item.id),
+      onMouseLeave: () => setHoveredItem(null),
     };
+
+    const w = item.width || 200;
+    const h = item.height || 200;
+
+    let content: React.ReactNode = null;
 
     switch (item.type) {
       case 'sticky-note':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "rounded-lg shadow-sm")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 180,
-                height: item.height || 180,
-                backgroundColor: item.color,
-                transition: 'none'
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="p-3 h-full rounded-lg border border-white/50" style={{ fontSize: 14 * zoom }}>
-                <textarea
-                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans cursor-text"
-                  value={item.content ?? 'Click to edit...'}
-                  style={{ fontFamily: "'Comic Sans MS', cursive, sans-serif" }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    setItems(prev => prev.map(i => 
-                      i.id === item.id ? { ...i, content: e.target.value } : i
-                    ));
-                  }}
-                />
-              </div>
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'rounded-lg shadow-md overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor || item.color }}
+          >
+            <div className="p-3 flex-1 flex flex-col">
+              <input
+                type="text"
+                className="w-full bg-transparent font-bold text-sm outline-none cursor-text mb-2"
+                style={{ fontFamily: "'Comic Sans MS', cursive" }}
+                value={item.title ?? ''}
+                placeholder="Title..."
+                onMouseDown={stopEdit}
+                onClick={stopEdit}
+                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, title: e.target.value } : i))}
+              />
+              <textarea
+                className="w-full flex-1 bg-transparent resize-none outline-none text-sm cursor-text"
+                style={{ fontFamily: "'Comic Sans MS', cursive" }}
+                value={item.description ?? ''}
+                placeholder="Write something..."
+                onMouseDown={stopEdit}
+                onClick={stopEdit}
+                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, description: e.target.value } : i))}
+              />
             </div>
-            {getConnectionPoints()}
-          </React.Fragment>
+          </div>
         );
-        
+        break;
+
       case 'text':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 250,
-                height: item.height || 200,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="p-4 h-full rounded-lg" style={{ fontSize: 14 * zoom }}>
-                <textarea
-                  className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans cursor-text"
-                  value={item.content ?? 'Type your text here...'}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    setItems(prev => prev.map(i => 
-                      i.id === item.id ? { ...i, content: e.target.value } : i
-                    ));
-                  }}
-                />
-              </div>
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'document':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-white rounded-lg shadow-md border-2 border-gray-200")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 300,
-                height: item.height || 250,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="p-4 h-full rounded-lg border-t-2 border-gray-300" style={{ fontSize: 14 * zoom }}>
-                <div className="flex flex-col h-full">
-                  <div className="font-bold mb-2 text-gray-700">Document Title</div>
-                  <textarea
-                    className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans flex-grow cursor-text"
-                    value={item.content ?? 'Document content goes here...'}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      setItems(prev => prev.map(i => 
-                        i.id === item.id ? { ...i, content: e.target.value } : i
-                      ));
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'image':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-gray-100 rounded-lg shadow-sm border flex flex-col items-center justify-center overflow-hidden")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 200,
-                height: item.height || 150,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              {item.imageUrl ? (
-                <img 
-                  src={item.imageUrl} 
-                  alt={item.title} 
-                  className="object-contain w-full h-full p-1"
-                />
-              ) : (
-                <>
-                  <Image className="w-12 h-12 text-gray-400" />
-                  <span className="mt-2 text-gray-500 text-sm">Loading image...</span>
-                </>
-              )}
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'shape':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-blue-100 rounded-lg shadow-sm border-2 border-blue-300 flex items-center justify-center")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 120,
-                height: item.height || 120,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <Square className="w-8 h-8 text-blue-500 opacity-70" style={{ width: 8 * zoom, height: 8 * zoom }} />
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'task':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 250,
-                height: item.height || 150,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="p-3 h-full rounded-lg border" style={{ fontSize: 14 * zoom }}>
-                <div className="font-bold text-sm mb-2 text-gray-800">
-                  <input
-                    type="text"
-                    value={item.title || 'New Task'}
-                    className="w-full bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500 cursor-text"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      setItems(prev => prev.map(i => 
-                        i.id === item.id ? { ...i, title: e.target.value } : i
-                      ));
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  {item.tasks?.map(task => (
-                    <div key={task.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={task.completed}
-                        onChange={() => toggleTaskCompletion(item.id, task.id)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mr-2 h-4 w-4 text-blue-600 rounded"
-                        style={{ transform: `scale(${zoom})` }}
-                      />
-                      <span className={cn("text-sm", task.completed ? "line-through text-gray-400" : "text-gray-700")}>
-                        {task.text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'mindmap':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "shadow-lg border-2 border-primary/20 bg-background")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 180,
-                height: item.height || 60,
-                borderRadius: '30px',
-                backgroundColor: item.backgroundColor || '#f0f0ff'
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="w-full h-full flex items-center justify-center px-4" style={{ fontSize: 14 * zoom }}>
+        const textType = item.textType || 'header-description';
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
+          >
+            <div className="p-4 flex-1 flex flex-col">
+              {(textType === 'header-only' || textType === 'header-description') && (
                 <input
                   type="text"
-                  className="w-full bg-transparent text-center outline-none font-bold text-primary placeholder:text-primary/40 cursor-text"
-                  placeholder="Central Topic"
-                  value={item.content || ''}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    setItems(prev => prev.map(i => 
-                      i.id === item.id ? { ...i, content: e.target.value } : i
-                    ));
-                  }}
+                  className="w-full bg-transparent font-bold text-lg outline-none cursor-text mb-2"
+                  value={item.title ?? ''}
+                  placeholder="Header..."
+                  onMouseDown={stopEdit}
+                  onClick={stopEdit}
+                  onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, title: e.target.value } : i))}
                 />
-              </div>
+              )}
+              {(textType === 'description-only' || textType === 'header-description') && (
+                <textarea
+                  className="w-full flex-1 bg-transparent resize-none outline-none text-sm cursor-text text-gray-800"
+                  value={item.description ?? ''}
+                  placeholder="Type text..."
+                  onMouseDown={stopEdit}
+                  onClick={stopEdit}
+                  onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, description: e.target.value } : i))}
+                />
+              )}
             </div>
-            {getConnectionPoints()}
-          </React.Fragment>
+          </div>
         );
-        
-      case 'file':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 180,
-                height: item.height || 120,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="p-3 h-full rounded-lg border border-gray-200 flex flex-col items-center justify-center">
-                <Paperclip className="w-8 h-8 text-gray-400" style={{ width: 8 * zoom, height: 8 * zoom }} />
-                <div className="mt-2 text-sm text-gray-700 font-medium truncate max-w-full" style={{ fontSize: 12 * zoom }}>
-                  {item.title}
-                </div>
-                <div className="text-xs text-gray-500 mt-1" style={{ fontSize: 10 * zoom }}>File</div>
-              </div>
-            </div>
-            {getConnectionPoints()}
-          </React.Fragment>
-        );
-        
-      case 'board-column':
-        return (
-          <React.Fragment key={item.id}>
-            <div
-              className={cn(baseClasses, "bg-background rounded-xl shadow-xl border-2 border-border overflow-hidden flex flex-col")}
-              style={{
-                left: item.x,
-                top: item.y,
-                width: item.width || 280,
-                height: item.height || 400,
-              }}
-              onClick={(e) => handleItemClick(item.id, e)}
-              onMouseDown={handleItemMouseDown}
-              onMouseEnter={() => setHoveredItem(item.id)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
-              <div className="bg-muted/50 p-3 border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary" />
-                  <input
-                    type="text"
-                    value={item.title || 'Project Column'}
-                    className="bg-transparent font-bold text-xs uppercase tracking-wider text-foreground focus:outline-none cursor-text"
-                    style={{ fontSize: 10 * zoom }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => {
-                      setItems(prev => prev.map(i => 
-                        i.id === item.id ? { ...i, title: e.target.value } : i
-                      ));
-                    }}
-                  />
-                </div>
-                <span className="text-[10px] text-muted-foreground font-bold">{(item.tasks?.length || 0)}</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/10">
-                {item.tasks?.map(task => (
-                  <div key={task.id} className="bg-card border border-border p-2.5 rounded-lg shadow-sm hover:border-primary/30 transition-colors">
-                    <div className="flex items-start gap-2">
-                      <input
-                        type="checkbox"
-                        checked={task.completed}
-                        onChange={() => toggleTaskCompletion(item.id, task.id)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 h-3 w-3 rounded-full border-border accent-primary"
-                        style={{ transform: `scale(${zoom})` }}
-                      />
-                      <span className={cn("text-xs font-medium leading-tight", task.completed ? "line-through text-muted-foreground" : "text-foreground")} style={{ fontSize: 11 * zoom }}>
-                        {task.text}
-                      </span>
-                    </div>
+        break;
+
+      case 'document':
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-lg shadow-md border-2 border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
+          >
+            {item.fileUrl ? (
+              <>
+                <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700 truncate">{item.title || 'Document'}</span>
+                  <div className="flex gap-1">
+                    <button onClick={e => { stopEdit(e); fileInputRef.current?.click(); }} className="p-1 hover:bg-gray-200 rounded">
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, fileUrl: '' } : i)); }} className="p-1 hover:bg-red-100 rounded text-red-500">
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                ))}
-                <button className="w-full py-2 border border-dashed border-border rounded-lg text-[10px] text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
-                  + Add Card
+                </div>
+                <div className="flex-1 p-3 flex items-center justify-center bg-gray-50">
+                  {item.fileUrl.endsWith('.pdf') || item.fileUrl.endsWith('.doc') || item.fileUrl.endsWith('.docx') ? (
+                    <div className="text-center">
+                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <span className="text-xs text-gray-500">File uploaded</span>
+                    </div>
+                  ) : (
+                    <img src={item.fileUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <button onClick={e => { stopEdit(e); fileInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                  <FileText className="w-8 h-8 text-gray-400" />
+                  <span className="text-sm text-gray-500">Upload file</span>
                 </button>
               </div>
+            )}
+            <div className="p-3 border-t border-gray-200">
+              <textarea
+                className="w-full bg-transparent resize-none outline-none text-sm cursor-text text-gray-700"
+                value={item.description ?? ''}
+                placeholder="Description..."
+                onMouseDown={stopEdit}
+                onClick={stopEdit}
+                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, description: e.target.value } : i))}
+              />
             </div>
-            {getConnectionPoints()}
-          </React.Fragment>
+          </div>
         );
+        break;
+
+      case 'image':
+        const images = item.images || [];
+        const imageCount = images.length;
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
+          >
+            {imageCount === 0 ? (
+              <div className="flex-1 flex items-center justify-center bg-gray-50">
+                <button onClick={e => { stopEdit(e); imageInputRef.current?.click(); }} className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                  <Image className="w-8 h-8 text-gray-400" />
+                  <span className="text-sm text-gray-500">Add image</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 p-2 grid gap-2" style={{
+                gridTemplateColumns: imageCount === 1 ? '1fr' : imageCount <= 2 ? '1fr 1fr' : imageCount <= 4 ? '1fr 1fr' : '1fr 1fr 1fr',
+                gridTemplateRows: imageCount <= 2 ? '1fr' : imageCount <= 4 ? '1fr 1fr' : 'auto'
+              }}>
+                {images.map((img, idx) => (
+                  <div key={img.id} className="relative group">
+                    <img src={img.url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                    <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={e => { stopEdit(e); /* Replace image */ }} className="p-1 bg-white rounded shadow hover:bg-gray-100">
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                      <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, images: i.images?.filter(im => im.id !== img.id) } : i)); }} className="p-1 bg-white rounded shadow hover:bg-red-100 text-red-500">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <textarea
+                      className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 outline-none resize-none rounded-b-lg"
+                      placeholder="Description..."
+                      value={img.description || ''}
+                      onMouseDown={stopEdit}
+                      onClick={stopEdit}
+                      onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, images: i.images?.map(im => im.id === img.id ? { ...im, description: e.target.value } : im) } : i))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            {imageCount < 5 && (
+              <button
+                onClick={e => { stopEdit(e); imageInputRef.current?.click(); }}
+                className="border-t border-gray-200 py-2 text-xs text-gray-400 hover:text-primary hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add Image
+              </button>
+            )}
+          </div>
+        );
+        break;
+
+      case 'shape':
+        const shapeType = item.shapeType || 'square';
+        const rotation = item.rotation || 0;
+        const fillColor = item.fillColor || '#6366f1';
+        const borderColor = item.borderColor || '#4f46e5';
+        const borderThickness = item.borderThickness || 'medium';
+        const borderStyle = item.borderStyle || 'solid';
+        const opacity = item.opacity || 100;
+        const cornerRadius = item.cornerRadius || 0;
+        
+        const borderWidth = borderThickness === 'thin' ? 1 : borderThickness === 'thick' ? 4 : 2;
+        const borderDash = borderStyle === 'dashed' ? '5,5' : borderStyle === 'dotted' ? '2,2' : 'none';
+        
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'relative flex items-center justify-center overflow-hidden')}
+            style={{ 
+              left: item.x, 
+              top: item.y, 
+              width: w, 
+              height: h,
+              transform: `rotate(${rotation}deg)`,
+              opacity: opacity / 100
+            }}
+          >
+            <div
+              className="w-full h-full"
+              style={{
+                backgroundColor: fillColor,
+                border: `${borderWidth}px ${borderStyle} ${borderColor}`,
+                borderStyle: borderStyle === 'dashed' || borderStyle === 'dotted' ? 'dashed' : 'solid',
+                borderRadius: shapeType === 'circle' ? '50%' : `${cornerRadius}px`,
+                clipPath: shapeType === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' :
+                           shapeType === 'diamond' ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' :
+                           shapeType === 'hexagon' ? 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' :
+                           shapeType === 'star' ? 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)' :
+                           shapeType === 'arrow' ? 'polygon(0% 20%, 60% 20%, 60% 0%, 100% 50%, 60% 100%, 60% 80%, 0% 80%)' :
+                           'none'
+              }}
+            />
+            {isSelected && (
+              <>
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) + 15 } : i))} className="p-1 hover:bg-gray-100 rounded">
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) - 15 } : i))} className="p-1 hover:bg-gray-100 rounded">
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="absolute -right-12 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
+                  <button onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i))} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
+                </div>
+              </>
+            )}
+          </div>
+        );
+        break;
+
+      case 'task': {
+        const taskH = h;
+        const taskIds = item.taskIds || [];
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: taskH }}
+          >
+            <div className="bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center gap-2">
+              <SquareCheckBig className="w-4 h-4 text-primary flex-shrink-0" />
+              <input
+                type="text"
+                className="flex-1 bg-transparent font-bold text-sm text-gray-800 outline-none cursor-text"
+                value={item.title ?? ''}
+                placeholder="Task title"
+                onMouseDown={stopEdit}
+                onClick={stopEdit}
+                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, title: e.target.value } : i))}
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {taskIds.length === 0 ? (
+                <div className="text-center py-4 text-sm text-gray-400">
+                  No tasks yet. Click "Add Task" to add tasks from your project.
+                </div>
+              ) : (
+                taskIds.map(taskId => {
+                  // In a real implementation, this would fetch the actual task from the app's task state
+                  // For now, we'll render a placeholder
+                  return (
+                    <div key={taskId} className="bg-task rounded-lg p-3 border border-transparent hover:border-border cursor-pointer group relative">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" />
+                        <p className="text-sm font-bold text-foreground">Task {taskId}</p>
+                        <button
+                          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 rounded text-red-500"
+                          onMouseDown={stopEdit}
+                          onClick={e => { 
+                            stopEdit(e); 
+                            setItems(prev => prev.map(i => i.id === item.id ? { ...i, taskIds: i.taskIds?.filter(id => id !== taskId) } : i));
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {taskIds.length < 15 && (
+              <button
+                className="border-t border-gray-200 py-2 text-xs text-gray-400 hover:text-primary hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                onMouseDown={stopEdit}
+                onClick={e => { 
+                  stopEdit(e); 
+                  // In a real implementation, this would open a task selection popup
+                  // For now, we'll add a placeholder task ID
+                  const newTaskId = `task-${Date.now()}`;
+                  setItems(prev => prev.map(i => i.id === item.id ? { ...i, taskIds: [...(i.taskIds || []), newTaskId] } : i));
+                }}
+              >
+                <Plus className="w-3 h-3" /> Add Task
+              </button>
+            )}
+          </div>
+        );
+        break;
+      }
+
+      case 'table':
+        const rows = item.rows || 3;
+        const columns = item.columns || 3;
+        const cells = item.cells || [];
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
+          >
+            <div className="flex-1 overflow-auto">
+              <table className="w-full border-collapse">
+                <tbody>
+                  {Array.from({ length: rows }).map((_, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {Array.from({ length: columns }).map((_, colIndex) => {
+                        const cell = cells.find(c => c.row === rowIndex && c.column === colIndex);
+                        return (
+                          <td key={colIndex} className="border border-gray-200 p-1">
+                            <textarea
+                              className="w-full h-full bg-transparent resize-none outline-none text-sm"
+                              placeholder=""
+                              value={cell?.content || ''}
+                              onMouseDown={stopEdit}
+                              onClick={stopEdit}
+                              onChange={e => {
+                                const newCells = [...cells.filter(c => !(c.row === rowIndex && c.column === colIndex)), { row: rowIndex, column: colIndex, content: e.target.value }];
+                                setItems(prev => prev.map(i => i.id === item.id ? { ...i, cells: newCells } : i));
+                              }}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+        break;
+
+      case 'link':
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
+          >
+            {item.url ? (
+              <>
+                {item.imageUrl && (
+                  <div className="flex-1 overflow-hidden">
+                    <img src={item.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="p-3">
+                  <h3 className="font-semibold text-sm text-gray-800 mb-1">{item.title || 'Link'}</h3>
+                  <p className="text-xs text-gray-600 mb-2 line-clamp-2">{item.description || ''}</p>
+                  <input
+                    type="text"
+                    className="w-full bg-transparent text-xs text-primary outline-none"
+                    value={item.url}
+                    onMouseDown={stopEdit}
+                    onClick={stopEdit}
+                    onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, url: e.target.value } : i))}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-4">
+                <LinkIcon className="w-8 h-8 text-gray-400 mb-2" />
+                <input
+                  type="text"
+                  className="w-full bg-transparent text-center outline-none text-sm border-b border-gray-200"
+                  placeholder="Paste URL and press Enter"
+                  value={item.url || ''}
+                  onMouseDown={stopEdit}
+                  onClick={stopEdit}
+                  onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, url: e.target.value } : i))}
+                  onKeyDown={e => { if (e.key === 'Enter' && item.url) { /* Fetch preview */ } }}
+                />
+              </div>
+            )}
+          </div>
+        );
+        break;
+
+      case 'comment':
+        content = (
+          <div
+            {...sharedHandlers}
+            className={cn(wrapperCls, 'rounded-lg shadow-md overflow-hidden flex flex-col')}
+            style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor || item.color }}
+          >
+            <div className="p-3 flex-1">
+              <textarea
+                className="w-full h-full bg-transparent resize-none outline-none text-sm cursor-text"
+                value={item.description ?? ''}
+                placeholder="Add a comment..."
+                onMouseDown={stopEdit}
+                onClick={stopEdit}
+                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, description: e.target.value } : i))}
+              />
+            </div>
+          </div>
+        );
+        break;
 
       default:
         return null;
     }
+
+    return (
+      <React.Fragment key={item.id}>
+        {content}
+        {isSelected && !item.locked && renderBlockToolbar(item)}
+        {isSelected && renderResizeHandles(item)}
+      </React.Fragment>
+    );
   };
 
-  const zoomPercent = Math.round(zoom * 100);
+  // ── Render connections ────────────────────────────────────────────────────
+  const renderConnections = () => (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ zIndex: 0, transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
+    >
+      <defs>
+        {connections.map(c => (
+          <marker key={`m-${c.id}`} id={`arrow-${c.id}`} markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill={c.color || '#6366f1'} />
+          </marker>
+        ))}
+      </defs>
+      {connections.map(conn => {
+        const src = items.find(i => i.id === conn.sourceId);
+        const tgt = items.find(i => i.id === conn.targetId);
+        if (!src || !tgt) return null;
+        const sx = src.x + (src.width || 0) / 2;
+        const sy = src.y + (src.height || 0) / 2;
+        const tx = tgt.x + (tgt.width || 0) / 2;
+        const ty = tgt.y + (tgt.height || 0) / 2;
+        const cx1 = sx + (tx - sx) / 3;
+        const cy1 = sy;
+        const cx2 = tx - (tx - sx) / 3;
+        const cy2 = ty;
+        const thickness = conn.thickness === 'thin' ? 1 : conn.thickness === 'thick' ? 4 : 2;
+        
+        return (
+          <g key={conn.id}>
+            <path
+              d={`M ${sx} ${sy} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${tx} ${ty}`}
+              stroke={conn.color || '#6366f1'}
+              strokeWidth={thickness}
+              fill="none"
+              markerEnd={`url(#arrow-${conn.id})`}
+              className={selectedConnection === conn.id ? 'cursor-pointer' : ''}
+              style={{ pointerEvents: 'auto' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedConnection(conn.id);
+                setShowConnectionToolbar(true);
+              }}
+            />
+            {selectedConnection === conn.id && renderConnectionToolbar(conn, sx, sy, tx, ty)}
+          </g>
+        );
+      })}
+    </svg>
+  );
 
+  // ── Connection floating toolbar ─────────────────────────────────────────────
+  const renderConnectionToolbar = (conn: Connection, sx: number, sy: number, tx: number, ty: number) => {
+    const midX = (sx + tx) / 2;
+    const midY = (sy + ty) / 2;
+    const colors = ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#64748b'];
+    
+    return (
+      <div 
+        className="absolute bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-50"
+        style={{ 
+          left: midX * zoom + offset.x, 
+          top: midY * zoom + offset.y - 40,
+          transform: 'translate(-50%, 0)'
+        }}
+      >
+        {/* Color picker */}
+        <div className="relative group">
+          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+            <Palette className="w-4 h-4" />
+          </button>
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-4 gap-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+            {colors.map(color => (
+              <button
+                key={color}
+                onClick={() => changeConnectionColor(conn.id, color)}
+                className={`w-5 h-5 rounded ${conn.color === color ? 'ring-2 ring-blue-500' : ''}`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </div>
+        
+        {/* Thickness */}
+        <div className="relative group">
+          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+            <Layers className="w-4 h-4" />
+          </button>
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity min-w-[100px]">
+            {['thin', 'medium', 'thick'].map(thick => (
+              <button
+                key={thick}
+                onClick={() => changeConnectionThickness(conn.id, thick as any)}
+                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 capitalize ${conn.thickness === thick ? 'bg-gray-100' : ''}`}
+              >
+                {thick}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="w-px h-4 bg-gray-200 mx-1" />
+        
+        {/* Delete */}
+        <button onClick={() => deleteConnection(conn.id)} className="p-1.5 text-gray-500 hover:text-red-500">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  };
+
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full w-full bg-gray-50 relative">
+    <div className="flex h-full w-full bg-gray-50 relative" onPointerMove={isResizing ? handleResizePointerMove : undefined} onPointerUp={isResizing ? handleResizePointerUp : undefined}>
+      {/* Hidden inputs */}
+      <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="hidden" />
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+
       {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 z-[110] bg-background/60 backdrop-blur-sm flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-            <p className="text-sm font-medium text-muted-foreground">Loading your canvas...</p>
+        <div className="absolute inset-0 z-[110] bg-background/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+            <p className="text-sm font-medium text-muted-foreground">Loading canvas...</p>
           </div>
         </div>
       )}
-      {/* Hidden file inputs */}
-      <input 
-        type="file" 
-        accept="image/*" 
-        ref={imageInputRef} 
-        onChange={handleImageUpload} 
-        className="hidden" 
-      />
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileUpload} 
-        className="hidden" 
-      />
-      
-      {/* Whiteboard header with name and controls */}
-      <div className="absolute top-4 left-20 z-10">
-        <div className="bg-white shadow-lg border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-2">
-          {isEditingName ? (
-            <div className="flex items-center gap-2">
-              <input
-                ref={nameInputRef}
-                type="text"
-                defaultValue={whiteboardName}
-                className="px-2 py-1 border-b border-primary outline-none text-base font-semibold w-64 bg-transparent"
-                onBlur={handleRenameConfirm}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRenameConfirm();
-                  if (e.key === 'Escape') handleRenameCancel();
-                }}
-              />
-            </div>
-          ) : (
-            <div 
-              className="flex items-center gap-2 cursor-pointer group"
-              onClick={renameWhiteboardHandler}
-            >
-              <h2 className="font-bold text-gray-800 text-lg">{whiteboardName}</h2>
-              <Edit3 className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Left Sidebar Tool Selector */}
-      <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-4">
+
+      {/* Left toolbar */}
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-2xl p-1.5 shadow-xl">
         {tools.map(tool => (
-          <div key={tool.id} className="flex flex-col items-center">
-            <button
-              className={cn(
-                "p-3 rounded-xl transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
-                activeTool === tool.id 
-                  ? "bg-primary text-primary-foreground shadow-lg scale-110" 
-                  : "text-gray-500"
-              )}
-              onClick={() => setActiveTool(tool.id)}
-              title={tool.name}
-            >
-              {tool.icon}
-            </button>
-          </div>
+          <button
+            key={tool.id}
+            title={tool.name}
+            onClick={() => setActiveTool(tool.id)}
+            className={cn(
+              'p-2.5 rounded-xl transition-all duration-150 flex items-center justify-center',
+              activeTool === tool.id ? 'bg-primary text-primary-foreground shadow-md scale-105' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+            )}
+          >
+            {tool.icon}
+          </button>
         ))}
-        
-        <div className="flex-grow"></div>
-        
-        {/* Save button */}
+        <div className="w-full h-px bg-gray-200 my-0.5" />
         <button
-          className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
-          onClick={saveWhiteboard}
-          title="Save whiteboard"
-          disabled={saving}
-        >
-          {saving ? (
-            <div className="w-4 h-4 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-        </button>
-        
-        {/* Reset button */}
-        <button
-          className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
-          onClick={resetViewAndItems}
-          title="Reset whiteboard"
+          title="Clear canvas"
+          onClick={() => { setItems([]); setConnections([]); setSelectedItem(null); }}
+          className="p-2.5 rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
       </div>
-      
-      {/* Canvas Area */}
-      <div 
+
+      {/* Top bar */}
+      <div className="absolute top-3 left-3 right-3 z-20 flex items-center gap-3">
+        {/* Whiteboard selector dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowWhiteboardDropdown(!showWhiteboardDropdown)}
+            className="bg-white/90 backdrop-blur-sm shadow-md border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2 hover:bg-gray-50 transition-colors"
+          >
+            <div className="w-4 h-4 rounded" style={{ backgroundColor: whiteboardColor }} />
+            <span className="text-sm font-semibold text-foreground max-w-[150px] truncate">{whiteboardName}</span>
+            <ChevronDown className="w-4 h-4 text-gray-500" />
+          </button>
+          
+          {showWhiteboardDropdown && (
+            <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 w-64 z-30">
+              <div className="p-2 border-b border-gray-100">
+                <button
+                  onClick={() => {
+                    setShowWhiteboardDropdown(false);
+                    // Create new whiteboard logic
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium text-primary"
+                >
+                  <Plus className="w-4 h-4" /> New Whiteboard
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {/* Whiteboard list would go here */}
+                <div className="p-3 text-sm text-gray-500 text-center">No other whiteboards</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Current whiteboard info */}
+        <div className="bg-white/90 backdrop-blur-sm shadow-md border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: whiteboardColor }} />
+          <span className="text-sm font-semibold text-foreground">{whiteboardName}</span>
+          <button onClick={() => setShowEditPopup(!showEditPopup)} className="text-gray-400 hover:text-primary transition-colors">
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Edit popup */}
+        {showEditPopup && (
+          <div className="absolute top-full left-48 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-30 w-72">
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Name</label>
+                <input
+                  type="text"
+                  value={editingNameValue}
+                  onChange={e => setEditingNameValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Color</label>
+                <div className="flex gap-2">
+                  {['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#64748b'].map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setWhiteboardColor(color)}
+                      className={`w-6 h-6 rounded-full border-2 ${whiteboardColor === color ? 'border-gray-900' : 'border-transparent'}`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={confirmEditName} className="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90">Save</button>
+                <button onClick={() => setShowEditPopup(false)} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Undo/Redo/Export */}
+        <div className="bg-white/90 backdrop-blur-sm shadow-md border border-gray-200 rounded-xl p-1 flex gap-1">
+          <button onClick={undo} disabled={historyIndex <= 0} className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <Undo className="w-4 h-4 text-gray-600" />
+          </button>
+          <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+            <Redo className="w-4 h-4 text-gray-600" />
+          </button>
+          <div className="w-px bg-gray-200 mx-1" />
+          <button onClick={exportWhiteboard} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <Download className="w-4 h-4 text-gray-600" />
+          </button>
+        </div>
+      </div>
+
+      {/* Delete toolbar */}
+      {selectedItem && (
+        <div className="absolute top-3 right-3 z-20 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl p-1 flex gap-1 shadow-lg">
+          <button onClick={deleteSelectedItem} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium">
+            <Trash2 className="w-4 h-4" /> Delete
+          </button>
+        </div>
+      )}
+
+      {/* Connector hint */}
+      {connecting && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 bg-indigo-500 text-white text-xs px-4 py-2 rounded-full shadow-lg font-medium">
+          🔗 Now click another item to connect — or click the canvas to cancel
+        </div>
+      )}
+
+      {/* Canvas */}
+      <div
         ref={canvasRef}
         className="flex-1 relative overflow-hidden"
-        onMouseDown={handleCanvasMouseDown}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
+        onPointerUp={handleCanvasPointerUp}
         onClick={handleCanvasClick}
-        onMouseUp={handleMouseUp}
-        style={{ 
+        style={{
           backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
           backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
           backgroundPosition: `${offset.x}px ${offset.y}px`,
-          cursor: isPanning ? 'grabbing' : (activeTool === 'select' ? 'default' : 'crosshair')
+          cursor: isPanning ? 'grabbing' : activeTool === 'connector' ? 'crosshair' : activeTool !== 'select' ? 'crosshair' : 'default',
         }}
       >
-        {/* Apply zoom transformation to all items */}
-        <div 
-          className="absolute top-0 left-0 w-full h-full"
-          style={{
-            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-          }}
+        {/* Items layer */}
+        <div
+          className="absolute top-0 left-0 w-0 h-0"
+          style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, transformOrigin: '0 0' }}
         >
-          {/* Render all items */}
-          {items.map(item => renderItem(item))}
+          {[...items].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(item => renderItem(item))}
         </div>
-        
-        {/* Render connections - also apply transformations */}
-        <svg 
-          className="absolute top-0 left-0 w-full h-full pointer-events-none" 
-          style={{ 
-            zIndex: 1,
-            transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-          }}
-        >
-          {connections.map(conn => {
-            const sourceItem = items.find(i => i.id === conn.sourceId);
-            const targetItem = items.find(i => i.id === conn.targetId);
-            
-            if (!sourceItem || !targetItem) return null;
-            
-            const getNearestPoint = (source: CanvasItem, target: CanvasItem) => {
-              const sw = source.width || 0;
-              const sh = source.height || 0;
-              const tw = target.width || 0;
-              const th = target.height || 0;
-              
-              // Centers
-              const scx = source.x + sw / 2;
-              const scy = source.y + sh / 2;
-              const tcx = target.x + tw / 2;
-              const tcy = target.y + th / 2;
-              
-              // Simplistic: just use centers for now but ensure they are RAW
-              return { sx: scx, sy: scy, tx: tcx, ty: tcy };
-            };
 
-            const points = getNearestPoint(sourceItem, targetItem);
-            const sourceX = points.sx;
-            const sourceY = points.sy;
-            const targetX = points.tx;
-            const targetY = points.ty;
-            
-            // Calculate control points for curved lines
-            const midX = (sourceX + targetX) / 2;
-            const midY = (sourceY + targetY) / 2;
-            const c1X = sourceX + (targetX - sourceX) / 4;
-            const c1Y = sourceY;
-            const c2X = targetX - (targetX - sourceX) / 4;
-            const c2Y = targetY;
-            
-            let pathData = '';
-            switch (conn.type) {
-              case 'curved':
-                pathData = `M ${sourceX} ${sourceY} C ${c1X} ${c1Y}, ${c2X} ${c2Y}, ${targetX} ${targetY}`;
-                break;
-              case 'elbow':
-                const elbowX = (sourceX + targetX) / 2;
-                pathData = `M ${sourceX} ${sourceY} L ${elbowX} ${sourceY} L ${elbowX} ${targetY} L ${targetX} ${targetY}`;
-                break;
-              case 'dotted':
-                pathData = `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
-                break;
-              default: // straight
-                pathData = `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`;
-            }
-            
-            return (
-              <g key={conn.id}>
-                <defs>
-                  <marker
-                    id={`arrowhead-${conn.id}`}
-                    markerWidth="10"
-                    markerHeight="7"
-                    refX="9"
-                    refY="3.5"
-                    orient="auto"
-                  >
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
-                  </marker>
-                </defs>
-                <path
-                  d={pathData}
-                  stroke="#000"
-                  strokeWidth="2"
-                  fill="none"
-                  markerEnd={`url(#arrowhead-${conn.id})`}
-                  strokeDasharray={conn.type === 'dotted' ? "5,5" : "none"}
-                  className="transition-all duration-300"
-                />
-              </g>
-            );
-          })}
-        </svg>
-        
-        {/* Toolbar for selected item */}
-        {selectedItem && (
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg border p-1 flex space-x-1 z-20">
-            <button 
-              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
-              onClick={deleteSelectedItem}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete</span>
-            </button>
-          </div>
-        )}
-        
-        {/* Connection mode indicator */}
-        {connecting && (
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-sm px-3 py-1.5 rounded-lg shadow-md z-20">
-            Click on another item to connect
-          </div>
-        )}
-        
+        {/* Connections SVG */}
+        {renderConnections()}
+
+        {/* Connector live preview */}
+        {getConnectorPreview()}
+
         {/* Zoom controls */}
-        <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-1 flex">
-          <button
-            onClick={() => setShowTutorial(true)}
-            className="p-1.5 rounded-lg hover:bg-background text-primary font-bold px-3 text-xs flex items-center gap-1"
-          >
+        <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-xl p-1 flex items-center shadow-lg z-20">
+          <button onClick={() => setShowTutorial(true)} className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded-lg transition-colors">
             Guide
           </button>
-          
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <button
-            onClick={handleZoomOut}
-            disabled={zoom <= MIN_ZOOM}
-            title="Zoom out (Ctrl + scroll)"
-            className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
-          >
-            <ZoomOut className="w-4 h-4 text-muted-foreground" />
+          <div className="w-px h-5 bg-border mx-1" />
+          <button onClick={() => setZoom(z => clampZoom(+(z - ZOOM_STEP).toFixed(2)))} disabled={zoom <= MIN_ZOOM} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all">
+            <ZoomOut className="w-4 h-4 text-gray-500" />
           </button>
-
-          <button
-            onClick={resetView}
-            title="Reset view"
-            className="px-2.5 py-1 text-xs font-bold tabular-nums text-foreground hover:text-primary rounded-lg hover:bg-background transition-all min-w-[44px] text-center"
-          >
+          <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} className="px-2    py-1 text-xs font-bold tabular-nums text-gray-700 hover:text-primary rounded-lg hover:bg-gray-100 transition-all min-w-[44px] text-center">
             {zoomPercent}%
           </button>
-
-          <button
-            onClick={handleZoomIn}
-            disabled={zoom >= MAX_ZOOM}
-            title="Zoom in (Ctrl + scroll)"
-            className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
-          >
-            <ZoomIn className="w-4 h-4 text-muted-foreground" />
+          <button onClick={() => setZoom(z => clampZoom(+(z + ZOOM_STEP).toFixed(2)))} disabled={zoom >= MAX_ZOOM} className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-all">
+            <ZoomIn className="w-4 h-4 text-gray-500" />
           </button>
-
-          <div className="w-px h-6 bg-border mx-0.5" />
-
-          <button onClick={resetView} title="Reset to 100%" className="p-1.5 rounded-lg hover:bg-background transition-all">
-            <Maximize2 className="w-4 h-4 text-muted-foreground" />
+          <div className="w-px h-5 bg-border mx-1" />
+          <button onClick={() => { setZoom(1); setOffset({ x: 0, y: 0 }); }} className="p-1.5 rounded-lg hover:bg-gray-100 transition-all" title="Reset to 100%">
+            <span className="text-xs font-bold text-gray-600">100%</span>
+          </button>
+          <button onClick={fitToScreen} className="p-1.5 rounded-lg hover:bg-gray-100 transition-all" title="Fit to screen">
+            <Maximize2 className="w-4 h-4 text-gray-500" />
           </button>
         </div>
 
         {/* Tutorial Overlay */}
         {showTutorial && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-background/40 backdrop-blur-md">
-            <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-lg w-full p-8 relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-400" />
-               <button onClick={() => setShowTutorial(false)} className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground">
-                 <X className="w-5 h-5" />
-               </button>
-               
-               <div className="space-y-6">
-                 <div className="space-y-2">
-                   <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Canvas</h1>
-                   <p className="text-muted-foreground">Your spatial playground for thinking. Here's how to master it:</p>
-                 </div>
-
-                 <div className="grid gap-4">
-                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
-                     <div className="bg-primary/10 p-2 rounded-lg"><MousePointer2 className="w-5 h-5 text-primary" /></div>
-                     <div>
-                       <h3 className="font-semibold">Interact & Pan</h3>
-                       <p className="text-sm text-muted-foreground">Select tool to move items. Click on empty space to deselect. Drag empty space to pan.</p>
-                     </div>
-                   </div>
-
-                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
-                     <div className="bg-primary/10 p-2 rounded-lg"><Link className="w-5 h-5 text-primary" /></div>
-                     <div>
-                       <h3 className="font-semibold">Smart Connections</h3>
-                       <p className="text-sm text-muted-foreground">Use Connector tool. Select a point on one item, then a point on another to link them.</p>
-                     </div>
-                   </div>
-
-                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
-                     <div className="bg-primary/10 p-2 rounded-lg"><ZoomIn className="w-5 h-5 text-primary" /></div>
-                     <div>
-                       <h3 className="font-semibold">Zoom Controls</h3>
-                       <p className="text-sm text-muted-foreground">Use Ctrl + Scroll Wheel or the controls in the bottom corner to explore.</p>
-                     </div>
-                   </div>
-                 </div>
-
-                 <button 
-                  onClick={() => setShowTutorial(false)}
-                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                 >
-                   Let's Build Something
-                 </button>
-               </div>
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/50 backdrop-blur-md">
+            <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-lg w-full p-8 relative overflow-hidden mx-4">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-400" />
+              <button onClick={dismissTutorial} className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground">
+                <X className="w-5 h-5" />
+              </button>
+              <div className="space-y-5">
+                <div>
+                  <h1 className="text-2xl font-bold text-foreground">Welcome to Canvas</h1>
+                  <p className="text-sm text-muted-foreground mt-1">Your visual workspace. Here's what you need to know:</p>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { icon: <MousePointer2 className="w-5 h-5 text-primary" />, title: 'Add items', desc: 'Pick a tool from the left bar, then click anywhere on the canvas to place it.' },
+                    { icon: <GripVertical className="w-5 h-5 text-primary" />, title: 'Move & resize', desc: 'Select an item to move it. Drag the blue handles on the edges to resize.' },
+                    { icon: <LinkIcon className="w-5 h-5 text-primary" />, title: 'Connect items', desc: 'Pick the Connector tool, click one item, then click another to draw an arrow.' },
+                    { icon: <ZoomIn className="w-5 h-5 text-primary" />, title: 'Zoom & pan', desc: 'Ctrl + scroll to zoom. Drag empty space to pan around the canvas.' },
+                  ].map(tip => (
+                    <div key={tip.title} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40 border border-border">
+                      <div className="bg-primary/10 p-2 rounded-lg flex-shrink-0">{tip.icon}</div>
+                      <div>
+                        <h3 className="font-semibold text-sm">{tip.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{tip.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={dismissTutorial}
+                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  Got it — Let's Create!
+                </button>
+              </div>
             </div>
           </div>
         )}

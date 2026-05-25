@@ -14,9 +14,33 @@ export interface CanvasItem {
   backgroundColor?: string;
   connections?: ConnectionPoint[];
   title?: string;
-  tasks?: Array<{ id: string; text: string; completed: boolean }>;
+  description?: string; // For sticky notes, text blocks, documents, comments
+  tasks?: Array<{ id: string; text: string; completed: boolean; taskType?: string }>;
+  taskIds?: string[]; // For live sync with app tasks
   imageUrl?: string; // For images
+  images?: Array<{ id: string; url: string; description?: string }>; // Multiple images
   fileUrl?: string; // For file attachments
+  // New properties for enhanced blocks
+  locked?: boolean;
+  zIndex?: number;
+  // Text block specific
+  textType?: 'header-only' | 'description-only' | 'header-description';
+  // Shape specific
+  shapeType?: 'square' | 'circle' | 'star' | 'triangle' | 'diamond' | 'hexagon' | 'arrow';
+  fillColor?: string;
+  borderThickness?: 'thin' | 'medium' | 'thick';
+  borderStyle?: 'solid' | 'dashed' | 'dotted';
+  opacity?: number;
+  cornerRadius?: number;
+  // Table specific
+  rows?: number;
+  columns?: number;
+  cells?: Array<{ row: number; column: number; content: string; formatting?: Array<'bold' | 'underline' | 'bullet'> }>;
+  // Link specific
+  url?: string;
+  // Connection line specific
+  lineColor?: string;
+  lineThickness?: 'thin' | 'medium' | 'thick';
 }
 
 export interface Connection {
@@ -26,6 +50,8 @@ export interface Connection {
   sourcePoint: { x: number; y: number };
   targetPoint: { x: number; y: number };
   type: 'straight' | 'curved' | 'elbow' | 'dotted';
+  color?: string;
+  thickness?: 'thin' | 'medium' | 'thick';
 }
 
 interface ConnectionPoint {
