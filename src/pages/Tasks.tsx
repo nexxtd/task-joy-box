@@ -107,6 +107,11 @@ const Tasks: React.FC = () => {
   const [newChecklistItems, setNewChecklistItems] = useState<string[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
+  const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
+  const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
+  const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
+  const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   const [completedOpen, setCompletedOpen] = useState(true);
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
@@ -783,9 +788,52 @@ const Tasks: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   {newTaskSubtasks.map((subtask) => (
-                    <div key={subtask.id} className="grid grid-cols-[1fr_auto] gap-4 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50">
-                      <span className="text-sm text-foreground font-medium">{subtask.text}</span>
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{subtask.durationMinutes} min</span>
+                    <div key={subtask.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                      {editingDraftSubtaskId === subtask.id ? (
+                        <>
+                          <input
+                            autoFocus
+                            className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                            value={editingDraftSubtaskText}
+                            onChange={(e) => setEditingDraftSubtaskText(e.target.value)}
+                          />
+                          <input
+                            type="number"
+                            className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                            value={editingDraftSubtaskDuration}
+                            onChange={(e) => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                          />
+                          <button
+                            onClick={() => {
+                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st));
+                              setEditingDraftSubtaskId(null);
+                            }}
+                            className="text-xs text-primary font-bold"
+                          >
+                            Save
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span 
+                            onClick={() => {
+                              setEditingDraftSubtaskId(subtask.id);
+                              setEditingDraftSubtaskText(subtask.text);
+                              setEditingDraftSubtaskDuration(subtask.durationMinutes);
+                            }}
+                            className="text-sm text-foreground font-medium cursor-text flex-1"
+                          >
+                            {subtask.text}
+                          </span>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{subtask.durationMinutes} min</span>
+                          <button
+                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -817,9 +865,42 @@ const Tasks: React.FC = () => {
                 <label className="text-xs font-semibold uppercase text-muted-foreground">Checklist</label>
                 <div className="space-y-1">
                   {newChecklistItems.map((item, index) => (
-                    <div key={`${item}-${index}`} className="flex items-center gap-2 text-sm text-foreground bg-muted/20 px-3 py-2 rounded-lg border border-border/50">
+                    <div key={`${item}-${index}`} className="flex items-center gap-2 text-sm text-foreground bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
                       <CheckSquare className="w-3.5 h-3.5 text-primary" />
-                      <span>{item}</span>
+                      {editingDraftChecklistIndex === index ? (
+                        <input
+                          autoFocus
+                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                          value={editingDraftChecklistText}
+                          onChange={(e) => setEditingDraftChecklistText(e.target.value)}
+                          onBlur={() => {
+                            setNewChecklistItems(prev => prev.map((it, i) => i === index ? editingDraftChecklistText : it));
+                            setEditingDraftChecklistIndex(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setNewChecklistItems(prev => prev.map((it, i) => i === index ? editingDraftChecklistText : it));
+                              setEditingDraftChecklistIndex(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span 
+                          onClick={() => {
+                            setEditingDraftChecklistIndex(index);
+                            setEditingDraftChecklistText(item);
+                          }}
+                          className="flex-1 cursor-text"
+                        >
+                          {item}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setNewChecklistItems(prev => prev.filter((_, i) => i !== index))}
+                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1212,9 +1293,11 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="w-full px-1 text-2xl font-semibold text-foreground">
-            {task.title}
-          </h2>
+          <input
+            className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+            value={task.title}
+            onChange={(e) => onUpdateTask(task.id, { title: e.target.value })}
+          />
           <button onClick={onClose} className="ml-3 p-2 rounded-lg hover:bg-muted text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
@@ -1332,18 +1415,40 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 const isEditingSubtask = editingSubtaskId === subtask.id;
 
                 return (
-                  <div key={subtask.id} className="grid grid-cols-[auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 relative">
+                  <div key={subtask.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
                     <button onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}>
                       {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-label-green" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
                     </button>
-                    <span 
-                      className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                    >
-                      {subtask.text}
-                    </span>
-                    <div className="flex items-center gap-1">
+                    
+                    {editingSubtaskId === subtask.id ? (
+                      <input
+                        autoFocus
+                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                        value={editingSubtaskText}
+                        onChange={(e) => setEditingSubtaskText(e.target.value)}
+                        onBlur={() => saveSubtaskEdit(subtask.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                      />
+                    ) : (
+                      <span 
+                        onClick={() => {
+                          setEditingSubtaskId(subtask.id);
+                          setEditingSubtaskText(subtask.text);
+                        }}
+                        className={`flex-1 text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                      >
+                        {subtask.text}
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{getSubtaskDuration(subtask)} min</span>
-                      <span className="text-xs text-muted-foreground">{remainingAfter} min left</span>
+                      <button
+                        onClick={() => removeSubtask(subtask.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -1380,17 +1485,41 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                       <div className="text-[11px] uppercase text-muted-foreground font-semibold">{list.title}</div>
                     )}
                     {list.items.map(item => (
-                      <div key={item.id} className="flex items-center gap-2 text-sm">
+                      <div key={item.id} className="flex items-center gap-2 text-sm group">
                         <input
                           type="checkbox"
                           checked={item.completed}
                           onChange={() => onToggleChecklistItem(task.id, list.id, item.id)}
                           className="w-4 h-4 rounded border-border accent-primary"
                         />
-                        <span className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                          {item.text}
-                        </span>
+                        
+                        {editingChecklistItemId === item.id ? (
+                          <input
+                            autoFocus
+                            className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                            value={editingChecklistText}
+                            onChange={(e) => setEditingChecklistText(e.target.value)}
+                            onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                            onKeyDown={(e) => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                          />
+                        ) : (
+                          <span 
+                            onClick={() => {
+                              setEditingChecklistItemId(item.id);
+                              setEditingChecklistText(item.text);
+                            }}
+                            className={`flex-1 text-sm cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                          >
+                            {item.text}
+                          </span>
+                        )}
 
+                        <button
+                          onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>

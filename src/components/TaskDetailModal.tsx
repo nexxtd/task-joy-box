@@ -143,9 +143,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-start justify-between z-10">
           <div className="flex-1">
-            <h2 className="w-full text-lg font-semibold text-foreground">
-              {title}
-            </h2>
+            <input
+              className="w-full text-lg font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={saveTitle}
+            />
             <p className="text-xs text-muted-foreground mt-1">
               in column: <span className="text-foreground font-medium">{currentColumn?.title}</span>
             </p>
@@ -378,6 +381,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                       <span className="text-sm font-medium text-foreground">{cl.title}</span>
                       {total > 0 && <span className="text-[11px] text-muted-foreground">{done}/{total}</span>}
                     </div>
+                    <button
+                      onClick={() => handleDeleteChecklist(cl.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   {total > 0 && (
                     <div className="w-full h-1.5 bg-muted rounded-full mb-2 overflow-hidden">
@@ -386,15 +395,34 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                   )}
                   <div className="space-y-1">
                     {cl.items.map(item => {
-                      const isEditing = editingItem?.checklistId === cl.id && editingItem?.itemId === item.id;
                       return (
                         <div key={item.id} className="flex items-center gap-2 group">
                           <input type="checkbox" checked={item.completed} onChange={() => toggleChecklistItem(task.id, cl.id, item.id)} className="w-4 h-4 rounded border-border accent-primary" />
-                          <span 
-                            className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                          
+                          {editingItem?.checklistId === cl.id && editingItem?.itemId === item.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                              value={editingItem.text}
+                              onChange={(e) => setEditingItem({ ...editingItem, text: e.target.value })}
+                              onBlur={() => handleEditItem(cl.id, item.id, editingItem.text)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleEditItem(cl.id, item.id, editingItem.text)}
+                            />
+                          ) : (
+                            <span 
+                              onClick={() => setEditingItem({ checklistId: cl.id, itemId: item.id, text: item.text })}
+                              className={`text-sm flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                            >
+                              {item.text}
+                            </span>
+                          )}
+
+                          <button
+                            onClick={() => deleteChecklistItem(task.id, cl.id, item.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                           >
-                            {item.text}
-                          </span>
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       );
                     })}
