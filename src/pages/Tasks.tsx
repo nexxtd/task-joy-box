@@ -1215,11 +1215,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <input
-            value={task.title}
-            onChange={e => onUpdateTask(task.id, { title: e.target.value })}
-            className="w-full bg-transparent text-2xl font-semibold text-foreground focus:outline-none"
-          />
+          <h2 className="w-full px-1 text-2xl font-semibold text-foreground">
+            {task.title}
+          </h2>
           <button onClick={onClose} className="ml-3 p-2 rounded-lg hover:bg-muted text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
@@ -1341,50 +1339,15 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <button onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}>
                       {subtask.completed ? <CheckCircle2 className="w-4 h-4 text-label-green" /> : <Circle className="w-4 h-4 text-muted-foreground" />}
                     </button>
-                    {isEditingSubtask ? (
-                      <input
-                        value={editingSubtaskText}
-                        onChange={e => setEditingSubtaskText(e.target.value)}
-                        onBlur={() => saveSubtaskEdit(subtask.id)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') saveSubtaskEdit(subtask.id);
-                          if (e.key === 'Escape') {
-                            setEditingSubtaskId(null);
-                            setEditingSubtaskText('');
-                          }
-                        }}
-                        className={`bg-transparent text-sm border-b border-border focus:outline-none ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingSubtaskId(subtask.id);
-                          setEditingSubtaskText(subtask.text);
-                        }}
-                        className={`text-left text-sm ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
-                      >
-                        {subtask.text}
-                      </button>
-                    )}
-                    <span className="text-xs text-muted-foreground">{getSubtaskDuration(subtask)} min</span>
-                    <span className="text-xs text-muted-foreground">{remainingAfter} min left</span>
-                    <button
-                      onClick={() => {
-                        setSubtaskMenuOpenId(prev => prev === subtask.id ? null : subtask.id);
-                        setSubtaskMenuValue(getSubtaskDuration(subtask));
-                      }}
-                      className="p-1 rounded hover:bg-muted"
+                    <span 
+                      className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                     >
-                      <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                    <button
-                      onClick={() => removeSubtask(subtask.id)}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
-                      title="Delete sub-task"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                      {subtask.text}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">{getSubtaskDuration(subtask)} min</span>
+                      <span className="text-xs text-muted-foreground">{remainingAfter} min left</span>
+                    </div>
 
                     {subtaskMenuOpenId === subtask.id && (
                       <div className="absolute right-2 top-9 z-10 w-64 bg-popover border border-border rounded-xl shadow-xl p-3 space-y-2">
@@ -1459,40 +1422,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                           onChange={() => onToggleChecklistItem(task.id, list.id, item.id)}
                           className="w-4 h-4 rounded border-border accent-primary"
                         />
-                        {editingChecklistItemId === item.id ? (
-                          <input
-                            value={editingChecklistText}
-                            onChange={e => setEditingChecklistText(e.target.value)}
-                            onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') saveChecklistItemEdit(list.id, item.id);
-                              if (e.key === 'Escape') {
-                                setEditingChecklistItemId(null);
-                                setEditingChecklistText('');
-                              }
-                            }}
-                            className="flex-1 bg-transparent border-b border-border text-sm focus:outline-none text-foreground"
-                            autoFocus
-                          />
-                        ) : (
-                          <button
-                            onClick={() => {
-                              setEditingChecklistItemId(item.id);
-                              setEditingChecklistText(item.text);
-                            }}
-                            className={`flex-1 text-left ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground hover:text-primary'}`}
-                            title="Click to edit item"
-                          >
-                            {item.text}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                          className="ml-auto p-1 rounded hover:bg-muted text-muted-foreground hover:text-destructive"
-                          title="Delete checklist item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <span className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                          {item.text}
+                        </span>
+
                       </div>
                     ))}
                   </div>
@@ -1513,35 +1446,54 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-            <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="text-sm" />
-            {uploading && <p className="text-xs text-muted-foreground">Uploading...</p>}
-            <div className="space-y-1">
-              {(task.attachments || []).map(attachment => (
-                <div key={attachment.id} className="flex items-center gap-2 text-sm">
-                  {(() => {
-                    const isServerAttachment = /^\d+$/.test(String(attachment.id));
-                    const href = isServerAttachment
-                      ? `/api/attachments/file/${attachment.id}`
-                      : attachment.fileUrl;
-                    return (
+            <div className="group relative mt-1">
+              <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                <div className="flex flex-col items-center justify-center py-4">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                    <Paperclip className="w-5 h-5 text-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                  <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                </div>
+                <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
+              </label>
+              {uploading && (
+                <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-medium text-foreground">Uploading files...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+              {(task.attachments || []).map(attachment => {
+                const isServerAttachment = /^\d+$/.test(String(attachment.id));
+                const href = isServerAttachment ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
+                
+                return (
                   <a
+                    key={attachment.id}
                     href={href}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-primary hover:underline break-all"
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all group/item"
                   >
-                    {attachment.fileName}
+                    <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center group-hover/item:border-primary/30 group-hover/item:text-primary transition-colors">
+                      <Paperclip className="w-5 h-5 text-muted-foreground group-hover/item:text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
+                        {attachment.fileName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}
+                      </p>
+                    </div>
                   </a>
-                    );
-                  })()}
-                  <button
-                    onClick={() => deleteAttachment(attachment.id)}
-                    className="text-xs text-muted-foreground hover:text-destructive"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

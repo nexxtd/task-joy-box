@@ -143,12 +143,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-start justify-between z-10">
           <div className="flex-1">
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onBlur={saveTitle}
-              className="w-full bg-transparent text-lg font-semibold text-foreground focus:outline-none"
-            />
+            <h2 className="w-full text-lg font-semibold text-foreground">
+              {title}
+            </h2>
             <p className="text-xs text-muted-foreground mt-1">
               in column: <span className="text-foreground font-medium">{currentColumn?.title}</span>
             </p>
@@ -313,38 +310,33 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 <FileUp className="w-3.5 h-3.5" /> Attachments {!isPremium && <Sparkles className="w-2.5 h-2.5 text-primary" />}
               </h4>
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {task.attachments?.map(a => (
-                    <div key={a.id} className="flex items-center gap-2 bg-muted/50 border border-border rounded-md px-2 py-1 group">
-                      <File className="w-3 h-3 text-muted-foreground" />
-                      <button
-                        onClick={() => window.open(`/api/attachments/file/${a.id}`, '_blank')}
-                        className="text-[10px] text-foreground truncate max-w-[100px] hover:text-primary text-left"
-                        title={`View ${a.fileName}`}
-                      >
-                        {a.fileName}
-                      </button>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => window.open(`/api/attachments/file/${a.id}`, '_blank')}
-                          className="p-0.5 hover:text-primary transition-colors"
-                          title="View file"
-                        >
-                          <Eye className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => deleteAttachment(a.id)} className="p-0.5 hover:text-destructive transition-colors">
-                          <Trash className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <label className={`flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-border rounded-md cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all ${(!isPremium || uploading) && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
-                  <FileUp className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">{uploading ? 'Uploading...' : 'Upload File'}</span>
+              <div className="group relative mt-1">
+                <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${(!isPremium || uploading) && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <FileUp className="w-5 h-5 text-primary mb-1" />
+                    <p className="text-[10px] font-medium text-foreground">{uploading ? 'Uploading...' : 'Click to upload'}</p>
+                  </div>
                   <input type="file" className="hidden" onChange={handleFileUpload} disabled={!isPremium || uploading} />
                 </label>
+              </div>
+
+              <div className="space-y-1.5 mt-3">
+                {(task.attachments || []).map(a => (
+                  <a
+                    key={a.id}
+                    href={`/api/attachments/file/${a.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted transition-all group/item"
+                  >
+                    <File className="w-3.5 h-3.5 text-muted-foreground group-hover/item:text-primary" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
+                        {a.fileName}
+                      </p>
+                    </div>
+                  </a>
+                ))}
               </div>
             </div>
           </div>
@@ -386,9 +378,6 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                       <span className="text-sm font-medium text-foreground">{cl.title}</span>
                       {total > 0 && <span className="text-[11px] text-muted-foreground">{done}/{total}</span>}
                     </div>
-                    <button onClick={() => handleDeleteChecklist(cl.id)} className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all">
-                      <Trash className="w-3 h-3" />
-                    </button>
                   </div>
                   {total > 0 && (
                     <div className="w-full h-1.5 bg-muted rounded-full mb-2 overflow-hidden">
@@ -401,33 +390,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                       return (
                         <div key={item.id} className="flex items-center gap-2 group">
                           <input type="checkbox" checked={item.completed} onChange={() => toggleChecklistItem(task.id, cl.id, item.id)} className="w-4 h-4 rounded border-border accent-primary" />
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingItem.text}
-                              onChange={e => setEditingItem({ ...editingItem, text: e.target.value })}
-                              onBlur={() => handleEditItem(cl.id, item.id, editingItem.text)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  handleEditItem(cl.id, item.id, editingItem.text);
-                                } else if (e.key === 'Escape') {
-                                  setEditingItem(null);
-                                }
-                              }}
-                              className="flex-1 bg-muted border border-border rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                              autoFocus
-                            />
-                          ) : (
-                            <span 
-                              className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'} cursor-text hover:bg-muted/30 px-1 py-0.5 rounded`}
-                              onClick={() => !item.completed && setEditingItem({ checklistId: cl.id, itemId: item.id, text: item.text })}
-                            >
-                              {item.text}
-                            </span>
-                          )}
-                          <button onClick={() => deleteChecklistItem(task.id, cl.id, item.id)} className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all">
-                            <X className="w-3 h-3" />
-                          </button>
+                          <span 
+                            className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                          >
+                            {item.text}
+                          </span>
                         </div>
                       );
                     })}
@@ -448,12 +415,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
           </div>
 
           {/* Delete */}
-          <div className="pt-4 border-t border-border">
-            <button onClick={handleDelete} className="flex items-center gap-2 text-sm text-destructive hover:bg-destructive/10 px-3 py-2 rounded-md transition-colors">
-              <Trash2 className="w-4 h-4" />
-              Delete Task
-            </button>
-          </div>
+<div className="pt-4 border-t border-border" />
         </div>
       </div>
     </div>
