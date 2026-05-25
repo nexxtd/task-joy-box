@@ -120,18 +120,21 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
   };
 
   const deleteAttachment = async (id: string) => {
-    try {
-      const res = await fetch(`/api/attachments/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (res.ok) {
-        updateTask(task.id, {
-          attachments: (task.attachments || []).filter(a => a.id !== id)
+    // Optimistically update
+    updateTask(task.id, {
+      attachments: (task.attachments || []).filter(a => a.id !== id)
+    });
+
+    const isServerAttachment = /^\d+$/.test(id);
+    if (isServerAttachment) {
+      try {
+        await fetch(`/api/attachments/${id}`, {
+          method: 'DELETE',
+          credentials: 'include',
         });
+      } catch (error) {
+        console.error('Error deleting attachment:', error);
       }
-    } catch (error) {
-      console.error('Error deleting attachment:', error);
     }
   };
 
@@ -325,20 +328,31 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
 
               <div className="space-y-1.5 mt-3">
                 {(task.attachments || []).map(a => (
-                  <a
-                    key={a.id}
-                    href={`/api/attachments/file/${a.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted transition-all group/item"
-                  >
-                    <File className="w-3.5 h-3.5 text-muted-foreground group-hover/item:text-primary" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
-                        {a.fileName}
-                      </p>
-                    </div>
-                  </a>
+                  <div key={a.id} className="relative group/att">
+                    <a
+                      href={`/api/attachments/file/${a.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted transition-all group/item"
+                    >
+                      <File className="w-3.5 h-3.5 text-muted-foreground group-hover/item:text-primary" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
+                          {a.fileName}
+                        </p>
+                      </div>
+                    </a>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteAttachment(a.id);
+                      }}
+                      className="absolute top-1 right-1 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

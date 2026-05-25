@@ -1060,8 +1060,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [subtaskMenuValue, setSubtaskMenuValue] = useState<number>(0);
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
   const [uploading, setUploading] = useState(false);
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
@@ -1251,27 +1253,34 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const deleteAttachment = async (attachmentId: string) => {
+    // Optimistically remove from state
+    onUpdateTask(task.id, {
+      attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
+    });
+
     const isServerAttachment = canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId));
     if (isServerAttachment) {
       try {
-        const res = await fetch(`/api/attachments/${attachmentId}`, {
+        await fetch(`/api/attachments/${attachmentId}`, {
           method: 'DELETE',
           credentials: 'include',
         });
-        if (res.ok) {
-          onUpdateTask(task.id, {
-            attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
-          });
-          return;
-        }
       } catch (error) {
         console.error('Error deleting attachment:', error);
       }
     }
+  };
 
-    onUpdateTask(task.id, {
-      attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
-    });
+  const deleteComment = (commentId: string) => {
+    const comments = (task.comments || []).filter(c => c.id !== commentId);
+    onUpdateTask(task.id, { comments });
+  };
+
+  const updateComment = (commentId: string, text: string) => {
+    const comments = (task.comments || []).map(c => 
+      c.id === commentId ? { ...c, text } : c
+    );
+    onUpdateTask(task.id, { comments });
   };
 
   const addComment = () => {
@@ -1567,25 +1576,36 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 const href = isServerAttachment ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
                 
                 return (
-                  <a
-                    key={attachment.id}
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all group/item"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center group-hover/item:border-primary/30 group-hover/item:text-primary transition-colors">
-                      <Paperclip className="w-5 h-5 text-muted-foreground group-hover/item:text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
-                        {attachment.fileName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}
-                      </p>
-                    </div>
-                  </a>
+                  <div key={attachment.id} className="relative group/att">
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all group/item"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center group-hover/item:border-primary/30 group-hover/item:text-primary transition-colors">
+                        <Paperclip className="w-5 h-5 text-muted-foreground group-hover/item:text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
+                          {attachment.fileName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}
+                        </p>
+                      </div>
+                    </a>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteAttachment(attachment.id);
+                      }}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -1595,21 +1615,40 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             <h3 className="text-sm font-semibold text-foreground">Comments</h3>
             <div className="space-y-2">
               {(task.comments || []).map(comment => (
-                <div key={comment.id} className="border border-border rounded-lg px-3 py-2">
-                  <p className="text-sm text-foreground whitespace-pre-wrap">{comment.text}</p>
+                <div key={comment.id} className="border border-border rounded-lg px-3 py-2 group">
+                  <div className="flex items-start justify-between gap-2">
+                    {editingCommentId === comment.id ? (
+                      <textarea
+                        autoFocus
+                        className="flex-1 bg-muted/40 border border-primary/30 rounded px-2 py-1 text-sm resize-none"
+                        value={editingCommentText}
+                        onChange={(e) => setEditingCommentText(e.target.value)}
+                        onBlur={() => {
+                          updateComment(comment.id, editingCommentText);
+                          setEditingCommentId(null);
+                        }}
+                      />
+                    ) : (
+                      <p 
+                        onClick={() => {
+                          setEditingCommentId(comment.id);
+                          setEditingCommentText(comment.text);
+                        }}
+                        className="text-sm text-foreground whitespace-pre-wrap flex-1 cursor-text"
+                      >
+                        {comment.text}
+                      </p>
+                    )}
+                    <button
+                      onClick={() => deleteComment(comment.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString()}</p>
                 </div>
               ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={newCommentText}
-                onChange={e => setNewCommentText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addComment()}
-                placeholder="Leave a comment"
-                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button onClick={addComment} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Post</button>
             </div>
           </div>
 
