@@ -81,6 +81,7 @@ const Tasks: React.FC = () => {
     toggleChecklistItem,
     addChecklistItem,
     deleteChecklistItem,
+    deleteTask,
   } = useBoardContext();
   const { open: openDeepFocus } = useDeepFocus();
 
@@ -486,6 +487,11 @@ const Tasks: React.FC = () => {
                     {task.dueDate && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${isOverdue ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
                         {formatDate(task.dueDate)}
+                        {!isTaskCompleted(task) && !isOverdue && (
+                          <span className="ml-1 opacity-70">
+                            ({Math.max(0, Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left)
+                          </span>
+                        )}
                       </span>
                     )}
                     {subtasksDone && (
@@ -603,18 +609,50 @@ const Tasks: React.FC = () => {
                         <p className="text-xs text-muted-foreground">No attachments</p>
                       ) : (
                         <div className="space-y-1.5">
-                          {task.attachments.map(attachment => (
-                            <button
-                              key={attachment.id}
-                              onClick={() => window.open(`/api/attachments/file/${attachment.id}`, '_blank')}
-                              className="flex items-center gap-2 text-xs text-primary hover:underline"
-                            >
-                              <Paperclip className="w-3 h-3" />
-                              {attachment.fileName}
-                            </button>
-                          ))}
+                          {task.attachments.map(attachment => {
+                            const isServerAtt = /^\d+$/.test(String(attachment.id));
+                            const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
+                            return (
+                              <div key={attachment.id} className="flex items-center justify-between group/att">
+                                <a
+                                  href={href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-2 text-xs text-primary hover:underline truncate mr-2"
+                                >
+                                  <Paperclip className="w-3 h-3" />
+                                  {attachment.fileName}
+                                </a>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const nextAtts = (task.attachments || []).filter(a => a.id !== attachment.id);
+                                    updateTask(task.id, { attachments: nextAtts });
+                                  }}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           if (confirm('Are you sure you want to delete this task?')) {
+                             deleteTask(task.id);
+                           }
+                         }}
+                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                       >
+                         <Trash2 className="w-3.5 h-3.5" />
+                         Delete Task
+                       </button>
                     </div>
                   </div>
                 )}
@@ -825,13 +863,25 @@ const Tasks: React.FC = () => {
                           >
                             {subtask.text}
                           </span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{subtask.durationMinutes} min</span>
-                          <button
-                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              value={subtask.durationMinutes || 0}
+                              onChange={(e) => {
+                                const val = Math.max(0, Number(e.target.value) || 0);
+                                setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                              }}
+                            />
+                            <span className="text-[10px] text-muted-foreground mr-1">min</span>
+                            <button
+                              onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </>
                       )}
                     </div>
@@ -1451,7 +1501,17 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     )}
 
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">{getSubtaskDuration(subtask)} min</span>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        value={subtask.durationMinutes || 0}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          updateSubtask(subtask.id, { durationMinutes: val });
+                        }}
+                      />
+                      <span className="text-[10px] text-muted-foreground mr-1">min</span>
                       <button
                         onClick={() => removeSubtask(subtask.id)}
                         className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
@@ -1649,6 +1709,22 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString()}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={newCommentText}
+                onChange={e => setNewCommentText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addComment()}
+                placeholder="Add a comment..."
+                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <button 
+                onClick={addComment}
+                className="px-4 py-2 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium"
+              >
+                Send
+              </button>
             </div>
           </div>
 
