@@ -877,10 +877,11 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     const h = item.height || 200;
     const isShape = item.type === 'shape';
     
-    return (
-      <>
-        {/* Rotation handle for shapes */}
-        {isShape && (
+    if (isShape) {
+      // Corner and edge handles for shapes
+      return (
+        <>
+          {/* Rotation handle for shapes */}
           <div
             className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border-2 border-blue-500 rounded-full z-30 cursor-grab flex items-center justify-center select-none"
             onPointerDown={e => handleRotationPointerDown(e, item.id)}
@@ -889,13 +890,26 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           >
             <RotateCw className="w-3 h-3 text-blue-500" />
           </div>
-        )}
-        {/* Bottom-right corner resize handle */}
-        <div
-          className="absolute bottom-0 right-0 w-4 h-4 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none"
-          onPointerDown={e => handleResizePointerDown(e, 'se')}
-        />
-      </>
+          {/* Corner handles */}
+          <div className="absolute top-0 left-0 w-3 h-3 bg-white border-2 border-blue-500 rounded-br-sm z-30 cursor-nw-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'nw')} />
+          <div className="absolute top-0 right-0 w-3 h-3 bg-white border-2 border-blue-500 rounded-bl-sm z-30 cursor-ne-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'ne')} />
+          <div className="absolute bottom-0 left-0 w-3 h-3 bg-white border-2 border-blue-500 rounded-tr-sm z-30 cursor-sw-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'sw')} />
+          <div className="absolute bottom-0 right-0 w-3 h-3 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'se')} />
+          {/* Edge handles */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-3 bg-white border-2 border-blue-500 rounded-sm z-30 cursor-n-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'n')} />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-3 bg-white border-2 border-blue-500 rounded-sm z-30 cursor-s-resize select-none" onPointerDown={e => handleResizePointerDown(e, 's')} />
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-4 bg-white border-2 border-blue-500 rounded-sm z-30 cursor-w-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'w')} />
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-4 bg-white border-2 border-blue-500 rounded-sm z-30 cursor-e-resize select-none" onPointerDown={e => handleResizePointerDown(e, 'e')} />
+        </>
+      );
+    }
+    
+    // Standard bottom-right corner resize handle for other blocks
+    return (
+      <div
+        className="absolute bottom-0 right-0 w-4 h-4 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none"
+        onPointerDown={e => handleResizePointerDown(e, 'se')}
+      />
     );
   };
 
