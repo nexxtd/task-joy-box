@@ -135,6 +135,9 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const [selectedConnection, setSelectedConnection] = useState<string | null>(null);
   const [showConnectionToolbar, setShowConnectionToolbar] = useState(false);
 
+  // Connector drag state
+  const [connectorDrag, setConnectorDrag] = useState<{ sourceId: string; sourcePoint: { x: number; y: number } } | null>(null);
+
   // Dropdown states
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
@@ -438,9 +441,26 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
 
     if (isDragging) {
       const { x, y } = clientToCanvas(e.clientX, e.clientY);
-      setItems(prev => prev.map(item =>
-        item.id === itemId ? { ...item, x: x - dragOffset.x, y: y - dragOffset.y } : item
+      const item = items.find(i => i.id === itemId);
+      if (!item) return;
+      
+      const newX = x - dragOffset.x;
+      const newY = y - dragOffset.y;
+      
+      setItems(prev => prev.map(i =>
+        i.id === itemId ? { ...i, x: newX, y: newY } : i
       ));
+      
+      // Update connection points for connections attached to this item
+      setConnections(prev => prev.map(conn => {
+        if (conn.sourceId === itemId) {
+          return { ...conn, sourcePoint: { x: newX + (item.width || 0) / 2, y: newY + (item.height || 0) / 2 } };
+        }
+        if (conn.targetId === itemId) {
+          return { ...conn, targetPoint: { x: newX + (item.width || 0) / 2, y: newY + (item.height || 0) / 2 } };
+        }
+        return conn;
+      }));
     }
   };
 
@@ -504,10 +524,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   // ── Canvas pan ───────────────────────────────────────────────────────────
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('.canvas-item,.resize-handle')) return;
+    if ((e.target as HTMLElement).closest('.canvas-item,.resize-handle,.connector-circle')) return;
     setIsPanning(true);
     panStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    
+    // Deselect connection when clicking on canvas
+    if (selectedConnection) {
+      setSelectedConnection(null);
+      setShowConnectionToolbar(false);
+    }
   };
 
   const handleCanvasPointerMove = (e: React.PointerEvent) => {
@@ -519,8 +545,34 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     }
   };
 
-  const handleCanvasPointerUp = () => {
+  const handleCanvasPointerUp = (e: React.PointerEvent) => {
     setIsPanning(false);
+    
+    // Handle connector drag completion
+    if (connectorDrag) {
+      const target = (e.target as HTMLElement).closest('.canvas-item');
+      if (target) {
+        const targetId = target.getAttribute('data-item-id');
+        if (targetId && targetId !== connectorDrag.sourceId) {
+          // Create connection
+          const targetItem = items.find(i => i.id === targetId);
+          if (targetItem) {
+            const newConn: Connection = {
+              id: `conn-${Date.now()}`,
+              sourceId: connectorDrag.sourceId,
+              targetId: targetId,
+              sourcePoint: connectorDrag.sourcePoint,
+              targetPoint: { x: targetItem.x + (targetItem.width || 0) / 2, y: targetItem.y + (targetItem.height || 0) / 2 },
+              type: 'curved',
+            };
+            setConnections(prev => [...prev, newConn]);
+            addToHistory();
+            saveWhiteboard();
+          }
+        }
+      }
+      setConnectorDrag(null);
+    }
   };
 
   // ── Delete ───────────────────────────────────────────────────────────────
@@ -878,6 +930,14 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
 
     const w = item.width || 200;
     const h = item.height || 200;
+
+    // Connector points (center of each edge)
+    const connectorPoints = [
+      { x: w / 2, y: 0, edge: 'top' },
+      { x: w, y: h / 2, edge: 'right' },
+      { x: w / 2, y: h, edge: 'bottom' },
+      { x: 0, y: h / 2, edge: 'left' },
+    ];
 
     let content: React.ReactNode = null;
 
@@ -1308,7 +1368,36 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
 
     return (
       <React.Fragment key={item.id}>
-        {content}
+        <div
+          {...sharedHandlers}
+          className={wrapperCls}
+          style={{ left: item.x, top: item.y, width: w, height: h, zIndex }}
+          data-item-id={item.id}
+        >
+          {content}
+          {/* Connector circles - visible on hover */}
+          {isHovered && !item.locked && (
+            <>
+              {connectorPoints.map((point, idx) => (
+                <div
+                  key={`connector-${idx}`}
+                  className="absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-crosshair hover:bg-blue-500 hover:border-blue-600 transition-colors z-50"
+                  style={{
+                    left: point.x - 8,
+                    top: point.y - 8,
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    setConnectorDrag({
+                      sourceId: item.id,
+                      sourcePoint: { x: item.x + point.x, y: item.y + point.y },
+                    });
+                  }}
+                />
+              ))}
+            </>
+          )}
+        </div>
         {isSelected && !item.locked && renderBlockToolbar(item)}
         {isSelected && renderResizeHandles(item)}
       </React.Fragment>
@@ -1362,6 +1451,16 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           </g>
         );
       })}
+      {/* Connector drag preview */}
+      {connectorDrag && (
+        <path
+          d={`M ${connectorDrag.sourcePoint.x} ${connectorDrag.sourcePoint.y} L ${(mousePos.x - offset.x) / zoom} ${(mousePos.y - offset.y) / zoom}`}
+          stroke="#6366f1"
+          strokeWidth={2}
+          fill="none"
+          strokeDasharray="5,5"
+        />
+      )}
     </svg>
   );
 
