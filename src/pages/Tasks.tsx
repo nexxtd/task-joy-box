@@ -333,26 +333,18 @@ const Tasks: React.FC = () => {
       checklists: checklistItems.length
         ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
         : [],
+      attachments: newFiles.map(file => ({
+        id: crypto.randomUUID(),
+        taskId,
+        fileName: file.name,
+        fileType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+        fileUrl: URL.createObjectURL(file),
+        createdAt: new Date().toISOString(),
+      })),
       completed: newTaskStatus === 'completed',
       completedAt: newTaskStatus === 'completed' ? new Date().toISOString() : undefined,
     });
-
-    if (newFiles.length > 0) {
-      for (const file of newFiles) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('taskId', taskId);
-        try {
-          await fetch('/api/attachments/upload', {
-            method: 'POST',
-            body: formData,
-            credentials: 'include',
-          });
-        } catch (err) {
-          console.error('Failed to upload file:', file.name, err);
-        }
-      }
-    }
 
     resetTaskDraft();
     setAddingTask(false);
@@ -990,6 +982,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -1119,21 +1112,52 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     const uploaded: Attachment[] = [];
 
     for (const file of files) {
-      const formData = new FormData();
-      formData.append('file', file);
+      if (canUseServerAttachmentApi) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      try {
-        const res = await fetch(`/api/attachments/${task.id}`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-        if (res.ok) {
-          const attachment: Attachment = await res.json();
-          uploaded.push(attachment);
+        try {
+          const res = await fetch(`/api/attachments/${task.id}`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+          });
+          if (res.ok) {
+            const attachment: Attachment = await res.json();
+            uploaded.push(attachment);
+          } else {
+            uploaded.push({
+              id: crypto.randomUUID(),
+              taskId: task.id,
+              fileName: file.name,
+              fileType: file.type || 'application/octet-stream',
+              fileSize: file.size,
+              fileUrl: URL.createObjectURL(file),
+              createdAt: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          console.error('Error uploading file:', error);
+          uploaded.push({
+            id: crypto.randomUUID(),
+            taskId: task.id,
+            fileName: file.name,
+            fileType: file.type || 'application/octet-stream',
+            fileSize: file.size,
+            fileUrl: URL.createObjectURL(file),
+            createdAt: new Date().toISOString(),
+          });
         }
-      } catch (error) {
-        console.error('Error uploading file:', error);
+      } else {
+        uploaded.push({
+          id: crypto.randomUUID(),
+          taskId: task.id,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          fileUrl: URL.createObjectURL(file),
+          createdAt: new Date().toISOString(),
+        });
       }
     }
 
@@ -1146,19 +1170,27 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (res.ok) {
-        onUpdateTask(task.id, {
-          attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
+    const isServerAttachment = canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId));
+    if (isServerAttachment) {
+      try {
+        const res = await fetch(`/api/attachments/${attachmentId}`, {
+          method: 'DELETE',
+          credentials: 'include',
         });
+        if (res.ok) {
+          onUpdateTask(task.id, {
+            attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Error deleting attachment:', error);
       }
-    } catch (error) {
-      console.error('Error deleting attachment:', error);
     }
+
+    onUpdateTask(task.id, {
+      attachments: (task.attachments || []).filter(item => item.id !== attachmentId),
+    });
   };
 
   const addComment = () => {
@@ -1483,14 +1515,22 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             <div className="space-y-1">
               {(task.attachments || []).map(attachment => (
                 <div key={attachment.id} className="flex items-center gap-2 text-sm">
+                  {(() => {
+                    const isServerAttachment = /^\d+$/.test(String(attachment.id));
+                    const href = isServerAttachment
+                      ? `/api/attachments/file/${attachment.id}`
+                      : attachment.fileUrl;
+                    return (
                   <a
-                    href={`/api/attachments/file/${attachment.id}`}
+                    href={href}
                     target="_blank"
                     rel="noreferrer"
                     className="text-primary hover:underline break-all"
                   >
                     {attachment.fileName}
                   </a>
+                    );
+                  })()}
                   <button
                     onClick={() => deleteAttachment(attachment.id)}
                     className="text-xs text-muted-foreground hover:text-destructive"
