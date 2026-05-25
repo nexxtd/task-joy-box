@@ -141,6 +141,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   // Dropdown states
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
+  const [showTextFormatPopup, setShowTextFormatPopup] = useState(false);
+  const [showTextTypePopup, setShowTextTypePopup] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -833,6 +835,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   // ── Global block toolbar ─────────────────────────────────────────────────
   const renderBlockToolbar = (item: CanvasItem) => {
     const colors = ['#fef3c7', '#dbeafe', '#d1fae5', '#ffe4e6', '#f3e8ff', '#ffedd5', '#e0f2fe', '#dcfce7', '#fee2e2', '#f1f5f9'];
+    const isTextBlock = item.type === 'text' || item.type === 'sticky-note';
     
     return (
       <div className="absolute -top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
@@ -863,6 +866,46 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             </div>
           )}
         </div>
+        
+        {/* Text type/format button for text blocks */}
+        {isTextBlock && (
+          <div className="relative">
+            <button 
+              onClick={() => setShowTextFormatPopup(!showTextFormatPopup)}
+              className="p-1.5 text-gray-500 hover:text-gray-700"
+              title="Text formatting"
+            >
+              <Type className="w-4 h-4" />
+            </button>
+            {showTextFormatPopup && (
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {/* Apply bold to selected text */}}
+                    className="p-2 hover:bg-gray-100 rounded font-bold"
+                    title="Bold"
+                  >
+                    B
+                  </button>
+                  <button
+                    onClick={() => {/* Apply underline to selected text */}}
+                    className="p-2 hover:bg-gray-100 rounded underline"
+                    title="Underline"
+                  >
+                    U
+                  </button>
+                  <button
+                    onClick={() => {/* Apply bullets to selected text */}}
+                    className="p-2 hover:bg-gray-100 rounded"
+                    title="Bullet points"
+                  >
+                    •
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Delete */}
         <button onClick={() => deleteSelectedItem()} className="p-1.5 text-gray-500 hover:text-red-500">
