@@ -138,6 +138,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   // Connector drag state
   const [connectorDrag, setConnectorDrag] = useState<{ sourceId: string; sourcePoint: { x: number; y: number } } | null>(null);
 
+  // Rotation state
+  const [isRotating, setIsRotating] = useState(false);
+  const rotationRef = useRef<{ itemId: string; startAngle: number; startRotation: number } | null>(null);
+
   // Dropdown states
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
@@ -821,16 +825,77 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     );
   };
 
+  // ── Rotation handle ─────────────────────────────────────────────────────────────
+  const handleRotationPointerDown = (e: React.PointerEvent, itemId: string) => {
+    e.stopPropagation();
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+    
+    rotationRef.current = {
+      itemId,
+      startAngle,
+      startRotation: item.rotation || 0,
+    };
+    setIsRotating(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleRotationPointerMove = (e: React.PointerEvent) => {
+    if (!isRotating || !rotationRef.current) return;
+    
+    const item = items.find(i => i.id === rotationRef.current.itemId);
+    if (!item) return;
+    
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const centerX = item.x + (item.width || 200) / 2;
+    const centerY = item.y + (item.height || 200) / 2;
+    const canvasCenterX = centerX * zoom + offset.x;
+    const canvasCenterY = centerY * zoom + offset.y;
+    
+    const currentAngle = Math.atan2(e.clientY - canvasCenterY, e.clientX - canvasCenterX);
+    const angleDiff = currentAngle - rotationRef.current.startAngle;
+    const newRotation = rotationRef.current.startRotation + angleDiff;
+    
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: newRotation } : i));
+  };
+
+  const handleRotationPointerUp = () => {
+    setIsRotating(false);
+    rotationRef.current = null;
+  };
+
   // ── Resize handles for selected item ─────────────────────────────────────
   const renderResizeHandles = (item: CanvasItem) => {
     const w = item.width || 200;
     const h = item.height || 200;
-    // Only bottom-right corner resize handle as per spec
+    const isShape = item.type === 'shape';
+    
     return (
-      <div
-        className="absolute bottom-0 right-0 w-4 h-4 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none"
-        onPointerDown={e => handleResizePointerDown(e, 'se')}
-      />
+      <>
+        {/* Rotation handle for shapes */}
+        {isShape && (
+          <div
+            className="absolute -top-8 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border-2 border-blue-500 rounded-full z-30 cursor-grab flex items-center justify-center select-none"
+            onPointerDown={e => handleRotationPointerDown(e, item.id)}
+            onPointerMove={handleRotationPointerMove}
+            onPointerUp={handleRotationPointerUp}
+          >
+            <RotateCw className="w-3 h-3 text-blue-500" />
+          </div>
+        )}
+        {/* Bottom-right corner resize handle */}
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 bg-white border-2 border-blue-500 rounded-tl-sm z-30 cursor-se-resize select-none"
+          onPointerDown={e => handleResizePointerDown(e, 'se')}
+        />
+      </>
     );
   };
 
@@ -1309,23 +1374,13 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
               }}
             />
             {isSelected && (
-              <>
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) + 15 } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded">
-                    <RotateCw className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, rotation: (i.rotation || 0) - 15 } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded">
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="absolute -right-12 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
-                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
-                </div>
-              </>
+              <div className="absolute -right-12 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
+                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
+                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
+                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
+                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
+                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
+              </div>
             )}
           </div>
         );
