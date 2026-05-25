@@ -79,6 +79,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const [localWhiteboardId, setLocalWhiteboardId] = useState<number | null>(whiteboardId || null);
   const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
   const [isEditingName, setIsEditingName] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(true);
   const [tempItemPos, setTempItemPos] = useState<{x: number, y: number} | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -180,13 +181,18 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     }
   };
 
-  // Handle canvas click to create items
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!canvasRef.current) return;
     
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left - offset.x) / zoom;
     const y = (e.clientY - rect.top - offset.y) / zoom;
+
+    // Deselect if active tool is select and we clicked the background
+    if (activeTool === 'select' && selectedItem) {
+      setSelectedItem(null);
+      return;
+    }
 
     // Only create items when not dragging and with non-select tools
     if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
@@ -465,11 +471,11 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         const targetItem = items.find(i => i.id === itemId);
         
         if (sourceItem && targetItem) {
-          // Calculate connection points
-          const sourceX = sourceItem.x * zoom + offset.x + (sourceItem.width || 0) * zoom / 2;
-          const sourceY = sourceItem.y * zoom + offset.y + (sourceItem.height || 0) * zoom / 2;
-          const targetX = targetItem.x * zoom + offset.x + (targetItem.width || 0) * zoom / 2;
-          const targetY = targetItem.y * zoom + offset.y + (targetItem.height || 0) * zoom / 2;
+          // Calculate connection points in RAW coordinates
+          const sourceX = sourceItem.x + (sourceItem.width || 0) / 2;
+          const sourceY = sourceItem.y + (sourceItem.height || 0) / 2;
+          const targetX = targetItem.x + (targetItem.width || 0) / 2;
+          const targetY = targetItem.y + (targetItem.height || 0) / 2;
           
           const newConnection: Connection = {
             id: `conn-${Date.now()}`,
@@ -921,24 +927,26 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         return (
           <React.Fragment key={item.id}>
             <div
-              className={cn(baseClasses, "bg-purple-100 rounded-full shadow-sm border-2 border-purple-200 flex items-center justify-center")}
+              className={cn(baseClasses, "shadow-lg border-2 border-primary/20 bg-background")}
               style={{
                 left: item.x,
                 top: item.y,
-                width: item.width || 150,
-                height: item.height || 100,
-                backgroundColor: item.backgroundColor
+                width: item.width || 180,
+                height: item.height || 60,
+                borderRadius: '30px',
+                backgroundColor: item.backgroundColor || '#f0f0ff'
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
               onMouseEnter={() => setHoveredItem(item.id)}
               onMouseLeave={() => setHoveredItem(null)}
             >
-              <div className="text-center px-4 py-2" style={{ fontSize: 14 * zoom }}>
+              <div className="w-full h-full flex items-center justify-center px-4" style={{ fontSize: 14 * zoom }}>
                 <input
                   type="text"
-                  value={item.content || 'Main Idea'}
-                  className="w-full bg-transparent text-center font-medium text-purple-700 focus:outline-none"
+                  className="w-full bg-transparent text-center outline-none font-bold text-primary placeholder:text-primary/40"
+                  placeholder="Central Topic"
+                  value={item.content || ''}
                   onChange={(e) => {
                     setItems(prev => prev.map(i => 
                       i.id === item.id ? { ...i, content: e.target.value } : i
@@ -1147,7 +1155,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
           backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
           backgroundPosition: `${offset.x}px ${offset.y}px`,
-          cursor: isPanning ? 'grabbing' : 'default'
+          cursor: isPanning ? 'grabbing' : (activeTool === 'select' ? 'default' : 'crosshair')
         }}
       >
         {/* Apply zoom transformation to all items */}
@@ -1177,10 +1185,27 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             
             if (!sourceItem || !targetItem) return null;
             
-            const sourceX = sourceItem.x + (sourceItem.width || 0) / 2;
-            const sourceY = sourceItem.y + (sourceItem.height || 0) / 2;
-            const targetX = targetItem.x + (targetItem.width || 0) / 2;
-            const targetY = targetItem.y + (targetItem.height || 0) / 2;
+            const getNearestPoint = (source: CanvasItem, target: CanvasItem) => {
+              const sw = source.width || 0;
+              const sh = source.height || 0;
+              const tw = target.width || 0;
+              const th = target.height || 0;
+              
+              // Centers
+              const scx = source.x + sw / 2;
+              const scy = source.y + sh / 2;
+              const tcx = target.x + tw / 2;
+              const tcy = target.y + th / 2;
+              
+              // Simplistic: just use centers for now but ensure they are RAW
+              return { sx: scx, sy: scy, tx: tcx, ty: tcy };
+            };
+
+            const points = getNearestPoint(sourceItem, targetItem);
+            const sourceX = points.sx;
+            const sourceY = points.sy;
+            const targetX = points.tx;
+            const targetY = points.ty;
             
             // Calculate control points for curved lines
             const midX = (sourceX + targetX) / 2;
@@ -1257,6 +1282,15 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         {/* Zoom controls */}
         <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-1 flex">
           <button
+            onClick={() => setShowTutorial(true)}
+            className="p-1.5 rounded-lg hover:bg-background text-primary font-bold px-3 text-xs flex items-center gap-1"
+          >
+            Guide
+          </button>
+          
+          <div className="w-px h-6 bg-border mx-2" />
+
+          <button
             onClick={handleZoomOut}
             disabled={zoom <= MIN_ZOOM}
             title="Zoom out (Ctrl + scroll)"
@@ -1288,6 +1322,58 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <Maximize2 className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
+
+        {/* Tutorial Overlay */}
+        {showTutorial && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center p-4 bg-background/40 backdrop-blur-md">
+            <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-lg w-full p-8 relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-400" />
+               <button onClick={() => setShowTutorial(false)} className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground">
+                 <X className="w-5 h-5" />
+               </button>
+               
+               <div className="space-y-6">
+                 <div className="space-y-2">
+                   <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome to Canvas</h1>
+                   <p className="text-muted-foreground">Your spatial playground for thinking. Here's how to master it:</p>
+                 </div>
+
+                 <div className="grid gap-4">
+                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                     <div className="bg-primary/10 p-2 rounded-lg"><MousePointer2 className="w-5 h-5 text-primary" /></div>
+                     <div>
+                       <h3 className="font-semibold">Interact & Pan</h3>
+                       <p className="text-sm text-muted-foreground">Select tool to move items. Click on empty space to deselect. Drag empty space to pan.</p>
+                     </div>
+                   </div>
+
+                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                     <div className="bg-primary/10 p-2 rounded-lg"><Link className="w-5 h-5 text-primary" /></div>
+                     <div>
+                       <h3 className="font-semibold">Smart Connections</h3>
+                       <p className="text-sm text-muted-foreground">Use Connector tool. Select a point on one item, then a point on another to link them.</p>
+                     </div>
+                   </div>
+
+                   <div className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                     <div className="bg-primary/10 p-2 rounded-lg"><ZoomIn className="w-5 h-5 text-primary" /></div>
+                     <div>
+                       <h3 className="font-semibold">Zoom Controls</h3>
+                       <p className="text-sm text-muted-foreground">Use Ctrl + Scroll Wheel or the controls in the bottom corner to explore.</p>
+                     </div>
+                   </div>
+                 </div>
+
+                 <button 
+                  onClick={() => setShowTutorial(false)}
+                  className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                 >
+                   Let's Build Something
+                 </button>
+               </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
