@@ -25,6 +25,7 @@ import Support from "@/pages/Support";
 import AdminDashboard from "@/pages/AdminDashboard";
 import Tutorial from "@/pages/Tutorial";
 import NotFound from "@/pages/NotFound";
+import WhiteboardPage from "@/pages/WhiteboardPage";
 import { useEffect } from "react";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
@@ -112,6 +113,7 @@ function ProtectedRoutes() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Route>
+        <Route path="/whiteboard/:id" element={<WhiteboardPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BoardProvider>

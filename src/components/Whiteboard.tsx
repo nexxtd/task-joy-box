@@ -1492,6 +1492,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                       connections: [],
                     });
                     if (newWhiteboard) {
+                      // Reload the page with the new whiteboard ID
                       window.location.href = `/whiteboard/${newWhiteboard.id}`;
                     }
                   }}
