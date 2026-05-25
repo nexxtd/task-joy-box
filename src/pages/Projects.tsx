@@ -8,9 +8,10 @@ import ListView from '@/components/ListView';
 import CalendarView from '@/components/CalendarView';
 import Whiteboard from '@/components/Whiteboard'; // Import the new Whiteboard component
 import { Task, ViewType } from '@/types/board';
-import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, LayoutTemplate } from 'lucide-react';
+import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, LayoutTemplate, ChevronDown, PlusCircle, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { getWhiteboards, createWhiteboard, updateWhiteboard } from '@/services/whiteboardService';
 
 const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 1.5;
@@ -25,6 +26,11 @@ const Projects: React.FC = () => {
   const [newColTitle, setNewColTitle] = useState('');
   const [currentView, setCurrentView] = useState<ViewType>('board'); // Updated to include whiteboard
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [whiteboards, setWhiteboards] = useState<any[]>([]);
+  const [showWhiteboardDropdown, setShowWhiteboardDropdown] = useState(false);
+  const [editingWhiteboardId, setEditingWhiteboardId] = useState<string | null>(null);
+  const [editingWhiteboardName, setEditingWhiteboardName] = useState('');
+  const [selectedWhiteboardId, setSelectedWhiteboardId] = useState<number | null>(null);
 
   const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
   const FREE_COL_LIMIT = 2;
@@ -126,11 +132,59 @@ const Projects: React.FC = () => {
   const viewTabs = [
     { id: 'board' as ViewType, label: 'Board', icon: LayoutDashboard },
     { id: 'list' as ViewType,  label: 'List',  icon: List },
-    { id: 'calendar' as ViewType, label: 'Calendar', icon: CalendarDays },
-    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: LayoutTemplate }, // Changed to a valid icon
+    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: LayoutTemplate }, // Removed calendar
   ];
 
   const zoomPct = Math.round(zoom * 100);
+
+  // Load whiteboards from the API
+  useEffect(() => {
+    const loadWhiteboards = async () => {
+      try {
+        const fetchedWhiteboards = await getWhiteboards();
+        setWhiteboards(fetchedWhiteboards);
+      } catch (error) {
+        console.error('Failed to load whiteboards:', error);
+      }
+    };
+    
+    loadWhiteboards();
+  }, []);
+
+  const createNewWhiteboard = async () => {
+    try {
+      const newWhiteboard = await createWhiteboard({
+        name: 'Untitled Whiteboard',
+        description: 'A new whiteboard',
+        items: [],
+        connections: []
+      });
+      setWhiteboards([...whiteboards, newWhiteboard]);
+      // Automatically select the newly created whiteboard
+      setSelectedWhiteboardId(newWhiteboard.id);
+      setShowWhiteboardDropdown(false);
+    } catch (error) {
+      console.error('Failed to create whiteboard:', error);
+    }
+  };
+
+  const renameWhiteboard = async (id: string, newName: string) => {
+    try {
+      const updatedWhiteboard = await updateWhiteboard(parseInt(id), {
+        name: newName,
+        description: 'Updated whiteboard',
+        items: [],
+        connections: []
+      });
+      
+      setWhiteboards(whiteboards.map(wb => 
+        wb.id === parseInt(id) ? updatedWhiteboard : wb
+      ));
+      setEditingWhiteboardId(null);
+    } catch (error) {
+      console.error('Failed to rename whiteboard:', error);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -143,19 +197,103 @@ const Projects: React.FC = () => {
           {/* View tabs */}
           <div className="flex items-center bg-muted rounded-lg p-0.5">
             {viewTabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setCurrentView(tab.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all duration-200',
-                  currentView === tab.id
-                    ? 'bg-card text-foreground shadow-sm font-medium'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <tab.icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
+              tab.id !== 'whiteboard' ? (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setCurrentView(tab.id);
+                    // Preserve whiteboard ID when switching away from whiteboard view
+                    if (currentView === 'whiteboard' && selectedWhiteboardId) {
+                      setSelectedWhiteboardId(selectedWhiteboardId);
+                    }
+                  }}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all duration-200',
+                    currentView === tab.id
+                      ? 'bg-card text-foreground shadow-sm font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              ) : (
+                <div key={tab.id} className="relative">
+                  <button
+                    onClick={() => setShowWhiteboardDropdown(!showWhiteboardDropdown)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all duration-200',
+                      currentView === tab.id
+                        ? 'bg-card text-foreground shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+
+                  {showWhiteboardDropdown && (
+                    <div className="absolute left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-lg z-20 overflow-hidden">
+                      <div className="p-1">
+                        <button
+                          onClick={createNewWhiteboard}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground rounded-md"
+                        >
+                          <PlusCircle className="w-4 h-4" />
+                          Create new whiteboard
+                        </button>
+                        
+                        <div className="py-1 border-t border-border">
+                          {whiteboards.map((wb) => (
+                            <div key={wb.id} className="px-2 py-1">
+                              {editingWhiteboardId === wb.id.toString() ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={editingWhiteboardName}
+                                    onChange={(e) => setEditingWhiteboardName(e.target.value)}
+                                    onBlur={() => renameWhiteboard(wb.id, editingWhiteboardName)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        renameWhiteboard(wb.id, editingWhiteboardName);
+                                      }
+                                    }}
+                                    autoFocus
+                                    className="flex-1 bg-background border border-border rounded px-2 py-1 text-xs"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedWhiteboardId(wb.id);
+                                      setCurrentView('whiteboard');
+                                      setShowWhiteboardDropdown(false);
+                                    }}
+                                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left text-foreground hover:bg-accent rounded-md truncate"
+                                  >
+                                    {wb.name}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingWhiteboardId(wb.id.toString());
+                                      setEditingWhiteboardName(wb.name);
+                                    }}
+                                    className="p-1 text-muted-foreground hover:text-foreground rounded"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
             ))}
           </div>
 
@@ -331,10 +469,10 @@ const Projects: React.FC = () => {
       )}
 
       {currentView === 'list' && <div className="animate-fade-in flex-1"><ListView onTaskClick={setSelectedTask} /></div>}
-      {currentView === 'calendar' && <div className="animate-fade-in flex-1"><CalendarView onTaskClick={setSelectedTask} /></div>}
+      {/* Removed calendar view */}
       
       {/* Added Whiteboard view */}
-      {currentView === 'whiteboard' && <div className="animate-fade-in flex-1"><Whiteboard /></div>}
+      {currentView === 'whiteboard' && <div className="animate-fade-in flex-1"><Whiteboard whiteboardId={selectedWhiteboardId} /></div>}
 
       {/* Task detail modal */}
       {currentTask && (

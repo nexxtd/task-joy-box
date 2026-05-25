@@ -18,7 +18,9 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  Save
+  Save,
+  Edit3,
+  X
 } from 'lucide-react';
 import { createWhiteboard, getWhiteboardById, updateWhiteboard, CanvasItem, Connection } from '@/services/whiteboardService';
 
@@ -40,7 +42,11 @@ const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 1.5;
 const ZOOM_STEP = 0.1;
 
-const Whiteboard: React.FC = () => {
+interface WhiteboardProps {
+  whiteboardId?: number;
+}
+
+const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   // Define available tools
   const tools: Tool[] = [
     { id: 'select', name: 'Select', icon: <MousePointer2 className="w-4 h-4" /> },
@@ -68,10 +74,14 @@ const Whiteboard: React.FC = () => {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [whiteboardId, setWhiteboardId] = useState<number | null>(null);
+  const [localWhiteboardId, setLocalWhiteboardId] = useState<number | null>(whiteboardId || null);
+  const [whiteboardName, setWhiteboardName] = useState('Untitled Whiteboard');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempItemPos, setTempItemPos] = useState<{x: number, y: number} | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
@@ -88,6 +98,24 @@ const Whiteboard: React.FC = () => {
     setOffset({ x: 0, y: 0 });
   };
 
+  // Load whiteboard data if an ID is provided
+  useEffect(() => {
+    if (localWhiteboardId) {
+      const loadWhiteboard = async () => {
+        try {
+          const data = await getWhiteboardById(localWhiteboardId);
+          setItems(data.items);
+          setConnections(data.connections);
+          setWhiteboardName(data.name);
+        } catch (error) {
+          console.error('Error loading whiteboard:', error);
+        }
+      };
+
+      loadWhiteboard();
+    }
+  }, [localWhiteboardId]);
+
   // Auto-save functionality
   useEffect(() => {
     const saveTimeout = setTimeout(() => {
@@ -96,31 +124,52 @@ const Whiteboard: React.FC = () => {
       }
     }, 2000); // Save after 2 seconds of inactivity
 
-    return () => clearTimeout(saveTimeout);
-  }, [items, connections]);
+    // Cleanup function - runs when component unmounts
+    return () => {
+      clearTimeout(saveTimeout);
+      // Save one final time when component unmounts
+      saveWhiteboard();
+    };
+  }, [items, connections, whiteboardName]);
+
+  // Handle visibility change (when user switches tabs/windows) to save whiteboard
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveWhiteboard();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [items, connections, whiteboardName, localWhiteboardId]);
 
   const saveWhiteboard = async () => {
     if (saving) return; // Prevent duplicate saves
     
     setSaving(true);
     try {
-      if (whiteboardId) {
+      if (localWhiteboardId) {
         // Update existing whiteboard
-        await updateWhiteboard(whiteboardId, {
-          name: 'Untitled Whiteboard',
+        const result = await updateWhiteboard(localWhiteboardId, {
+          name: whiteboardName,
           description: 'A collaborative whiteboard',
           items,
           connections
         });
+        setWhiteboardName(result.name); // Update name in case it was changed
       } else {
         // Create new whiteboard
         const result = await createWhiteboard({
-          name: 'Untitled Whiteboard',
+          name: whiteboardName,
           description: 'A collaborative whiteboard',
           items,
           connections
         });
-        setWhiteboardId(result.id);
+        setLocalWhiteboardId(result.id);
       }
     } catch (error) {
       console.error('Error saving whiteboard:', error);
@@ -140,7 +189,19 @@ const Whiteboard: React.FC = () => {
     // Only create items when not dragging and with non-select tools
     if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
 
-    // Create new item based on active tool
+    // Only create items if we have a temporary position set (when plus button is clicked)
+    if (tempItemPos && activeTool !== 'select' && activeTool !== 'connector') {
+      createNewItem(tempItemPos.x, tempItemPos.y);
+      setTempItemPos(null);
+      return;
+    }
+
+    // If we clicked without setting a temp position, cancel creation
+    setTempItemPos(null);
+  };
+
+  // Create new item at specified position
+  const createNewItem = (x: number, y: number) => {
     let newItem: CanvasItem;
     
     switch(activeTool) {
@@ -190,6 +251,8 @@ const Whiteboard: React.FC = () => {
         // Trigger file input for image upload
         if (imageInputRef.current) {
           imageInputRef.current.click();
+          // Store the position for when the image is uploaded
+          setTempItemPos({x, y});
         }
         return;
         
@@ -241,6 +304,8 @@ const Whiteboard: React.FC = () => {
         // Trigger file input for general file upload
         if (fileInputRef.current) {
           fileInputRef.current.click();
+          // Store the position for when the file is uploaded
+          setTempItemPos({x, y});
         }
         return;
         
@@ -251,6 +316,7 @@ const Whiteboard: React.FC = () => {
     // Only add to items if it's not an image or file (those are handled separately)
     if (!['image', 'file'].includes(activeTool)) {
       setItems(prev => [...prev, newItem]);
+      setTempItemPos(null);
     }
   };
 
@@ -265,23 +331,42 @@ const Whiteboard: React.FC = () => {
     reader.onload = (event) => {
       if (!event.target?.result || typeof event.target.result !== 'string' || !canvasRef.current) return;
       
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = (rect.width / 2 - 100) / zoom; // Center on canvas
-      const y = (rect.height / 2 - 75) / zoom; // Center on canvas
-      
-      const newItem: CanvasItem = {
-        id: `item-${Date.now()}`,
-        type: 'image',
-        x,
-        y,
-        width: 200,
-        height: 150,
-        imageUrl: event.target.result,
-        title: file.name,
-        connections: [],
-      };
-      
-      setItems(prev => [...prev, newItem]);
+      if (!tempItemPos) {
+        // If no position was set, place in the center
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = (rect.width / 2 - 100) / zoom;
+        const y = (rect.height / 2 - 75) / zoom;
+        
+        const newItem: CanvasItem = {
+          id: `item-${Date.now()}`,
+          type: 'image',
+          x,
+          y,
+          width: 200,
+          height: 150,
+          imageUrl: event.target.result as string,
+          title: file.name,
+          connections: [],
+        };
+        
+        setItems(prev => [...prev, newItem]);
+      } else {
+        // Use the stored position
+        const newItem: CanvasItem = {
+          id: `item-${Date.now()}`,
+          type: 'image',
+          x: tempItemPos.x,
+          y: tempItemPos.y,
+          width: 200,
+          height: 150,
+          imageUrl: event.target.result as string,
+          title: file.name,
+          connections: [],
+        };
+        
+        setItems(prev => [...prev, newItem]);
+        setTempItemPos(null);
+      }
     };
     
     reader.readAsDataURL(file);
@@ -295,24 +380,43 @@ const Whiteboard: React.FC = () => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // For demo purposes, we're not actually uploading to a server
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (rect.width / 2 - 90) / zoom; // Center on canvas
-    const y = (rect.height / 2 - 60) / zoom; // Center on canvas
+    if (!tempItemPos) {
+      // If no position was set, place in the center
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = (rect.width / 2 - 90) / zoom;
+      const y = (rect.height / 2 - 60) / zoom;
+      
+      const newItem: CanvasItem = {
+        id: `item-${Date.now()}`,
+        type: 'file',
+        x,
+        y,
+        width: 180,
+        height: 120,
+        title: file.name,
+        fileUrl: URL.createObjectURL(file), // Temporary URL
+        connections: [],
+      };
+      
+      setItems(prev => [...prev, newItem]);
+    } else {
+      // Use the stored position
+      const newItem: CanvasItem = {
+        id: `item-${Date.now()}`,
+        type: 'file',
+        x: tempItemPos.x,
+        y: tempItemPos.y,
+        width: 180,
+        height: 120,
+        title: file.name,
+        fileUrl: URL.createObjectURL(file), // Temporary URL
+        connections: [],
+      };
+      
+      setItems(prev => [...prev, newItem]);
+      setTempItemPos(null);
+    }
     
-    const newItem: CanvasItem = {
-      id: `item-${Date.now()}`,
-      type: 'file',
-      x,
-      y,
-      width: 180,
-      height: 120,
-      title: file.name,
-      fileUrl: URL.createObjectURL(file), // Temporary URL
-      connections: [],
-    };
-    
-    setItems(prev => [...prev, newItem]);
     e.target.value = ''; // Reset input
   };
 
@@ -430,6 +534,7 @@ const Whiteboard: React.FC = () => {
     setConnecting(null);
     setOffset({ x: 0, y: 0 });
     setZoom(1);
+    setTempItemPos(null);
   };
 
   // Delete selected item
@@ -460,6 +565,23 @@ const Whiteboard: React.FC = () => {
       }
       return item;
     }));
+  };
+
+  // Rename whiteboard
+  const renameWhiteboardHandler = () => {
+    setIsEditingName(true);
+  };
+
+  const handleRenameConfirm = () => {
+    if (nameInputRef.current) {
+      setWhiteboardName(nameInputRef.current.value);
+      setIsEditingName(false);
+      saveWhiteboard(); // Save the new name
+    }
+  };
+
+  const handleRenameCancel = () => {
+    setIsEditingName(false);
   };
 
   // Cleanup event listeners
@@ -500,14 +622,23 @@ const Whiteboard: React.FC = () => {
       window.addEventListener('mouseup', handleGlobalMouseUp);
     }
 
+    // Focus the input when editing starts
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+
     return () => {
+      // Save before unmounting
+      saveWhiteboard();
+      
       if (canvasRef.current) {
         canvasRef.current.removeEventListener('wheel', handleWheel);
       }
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isDragging, isPanning, connecting, selectedItem, dragOffset, offset, zoom]);
+  }, [isDragging, isPanning, connecting, selectedItem, dragOffset, offset, zoom, isEditingName]);
 
   // Render different item types
   const renderItem = (item: CanvasItem) => {
@@ -588,6 +719,11 @@ const Whiteboard: React.FC = () => {
                   className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
                   defaultValue={item.content || 'Click to edit...'}
                   style={{ fontFamily: "'Comic Sans MS', cursive, sans-serif" }}
+                  onChange={(e) => {
+                    setItems(prev => prev.map(i => 
+                      i.id === item.id ? { ...i, content: e.target.value } : i
+                    ));
+                  }}
                 />
               </div>
             </div>
@@ -615,6 +751,11 @@ const Whiteboard: React.FC = () => {
                 <textarea
                   className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans"
                   defaultValue={item.content || 'Type your text here...'}
+                  onChange={(e) => {
+                    setItems(prev => prev.map(i => 
+                      i.id === item.id ? { ...i, content: e.target.value } : i
+                    ));
+                  }}
                 />
               </div>
             </div>
@@ -644,6 +785,11 @@ const Whiteboard: React.FC = () => {
                   <textarea
                     className="w-full h-full bg-transparent resize-none outline-none text-sm font-sans flex-grow"
                     defaultValue={item.content || 'Document content goes here...'}
+                    onChange={(e) => {
+                      setItems(prev => prev.map(i => 
+                        i.id === item.id ? { ...i, content: e.target.value } : i
+                      ));
+                    }}
                   />
                 </div>
               </div>
@@ -724,7 +870,18 @@ const Whiteboard: React.FC = () => {
               onMouseLeave={() => setHoveredItem(null)}
             >
               <div className="p-3 h-full rounded-lg border" style={{ fontSize: 14 * zoom }}>
-                <div className="font-bold text-sm mb-2 text-gray-800">{item.title}</div>
+                <div className="font-bold text-sm mb-2 text-gray-800">
+                  <input
+                    type="text"
+                    value={item.title || 'New Task'}
+                    className="w-full bg-transparent border-b border-gray-300 focus:outline-none focus:border-blue-500"
+                    onChange={(e) => {
+                      setItems(prev => prev.map(i => 
+                        i.id === item.id ? { ...i, title: e.target.value } : i
+                      ));
+                    }}
+                  />
+                </div>
                 <div className="space-y-2">
                   {item.tasks?.map(task => (
                     <div key={task.id} className="flex items-center">
@@ -765,7 +922,16 @@ const Whiteboard: React.FC = () => {
               onMouseLeave={() => setHoveredItem(null)}
             >
               <div className="text-center px-4 py-2" style={{ fontSize: 14 * zoom }}>
-                <div className="text-sm font-medium text-purple-700">{item.content}</div>
+                <input
+                  type="text"
+                  value={item.content || 'Main Idea'}
+                  className="w-full bg-transparent text-center font-medium text-purple-700 focus:outline-none"
+                  onChange={(e) => {
+                    setItems(prev => prev.map(i => 
+                      i.id === item.id ? { ...i, content: e.target.value } : i
+                    ));
+                  }}
+                />
               </div>
             </div>
             {getConnectionPoints()}
@@ -824,22 +990,104 @@ const Whiteboard: React.FC = () => {
         className="hidden" 
       />
       
+      {/* Whiteboard header with name and controls */}
+      <div className="absolute top-4 left-0 right-0 z-10 flex justify-center">
+        <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-2 shadow-sm">
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                ref={nameInputRef}
+                type="text"
+                defaultValue={whiteboardName}
+                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                onBlur={handleRenameCancel}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameConfirm();
+                  if (e.key === 'Escape') handleRenameCancel();
+                }}
+              />
+              <button
+                onClick={handleRenameConfirm}
+                className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90"
+              >
+                Save
+              </button>
+              <button
+                onClick={handleRenameCancel}
+                className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded hover:opacity-90"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-gray-800">{whiteboardName}</h2>
+              <button
+                onClick={renameWhiteboardHandler}
+                className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-200"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      
       {/* Left Sidebar Tool Selector */}
       <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-2">
         {tools.map(tool => (
-          <button
-            key={tool.id}
-            className={cn(
-              "p-2.5 rounded-lg transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
-              activeTool === tool.id 
-                ? "bg-blue-100 text-blue-600 border border-blue-300 shadow-sm" 
-                : "text-gray-600"
-            )}
-            onClick={() => setActiveTool(tool.id)}
-            title={tool.name}
-          >
-            {tool.icon}
-          </button>
+          <div key={tool.id} className="flex flex-col items-center">
+            <button
+              className={cn(
+                "p-2.5 rounded-lg transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
+                activeTool === tool.id 
+                  ? "bg-blue-100 text-blue-600 border border-blue-300 shadow-sm" 
+                  : "text-gray-600"
+              )}
+              onClick={() => {
+                if (['image', 'file'].includes(tool.id)) {
+                  // For image/file tools, we'll trigger the file input when plus is clicked
+                  setActiveTool(tool.id);
+                } else {
+                  setActiveTool(tool.id);
+                }
+              }}
+              title={tool.name}
+            >
+              {tool.icon}
+            </button>
+            
+            {/* Plus button for creating items with current tool */}
+            <button
+              className={cn(
+                "mt-1 p-1.5 rounded-lg text-xs bg-primary text-primary-foreground",
+                "hover:bg-primary/90 transition-all"
+              )}
+              onClick={() => {
+                if (canvasRef.current) {
+                  const rect = canvasRef.current.getBoundingClientRect();
+                  // Position at center of canvas
+                  const centerX = (rect.width / 2 - offset.x) / zoom;
+                  const centerY = (rect.height / 2 - offset.y) / zoom;
+                  
+                  setTempItemPos({x: centerX, y: centerY});
+                  
+                  // If it's image or file, trigger the file input
+                  if (tool.id === 'image' && imageInputRef.current) {
+                    imageInputRef.current.click();
+                  } else if (tool.id === 'file' && fileInputRef.current) {
+                    fileInputRef.current.click();
+                  } else {
+                    // For other tools, create the item directly
+                    createNewItem(centerX, centerY);
+                  }
+                }
+              }}
+              title={`Add ${tool.name}`}
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
         ))}
         
         <div className="flex-grow"></div>

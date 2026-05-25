@@ -5,6 +5,12 @@ The Whiteboard feature is a flexible canvas-based workspace that allows users to
 
 ## Features
 
+### Whiteboard Management
+- Whiteboard view is accessible via a dropdown menu
+- Dropdown displays all existing whiteboards
+- Create new whiteboards with the "Create new whiteboard" button
+- Rename whiteboards by clicking the edit icon next to each whiteboard name
+
 ### Left Sidebar Tool Selector
 The whiteboard includes a fixed vertical sidebar on the left side of the canvas that remains visible at all times. The sidebar contains:
 
@@ -101,6 +107,12 @@ The whiteboard includes a fixed vertical sidebar on the left side of the canvas 
 1. Select the item you want to delete
 2. Use the delete button in the toolbar that appears
 3. Alternatively, press the Delete key on your keyboard
+
+### Managing Whiteboards
+1. Access the whiteboard dropdown from the main navigation
+2. Select an existing whiteboard to open it
+3. Click "Create new whiteboard" to create a blank whiteboard
+4. Click the edit icon next to a whiteboard name to rename it
 
 ## Keyboard Shortcuts
 - Delete: Delete selected item

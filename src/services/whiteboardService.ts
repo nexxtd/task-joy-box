@@ -54,6 +54,17 @@ export interface WhiteboardRequest {
   connections: Connection[];
 }
 
+// Get all whiteboards for the current user
+export const getWhiteboards = async (): Promise<WhiteboardData[]> => {
+  const response = await fetch('/api/whiteboards');
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch whiteboards: ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
 // Create a new whiteboard
 export const createWhiteboard = async (whiteboardData: WhiteboardRequest): Promise<WhiteboardData> => {
   const response = await fetch('/api/whiteboards', {

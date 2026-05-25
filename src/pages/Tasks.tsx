@@ -619,12 +619,15 @@ const Tasks: React.FC = () => {
 
           {(filtered.completed.length > 0 || completedOpen) && (
             <div className="mt-8 pt-6 border-t border-border/80">
-              <div className="border border-border rounded-xl bg-card">
+              <div className="border border-label-green/25 rounded-xl bg-label-green/5">
               <button
                 onClick={() => setCompletedOpen(prev => !prev)}
                 className="w-full flex items-center justify-between px-4 py-3"
               >
-                <span className="text-sm font-semibold text-foreground">Completed ({filtered.completed.length})</span>
+                <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Completed ({filtered.completed.length})
+                </span>
                 {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
               </button>
 
@@ -637,7 +640,7 @@ const Tasks: React.FC = () => {
                     <div
                       key={task.id}
                       onClick={() => setOpenTaskId(task.id)}
-                      className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/40 cursor-pointer"
+                      className="flex items-center gap-3 px-2 py-2 rounded-lg border border-label-green/15 bg-background/70 hover:bg-muted/40 cursor-pointer"
                     >
                       <button
                         onClick={(e) => {
@@ -650,12 +653,12 @@ const Tasks: React.FC = () => {
                         <CheckCircle2 className="w-5 h-5" />
                       </button>
 
-                      <span className="text-sm text-left text-muted-foreground line-through hover:text-primary">
+                      <span className="text-sm text-left text-muted-foreground/90 line-through hover:text-primary">
                         {task.title}
                       </span>
 
-                      <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'} left
+                      <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium">
+                        Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
                       </span>
                     </div>
                   ))}
