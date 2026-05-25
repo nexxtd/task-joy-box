@@ -986,6 +986,32 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           </button>
         )}
         
+        {/* Change Shape button for shape blocks */}
+        {isShapeBlock && (
+          <div className="relative">
+            <button
+              onClick={() => setShowShapeSelector(!showShapeSelector)}
+              className="p-1.5 text-gray-500 hover:text-gray-700"
+              title="Change shape"
+            >
+              <Shapes className="w-4 h-4" />
+            </button>
+            {showShapeSelector && (
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+                <div className="flex gap-1">
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'hexagon' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Hexagon"><Hexagon className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
+                  <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'arrow' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Arrow"><ArrowUp className="w-4 h-4" /></button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Delete */}
         <button onClick={() => deleteSelectedItem()} className="p-1.5 text-gray-500 hover:text-red-500">
           <Trash2 className="w-4 h-4" />
@@ -1373,15 +1399,6 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                            'none'
               }}
             />
-            {isSelected && (
-              <div className="absolute -right-12 top-1/2 -translate-y-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
-                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
-                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
-                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'triangle' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Triangle"><Triangle className="w-4 h-4" /></button>
-                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'diamond' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Diamond"><Diamond className="w-4 h-4" /></button>
-                <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'star' } : i)); addToHistory(); saveWhiteboard(); }} className="p-1 hover:bg-gray-100 rounded" title="Star"><Star className="w-4 h-4" /></button>
-              </div>
-            )}
           </div>
         );
         break;
