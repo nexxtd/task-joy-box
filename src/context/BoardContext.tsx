@@ -208,6 +208,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })),
       subtasks: task.subtasks.map(st => ({ ...st, id: genId(), completed: false })),
       attachments: [],
+      comments: [],
     };
 
     return { ...b, tasks: [...b.tasks, newTask] };
@@ -240,6 +241,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         completedAt: details.completedAt,
         recurrencePattern: details.recurrencePattern,
         attachments: details.attachments || [],
+        comments: details.comments || [],
       };
       return { ...b, tasks: [...b.tasks, newTask] };
     });

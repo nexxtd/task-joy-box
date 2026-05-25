@@ -1,6 +1,6 @@
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 export type LabelColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink';
-export type ViewType = 'board' | 'list' | 'calendar' | 'whiteboard';
+export type ViewType = 'board' | 'list' | 'whiteboard' | 'calendar';
 
 export interface Label {
   id: string;
@@ -12,6 +12,10 @@ export interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+}
+
+export interface Subtask extends ChecklistItem {
+  durationMinutes?: number;
 }
 
 export interface Checklist {
@@ -30,6 +34,12 @@ export interface Attachment {
   createdAt: string;
 }
 
+export interface TaskComment {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -37,7 +47,7 @@ export interface Task {
   priority: Priority;
   labels: Label[];
   checklists: Checklist[];
-  subtasks: ChecklistItem[];
+  subtasks: Subtask[];
   dueDate?: string;
   dueTime?: string;
   startTime?: string;
@@ -55,6 +65,7 @@ export interface Task {
   recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
   nextOccurrence?: string | null;
   attachments?: Attachment[];
+  comments?: TaskComment[];
 }
 
 export interface Column {
