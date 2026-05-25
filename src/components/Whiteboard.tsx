@@ -142,6 +142,36 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
   const zoomPercent = Math.round(zoom * 100);
 
+  const fitToScreen = () => {
+    if (items.length === 0) {
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+    const bounds = items.reduce(
+      (acc, item) => ({
+        minX: Math.min(acc.minX, item.x),
+        minY: Math.min(acc.minY, item.y),
+        maxX: Math.max(acc.maxX, item.x + (item.width || 0)),
+        maxY: Math.max(acc.maxY, item.y + (item.height || 0)),
+      }),
+      { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+    );
+    const padding = 100;
+    const contentWidth = bounds.maxX - bounds.minX + padding * 2;
+    const contentHeight = bounds.maxY - bounds.minY + padding * 2;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const scaleX = rect.width / contentWidth;
+    const scaleY = rect.height / contentHeight;
+    const newZoom = clampZoom(Math.min(scaleX, scaleY));
+    setZoom(newZoom);
+    setOffset({
+      x: (rect.width - contentWidth * newZoom) / 2 - bounds.minX * newZoom + padding * newZoom,
+      y: (rect.height - contentHeight * newZoom) / 2 - bounds.minY * newZoom + padding * newZoom,
+    });
+  };
+
   // ── Tutorial (once per user) ─────────────────────────────────────────────
   useEffect(() => {
     const seen = localStorage.getItem('whiteboard-tutorial-seen');
