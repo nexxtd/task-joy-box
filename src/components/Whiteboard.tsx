@@ -191,15 +191,9 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     // Only create items when not dragging and with non-select tools
     if (isDragging || isPanning || activeTool === 'select' || activeTool === 'connector') return;
 
-    // Only create items if we have a temporary position set (when plus button is clicked)
-    if (tempItemPos && activeTool !== 'select' && activeTool !== 'connector') {
-      createNewItem(tempItemPos.x, tempItemPos.y);
-      setTempItemPos(null);
-      return;
-    }
-
-    // If we clicked without setting a temp position, cancel creation
-    setTempItemPos(null);
+    // Create item directly at click position
+    createNewItem(x, y);
+    return;
   };
 
   // Create new item at specified position
@@ -685,29 +679,29 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         <>
           {/* Top center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: centerX, top: item.y * zoom + offset.y }}
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-20"
+            style={{ left: item.width ? item.width / 2 : 0, top: 0 }}
             onClick={(e) => handleConnectionPointClick(item.id, 'top', e)}
           />
           
           {/* Right center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: item.x * zoom + offset.x + (item.width || 0) * zoom, top: centerY }}
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform translate-x-1/2 -translate-y-1/2 z-20"
+            style={{ left: item.width || 0, top: item.height ? item.height / 2 : 0 }}
             onClick={(e) => handleConnectionPointClick(item.id, 'right', e)}
           />
           
           {/* Bottom center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: centerX, top: item.y * zoom + offset.y + (item.height || 0) * zoom }}
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 translate-y-1/2 z-20"
+            style={{ left: item.width ? item.width / 2 : 0, top: item.height || 0 }}
             onClick={(e) => handleConnectionPointClick(item.id, 'bottom', e)}
           />
           
           {/* Left center */}
           <div 
-            className="absolute w-3 h-3 rounded-full bg-blue-500 border-2 border-white cursor-pointer -mt-1.5 -ml-1.5 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-            style={{ left: item.x * zoom + offset.x, top: centerY }}
+            className="absolute w-3 h-3 rounded-full bg-blue-500 border border-white cursor-pointer transform -translate-x-1/2 -translate-y-1/2 z-20"
+            style={{ left: 0, top: item.height ? item.height / 2 : 0 }}
             onClick={(e) => handleConnectionPointClick(item.id, 'left', e)}
           />
         </>
@@ -721,13 +715,12 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "rounded-lg shadow-sm")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 180,
+                height: item.height || 180,
                 backgroundColor: item.color,
-                transform: isHovered ? 'translateY(-5px)' : 'none',
-                transition: 'transform 0.2s ease'
+                transition: 'none'
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -757,10 +750,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 250,
+                height: item.height || 200,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -789,10 +782,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-md border-2 border-gray-200")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 300,
+                height: item.height || 250,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -824,10 +817,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-gray-100 rounded-lg shadow-sm border flex flex-col items-center justify-center overflow-hidden")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 200,
+                height: item.height || 150,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -857,10 +850,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-blue-100 rounded-lg shadow-sm border-2 border-blue-300 flex items-center justify-center")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 120,
+                height: item.height || 120,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -879,10 +872,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 250,
+                height: item.height || 150,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -930,10 +923,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-purple-100 rounded-full shadow-sm border-2 border-purple-200 flex items-center justify-center")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 150,
+                height: item.height || 100,
                 backgroundColor: item.backgroundColor
               }}
               onClick={(e) => handleItemClick(item.id, e)}
@@ -964,10 +957,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-white rounded-lg shadow-sm border")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 180,
+                height: item.height || 120,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -992,10 +985,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             <div
               className={cn(baseClasses, "bg-background rounded-xl shadow-xl border-2 border-border overflow-hidden flex flex-col")}
               style={{
-                left: item.x * zoom + offset.x,
-                top: item.y * zoom + offset.y,
-                width: (item.width || 0) * zoom,
-                height: (item.height || 0) * zoom,
+                left: item.x,
+                top: item.y,
+                width: item.width || 280,
+                height: item.height || 400,
               }}
               onClick={(e) => handleItemClick(item.id, e)}
               onMouseDown={handleItemMouseDown}
@@ -1070,101 +1063,49 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
       />
       
       {/* Whiteboard header with name and controls */}
-      <div className="absolute top-4 left-0 right-0 z-10 flex justify-center">
-        <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-2 shadow-sm">
+      <div className="absolute top-4 left-20 z-10">
+        <div className="bg-white shadow-lg border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-2">
           {isEditingName ? (
             <div className="flex items-center gap-2">
               <input
                 ref={nameInputRef}
                 type="text"
                 defaultValue={whiteboardName}
-                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                onBlur={handleRenameCancel}
+                className="px-2 py-1 border-b border-primary outline-none text-base font-semibold w-64 bg-transparent"
+                onBlur={handleRenameConfirm}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleRenameConfirm();
                   if (e.key === 'Escape') handleRenameCancel();
                 }}
               />
-              <button
-                onClick={handleRenameConfirm}
-                className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:opacity-90"
-              >
-                Save
-              </button>
-              <button
-                onClick={handleRenameCancel}
-                className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded hover:opacity-90"
-              >
-                Cancel
-              </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-gray-800">{whiteboardName}</h2>
-              <button
-                onClick={renameWhiteboardHandler}
-                className="p-1 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-200"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
+            <div 
+              className="flex items-center gap-2 cursor-pointer group"
+              onClick={renameWhiteboardHandler}
+            >
+              <h2 className="font-bold text-gray-800 text-lg">{whiteboardName}</h2>
+              <Edit3 className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           )}
         </div>
       </div>
       
       {/* Left Sidebar Tool Selector */}
-      <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-2">
+      <div className="w-16 bg-white/80 backdrop-blur-sm border-r border-gray-200 flex flex-col items-center py-4 space-y-4">
         {tools.map(tool => (
           <div key={tool.id} className="flex flex-col items-center">
             <button
               className={cn(
-                "p-2.5 rounded-lg transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
+                "p-3 rounded-xl transition-all duration-200 hover:bg-gray-100 flex items-center justify-center",
                 activeTool === tool.id 
-                  ? "bg-blue-100 text-blue-600 border border-blue-300 shadow-sm" 
-                  : "text-gray-600"
+                  ? "bg-primary text-primary-foreground shadow-lg scale-110" 
+                  : "text-gray-500"
               )}
-              onClick={() => {
-                if (['image', 'file'].includes(tool.id)) {
-                  // For image/file tools, we'll trigger the file input when plus is clicked
-                  setActiveTool(tool.id);
-                } else {
-                  setActiveTool(tool.id);
-                }
-              }}
+              onClick={() => setActiveTool(tool.id)}
               title={tool.name}
             >
               {tool.icon}
-            </button>
-            
-            {/* Plus button for creating items with current tool */}
-            <button
-              className={cn(
-                "mt-1 p-1.5 rounded-lg text-xs bg-primary text-primary-foreground",
-                "hover:bg-primary/90 transition-all"
-              )}
-              onClick={() => {
-                if (canvasRef.current) {
-                  const rect = canvasRef.current.getBoundingClientRect();
-                  // Position at center of canvas
-                  const centerX = (rect.width / 2 - offset.x) / zoom;
-                  const centerY = (rect.height / 2 - offset.y) / zoom;
-                  
-                  setTempItemPos({x: centerX, y: centerY});
-                  
-                  // If it's image or file, trigger the file input
-                  if (tool.id === 'image' && imageInputRef.current) {
-                    imageInputRef.current.click();
-                  } else if (tool.id === 'file' && fileInputRef.current) {
-                    fileInputRef.current.click();
-                  } else {
-                    // For other tools, create the item directly
-                    createNewItem(centerX, centerY);
-                  }
-                }
-              }}
-              title={`Add ${tool.name}`}
-            >
-              <Plus className="w-3 h-3" />
             </button>
           </div>
         ))}
@@ -1236,10 +1177,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
             
             if (!sourceItem || !targetItem) return null;
             
-            const sourceX = sourceItem.x * zoom + (sourceItem.width || 0) * zoom / 2;
-            const sourceY = sourceItem.y * zoom + (sourceItem.height || 0) * zoom / 2;
-            const targetX = targetItem.x * zoom + (targetItem.width || 0) * zoom / 2;
-            const targetY = targetItem.y * zoom + (targetItem.height || 0) * zoom / 2;
+            const sourceX = sourceItem.x + (sourceItem.width || 0) / 2;
+            const sourceY = sourceItem.y + (sourceItem.height || 0) / 2;
+            const targetX = targetItem.x + (targetItem.width || 0) / 2;
+            const targetY = targetItem.y + (targetItem.height || 0) / 2;
             
             // Calculate control points for curved lines
             const midX = (sourceX + targetX) / 2;
@@ -1295,18 +1236,13 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         
         {/* Toolbar for selected item */}
         {selectedItem && (
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg border p-2 flex space-x-1 z-20">
-            <button className="p-2 text-gray-600 hover:bg-gray-100 rounded">
-              <Move className="w-4 h-4" />
-            </button>
-            <button className="p-2 text-gray-600 hover:bg-gray-100 rounded">
-              <Plus className="w-4 h-4" />
-            </button>
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg border p-1 flex space-x-1 z-20">
             <button 
-              className="p-2 text-red-600 hover:bg-red-50 rounded"
+              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
               onClick={deleteSelectedItem}
             >
               <Trash2 className="w-4 h-4" />
+              <span>Delete</span>
             </button>
           </div>
         )}
