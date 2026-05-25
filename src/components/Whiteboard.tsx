@@ -60,7 +60,7 @@ interface Tool {
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
-const DRAG_THRESHOLD = 2; // px before drag starts
+const DRAG_THRESHOLD = 0; // No threshold - single click to select
 
 interface WhiteboardProps {
   whiteboardId?: number;
@@ -402,6 +402,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
               type: 'curved',
             };
             setConnections(prev => [...prev, newConn]);
+            addToHistory();
+            saveWhiteboard();
           }
         }
         setConnecting(null);
@@ -801,8 +803,9 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                 <button
                   key={color}
                   onClick={() => { changeItemColor(item.id, color); setShowColorPicker(false); }}
-                  className={`w-6 h-6 rounded ${item.color === color ? 'ring-2 ring-blue-500' : ''}`}
+                  className={`w-8 h-8 rounded border-2 ${item.color === color ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-300'}`}
                   style={{ backgroundColor: color }}
+                  title={color}
                 />
               ))}
             </div>
@@ -1426,8 +1429,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
   return (
     <div className="flex h-full w-full bg-gray-50 relative" onPointerMove={isResizing ? handleResizePointerMove : undefined} onPointerUp={isResizing ? handleResizePointerUp : undefined}>
       {/* Hidden inputs */}
-      <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="hidden" />
-      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+      <input type="file" accept="image/*" ref={imageInputRef} onChange={handleImageUpload} className="hidden" multiple={false} />
+      <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple={false} />
 
       {/* Loading overlay */}
       {isLoading && (
