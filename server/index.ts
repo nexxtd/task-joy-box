@@ -169,7 +169,7 @@ app.use(cors({
 }));
 
 // Removed Stripe webhook endpoints - now using only PayPal
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
 // Serve uploads folder if it exists
