@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, Target, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, Brain, LifeBuoy, Flame, ShieldCheck
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, Brain, LifeBuoy, Flame, ShieldCheck, X
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +16,7 @@ const AppSidebar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { T } = useLanguage();
+  const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
 
   const isPremium = user?.subscriptionTier === 'premium';
 
@@ -86,7 +87,13 @@ const AppSidebar: React.FC = () => {
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                if (item.path === '/whiteboard') {
+                  setShowWhiteboardModal(true);
+                } else {
+                  navigate(item.path);
+                }
+              }}
               title={collapsed ? item.label : undefined}
               data-testid={`nav-${item.path === '/' ? 'dashboard' : item.path.slice(1)}`}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm rounded-lg transition-all duration-200 group ${
@@ -167,6 +174,35 @@ const AppSidebar: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Whiteboard Coming Soon Modal */}
+      {showWhiteboardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWhiteboardModal(false)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">Whiteboard Coming Soon</h3>
+              <button onClick={() => setShowWhiteboardModal(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                The whiteboard feature is currently under development. Soon you'll be able to:
+              </p>
+              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
+                <li>Create visual mind maps and diagrams</li>
+                <li>Collaborate with team members in real-time</li>
+                <li>Link whiteboards to your tasks and projects</li>
+                <li>Use drawing tools and sticky notes</li>
+              </ul>
+              <p className="text-sm text-muted-foreground">
+                Stay tuned for updates!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

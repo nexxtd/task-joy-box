@@ -457,7 +457,15 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
           </div>
 
           {/* Delete */}
-<div className="pt-4 border-t border-border" />
+<div className="pt-4 border-t border-border flex justify-end">
+  <button
+    onClick={handleDelete}
+    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+  >
+    <Trash2 className="w-3.5 h-3.5" />
+    Delete Task
+  </button>
+</div>
         </div>
       </div>
     </div>

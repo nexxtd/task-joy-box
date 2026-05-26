@@ -17,6 +17,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
@@ -115,6 +116,10 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   const [completedOpen, setCompletedOpen] = useState(true);
+  const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
+  const [deleteDropdownOpen, setDeleteDropdownOpen] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
@@ -363,13 +368,49 @@ const Tasks: React.FC = () => {
           <h1 className="text-lg font-bold text-foreground">All Tasks</h1>
           <p className="text-xs text-muted-foreground">{matchingCount} tasks matching filters</p>
         </div>
-        <button
-          onClick={() => setAddingTask(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          New Task
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setDeleteDropdownOpen(!deleteDropdownOpen)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border transition-all ${
+                isDeleteMode 
+                  ? 'bg-destructive/15 border-destructive/30 text-destructive'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              {isDeleteMode ? 'Exit Delete Mode' : 'Delete'}
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+
+            {deleteDropdownOpen && !isDeleteMode && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setDeleteDropdownOpen(false)} />
+                <div className="absolute right-0 mt-1.5 w-48 bg-card border border-border rounded-xl shadow-lg z-30 py-1 animate-fade-in">
+                  <button
+                    onClick={() => {
+                      setDeleteDropdownOpen(false);
+                      setIsDeleteMode(true);
+                      setSelectedDeleteTaskIds([]);
+                    }}
+                    className="w-full text-left px-3.5 py-2 text-xs hover:bg-muted transition-colors flex items-center gap-2 text-foreground"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Select Tasks to Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => setAddingTask(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            New Task
+          </button>
+        </div>
       </header>
 
       <div className="px-6 py-4 border-b border-border bg-card/10">
@@ -401,20 +442,58 @@ const Tasks: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border">
-            {board.columns.map(column => (
-              <button
-                key={column.id}
-                onClick={() => setGroupFilterId(prev => (prev === column.id ? null : column.id))}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
-                  groupFilterId === column.id
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {column.title}
-              </button>
-            ))}
+          <div className="relative">
+            <button
+              onClick={() => setGroupDropdownOpen(!groupDropdownOpen)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                groupFilterId 
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm' 
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>
+                {groupFilterId 
+                  ? `Group: ${board.columns.find(c => c.id === groupFilterId)?.title || ''}` 
+                  : 'Group Filter'}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </button>
+
+            {groupDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setGroupDropdownOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-48 bg-card border border-border rounded-xl shadow-lg z-30 py-1 animate-fade-in">
+                  <button
+                    onClick={() => {
+                      setGroupFilterId(null);
+                      setGroupDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3.5 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between ${
+                      !groupFilterId ? "text-primary font-semibold" : "text-foreground"
+                    }`}
+                  >
+                    All Groups
+                  </button>
+                  <div className="h-px bg-border my-1" />
+                  {board.columns.map(column => (
+                    <button
+                      key={column.id}
+                      onClick={() => {
+                        setGroupFilterId(column.id);
+                        setGroupDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between ${
+                        groupFilterId === column.id ? "text-primary font-semibold" : "text-foreground"
+                      }`}
+                    >
+                      <span>{column.title}</span>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: column.color }} />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -461,29 +540,51 @@ const Tasks: React.FC = () => {
             return (
               <div
                 key={task.id}
-                onClick={() => setOpenTaskId(task.id)}
-                className="border border-border rounded-xl bg-card transition-all duration-300"
+                onClick={() => {
+                  if (isDeleteMode) {
+                    setSelectedDeleteTaskIds(prev => 
+                      prev.includes(task.id) 
+                        ? prev.filter(id => id !== task.id) 
+                        : [...prev, task.id]
+                    );
+                  } else {
+                    setOpenTaskId(task.id);
+                  }
+                }}
+                className={`border rounded-xl bg-card transition-all duration-300 cursor-pointer ${
+                  isDeleteMode 
+                    ? selectedDeleteTaskIds.includes(task.id)
+                      ? 'border-destructive bg-destructive/5 shadow-[0_0_8px_rgba(239,68,68,0.1)] hover:bg-destructive/10'
+                      : 'border-border hover:bg-muted/20'
+                    : 'border-border'
+                }`}
               >
                 <div className="flex items-center gap-3 px-4 py-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleTaskCompletion(task);
-                    }}
-                    className="text-muted-foreground hover:text-label-green transition-colors"
-                    title="Mark complete"
-                  >
-                    <Circle className="w-5 h-5" />
-                  </button>
+                  {isDeleteMode ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedDeleteTaskIds.includes(task.id)}
+                      onChange={() => {}}
+                      className="w-5 h-5 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+                    />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTaskCompletion(task);
+                      }}
+                      className="text-muted-foreground hover:text-label-green transition-colors"
+                      title="Mark complete"
+                    >
+                      <Circle className="w-5 h-5" />
+                    </button>
+                  )}
 
                   <span className="text-sm font-medium text-left text-foreground hover:text-primary truncate">
                     {task.title}
                   </span>
 
                   <div className="flex items-center gap-2 ml-2">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                      {getStatusLabel(status)}
-                    </span>
                     {task.dueDate && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full ${isOverdue ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
                         {formatDate(task.dueDate)}
@@ -492,6 +593,14 @@ const Tasks: React.FC = () => {
                             ({Math.max(0, Math.ceil((new Date(task.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left)
                           </span>
                         )}
+                      </span>
+                    )}
+                    {column && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                        style={{ backgroundColor: column.color, color: 'hsl(var(--primary-foreground))' }}
+                      >
+                        {column.title}
                       </span>
                     )}
                     {subtasksDone && (
@@ -512,38 +621,37 @@ const Tasks: React.FC = () => {
                   </div>
 
                   <div className="ml-auto flex items-center gap-2">
-                    {column && (
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                        style={{ backgroundColor: column.color, color: 'hsl(var(--primary-foreground))' }}
-                      >
-                        {column.title}
-                      </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      {getStatusLabel(status)}
+                    </span>
+                    {!isDeleteMode && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(task.id);
+                          }}
+                          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+                          title={isExpanded ? 'Collapse' : 'Expand'}
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeepFocus(task);
+                          }}
+                          className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                          title="Open Deep Focus"
+                        >
+                          <Brain className="w-4 h-4" />
+                        </button>
+                      </>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpand(task.id);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
-                      title={isExpanded ? 'Collapse' : 'Expand'}
-                    >
-                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openDeepFocus(task);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                      title="Open Deep Focus"
-                    >
-                      <Brain className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
 
-                {isExpanded && (
+                {isExpanded && !isDeleteMode && (
                   <div
                     onClick={(e) => e.stopPropagation()}
                     className="border-t border-border px-4 py-3 space-y-4 bg-muted/20"
@@ -588,15 +696,15 @@ const Tasks: React.FC = () => {
                         <div className="space-y-1.5">
                           {task.checklists.map(checklist =>
                             checklist.items.map(item => (
-                              <label key={item.id} className="flex items-center gap-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={item.completed}
-                                  onChange={() => toggleChecklistItem(task.id, checklist.id, item.id)}
-                                  className="w-4 h-4 rounded border-border accent-primary"
-                                />
+                              <div key={item.id} className="flex items-center gap-2 text-sm">
+                                <button
+                                  onClick={() => toggleChecklistItem(task.id, checklist.id, item.id)}
+                                  className="text-muted-foreground hover:text-label-green"
+                                >
+                                  {item.completed ? <CheckCircle2 className="w-4 h-4 text-label-green" /> : <Circle className="w-4 h-4" />}
+                                </button>
                                 <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
-                              </label>
+                              </div>
                             ))
                           )}
                         </div>
@@ -660,19 +768,24 @@ const Tasks: React.FC = () => {
             );
           })}
 
-          {(filtered.completed.length > 0 || completedOpen) && (
+          {filtered.completed.length > 0 && (
             <div className="mt-8 pt-6 border-t border-border/80">
               <div className="border border-label-green/25 rounded-xl bg-label-green/5">
-              <button
-                onClick={() => setCompletedOpen(prev => !prev)}
-                className="w-full flex items-center justify-between px-4 py-3"
-              >
-                <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Completed ({filtered.completed.length})
-                </span>
-                {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-              </button>
+              <div className="w-full flex items-center justify-between px-4 py-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCompletedOpen(prev => !prev);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Completed ({filtered.completed.length})
+                  </span>
+                  {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </div>
 
               {completedOpen && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
@@ -682,21 +795,46 @@ const Tasks: React.FC = () => {
                   {filtered.completed.map(task => (
                     <div
                       key={task.id}
-                      onClick={() => setOpenTaskId(task.id)}
-                      className="flex items-center gap-3 px-2 py-2 rounded-lg border border-label-green/15 bg-background/70 hover:bg-muted/40 cursor-pointer"
+                      onClick={() => {
+                        if (isDeleteMode) {
+                          setSelectedDeleteTaskIds(prev => 
+                            prev.includes(task.id) 
+                              ? prev.filter(id => id !== task.id) 
+                              : [...prev, task.id]
+                          );
+                        } else {
+                          setOpenTaskId(task.id);
+                        }
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                        isDeleteMode 
+                          ? selectedDeleteTaskIds.includes(task.id)
+                            ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+                            : 'border-border bg-background/50 hover:bg-muted/20'
+                          : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
+                      }`}
                     >
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleTaskCompletion(task);
-                        }}
-                        className="text-label-green"
-                        title="Mark active"
-                      >
-                        <CheckCircle2 className="w-5 h-5" />
-                      </button>
+                      {isDeleteMode ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedDeleteTaskIds.includes(task.id)}
+                          onChange={() => {}}
+                          className="w-5 h-5 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+                        />
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTaskCompletion(task);
+                          }}
+                          className="text-label-green"
+                          title="Mark active"
+                        >
+                          <CheckCircle2 className="w-5 h-5" />
+                        </button>
+                      )}
 
-                      <span className="text-sm text-left text-muted-foreground/90 line-through hover:text-primary">
+                      <span className={`text-sm text-left ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/90 line-through'} hover:text-primary`}>
                         {task.title}
                       </span>
 
@@ -967,30 +1105,54 @@ const Tasks: React.FC = () => {
               </div>
 
               <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Attachments</label>
                 <div className="group relative mt-1">
-                  <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                    <div className="flex flex-col items-center justify-center py-2">
-                      <Paperclip className="w-5 h-5 text-primary mb-1" />
-                      <p className="text-[10px] font-medium text-foreground">Click to add attachments</p>
+                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                    <div className="flex flex-col items-center justify-center py-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                        <Paperclip className="w-5 h-5 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                      <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                     </div>
                     <input
                       type="file"
                       multiple
                       onChange={e => {
                         if (!e.target.files) return;
-                        setNewFiles(Array.from(e.target.files));
+                        setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
                       }}
                       className="hidden"
                     />
                   </label>
                 </div>
                 {newFiles.length > 0 && (
-                  <div className="grid grid-cols-1 gap-2 mt-3">
-                    {newFiles.map(file => (
-                      <div key={file.name} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30">
-                        <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-[11px] font-medium text-foreground truncate">{file.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-auto">{(file.size / 1024).toFixed(0)} KB</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 animate-fade-in">
+                    {newFiles.map((file, fileIdx) => (
+                      <div key={`${file.name}-${fileIdx}`} className="relative group/att">
+                        <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all group/item">
+                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                            <Paperclip className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {(file.size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx));
+                          }}
+                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1078,6 +1240,49 @@ const Tasks: React.FC = () => {
           onAddChecklistItem={addChecklistItem}
           onDeleteChecklistItem={deleteChecklistItem}
         />
+      )}
+
+      {isDeleteMode && (
+        <div className="sticky bottom-0 left-0 right-0 z-30 p-4 bg-background/80 backdrop-blur-md border-t border-border flex justify-center animate-fade-in">
+          <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center text-destructive">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <span className="text-sm font-bold text-foreground animate-fade-in">
+                {selectedDeleteTaskIds.length === 0 
+                  ? 'Select tasks to delete' 
+                  : `Selected ${selectedDeleteTaskIds.length} task${selectedDeleteTaskIds.length === 1 ? '' : 's'}`
+                }
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedDeleteTaskIds([]);
+                  setIsDeleteMode(false);
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg hover:bg-muted text-muted-foreground transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={selectedDeleteTaskIds.length === 0}
+                onClick={() => {
+                  if (confirm(`Are you sure you want to delete the ${selectedDeleteTaskIds.length} selected task(s)? This action cannot be undone.`)) {
+                    selectedDeleteTaskIds.forEach(id => deleteTask(id));
+                    setSelectedDeleteTaskIds([]);
+                    setIsDeleteMode(false);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-destructive text-destructive-foreground rounded-lg disabled:opacity-40 hover:bg-destructive/95 transition-all shadow-sm"
+              >
+                Delete Selected
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1555,13 +1760,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     )}
                     {list.items.map(item => (
                       <div key={item.id} className="flex items-center gap-2 text-sm group">
-                        <input
-                          type="checkbox"
-                          checked={item.completed}
-                          onChange={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                          className="w-4 h-4 rounded border-border accent-primary"
-                        />
-                        
+                        <button
+                          onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                          className="text-muted-foreground hover:text-label-green"
+                        >
+                          {item.completed ? <CheckCircle2 className="w-4 h-4 text-label-green" /> : <Circle className="w-4 h-4" />}
+                        </button>
+
                         {editingChecklistItemId === item.id ? (
                           <input
                             autoFocus
@@ -1572,7 +1777,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                             onKeyDown={(e) => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
                           />
                         ) : (
-                          <span 
+                          <span
                             onClick={() => {
                               setEditingChecklistItemId(item.id);
                               setEditingChecklistText(item.text);
