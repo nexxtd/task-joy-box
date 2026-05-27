@@ -1199,6 +1199,72 @@ Respond with a JSON object like:
   }
 });
 
+router.post('/task-builder', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req, res);
+    if (!user) return;
+
+    const client = getOpenRouter();
+    if (!client) {
+      return res.status(503).json({ error: 'AI service is currently unavailable. Please set OPENROUTER_API_KEY.' });
+    }
+
+    const { input, columns: boardColumns } = req.body;
+    if (!input || typeof input !== 'string' || !input.trim()) {
+      return res.status(400).json({ error: 'Input text is required' });
+    }
+
+    const safeInput = sanitize(input);
+    const columnsContext = Array.isArray(boardColumns) && boardColumns.length > 0
+      ? `Available groups: ${boardColumns.map((c: any) => c.title).join(', ')}.`
+      : '';
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const prompt = `You are a task management AI. The user describes a task, project, or goal in plain text. Extract all relevant information and return a fully structured task JSON.
+
+Today's date: ${today}
+${columnsContext}
+
+User input:
+"""
+${safeInput}
+"""
+
+Return ONLY a valid JSON object with these exact fields:
+{
+  "title": "concise task title extracted or generated",
+  "description": "summarized description from input",
+  "priority": "urgent|high|medium|low|none (infer from urgency language)",
+  "dueDate": "YYYY-MM-DD or null if no date mentioned",
+  "dueTime": "HH:MM (24h) or null if no time mentioned",
+  "duration": "estimated duration in minutes as integer or null",
+  "group": "suggested group name from the available groups if relevant, or null",
+  "status": "to_do",
+  "subtasks": [
+    { "text": "subtask description", "durationMinutes": 15 }
+  ],
+  "checklistItems": ["step1", "step2"]
+}
+
+Rules:
+- subtasks: break down complex tasks. Each gets a realistic durationMinutes.
+- checklistItems: for step-by-step actions or checklist-style items in the input.
+- duration: sum of subtask durations if subtasks exist, otherwise estimate from scope.
+- priority: "urgent" for ASAP/critical, "high" for important, "medium" default, "low" for minor.
+- dueDate: only if explicitly mentioned. Parse relative dates like "tomorrow" using today's date.
+- Return ONLY the JSON, no markdown, no explanation.`;
+
+    const responseText = await generateContentWithRetry(prompt, 2);
+    const taskData = await extractJsonFromResponse(responseText);
+
+    res.json(taskData);
+  } catch (error) {
+    console.error('AI task builder failed:', error);
+    res.status(500).json({ error: 'Failed to generate task. Please try again.' });
+  }
+});
+
 router.post('/premium/ai-prioritize', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const user = await requirePremiumTier(req, res);

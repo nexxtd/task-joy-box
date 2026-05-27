@@ -158,6 +158,11 @@ app.use(cors({
     if (origin.includes('onrender.com')) {
       return callback(null, true);
     }
+
+    // Allow all Replit dev domains
+    if (/\.replit\.dev$/.test(origin) || /\.riker\.replit\.dev$/.test(origin) || /\.replit\.app$/.test(origin)) {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.has(origin)) {
       return callback(null, true);

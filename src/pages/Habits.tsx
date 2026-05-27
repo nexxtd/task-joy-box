@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Flame, Plus, Check, RotateCcw, TrendingUp, Calendar, Zap, Sparkles } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
+import { CircleToggle } from '@/components/ToggleComponents';
 
 interface Habit {
   id: number;
@@ -234,11 +235,16 @@ const Habits: React.FC = () => {
              <div key={habit.id} className="group bg-card border border-border rounded-2xl p-5 hover:border-primary/30 hover:shadow-xl transition-all duration-300">
                 <div className="flex items-start justify-between mb-4">
                    <div className="flex items-center gap-3">
-                      <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-all", habit.completedDays.includes(today) ? "bg-primary text-primary-foreground scale-110 rotate-3 shadow-lg shadow-primary/20" : "bg-muted text-muted-foreground hover:bg-muted/80")}>
-                         <button onClick={() => toggleHabit(habit.id)}>
-                            {habit.completedDays.includes(today) ? <Check className="w-7 h-7" /> : <Plus className="w-7 h-7" />}
-                         </button>
-                      </div>
+                      <CircleToggle
+                        completed={habit.completedDays.includes(today)}
+                        onClick={e => { e.stopPropagation(); toggleHabit(habit.id); }}
+                        size="lg"
+                        title={habit.completedDays.includes(today) ? 'Mark incomplete' : 'Mark complete'}
+                        className={cn(
+                          "w-14 h-14 !rounded-2xl transition-all",
+                          habit.completedDays.includes(today) ? "scale-110 shadow-lg shadow-primary/20" : ""
+                        )}
+                      />
                       <div>
                          <h3 className="text-base font-bold text-foreground">{habit.title}</h3>
                          <span className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full mt-1 inline-block", CATEGORY_COLORS[habit.category])}>

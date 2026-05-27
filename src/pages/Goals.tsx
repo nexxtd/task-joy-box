@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Plus, Trash2, TrendingUp } from 'lucide-react';
+import { CircleToggle } from '@/components/ToggleComponents';
 
 interface SubGoal {
   id: string;
@@ -386,9 +387,13 @@ const Goals: React.FC = () => {
                     <div className="space-y-1 pt-2 border-t border-border">
                       {goal.subGoals.map(sg => (
                         <div key={sg.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${sg.completed ? 'bg-label-green border-label-green' : 'border-muted'}`}>
-                            {sg.completed && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><polyline points="20 6 9 17 4 12"/></svg>}
-                          </div>
+                          <CircleToggle
+                            completed={sg.completed}
+                            onClick={e => {
+                              e.stopPropagation();
+                            }}
+                            size="sm"
+                          />
                           <span className={sg.completed ? 'line-through opacity-60' : ''}>{sg.title}</span>
                         </div>
                       ))}
