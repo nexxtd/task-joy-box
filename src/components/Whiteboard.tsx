@@ -46,6 +46,8 @@ import {
   CheckSquare,
   AlertTriangle,
   Brain,
+  Settings2,
+  Shapes,
 } from 'lucide-react';
 import { createWhiteboard, getWhiteboardById, updateWhiteboard, CanvasItem, Connection } from '@/services/whiteboardService';
 import TaskCard from '@/components/TaskCard';
@@ -1096,7 +1098,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   {['thin', 'medium', 'thick'].map(thickness => (
                     <button
                       key={thickness}
-                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderThickness: thickness } : i)); }}
+                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderThickness: thickness as 'thin' | 'medium' | 'thick' } : i)); }}
                       className={`px-2 py-1 text-xs rounded ${item.borderThickness === thickness ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
                     >
                       {thickness}
@@ -1110,7 +1112,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   {['solid', 'dashed', 'dotted'].map(style => (
                     <button
                       key={style}
-                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderStyle: style } : i)); }}
+                      onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderStyle: style as 'solid' | 'dashed' | 'dotted' } : i)); }}
                       className={`px-2 py-1 text-xs rounded ${item.borderStyle === style ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}
                     >
                       {style}
@@ -1129,15 +1131,15 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
                   className="w-full"
                 />
               </div>
-              {(item.shapeType === 'square' || item.shapeType === 'rectangle') && (
+              {item.shapeType === 'square' && (
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">Corner radius: {item.borderRadius || 0}px</label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Corner radius: {item.cornerRadius || 0}px</label>
                   <input
                     type="range"
                     min="0"
                     max="50"
-                    value={item.borderRadius || 0}
-                    onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, borderRadius: parseInt(e.target.value) } : i))}
+                    value={item.cornerRadius || 0}
+                    onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, cornerRadius: parseInt(e.target.value) } : i))}
                     className="w-full"
                   />
                 </div>
