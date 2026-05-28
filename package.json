@@ -22,7 +22,6 @@
     "start": "cross-env NODE_ENV=production node dist-server/server/index.js"
   },
   "dependencies": {
-    "cross-env": "^7.0.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@radix-ui/react-accordion": "^1.2.1",
     "@radix-ui/react-alert-dialog": "^1.1.2",
@@ -70,6 +69,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^2.1.9",
+    "antd": "^6.4.3",
     "autoprefixer": "^10.5.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
@@ -79,6 +79,7 @@
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "cross-env": "^7.0.3",
     "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
