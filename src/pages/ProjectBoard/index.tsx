@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Select, DatePicker, TimePicker, Upload, Button, Space, Tag } from 'antd';
-import { PlusOutlined, UploadOutlined, DeleteOutlined, MoreHorizontal, Calendar, CheckSquare, AlertTriangle, Brain } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { Task, LABEL_COLORS, PRIORITY_CONFIG, TaskStatus } from '@/types/board';
+import { Task, LABEL_COLORS, PRIORITY_CONFIG, TaskStatus, Checklist, Subtask } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -218,7 +218,7 @@ const ProjectBoard = () => {
                         className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-100 rounded text-gray-500 hover:text-blue-600"
                         title="Start Deep Focus"
                       >
-                        <Brain style={{ width: '14px', height: '14px' }} />
+                        <BrainIcon className="w-3.5 h-3.5" />
                       </button>
                       {task.icon && <span className="text-xs opacity-70">{task.icon}</span>}
                     </div>
@@ -241,19 +241,19 @@ const ProjectBoard = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                       {task.priority !== 'none' && (
                         <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex items-center gap-1`}>
-                          {task.priority === 'urgent' && <AlertTriangle style={{ width: '12px', height: '12px' }} />}
+                          {task.priority === 'urgent' && <AlertTriangleIcon className="w-3 h-3" />}
                           {PRIORITY_CONFIG[task.priority].label}
                         </span>
                       )}
                       {task.dueDate && (
                         <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                          <Calendar style={{ width: '12px', height: '12px' }} />
+                          <CalendarIcon className="w-3 h-3" />
                           {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                         </span>
                       )}
                       {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (
                         <span className={`flex items-center gap-1 text-[11px] ${(task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0) === (task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) ? 'text-green-600' : 'text-gray-500'}`}>
-                          <CheckSquare style={{ width: '12px', height: '12px' }} />
+                          <CheckSquareIcon className="w-3 h-3" />
                           {task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0}/{task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0}
                         </span>
                       )}
@@ -270,7 +270,7 @@ const ProjectBoard = () => {
                   }}
                   className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-amber-600 border-2 border-dashed border-amber-400/50 hover:border-amber-400 hover:bg-amber-50 rounded-2xl transition-all duration-300"
                 >
-                  <DeleteOutlined style={{ fontSize: '16px' }} />
+                  <DeleteOutlined />
                   Upgrade to Add Tasks
                 </button>
               ) : (
@@ -278,7 +278,7 @@ const ProjectBoard = () => {
                   onClick={() => handleCreateTask(column.id)}
                   className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-2 border-dashed border-gray-300 hover:border-blue-200 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
                 >
-                  <PlusOutlined style={{ fontSize: '16px' }} />
+                  <PlusOutlined />
                   Add New Task
                 </button>
               )}
@@ -419,7 +419,7 @@ const ProjectBoard = () => {
                     <div key={i} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded-lg border border-gray-200 group">
                       <span className="flex-1 text-sm text-gray-700">{st}</span>
                       <button onClick={() => removeSubtask(i)} className="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                        <DeleteOutlined style={{ fontSize: '12px' }} />
+                        <DeleteOutlined />
                       </button>
                     </div>
                   ))}
@@ -436,7 +436,7 @@ const ProjectBoard = () => {
                     onClick={handleAddSubtask}
                     className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-all"
                   >
-                    <PlusOutlined style={{ fontSize: '14px' }} />
+                    <PlusOutlined />
                   </button>
                 </div>
               </div>
@@ -457,7 +457,7 @@ const ProjectBoard = () => {
                     <div key={i} className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 text-xs font-medium text-blue-600 uppercase">
                       {f.name}
                       <button onClick={() => setNewFiles(newFiles.filter((_, idx) => idx !== i))} className="hover:text-red-500">
-                        <DeleteOutlined style={{ fontSize: '10px' }} />
+                        <DeleteOutlined />
                       </button>
                     </div>
                   ))}
@@ -470,7 +470,7 @@ const ProjectBoard = () => {
                   }`}
                   onClick={() => !isPremium && (navigate('/pricing'))}
                 >
-                  {isPremium ? <PlusOutlined style={{ fontSize: '12px' }} /> : <SparklesIcon style={{ fontSize: '12px' }} />}
+                  {isPremium ? <PlusOutlined /> : <SparklesIcon className="w-3 h-3" />}
                   {isPremium ? 'Add File' : 'Post Files (Premium)'}
                   {isPremium && (
                     <input
@@ -585,7 +585,7 @@ const ProjectBoard = () => {
                 {/* Priority */}
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    <AlertTriangle style={{ width: '14px', height: '14px' }} /> Priority
+                    <AlertTriangleIcon className="w-3.5 h-3.5" /> Priority
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -619,7 +619,7 @@ const ProjectBoard = () => {
                 {/* Due date */}
                 <div>
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    <Calendar style={{ width: '14px', height: '14px' }} /> Due Date
+                    <CalendarIcon className="w-3.5 h-3.5" /> Due Date
                   </h4>
                   <input
                     type="date"
@@ -716,7 +716,7 @@ const ProjectBoard = () => {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                    <CheckSquare style={{ width: '14px', height: '14px' }} /> Checklists
+                    <CheckSquareIcon className="w-3.5 h-3.5" /> Checklists
                   </h4>
                 </div>
 
@@ -779,7 +779,7 @@ const ProjectBoard = () => {
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-lg transition-all"
                 >
-                  <DeleteOutlined style={{ fontSize: '14px' }} />
+                  <DeleteOutlined />
                   Delete Task
                 </button>
               </div>
@@ -852,6 +852,30 @@ const SparklesIcon = ({ className }: { className?: string }) => (
 const LockIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+  </svg>
+);
+
+const CalendarIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const CheckSquareIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const AlertTriangleIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
+const BrainIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9c0 1.105 3.134 2 7 2s7-.895 7-2M3 9c0-1.105 3.134-2 7-2s7 .895 7 2M3 9v6c0 1.105 3.134 2 7 2s7-.895 7-2V9M10 15c0-.552-.448-1-1-1s-1 .448-1 1 .448 1 1 1 1-.448 1-1z" />
   </svg>
 );
 
