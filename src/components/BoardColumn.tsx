@@ -3,8 +3,9 @@ import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import TaskCard from './TaskCard';
-import { Plus, MoreHorizontal, Trash2, Sparkles } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface BoardColumnProps {
   column: ColumnType;
@@ -27,8 +28,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [newSubtask, setNewSubtask] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [duration, setDuration] = useState<number>(60);
+  const [showRowUpgradePrompt, setShowRowUpgradePrompt] = useState(false);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isPremium = user?.subscriptionTier === 'premium';
+  const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
   const [showMenu, setShowMenu] = useState(false);
   const [editingColumnName, setEditingColumnName] = useState(false);
   const [columnName, setColumnName] = useState(column.title);
@@ -100,6 +104,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   };
 
   return (
+    <>
     <Draggable draggableId={column.id} index={index}>
       {(provided) => (
         <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-80">
@@ -414,17 +419,60 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               </div>
             </div>
           ) : (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Task
-            </button>
+            isFree ? (
+              <button
+                onClick={() => setShowRowUpgradePrompt(true)}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-amber-600 border-2 border-dashed border-amber-400/50 hover:border-amber-400 hover:bg-amber-500/5 rounded-2xl transition-all duration-300"
+              >
+                <Lock className="w-4 h-4" />
+                Upgrade to Add Tasks
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsAdding(true)}
+                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Add New Task
+              </button>
+            )
           )}
         </div>
       )}
     </Draggable>
+
+    {showRowUpgradePrompt && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowRowUpgradePrompt(false)}>
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+        <div
+          className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-fade-in text-center"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-7 h-7 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground mb-2">Premium Feature</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Adding tasks (rows) to your board is a <strong>Pro feature</strong>. Upgrade to unlock unlimited tasks across all your projects.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => { setShowRowUpgradePrompt(false); navigate('/pricing'); }}
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors"
+            >
+              View Plans
+            </button>
+            <button
+              onClick={() => setShowRowUpgradePrompt(false)}
+              className="w-full py-2.5 text-muted-foreground text-sm hover:text-foreground transition-colors"
+            >
+              Stay on Free
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
