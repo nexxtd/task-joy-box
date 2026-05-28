@@ -150,7 +150,7 @@ function delay(ms: number): Promise<void> {
 // Add AI request function with retry and caching
 async function generateContentWithRetry(prompt: string, retries = 1, useFallback = true) {
   // Create cache key for this request
-  const cacheKey = createCacheKey(prompt, 'nvidia/nemotron-3-8b'); // Using NVIDIA Nemotron 3 model
+  const cacheKey = createCacheKey(prompt, 'nvidia/nemotron-3-super-120b-a12b:free');
   const cached = requestCache.get(cacheKey);
 
   // Return cached response if available and not expired
@@ -168,7 +168,7 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
     try {
       const completion = await client.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        model: 'nvidia/nemotron-3-8b', // Using the free NVIDIA Nemotron 3 Super model
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
         temperature: 0.7,
         max_tokens: 500,
       });
@@ -1179,7 +1179,7 @@ Respond with a JSON object like:
 
     const completion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'openrouter/auto',
+      model: 'nvidia/nemotron-3-super-120b-a12b:free',
       temperature: 0.6,
       max_tokens: 800,
     });

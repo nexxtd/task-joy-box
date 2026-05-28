@@ -350,6 +350,16 @@ export const whiteboardConnections = pgTable('whiteboard_connections', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const deepFocusSessions = pgTable('deep_focus_sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  taskId: text('task_id'),
+  taskName: text('task_name').notNull(),
+  durationMinutes: integer('duration_minutes').notNull(),
+  completed: boolean('completed').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 // Types exported via any to avoid inference issues on Render
 export type InsertUser = any;
 export type UpdateUser = any;

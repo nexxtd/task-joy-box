@@ -20,6 +20,7 @@ import attachmentRoutes from './routes/attachments';
 import adminRoutes from './routes/admin';
 import boardRoutes from './routes/boards';
 import whiteboardsRoutes from './routes/whiteboards';
+import deepFocusRoutes from './routes/deepFocus';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
 import { pool } from './db';
@@ -226,6 +227,7 @@ app.use('/api/attachments', attachmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/whiteboards', whiteboardsRoutes);
+app.use('/api/deep-focus', deepFocusRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {

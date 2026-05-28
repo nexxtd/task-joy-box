@@ -159,6 +159,24 @@ export async function initDatabase() {
     `);
 
     console.log('Whiteboard tables verified');
+
+    // --- DEEP FOCUS SESSIONS TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS deep_focus_sessions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        task_id TEXT,
+        task_name TEXT NOT NULL,
+        duration_minutes INTEGER NOT NULL,
+        completed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS deep_focus_sessions_user_id_idx ON deep_focus_sessions(user_id);
+    `);
+    console.log('Deep focus sessions table verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails

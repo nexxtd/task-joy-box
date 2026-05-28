@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Palette, Bell, Globe, Calendar, Battery,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
-  Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap
+  Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
+  History, Brain, CheckCircle2, XCircle, Clock
 } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
@@ -82,7 +83,10 @@ const SettingsPage: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ synced: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState('');
-  const [syncSuccess, setSyncSuccess] = useState(''); // Add success message state
+  const [syncSuccess, setSyncSuccess] = useState('');
+  const [historyTab, setHistoryTab] = useState<'energy' | 'deepfocus'>('deepfocus');
+  const [deepFocusSessions, setDeepFocusSessions] = useState<any[]>([]);
+  const [deepFocusLoading, setDeepFocusLoading] = useState(false);
   const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isTopTier = user?.subscriptionTier === 'premium';
   const isMidTier = user?.subscriptionTier === 'pro';
@@ -92,6 +96,7 @@ const SettingsPage: React.FC = () => {
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'energy', label: 'Energy Levels', icon: Battery },
+    { id: 'history', label: 'History', icon: History },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
   ];
@@ -142,7 +147,20 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (activeSection === 'calendar') fetchCalendarStatus();
-  }, [activeSection]);
+    if (activeSection === 'history' && historyTab === 'deepfocus') fetchDeepFocusSessions();
+  }, [activeSection, historyTab]);
+
+  const fetchDeepFocusSessions = async () => {
+    setDeepFocusLoading(true);
+    try {
+      const res = await fetch('/api/deep-focus/sessions', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setDeepFocusSessions(data);
+      }
+    } catch {}
+    finally { setDeepFocusLoading(false); }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -871,6 +889,86 @@ const SettingsPage: React.FC = () => {
                   Save Energy Levels
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeSection === 'history' && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-foreground">History</h2>
+              <div className="flex gap-1 p-1 bg-muted/40 rounded-xl w-fit">
+                <button
+                  onClick={() => setHistoryTab('energy')}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    historyTab === 'energy' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Energy Tracker
+                </button>
+                <button
+                  onClick={() => setHistoryTab('deepfocus')}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    historyTab === 'deepfocus' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Deep Focus
+                </button>
+              </div>
+
+              {historyTab === 'energy' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Your energy level log will appear here once tracked.</p>
+                </div>
+              )}
+
+              {historyTab === 'deepfocus' && (
+                <div className="space-y-3">
+                  {deepFocusLoading ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">Loading sessions…</div>
+                  ) : deepFocusSessions.length === 0 ? (
+                    <div className="text-center py-10">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                        <Brain className="w-6 h-6 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">No sessions yet</p>
+                      <p className="text-xs text-muted-foreground mt-1">Your completed Deep Focus sessions will appear here.</p>
+                    </div>
+                  ) : (
+                    deepFocusSessions.map((session: any) => {
+                      const date = new Date(session.createdAt);
+                      const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                      const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                      return (
+                        <div key={session.id} className="bg-card border border-border rounded-xl p-4 flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                            session.completed ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'
+                          }`}>
+                            {session.completed
+                              ? <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                              : <XCircle className="w-4 h-4 text-muted-foreground" />
+                            }
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{session.taskName}</p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {session.durationMinutes} min
+                              </span>
+                              <span className={`text-xs font-medium ${session.completed ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+                                {session.completed ? 'Completed' : 'Partial'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-xs text-muted-foreground">{dateStr}</p>
+                            <p className="text-xs text-muted-foreground">{timeStr}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           )}
 
