@@ -1,0 +1,57 @@
+Deep Focus — Full Spec
+
+Opening deep focus
+Clicking the brain icon on any task row opens the deep focus modal. Clicking outside the modal closes it instantly.
+
+Deep focus modal
+A centred modal with a brain icon and "Deep Focus Mode" as the title. Below the title in smaller muted text: "Focusing on: [task name]". An X button in the top right also closes the modal.
+
+Timer
+A large circular timer in the centre of the modal showing the selected session duration in MM:SS format. Below the timer a label shows the session type e.g. "Medium Session".
+Below the timer are session duration options displayed as pill buttons from left to right:
+20 min
+30 min
+40 min
+60 min
+Custom
+The selected duration pill is highlighted dark. Clicking any preset pill deselects the custom time and resets it to 0.
+Custom timer
+Clicking the Custom button opens a small popup with a number input field where the user types any number of minutes e.g. 92. A Save button applies the custom duration. The timer updates to the custom time and the Custom button shows the entered time e.g. "92 min" to indicate it is active. Clicking any preset pill resets the custom time to 0 and the Custom button returns to its default label. The user can click Custom again at any time to edit the input. When the session starts with a custom duration the countdown runs for exactly that custom duration.
+Below the pills is a "Set custom duration" link that opens the same custom duration popup.
+
+Subtasks
+Below the timer section is a Subtasks section. On the left is the "Subtasks" label. On the right is a completed count e.g. "1 / 2 completed". If the total subtask duration does not match the task estimated duration a warning shows in orange on the top right: "Sub-task time does not match task duration."
+Each subtask is displayed as a row containing:
+A circle toggle on the left — clicking it marks the subtask complete, fills the circle green, and crosses out the subtask name
+Subtask name
+A duration field on the right showing the minutes e.g. "10 min"
+New subtasks are added using the "Add sub-task" text input at the bottom with a duration field next to it and an Add button on the right.
+
+Sounds
+A Sound On/Off toggle button below the Start Session button. When sound is on a sound picker opens showing options: lofi, rain, white noise, café ambience, nature. The selected sound plays during the session.
+
+Start Session button
+A full width dark button below the subtasks section. Clicking it starts the countdown timer.
+
+During a session
+When the session starts:
+The rest of the app dims behind the modal so the user stays focused
+The timer counts down from the selected duration in MM:SS format
+A pause button appears to pause the session
+The sound plays if enabled
+The subtasks remain visible so the user can tick them off during the session
+When the timer reaches zero a sound plays and a notification appears saying the session is complete. The user is then asked if they completed the task or want to start another session.
+
+Today's Progress
+At the bottom of the modal is a Today's Progress section showing two stats side by side:
+Sessions — number of deep focus sessions completed today
+Minutes — total minutes of deep focus logged today
+
+Session history (settings)
+In the settings sidebar there is a History tab. At the top of the history page are two tabs: Energy Tracker and Deep Focus.
+The Deep Focus tab shows a list of all past deep focus sessions as cards. Each card shows:
+Task name that was worked on
+Session duration
+Whether the session was completed or not
+Date of the session
+The list is in reverse chronological order — most recent at the top. There is no delete option. It is a read only history log.

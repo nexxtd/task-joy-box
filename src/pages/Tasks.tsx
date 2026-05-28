@@ -834,17 +834,18 @@ const Tasks: React.FC = () => {
                                 </>
                               )}
 
-                              <span className="text-sm font-medium text-left text-foreground truncate flex-1 min-w-0">
-                                {task.title}
-                              </span>
+                              {/* Title + inline meta */}
+                              <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                                <span className="text-sm font-medium text-left text-foreground truncate">
+                                  {task.title}
+                                </span>
 
-                              <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusCfg.className}`}>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}>
                                   {statusCfg.label}
                                 </span>
 
                                 {task.dueDate && (
-                                  <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${dueBadgeClass(dueWarning, true)}`}>
+                                  <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}>
                                     {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
                                       <Clock className="w-2.5 h-2.5 flex-shrink-0" />
                                     )}
@@ -853,23 +854,26 @@ const Tasks: React.FC = () => {
                                 )}
 
                                 {taskDurFmt && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                                     {taskDurFmt}
                                   </span>
                                 )}
 
                                 {checklistTotal > 0 && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                                     {checklistDone}/{checklistTotal} items
                                   </span>
                                 )}
 
                                 {subtaskCount > 0 && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                                     {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
                                   </span>
                                 )}
+                              </div>
 
+                              {/* Right side: group badge + actions */}
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
                                 {column && (
                                   <span
                                     className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white"
