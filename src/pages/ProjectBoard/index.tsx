@@ -590,7 +590,7 @@ const ProjectBoard = () => {
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => {
-                        const updatedTask = { ...selectedTask, priority: 'none' };
+                        const updatedTask = { ...selectedTask, priority: 'none' as const };
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask.id, { priority: 'none' });
                       }}
@@ -602,9 +602,9 @@ const ProjectBoard = () => {
                       <button
                         key={key}
                         onClick={() => {
-                          const updatedTask = { ...selectedTask, priority: key as any };
+                          const updatedTask = { ...selectedTask, priority: key };
                           setSelectedTask(updatedTask);
-                          updateTask(updatedTask.id, { priority: key as any });
+                          updateTask(updatedTask.id, { priority: key });
                         }}
                         className={`text-xs px-3 py-1.5 rounded-md border transition-all ${selectedTask.priority === key ? `${cfg.className} text-white border-transparent` : 'border-gray-300 text-gray-500 hover:text-gray-900 hover:border-gray-400'}`}
                       >
@@ -845,13 +845,13 @@ const AlignLeftIcon = ({ className }: { className?: string }) => (
 
 const SparklesIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
   </svg>
 );
 
 const LockIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 11-18 0v12a4 4 0 0118 0z" />
   </svg>
 );
 
