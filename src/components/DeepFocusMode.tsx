@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Play, Pause, Brain, Plus, AlertTriangle, Volume2, VolumeX, CheckCircle2 } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, AlertTriangle, Volume2, VolumeX, CheckCircle2, LifeBuoy } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 
@@ -58,10 +58,12 @@ function createSoundEngine(ctx: AudioContext, type: SoundType): () => void {
   };
 
   if (type === 'whitenoise') {
+    // Proper flat continuous broadband noise tone with no variation or melody
     const { src, gain } = makeNoise(0.12);
     gain.connect(ctx.destination);
     src.start();
   } else if (type === 'rain') {
+    // Continuous steady actual rainfall sound
     const { src, gain } = makeNoise(0.25);
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -70,6 +72,8 @@ function createSoundEngine(ctx: AudioContext, type: SoundType): () => void {
     filter.connect(ctx.destination);
     src.start();
     nodes.push(filter);
+    
+    // Add subtle variation to mimic natural rain
     const lfo = ctx.createOscillator();
     lfo.frequency.value = 0.05;
     const lfoGain = ctx.createGain();
@@ -107,6 +111,7 @@ function createSoundEngine(ctx: AudioContext, type: SoundType): () => void {
     lfo.start();
     nodes.push(lfo, lfoGain);
   } else if (type === 'cafe') {
+    // Background chatter, light clinking of cups, soft indistinct conversation, faint background music
     const { src, gain } = makeNoise(0.15);
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
@@ -116,9 +121,27 @@ function createSoundEngine(ctx: AudioContext, type: SoundType): () => void {
     bp.connect(ctx.destination);
     src.start();
     nodes.push(bp);
+    
+    // Add some higher frequency elements for café ambience
     const { src: src2, gain: gain2 } = makeNoise(0.04);
-    gain2.connect(ctx.destination);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2000;
+    gain2.connect(hp);
+    hp.connect(ctx.destination);
     src2.start();
+    nodes.push(hp);
+    
+    // Add low frequency rumble for background
+    const lfOsc = ctx.createOscillator();
+    lfOsc.type = 'sine';
+    lfOsc.frequency.value = 80;
+    const lfGain = ctx.createGain();
+    lfGain.gain.value = 0.03;
+    lfOsc.connect(lfGain);
+    lfGain.connect(ctx.destination);
+    lfOsc.start();
+    nodes.push(lfOsc, lfGain);
   } else if (type === 'nature') {
     const { src, gain } = makeNoise(0.18);
     const lp = ctx.createBiquadFilter();
@@ -397,27 +420,40 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     document.dispatchEvent(new CustomEvent('closeDeepFocus'));
   };
 
+  // Navigate to the Resources page in the Support tab
+  const handleHelpClick = () => {
+    // Since the Resources page doesn't exist yet, we'll navigate to the support page
+    // In the future, this should navigate to /support/resources when it's created
+    window.location.hash = '#/support';
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-500 ${
-        isRunning ? 'bg-black/92 backdrop-blur-xl' : 'bg-black/80 backdrop-blur-lg'
+        isRunning ? 'bg-black backdrop-blur-xl' : 'bg-white backdrop-blur-lg'
       }`}
       onClick={(e) => { if (e.target === e.currentTarget && !isRunning) close(); }}
     >
       {showCompletionDialog && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center">
+          <div className={`border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center ${
+            isRunning ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'
+          }`}>
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-8 h-8 text-primary" />
+              <CheckCircle2 className={`w-8 h-8 ${isRunning ? 'text-primary' : 'text-primary'}`} />
             </div>
-            <h3 className="text-lg font-bold text-foreground mb-2">Session Complete!</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              Great work! Did you complete <span className="font-medium text-foreground">{selectedTask?.title || 'the task'}</span>?
+            <h3 className={`text-lg font-bold ${isRunning ? 'text-white' : 'text-foreground'}`}>Session Complete!</h3>
+            <p className={`text-sm ${isRunning ? 'text-gray-300' : 'text-muted-foreground'} mb-6`}>
+              Great work! Did you complete <span className={`font-medium ${isRunning ? 'text-white' : 'text-foreground'}`}>{selectedTask?.title || 'the task'}</span>?
             </p>
             <div className="flex gap-3">
               <button
                 onClick={handleAnotherSession}
-                className="flex-1 py-2.5 px-4 text-sm font-medium border border-border rounded-xl text-muted-foreground hover:bg-muted transition-all"
+                className={`flex-1 py-2.5 px-4 text-sm font-medium border rounded-xl ${
+                  isRunning 
+                    ? 'text-gray-300 border-gray-600 hover:bg-gray-800' 
+                    : 'text-muted-foreground border-border hover:bg-muted'
+                } transition-all`}
               >
                 Start Another
               </button>
@@ -433,47 +469,82 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       <div
-        className="bg-card w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl border border-border"
+        className={`w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl ${
+          isRunning ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200'
+        } border relative`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        {/* Help button in bottom left corner */}
+        <button
+          onClick={handleHelpClick}
+          className={`absolute bottom-4 left-4 p-2 rounded-full transition-colors z-10 ${
+            isRunning 
+              ? 'text-gray-300 hover:text-white hover:bg-gray-700' 
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+          }`}
+          aria-label="Help"
+        >
+          <LifeBuoy className="w-5 h-5" />
+        </button>
+        
+        <div className={`flex items-center justify-between px-6 py-4 ${
+          isRunning ? 'border-b border-gray-700' : 'border-b border-border'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
-              <Brain className="w-4.5 h-4.5 text-primary" />
+            <div className={`w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center ${
+              isRunning ? 'bg-primary/10' : ''
+            }`}>
+              <Brain className={`w-4.5 h-4.5 ${isRunning ? 'text-primary' : 'text-primary'}`} />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-foreground">Deep Focus Mode</h2>
-              <p className="text-xs text-muted-foreground">
+              <h2 className={`text-sm font-bold ${isRunning ? 'text-white' : 'text-foreground'}`}>Deep Focus Mode</h2>
+              <p className={`text-xs ${isRunning ? 'text-gray-400' : 'text-muted-foreground'}`}>
                 {selectedTask ? `Focusing on: ${selectedTask.title}` : 'Select a task to focus on'}
               </p>
             </div>
           </div>
           <button
             onClick={close}
-            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all"
+            className={`p-2 ${
+              isRunning ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            } rounded-full transition-all`}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 pb-16"> {/* Added pb-16 to account for help button */}
           {/* Timer */}
           <div className="flex flex-col items-center">
             <div className="relative w-44 h-44 mb-4">
               <svg className="w-full h-full -rotate-90">
-                <circle cx="88" cy="88" r={r} stroke="currentColor" strokeWidth="7" fill="none" className="text-muted/20" />
+                {/* Background circle - always visible */}
+                <circle 
+                  cx="88" 
+                  cy="88" 
+                  r={r} 
+                  stroke={isRunning ? "currentColor" : "currentColor"} 
+                  strokeWidth="7" 
+                  fill="none" 
+                  className={isRunning ? "text-gray-700" : "text-muted/20"} 
+                />
+                {/* Progress circle - fills proportionally */}
                 <circle
-                  cx="88" cy="88" r={r}
-                  stroke="currentColor" strokeWidth="7" fill="none"
+                  cx="88" 
+                  cy="88" 
+                  r={r}
+                  stroke={isRunning ? "currentColor" : "currentColor"} 
+                  strokeWidth="7" 
+                  fill="none"
                   strokeDasharray={circ}
                   strokeDashoffset={circ * (1 - progress / 100)}
                   strokeLinecap="round"
-                  className="text-primary transition-all duration-1000 ease-linear"
+                  className={`${isRunning ? 'text-white' : 'text-primary'} transition-all duration-1000 ease-linear`}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-3xl font-bold text-foreground tabular-nums">{formatTime(timeLeft)}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{SESSION_LABELS[activePill]}</div>
+                <div className={`text-3xl font-bold tabular-nums ${isRunning ? 'text-white' : 'text-foreground'}`}>{formatTime(timeLeft)}</div>
+                <div className={`text-xs mt-0.5 ${isRunning ? 'text-gray-400' : 'text-muted-foreground'}`}>{SESSION_LABELS[activePill]}</div>
               </div>
             </div>
 
@@ -486,8 +557,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   disabled={isRunning}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-50 ${
                     activePill === p
-                      ? 'bg-foreground text-background'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      ? isRunning 
+                        ? 'bg-white text-gray-900' 
+                        : 'bg-foreground text-background'
+                      : isRunning
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
                   {p} min
@@ -500,8 +575,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   disabled={isRunning}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-50 ${
                     activePill === 'custom'
-                      ? 'bg-foreground text-background'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      ? isRunning 
+                        ? 'bg-white text-gray-900' 
+                        : 'bg-foreground text-background'
+                      : isRunning
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
                   {activePill === 'custom' && customMinutes > 0 ? `${customMinutes} min` : 'Custom'}
@@ -510,9 +589,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 {showCustomPopup && (
                   <div
                     ref={customPopupRef}
-                    className="absolute top-full mt-2 right-0 bg-card border border-border rounded-xl shadow-xl p-4 z-20 w-48"
+                    className={`absolute top-full mt-2 right-0 ${
+                      isRunning ? 'bg-gray-800 border-gray-700' : 'bg-card border-border'
+                    } rounded-xl shadow-xl p-4 z-20 w-48`}
                   >
-                    <p className="text-xs font-semibold text-foreground mb-2">Custom duration</p>
+                    <p className={`text-xs font-semibold mb-2 ${isRunning ? 'text-white' : 'text-foreground'}`}>Custom duration</p>
                     <div className="flex items-center gap-2 mb-3">
                       <input
                         type="number"
@@ -522,10 +603,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         onChange={e => setCustomInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && saveCustomDuration()}
                         placeholder="e.g. 92"
-                        className="w-full px-2.5 py-1.5 bg-muted border border-border rounded-lg text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                        className={`w-full px-2.5 py-1.5 ${
+                          isRunning ? 'bg-gray-700 border-gray-600 text-white' : 'bg-muted border-border text-foreground'
+                        } rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary/30`}
                         autoFocus
                       />
-                      <span className="text-xs text-muted-foreground flex-shrink-0">min</span>
+                      <span className={`text-xs ${isRunning ? 'text-gray-400' : 'text-muted-foreground'} flex-shrink-0`}>min</span>
                     </div>
                     <button
                       onClick={saveCustomDuration}
@@ -538,19 +621,14 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowCustomPopup(true)}
-              className="text-xs text-primary hover:underline"
-            >
-              Set custom duration
-            </button>
+            {/* Removed: Set custom duration button */}
           </div>
 
           {/* Subtasks */}
           {selectedTask && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Subtasks</span>
+                <span className={`text-xs font-semibold uppercase tracking-wide ${isRunning ? 'text-white' : 'text-foreground'}`}>Subtasks</span>
                 <div className="flex items-center gap-2">
                   {durationMismatch && (
                     <span className="flex items-center gap-1 text-[10px] text-orange-500 font-medium">
@@ -558,7 +636,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       Sub-task time does not match task duration
                     </span>
                   )}
-                  <span className="text-xs text-muted-foreground">
+                  <span className={`text-xs ${isRunning ? 'text-gray-400' : 'text-muted-foreground'}`}>
                     {selectedTask.subtasks?.filter(s => s.completed).length || 0} / {selectedTask.subtasks?.length || 0} completed
                   </span>
                 </div>
@@ -566,13 +644,22 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
               <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
                 {selectedTask.subtasks?.map(sub => (
-                  <div key={sub.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg hover:bg-muted/30 transition-all">
+                  <div 
+                    key={sub.id} 
+                    className={`flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all ${
+                      isRunning ? 'hover:bg-gray-800/50' : 'hover:bg-muted/30'
+                    }`}
+                  >
                     <button
                       onClick={() => toggleSubtask(sub.id)}
                       className={`w-4.5 h-4.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                         sub.completed
-                          ? 'bg-green-500 border-green-500'
-                          : 'border-muted-foreground/40 hover:border-green-400'
+                          ? isRunning 
+                            ? 'bg-green-500 border-green-500' 
+                            : 'bg-green-500 border-green-500'
+                          : isRunning
+                            ? 'border-gray-500 hover:border-green-400'
+                            : 'border-muted-foreground/40 hover:border-green-400'
                       }`}
                       style={{ width: 18, height: 18 }}
                     >
@@ -582,16 +669,26 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         </svg>
                       )}
                     </button>
-                    <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                    <span className={`flex-1 text-sm ${
+                      sub.completed 
+                        ? isRunning 
+                          ? 'line-through text-gray-500' 
+                          : 'line-through text-muted-foreground'
+                        : isRunning
+                          ? 'text-gray-300'
+                          : 'text-foreground'
+                    }`}>
                       {sub.text}
                     </span>
                     {(sub.durationMinutes ?? 0) > 0 && (
-                      <span className="text-xs text-muted-foreground flex-shrink-0">{sub.durationMinutes} min</span>
+                      <span className={`text-xs flex-shrink-0 ${
+                        isRunning ? 'text-gray-400' : 'text-muted-foreground'
+                      }`}>{sub.durationMinutes} min</span>
                     )}
                   </div>
                 ))}
                 {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
-                  <p className="text-xs text-muted-foreground text-center py-2">No subtasks yet</p>
+                  <p className={`text-xs text-center py-2 ${isRunning ? 'text-gray-500' : 'text-muted-foreground'}`}>No subtasks yet</p>
                 )}
               </div>
 
@@ -602,14 +699,22 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   onChange={e => setNewSubtaskText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addSubtask()}
                   placeholder="Add sub-task..."
-                  className="flex-1 px-3 py-1.5 bg-muted/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                  className={`flex-1 px-3 py-1.5 ${
+                    isRunning ? 'bg-gray-800/50 border-gray-700 text-white' : 'bg-muted/50 border-border text-foreground'
+                  } rounded-lg text-sm placeholder:${
+                    isRunning ? 'text-gray-500' : 'text-muted-foreground'
+                  } outline-none focus:ring-2 focus:ring-primary/30`}
                 />
                 <input
                   type="number"
                   value={newSubtaskDuration}
                   onChange={e => setNewSubtaskDuration(e.target.value)}
                   placeholder="min"
-                  className="w-16 px-2 py-1.5 bg-muted/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30 text-center"
+                  className={`w-16 px-2 py-1.5 ${
+                    isRunning ? 'bg-gray-800/50 border-gray-700 text-white' : 'bg-muted/50 border-border text-foreground'
+                  } rounded-lg text-sm placeholder:${
+                    isRunning ? 'text-gray-500' : 'text-muted-foreground'
+                  } outline-none focus:ring-2 focus:ring-primary/30 text-center`}
                 />
                 <button
                   onClick={addSubtask}
@@ -635,7 +740,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             ) : (
               <button
                 onClick={handlePause}
-                className="w-full py-3 bg-muted text-muted-foreground rounded-xl font-semibold text-sm hover:bg-muted/80 flex items-center justify-center gap-2 transition-all"
+                className={`w-full py-3 ${
+                  isRunning ? 'bg-gray-700 text-gray-300' : 'bg-muted text-muted-foreground'
+                } rounded-xl font-semibold text-sm ${
+                  isRunning ? 'hover:bg-gray-600' : 'hover:bg-muted/80'
+                } flex items-center justify-center gap-2 transition-all`}
               >
                 <Pause className="w-4 h-4" />
                 Pause
@@ -649,8 +758,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               onClick={toggleSound}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                 soundEnabled
-                  ? 'bg-primary/10 border-primary/30 text-primary'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+                  ? isRunning
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'bg-primary/10 border-primary/30 text-primary'
+                  : isRunning
+                    ? 'bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700'
+                    : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
               }`}
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -665,8 +778,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     onClick={() => selectSound(opt.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                       selectedSound === opt.id
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+                        ? isRunning
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-primary text-primary-foreground border-primary'
+                        : isRunning
+                          ? 'bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700'
+                          : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
                     }`}
                   >
                     {opt.label}
@@ -677,16 +794,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           </div>
 
           {/* Today's Progress */}
-          <div className="bg-muted/30 rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-foreground mb-3">Today's Progress</h3>
+          <div className={`rounded-xl p-4 ${
+            isRunning ? 'bg-gray-800/30' : 'bg-muted/30'
+          }`}>
+            <h3 className={`text-xs font-semibold mb-3 ${isRunning ? 'text-white' : 'text-foreground'}`}>Today's Progress</h3>
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary">{todayStats.sessions}</div>
-                <div className="text-xs text-muted-foreground">Sessions</div>
+                <div className={`text-2xl font-bold ${isRunning ? 'text-primary' : 'text-primary'}`}>{todayStats.sessions}</div>
+                <div className={`text-xs ${isRunning ? 'text-gray-400' : 'text-muted-foreground'}`}>Sessions</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">{todayStats.minutes}</div>
-                <div className="text-xs text-muted-foreground">Minutes</div>
+                <div className={`text-2xl font-bold ${isRunning ? 'text-primary' : 'text-primary'}`}>{todayStats.minutes}</div>
+                <div className={`text-xs ${isRunning ? 'text-gray-400' : 'text-muted-foreground'}`}>Minutes</div>
               </div>
             </div>
           </div>
