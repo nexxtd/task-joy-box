@@ -897,7 +897,7 @@ const Tasks: React.FC = () => {
                       onClick={() => {
                         const current = board.tasks.find(task => task.id === openTaskId) || filteredTasksByBase[0];
                         if (current) createTaskTag(current.id);
-                        if (current) createTaskTag(current);
+                        
                       }}
                       disabled={!newTagName.trim()}
                       className="w-full rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
