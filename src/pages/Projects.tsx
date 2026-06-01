@@ -1,92 +1,262 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
+import {
+  CheckCircle2,
+  CircleDotDashed,
+  Clock3,
+  Copy,
+  FolderKanban,
+  GripVertical,
+  LayoutDashboard,
+  List,
+  Lock,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings2,
+  Share2,
+  SquarePen,
+  Sparkles,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from '@/hooks/use-toast';
+import BoardColumn from '@/components/BoardColumn';
+import ListView from '@/components/ListView';
+import TaskDetailModal from '@/components/TaskDetailModal';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import BoardColumn from '@/components/BoardColumn';
-import TaskDetailModal from '@/components/TaskDetailModal';
-import ListView from '@/components/ListView';
-import CalendarView from '@/components/CalendarView';
-import Whiteboard from '@/components/Whiteboard'; // Import the new Whiteboard component
-import { Task, ViewType } from '@/types/board';
-import { Plus, LayoutDashboard, List, CalendarDays, ZoomIn, ZoomOut, Maximize2, Lock, LayoutTemplate, ChevronDown, PlusCircle, Edit3, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
-import { getWhiteboards, createWhiteboard, updateWhiteboard } from '@/services/whiteboardService';
+import { Task } from '@/types/board';
 
-const MIN_ZOOM = 0.35;
-const MAX_ZOOM = 1.5;
-const ZOOM_STEP = 0.1;
+type ProjectTab = 'home' | 'board' | 'list' | 'chat';
+
+interface ProjectMember {
+  id: number;
+  name: string;
+  email: string;
+  role: 'owner' | 'member';
+}
+
+interface ProjectMeta {
+  id: number;
+  name: string;
+  color: string;
+  description: string;
+  archived: boolean;
+  completed: boolean;
+  inviteCode: string;
+  ownerId: number;
+  members: ProjectMember[];
+  memberCount: number;
+}
+
+const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899'];
+const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
 
 const Projects: React.FC = () => {
-  const { board, moveTask, reorderColumns, addColumn } = useBoardContext();
+  const { board, moveTask, reorderColumns } = useBoardContext();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [addingColumn, setAddingColumn] = useState(false);
-  const [newColTitle, setNewColTitle] = useState('');
-  const [currentView, setCurrentView] = useState<ViewType>('board'); // Updated to include whiteboard
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [whiteboards, setWhiteboards] = useState<any[]>([]);
-  const [showWhiteboardDropdown, setShowWhiteboardDropdown] = useState(false);
-  const [editingWhiteboardId, setEditingWhiteboardId] = useState<string | null>(null);
-  const [editingWhiteboardName, setEditingWhiteboardName] = useState('');
-  const [selectedWhiteboardId, setSelectedWhiteboardId] = useState<number | null>(null);
-  const [showWhiteboardComingSoon, setShowWhiteboardComingSoon] = useState(false);
+  const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
+  const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [addingProject, setAddingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState(STORAGE_COLORS[0]);
+  const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [limitHint, setLimitHint] = useState(false);
+  const [joinState, setJoinState] = useState<'idle' | 'joining' | 'failed'>('idle');
 
-  const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
-  const FREE_COL_LIMIT = 2;
+  const planTier = (user?.subscriptionTier === 'pro'
+    ? 'pro'
+    : user?.subscriptionTier === 'premium'
+      ? 'premium'
+      : 'free') as 'free' | 'premium' | 'pro';
+  const projectLimit = PLAN_LIMITS[planTier];
+  const activeCount = projects.filter(project => !project.archived).length;
+  const canAddProject = activeCount < projectLimit;
 
-  // ── Zoom & Pan ─────────────────────────────────────────────
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const isPanning = useRef(false);
-  const panStart = useRef({ x: 0, y: 0 });
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const selectedProject = useMemo(
+    () => projects.find(project => project.id === selectedProjectId) || projects[0] || null,
+    [projects, selectedProjectId],
+  );
 
-  const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
-  const zoomIn  = () => setZoom(z => clampZoom(+(z + ZOOM_STEP).toFixed(2)));
-  const zoomOut = () => setZoom(z => clampZoom(+(z - ZOOM_STEP).toFixed(2)));
-  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
-
-  // Ctrl/Cmd + wheel to zoom
-  const handleWheel = useCallback((e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      setZoom(z => clampZoom(+(z - e.deltaY * 0.001).toFixed(3)));
-    }
-  }, []);
+  const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
+  const totalTasks = board.tasks.length;
+  const completedTasks = board.tasks.filter(task => task.completed || task.columnId.toLowerCase().includes('completed')).length;
+  const overdueTasks = board.tasks.filter(task => task.dueDate && new Date(task.dueDate) < new Date() && !task.completed).length;
+  const progressPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const recentActivity = useMemo(
+    () => [...board.tasks]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+      .slice(0, 10)
+      .map(task => ({
+        id: task.id,
+        text: `${task.title}${task.completed ? ' was completed' : ' was updated'}`,
+        time: task.updatedAt || task.createdAt,
+      })),
+    [board.tasks],
+  );
 
   useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+    const load = async () => {
+      try {
+        const response = await fetch('/api/projects', { credentials: 'include' });
+        if (!response.ok) throw new Error(String(response.status));
+        const data = await response.json();
+        const loaded: ProjectMeta[] = data.projects || [];
+        setProjects(loaded);
+        if (!selectedProjectId && loaded[0]) setSelectedProjectId(loaded[0].id);
+        if (loaded.length === 0) setSelectedProjectId(null);
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+        toast({ title: 'Projects unavailable', description: 'Could not load your projects.' });
+      }
+    };
+    load();
+  }, [selectedProjectId]);
 
-  // Left-click drag to pan (on canvas background only)
-  const startPan = (e: React.MouseEvent) => {
-    // Only pan when clicking directly on the canvas background (not on a card)
-    if ((e.target as HTMLElement).closest('[data-no-pan]')) return;
-    isPanning.current = true;
-    panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
-    e.preventDefault();
+  useEffect(() => {
+    const joinCode = searchParams.get('join');
+    if (!joinCode || joinState !== 'idle') return;
+
+    const join = async () => {
+      setJoinState('joining');
+      try {
+        const response = await fetch(`/api/projects/join/${joinCode}`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Join failed');
+        const nextProject: ProjectMeta | undefined = data.project;
+        if (nextProject) {
+          setProjects(prev => {
+            const without = prev.filter(project => project.id !== nextProject.id);
+            return [...without, nextProject];
+          });
+          setSelectedProjectId(nextProject.id);
+        }
+        toast({ title: 'Joined project', description: 'You have been added to the project.' });
+        searchParams.delete('join');
+        setSearchParams(searchParams, { replace: true });
+      } catch (error: any) {
+        setJoinState('failed');
+        toast({ title: 'Could not join project', description: error?.message || 'Invite link is invalid or you reached your limit.' });
+      }
+    };
+
+    join();
+  }, [joinState, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!selectedProjectId && projects[0]) setSelectedProjectId(projects[0].id);
+  }, [projects, selectedProjectId]);
+
+  const activeProjects = projects.filter(project => !project.archived);
+  const completedProjects = projects.filter(project => project.completed && !project.archived);
+  const archivedProjects = projects.filter(project => project.archived);
+
+  const persistProject = async (projectId: number, updates: Partial<ProjectMeta>) => {
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(updates),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to update project');
+    if (data.project) {
+      setProjects(prev => prev.map(project => (project.id === data.project.id ? data.project : project)));
+      return data.project as ProjectMeta;
+    }
+    return null;
   };
 
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!isPanning.current) return;
-    setPan({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
+  const handleAddProject = async () => {
+    if (!newProjectName.trim()) return;
+    if (!canAddProject) {
+      setLimitHint(true);
+      return;
+    }
+
+    const response = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: newProjectName.trim(),
+        description: newProjectDescription.trim(),
+        color: newProjectColor,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      toast({ title: 'Could not create project', description: data.message || data.error || 'Try again.' });
+      if (response.status === 402) setLimitHint(true);
+      return;
+    }
+
+    if (data.project) {
+      setProjects(prev => [...prev, data.project]);
+      setSelectedProjectId(data.project.id);
+    }
+    setNewProjectName('');
+    setNewProjectDescription('');
+    setNewProjectColor(STORAGE_COLORS[0]);
+    setAddingProject(false);
   };
 
-  const stopPan = () => {
-    if (isPanning.current) {
-      isPanning.current = false;
-      if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+  const handleInvite = async () => {
+    if (!selectedProject || !inviteEmail.trim()) return;
+    setInviteBusy(true);
+    try {
+      const response = await fetch(`/api/projects/${selectedProject.id}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || 'Invite failed');
+      if (data.project) {
+        setProjects(prev => prev.map(project => (project.id === data.project.id ? data.project : project)));
+      }
+      toast({ title: 'Invite sent', description: data.message || 'The member has been added.' });
+      setInviteEmail('');
+      setShowInviteModal(false);
+    } catch (error: any) {
+      toast({ title: 'Invite failed', description: error?.message || 'Could not invite member.' });
+    } finally {
+      setInviteBusy(false);
     }
   };
 
-  // ── Board logic ─────────────────────────────────────────────
-  const sortedColumns = [...board.columns].sort((a, b) => a.order - b.order);
+  const handleDeleteProject = async (projectId: number) => {
+    const response = await fetch(`/api/projects/${projectId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (response.ok) {
+      setProjects(prev => prev.filter(project => project.id !== projectId));
+      if (selectedProjectId === projectId) {
+        const remaining = projects.filter(project => project.id !== projectId);
+        setSelectedProjectId(remaining[0]?.id || null);
+      }
+    }
+  };
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -97,398 +267,493 @@ const Projects: React.FC = () => {
     moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
   };
 
-  // Fix for drag offset when zoomed - adjusts the drag position
-  const handleDragStart = () => {
-    // Add a class to body during drag for global styling
-    document.body.classList.add('is-dragging');
+  const handleBoardDragStart = () => document.body.classList.add('is-dragging');
+  const handleBoardDragUpdate = () => undefined;
+
+  const updateSelectedProject = async (updates: Partial<ProjectMeta>) => {
+    if (!selectedProject) return;
+    const next = await persistProject(selectedProject.id, updates);
+    if (next) setSelectedProjectId(next.id);
   };
 
-  const handleDragUpdate = () => {
-    // Drag is in progress
-  };
-
-  const handleAddColumn = () => {
-    if (!newColTitle.trim()) return;
-    if (isFree && board.columns.length >= FREE_COL_LIMIT) {
-      setShowUpgradePrompt(true);
-      setAddingColumn(false);
-      setNewColTitle('');
-      return;
-    }
-    addColumn(newColTitle.trim());
-    setNewColTitle('');
-    setAddingColumn(false);
-  };
-
-  const handleAddColumnClick = () => {
-    if (isFree && board.columns.length >= FREE_COL_LIMIT) {
-      setShowUpgradePrompt(true);
-      return;
-    }
-    setAddingColumn(true);
-  };
-
-  const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
-
-  const viewTabs = [
-    { id: 'board' as ViewType, label: 'Board', icon: LayoutDashboard },
-    { id: 'list' as ViewType,  label: 'List',  icon: List },
-    { id: 'whiteboard' as ViewType, label: 'Whiteboard', icon: LayoutTemplate }, // Removed calendar
-  ];
-
-  const zoomPct = Math.round(zoom * 100);
-
-  // Load whiteboards from the API
-  useEffect(() => {
-    const loadWhiteboards = async () => {
-      try {
-        const fetchedWhiteboards = await getWhiteboards();
-        setWhiteboards(fetchedWhiteboards);
-      } catch (error) {
-        console.error('Failed to load whiteboards:', error);
-      }
-    };
-    
-    loadWhiteboards();
-  }, []);
-
-  const createNewWhiteboard = async () => {
-    try {
-      const newWhiteboard = await createWhiteboard({
-        name: 'Untitled Whiteboard',
-        description: 'A new whiteboard',
-        items: [],
-        connections: []
-      });
-      setWhiteboards([...whiteboards, newWhiteboard]);
-      // Automatically select and switch to the newly created whiteboard
-      setSelectedWhiteboardId(newWhiteboard.id);
-      setCurrentView('whiteboard');
-      setShowWhiteboardDropdown(false);
-    } catch (error) {
-      console.error('Failed to create whiteboard:', error);
-      // Optional: Add a toast notification here
-      alert('Failed to create whiteboard. Please try again.');
-    }
-  };
-
-  const renameWhiteboard = async (id: string, newName: string) => {
-    try {
-      const updatedWhiteboard = await updateWhiteboard(parseInt(id), {
-        name: newName,
-        description: 'Updated whiteboard',
-        items: [],
-        connections: []
-      });
-      
-      setWhiteboards(whiteboards.map(wb => 
-        wb.id === parseInt(id) ? updatedWhiteboard : wb
-      ));
-      setEditingWhiteboardId(null);
-    } catch (error) {
-      console.error('Failed to rename whiteboard:', error);
-    }
-  };
-
-  return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-      {/* ── Header ── */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-border bg-background/80 backdrop-blur-sm z-10 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-base font-bold text-foreground">{board.title}</h1>
-
-          {/* View tabs */}
-          <div className="flex items-center bg-muted rounded-lg p-0.5">
-            {viewTabs.map(tab => (
-              tab.id !== 'whiteboard' ? (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setCurrentView(tab.id);
-                    // Preserve whiteboard ID when switching away from whiteboard view
-                    if (currentView === 'whiteboard' && selectedWhiteboardId) {
-                      setSelectedWhiteboardId(selectedWhiteboardId);
-                    }
-                  }}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all duration-200',
-                    currentView === tab.id
-                      ? 'bg-card text-foreground shadow-sm font-medium'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <tab.icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              ) : (
-                <div key={tab.id} className="relative">
-                  <button
-                    onClick={() => setShowWhiteboardComingSoon(true)}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all duration-200',
-                      'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    <tab.icon className="w-3.5 h-3.5" />
-                    {tab.label}
-                  </button>
-
-                  {showWhiteboardComingSoon && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWhiteboardComingSoon(false)}>
-                      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-                      <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold text-foreground">Whiteboard Coming Soon</h3>
-                          <button onClick={() => setShowWhiteboardComingSoon(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                        <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">
-                            The whiteboard feature is currently under development. Soon you'll be able to:
-                          </p>
-                          <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
-                            <li>Create visual mind maps and diagrams</li>
-                            <li>Collaborate with team members in real-time</li>
-                            <li>Link whiteboards to your tasks and projects</li>
-                            <li>Use drawing tools and sticky notes</li>
-                          </ul>
-                          <p className="text-sm text-muted-foreground">
-                            Stay tuned for updates!
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            ))}
-          </div>
-
-          {/* Free tier badge */}
-          {isFree && (
-            <span className="text-[10px] font-bold px-2 py-1 bg-muted border border-border rounded-full text-muted-foreground uppercase tracking-wide">
-              Free: {board.columns.length}/{FREE_COL_LIMIT} projects
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground hidden sm:block">
-            {board.tasks.length} tasks · {board.columns.length} columns
-          </span>
-
-          {/* Zoom controls — board view only */}
-          {currentView === 'board' && (
-            <div className="flex items-center gap-1 bg-muted/60 border border-border rounded-xl p-1">
-              <button
-                onClick={zoomOut}
-                disabled={zoom <= MIN_ZOOM}
-                title="Zoom out (Ctrl + scroll)"
-                className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
-              >
-                <ZoomOut className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-
-              <button
-                onClick={resetView}
-                title="Reset view"
-                className="px-2.5 py-1 text-[11px] font-bold tabular-nums text-foreground hover:text-primary rounded-lg hover:bg-background transition-all min-w-[44px] text-center"
-              >
-                {zoomPct}%
-              </button>
-
-              <button
-                onClick={zoomIn}
-                disabled={zoom >= MAX_ZOOM}
-                title="Zoom in (Ctrl + scroll)"
-                className="p-1.5 rounded-lg hover:bg-background disabled:opacity-30 transition-all"
-              >
-                <ZoomIn className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-
-              <div className="w-px h-4 bg-border mx-0.5" />
-
-              <button onClick={resetView} title="Reset to 100%" className="p-1.5 rounded-lg hover:bg-background transition-all">
-                <Maximize2 className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* ── Hint bar (board only) ── */}
-      {currentView === 'board' && (
-        <div className="px-6 py-1 bg-muted/20 border-b border-border flex items-center gap-4 text-[11px] text-muted-foreground flex-shrink-0">
-          <span><kbd className="font-mono bg-muted px-1 rounded text-[10px]">Ctrl</kbd> + scroll to zoom</span>
-          <span>·</span>
-          <span>Drag background to pan</span>
-          <span>·</span>
-          <span>Click <b>{zoomPct}%</b> to reset</span>
-        </div>
-      )}
-
-      {/* ── Board View ── */}
-      {currentView === 'board' && (
+  const sidebarBlock = (title: string, items: ProjectMeta[]) => (
+    <div className="space-y-2">
+      <div className="mb-2 flex items-center justify-between px-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{title}</h3>
+        <span className="text-xs text-muted-foreground">{items.length}</span>
+      </div>
+      {items.length > 0 ? items.map(project => (
         <div
-          ref={canvasRef}
-          className="flex-1 overflow-hidden relative"
-          style={{ cursor: 'grab' }}
-          onMouseDown={startPan}
-          onMouseMove={onMouseMove}
-          onMouseUp={stopPan}
-          onMouseLeave={stopPan}
+          key={project.id}
+          onClick={() => setSelectedProjectId(project.id)}
+          className={cn(
+            'group cursor-pointer rounded-2xl border px-3 py-3 transition-all',
+            selectedProject?.id === project.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/30 hover:bg-muted/40',
+          )}
         >
-          {/* Subtle dot grid */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
-              backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-              backgroundPosition: `${pan.x}px ${pan.y}px`,
-            }}
-          />
-
-          {/* Zoomable canvas */}
-          <div
-            className="absolute"
-            style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-              transformOrigin: '0 0',
-              padding: '32px',
-              willChange: 'transform',
-            }}
-          >
-            <DragDropContext
-              onDragEnd={(result) => {
-                document.body.classList.remove('is-dragging');
-                handleDragEnd(result);
+          <div className="flex items-center gap-3">
+            <GripVertical className="h-4 w-4 flex-shrink-0 text-muted-foreground opacity-60" />
+            <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: project.color }} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                {project.completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+                {project.archived && <Lock className="h-3.5 w-3.5 text-amber-500" />}
+              </div>
+              <p className="truncate text-xs text-muted-foreground">{project.description}</p>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowProjectMenuId(prev => prev === project.id ? null : project.id);
               }}
-              onDragStart={handleDragStart}
-              onDragUpdate={handleDragUpdate}
+              className="rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all group-hover:opacity-100 hover:bg-muted hover:text-foreground"
             >
-              <Droppable droppableId="board" type="column" direction="horizontal">
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="flex flex-nowrap gap-6 items-start min-w-max h-full"
-                    data-no-pan="true"
-                    onMouseDown={e => e.stopPropagation()}
-                  >
-                    {sortedColumns.map((column, index) => {
-                      const tasks = board.tasks
-                        .filter(t => t.columnId === column.id)
-                        .sort((a, b) => a.order - b.order);
-                      return (
-                        <BoardColumn
-                          key={column.id}
-                          column={column}
-                          tasks={tasks}
-                          index={index}
-                          onTaskClick={setSelectedTask}
-                        />
-                      );
-                    })}
-                    {provided.placeholder}
-
-                    {/* Add Column */}
-                    {addingColumn ? (
-                      <div className="flex-shrink-0 w-72 animate-fade-in" data-no-pan="true">
-                        <input
-                          autoFocus
-                          value={newColTitle}
-                          onChange={e => setNewColTitle(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') handleAddColumn();
-                            if (e.key === 'Escape') setAddingColumn(false);
-                          }}
-                          placeholder="Column name..."
-                          className="w-full bg-task border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                        <div className="flex gap-2 mt-2">
-                          <button onClick={handleAddColumn} className="bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors">Add</button>
-                          <button onClick={() => setAddingColumn(false)} className="text-xs text-muted-foreground px-3 py-1.5 hover:text-foreground transition-colors">Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        data-no-pan="true"
-                        onClick={handleAddColumnClick}
-                        className={cn(
-                          'flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 text-sm border-dashed rounded-lg transition-all duration-200',
-                          isFree && board.columns.length >= FREE_COL_LIMIT
-                            ? 'text-amber-600 border-amber-400/50 hover:border-amber-400 hover:bg-amber-500/5'
-                            : 'text-muted-foreground border-border hover:text-foreground hover:border-foreground/30 hover:scale-[1.01]'
-                        )}
-                      >
-                        {isFree && board.columns.length >= FREE_COL_LIMIT
-                          ? <><Lock className="w-4 h-4" /> Upgrade for more projects</>
-                          : <><Plus className="w-4 h-4" /> Add Column</>
-                        }
-                      </button>
-                    )}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
           </div>
-        </div>
-      )}
 
-      {currentView === 'list' && <div className="animate-fade-in flex-1"><ListView onTaskClick={setSelectedTask} /></div>}
-      {/* Removed calendar view */}
-      
-      {/* Added Whiteboard view */}
-      {currentView === 'whiteboard' && (
-        <div className="animate-fade-in flex-1">
-          <Whiteboard 
-            key={selectedWhiteboardId} 
-            whiteboardId={selectedWhiteboardId || undefined} 
-          />
-        </div>
-      )}
-
-      {/* Task detail modal */}
-      {currentTask && (
-        <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} />
-      )}
-
-      {/* ── Upgrade prompt modal ── */}
-      {showUpgradePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowUpgradePrompt(false)}>
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div
-            className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-fade-in text-center"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-7 h-7 text-amber-500" />
+          {showProjectMenuId === project.id && (
+            <div className="mt-3 rounded-2xl border border-border bg-card p-2 shadow-lg">
+              <MenuItem icon={<SquarePen className="h-3.5 w-3.5" />} label="Rename" onClick={() => {
+                setEditingProjectId(project.id);
+                setEditingName(project.name);
+                setShowProjectMenuId(null);
+              }} />
+              <MenuItem icon={<CircleDotDashed className="h-3.5 w-3.5" />} label="Recolour" onClick={() => {
+                const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
+                updateSelectedProject({ color: nextColor });
+                setShowProjectMenuId(null);
+              }} />
+              <MenuItem icon={<Lock className="h-3.5 w-3.5" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+                await persistProject(project.id, { archived: !project.archived });
+                setShowProjectMenuId(null);
+              }} />
+              <MenuItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+                await persistProject(project.id, { completed: !project.completed });
+                setShowProjectMenuId(null);
+              }} />
+              <MenuItem icon={<Trash2 className="h-3.5 w-3.5" />} danger label="Delete" onClick={() => {
+                handleDeleteProject(project.id);
+                setShowProjectMenuId(null);
+              }} />
             </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">Project Limit Reached</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Free accounts can have up to <strong>{FREE_COL_LIMIT} projects</strong>. Upgrade to Pro for unlimited projects.
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setShowUpgradePrompt(false); navigate('/pricing'); }}
-                className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors"
-              >
-                View Plans
-              </button>
-              <button
-                onClick={() => setShowUpgradePrompt(false)}
-                className="w-full py-2.5 text-muted-foreground text-sm hover:text-foreground transition-colors"
-              >
-                Stay on Free
-              </button>
-            </div>
-          </div>
+          )}
+        </div>
+      )) : (
+        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+          No projects in this section.
         </div>
       )}
     </div>
   );
+
+  const renderHome = () => (
+    <div className="space-y-6">
+      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+        <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="h-4 w-4 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
+                <h2 className="text-2xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h2>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-2xl">{selectedProject?.description || 'Describe what this project is about.'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </button>
+              {selectedProject?.completed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Completed</span>}
+              {selectedProject?.archived && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600"><Lock className="h-3.5 w-3.5" />Archived</span>}
+            </div>
+          </div>
+
+          <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Project Description</label>
+          <textarea
+            value={selectedProject?.description || ''}
+            onChange={e => updateSelectedProject({ description: e.target.value })}
+            readOnly={Boolean(selectedProject?.archived || selectedProject?.completed)}
+            rows={4}
+            className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75"
+            placeholder="What is this project about?"
+          />
+
+          <div className="mt-5">
+            <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Members</label>
+            <div className="flex flex-wrap gap-2">
+              {selectedProject?.members.length ? selectedProject.members.map(member => (
+                <div key={member.id} className="group flex items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background">
+                    {member.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <span className="text-foreground">{member.name}</span>
+                  <span className="text-muted-foreground">{member.role}</span>
+                </div>
+              )) : (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+                  No members yet
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">Summary Stats</h3>
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard value={totalTasks} label="Total tasks" />
+              <StatCard value={completedTasks} label="Completed" />
+              <StatCard value={overdueTasks} label="Overdue" />
+              <StatCard value={selectedProject?.memberCount || 0} label="Members" />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Progress Overview</h3>
+            <div className="mb-3 flex items-end justify-between">
+              <div>
+                <div className="text-3xl font-semibold text-foreground">{progressPct}%</div>
+                <div className="text-xs text-muted-foreground">Completed vs total items</div>
+              </div>
+              <Users className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="h-3 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-primary to-sky-500 transition-all" style={{ width: `${progressPct}%` }} />
+            </div>
+            <div className="mt-3 text-xs text-muted-foreground">
+              {completedTasks} completed, {Math.max(0, totalTasks - completedTasks)} remaining
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
+            <button onClick={() => navigate('/calendar')} className="text-xs font-medium text-primary hover:underline">
+              Add milestone
+            </button>
+          </div>
+          <EmptyState title="No milestones yet" description="Use the calendar to start planning upcoming checkpoints." />
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-foreground mb-4">Recent Activity</h3>
+          <div className="space-y-3">
+            {recentActivity.length > 0 ? recentActivity.map(activity => (
+              <div key={activity.id} className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3">
+                <Clock3 className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">{activity.text}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(activity.time).toLocaleString()}</p>
+                </div>
+              </div>
+            )) : <EmptyState title="No recent activity" description="Changes and updates will appear here." />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderBoard = () => (
+    <div className="min-w-0 flex-1 overflow-hidden rounded-3xl border border-border bg-background shadow-sm">
+      <div className="flex items-center justify-between border-b border-border/70 bg-card/60 px-5 py-4 backdrop-blur-sm">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Board View</h3>
+          <p className="text-xs text-muted-foreground">Drag tasks between columns to reorganize the project.</p>
+        </div>
+        <div className="text-xs text-muted-foreground">{board.tasks.length} tasks · {board.columns.length} columns</div>
+      </div>
+      <div className="min-h-[70vh] overflow-hidden">
+        <DragDropContext
+          onDragEnd={(result) => {
+            document.body.classList.remove('is-dragging');
+            handleDragEnd(result);
+          }}
+          onDragStart={handleBoardDragStart}
+          onDragUpdate={handleBoardDragUpdate}
+        >
+          <Droppable droppableId="board" type="column" direction="horizontal">
+            {(provided) => (
+              <div ref={provided.innerRef} {...provided.droppableProps} className="flex min-w-max gap-6 p-6" data-no-pan="true">
+                {[...board.columns].sort((a, b) => a.order - b.order).map((column, index) => {
+                  const tasks = board.tasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
+                  return <BoardColumn key={column.id} column={column} tasks={tasks} index={index} onTaskClick={setSelectedTask} />;
+                })}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      </div>
+    </div>
+  );
+
+  const renderList = () => (
+    <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+      <ListView onTaskClick={setSelectedTask} />
+    </div>
+  );
+
+  const renderChat = () => (
+    <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Project Chat</h3>
+          <p className="text-xs text-muted-foreground">Use the share modal to invite people. Chat comes next.</p>
+        </div>
+        <button onClick={() => navigate('/collaboration')} className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">
+          Open Collaboration
+        </button>
+      </div>
+      <EmptyState title="Chat is coming next" description="This tab will become the project-wide team chat." />
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-gradient-to-br from-background via-background to-muted/30 lg:flex-row">
+      <aside className="flex w-full flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
+        <div className="border-b border-border/70 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <FolderKanban className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
+              <h2 className="text-lg font-semibold text-foreground">Your workspace</h2>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input type="text" placeholder="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          </div>
+          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{activeCount}/{projectLimit} projects in use</span>
+            <button className="font-medium text-primary hover:underline" onClick={() => setLimitHint(v => !v)}>Plan limits</button>
+          </div>
+          {limitHint && (
+            <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700">
+              {user?.subscriptionTier ? `Your ${user.subscriptionTier} plan allows up to ${projectLimit} projects.` : `Free plans allow up to ${projectLimit} projects.`}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-5">
+            {sidebarBlock('Active Projects', activeProjects)}
+            {sidebarBlock('Completed Projects', completedProjects)}
+            {sidebarBlock('Archived', archivedProjects)}
+          </div>
+        </div>
+
+        <div className="border-t border-border/70 p-4">
+          {addingProject ? (
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">New project</label>
+              <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="Project name" className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+              <div className="mb-3 flex items-center gap-2">
+                {STORAGE_COLORS.map(color => (
+                  <button
+                    key={color}
+                    onClick={() => setNewProjectColor(color)}
+                    className={cn('h-7 w-7 rounded-full border-2 transition-all', newProjectColor === color ? 'border-foreground scale-110' : 'border-transparent')}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Pick ${color}`}
+                  />
+                ))}
+              </div>
+              <textarea value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} placeholder="Short description" rows={3} className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+              <div className="flex gap-2">
+                <button onClick={handleAddProject} className="flex-1 rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">Create</button>
+                <button onClick={() => setAddingProject(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (!canAddProject) {
+                  setLimitHint(true);
+                  return;
+                }
+                setAddingProject(true);
+              }}
+              disabled={!canAddProject}
+              className={cn(
+                'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
+                canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 opacity-70',
+              )}
+              title={!canAddProject ? 'You have reached your plan limit' : 'Add Project'}
+            >
+              <Plus className="h-4 w-4" />
+              Add Project
+            </button>
+          )}
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="border-b border-border/70 bg-background/80 px-5 py-4 backdrop-blur-xl lg:px-8">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-3">
+                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
+                <h1 className="truncate text-xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h1>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{selectedProject?.description || 'A project workspace for tasks, goals, notes, and team updates.'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{activeCount}</span>
+                <span>/</span>
+                <span>{projectLimit} projects</span>
+                <Lock className="h-3.5 w-3.5 text-amber-500" />
+              </div>
+              <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground">
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {[
+              { id: 'home', label: 'Home', icon: LayoutDashboard },
+              { id: 'board', label: 'Board', icon: FolderKanban },
+              { id: 'list', label: 'List', icon: List },
+              { id: 'chat', label: 'Chat', icon: Settings2 },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentTab(tab.id as ProjectTab)}
+                className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
+              >
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
+          {editingProjectId !== null && selectedProject?.id === editingProjectId && (
+            <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Rename project</label>
+              <div className="flex gap-2">
+                <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
+                  }
+                  if (e.key === 'Escape') {
+                    setEditingProjectId(null);
+                    setEditingName('');
+                  }
+                }} className="flex-1 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background">Save</button>
+                <button onClick={() => setEditingProjectId(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {currentTab === 'home' && renderHome()}
+          {currentTab === 'board' && renderBoard()}
+          {currentTab === 'list' && renderList()}
+          {currentTab === 'chat' && renderChat()}
+        </main>
+      </div>
+
+      {showInviteModal && selectedProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowInviteModal(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Share project</h3>
+                <p className="text-sm text-muted-foreground">Invite by email or copy a join link.</p>
+              </div>
+              <button onClick={() => setShowInviteModal(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Invite by email</label>
+                <div className="flex gap-2">
+                  <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="name@example.com" className="flex-1 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <button onClick={handleInvite} disabled={inviteBusy || !inviteEmail.trim()} className="rounded-2xl bg-foreground px-4 py-3 text-sm font-semibold text-background disabled:opacity-50">
+                    Invite
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Join link</label>
+                <div className="flex gap-2">
+                  <input readOnly value={`${window.location.origin}/projects?join=${selectedProject.inviteCode}`} className="flex-1 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground outline-none" />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(`${window.location.origin}/projects?join=${selectedProject.inviteCode}`);
+                      toast({ title: 'Copied', description: 'Join link copied to clipboard.' });
+                    }}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {currentTask && <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} />}
+    </div>
+  );
 };
+
+const StatCard = ({ value, label }: { value: number; label: string }) => (
+  <div className="rounded-2xl border border-border bg-muted/20 p-4">
+    <div className="text-2xl font-semibold text-foreground">{value}</div>
+    <div className="text-xs text-muted-foreground">{label}</div>
+  </div>
+);
+
+const MenuItem = ({
+  icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition-colors',
+      danger ? 'text-red-600 hover:bg-red-50' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    )}
+  >
+    {icon}
+    {label}
+  </button>
+);
+
+const EmptyState = ({ title, description }: { title: string; description: string }) => (
+  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4">
+    <p className="text-sm font-medium text-foreground">{title}</p>
+    <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+  </div>
+);
 
 export default Projects;

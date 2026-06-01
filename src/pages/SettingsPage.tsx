@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
+import EnergyAnalytics from '@/components/EnergyAnalytics';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -915,9 +916,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {historyTab === 'energy' && (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">Your energy level log will appear here once tracked.</p>
-                </div>
+                <EnergyAnalytics />
               )}
 
               {historyTab === 'deepfocus' && (

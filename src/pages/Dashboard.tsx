@@ -3,6 +3,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import {
   CheckSquare, Target, Clock, Flame, Plus, ArrowRight,
   TrendingUp, Cloud, Bot, Calendar, Zap, X
@@ -21,6 +22,33 @@ const Dashboard: React.FC = () => {
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskColumn, setNewTaskColumn] = useState('');
   const [habitStreak, setHabitStreak] = useState(0);
+  const [energySettings, setEnergySettings] = useState({
+    energyMorning: 'medium' as 'low' | 'medium' | 'high',
+    energyAfternoon: 'high' as 'low' | 'medium' | 'high',
+    energyEvening: 'low' as 'low' | 'medium' | 'high',
+  });
+
+  // Load energy settings from localStorage or backend
+  useEffect(() => {
+    const fetchEnergySettings = async () => {
+      try {
+        // Try to get from localStorage first
+        const morning = localStorage.getItem('energyMorning') || 'medium';
+        const afternoon = localStorage.getItem('energyAfternoon') || 'high';
+        const evening = localStorage.getItem('energyEvening') || 'low';
+        
+        setEnergySettings({
+          energyMorning: morning as 'low' | 'medium' | 'high',
+          energyAfternoon: afternoon as 'low' | 'medium' | 'high',
+          energyEvening: evening as 'low' | 'medium' | 'high',
+        });
+      } catch (error) {
+        console.error('Error loading energy settings:', error);
+      }
+    };
+
+    fetchEnergySettings();
+  }, []);
 
   const now = new Date();
   const hour = now.getHours();
@@ -247,6 +275,14 @@ const Dashboard: React.FC = () => {
 
           {/* Right Column */}
           <div className="space-y-6">
+            {/* Energy-Aware Recommendations */}
+            <div className="animate-fade-in" style={{ animationDelay: '300ms' }}>
+              <EnergyTaskRecommendations 
+                tasks={board.tasks} 
+                energySettings={energySettings} 
+              />
+            </div>
+
             {/* Weekly Activity */}
             <div className="bg-card border border-border rounded-xl p-5 animate-fade-in" style={{ animationDelay: '400ms' }}>
               <h2 className="text-sm font-semibold text-foreground mb-4">Weekly Activity</h2>

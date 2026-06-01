@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Battery, X, TrendingUp, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Battery, X, TrendingUp, Calendar, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
+import { useBoardContext } from '@/context/BoardContext';
+import { rankTasksByOptimalTiming } from '@/utils/energyTaskScheduler';
 
 interface EnergyEntry {
   date: string;
@@ -36,6 +38,7 @@ function saveHistory(entries: EnergyEntry[]) {
 }
 
 const EnergyPopup: React.FC = () => {
+  const { board } = useBoardContext();
   const [showPopup, setShowPopup] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [morning, setMorning] = useState('high');
@@ -44,6 +47,7 @@ const EnergyPopup: React.FC = () => {
   const [note, setNote] = useState('');
   const [history, setHistory] = useState<EnergyEntry[]>(loadHistory);
   const [historyDate, setHistoryDate] = useState(getToday());
+  const [recommendedTasks, setRecommendedTasks] = useState<any[]>([]);
 
   useEffect(() => {
     const today = getToday();
@@ -53,6 +57,21 @@ const EnergyPopup: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, []);
+
+  // Update recommendations when energy levels change
+  useEffect(() => {
+    if (board && board.tasks) {
+      const incompleteTasks = board.tasks.filter(task => !task.completed);
+      const energySettings = {
+        energyMorning: morning as 'low' | 'medium' | 'high',
+        energyAfternoon: afternoon as 'low' | 'medium' | 'high',
+        energyEvening: evening as 'low' | 'medium' | 'high',
+      };
+      
+      const rankedTasks = rankTasksByOptimalTiming(incompleteTasks, energySettings);
+      setRecommendedTasks(rankedTasks.slice(0, 3)); // Show top 3 recommendations
+    }
+  }, [morning, afternoon, evening, board]);
 
   const saveEntry = () => {
     const today = getToday();
@@ -182,6 +201,25 @@ const EnergyPopup: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {/* Task Recommendations Based on Energy Levels */}
+        {recommendedTasks.length > 0 && (
+          <div className="mb-4 p-3 bg-primary/5 border border-primary/10 rounded-xl">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">Task Suggestions</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-2">Tasks you should tackle during your peak energy times:</p>
+            <ul className="space-y-1">
+              {recommendedTasks.map((task, idx) => (
+                <li key={idx} className="text-xs text-foreground flex items-start">
+                  <span className="mr-2">•</span>
+                  <span className="truncate">{task.title}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <textarea
           value={note}

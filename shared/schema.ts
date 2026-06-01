@@ -213,6 +213,45 @@ export const notes = pgTable('notes', {
   title: text('title').notNull(),
   content: text('content').notNull(),
   color: text('color').notNull(),
+  pinned: boolean('pinned').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const noteTags = pgTable('note_tags', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const noteTagAssignments = pgTable('note_tag_assignments', {
+  id: serial('id').primaryKey(),
+  noteId: integer('note_id').references(() => notes.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => noteTags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const projects = pgTable('projects', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').default(''),
+  color: text('color').default('#3b82f6').notNull(),
+  ownerId: integer('owner_id').references(() => users.id).notNull(),
+  inviteCode: text('invite_code').notNull().unique(),
+  archived: boolean('archived').default(false).notNull(),
+  completed: boolean('completed').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const projectMembers = pgTable('project_members', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  role: text('role').notNull().default('member'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -263,8 +302,18 @@ export const userSettings = pgTable('user_settings', {
   energyMorning: text('energy_morning').default('medium'),
   energyAfternoon: text('energy_afternoon').default('high'),
   energyEvening: text('energy_evening').default('low'),
+  energyTrackerEnabled: boolean('energy_tracker_enabled').default(true),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const energyLogs = pgTable('energy_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  date: text('date').notNull(), // Format: YYYY-MM-DD
+  timeSlot: text('time_slot').notNull(), // 'morning', 'midday', 'afternoon'
+  energyLevel: text('energy_level').notNull(), // 'low', 'medium', 'high'
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const taskAttachments = pgTable('task_attachments', {

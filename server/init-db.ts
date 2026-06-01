@@ -108,6 +108,7 @@ export async function initDatabase() {
 
     // Columns table new columns
     await addColumnIfNotExists('columns', 'icon', 'TEXT');
+    await addColumnIfNotExists('notes', 'pinned', 'BOOLEAN DEFAULT FALSE');
 
     // --- WHITEBOARD TABLES ---
     console.log('Verifying whiteboard tables...');
@@ -177,10 +178,72 @@ export async function initDatabase() {
     `);
     console.log('Deep focus sessions table verified');
 
+    // --- PROJECTS TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        color TEXT NOT NULL DEFAULT '#3b82f6',
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        invite_code TEXT NOT NULL UNIQUE,
+        archived BOOLEAN NOT NULL DEFAULT FALSE,
+        completed BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_members (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role TEXT NOT NULL DEFAULT 'member',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(project_id, user_id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS project_members_user_id_idx ON project_members(user_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS project_members_project_id_idx ON project_members(project_id);
+    `);
+    console.log('Project tables verified');
+
+    // --- NOTE TAG TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS note_tags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS note_tag_assignments (
+        id SERIAL PRIMARY KEY,
+        note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES note_tags(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(note_id, tag_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS note_tags_user_id_idx ON note_tags(user_id);`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS note_tags_user_name_idx ON note_tags(user_id, lower(name));`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_note_id_idx ON note_tag_assignments(note_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_tag_id_idx ON note_tag_assignments(tag_id);`);
+    console.log('Note tag tables verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails
     // Tables might already exist or be created by migrations
   }
 }
-

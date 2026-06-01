@@ -41,6 +41,12 @@ export interface TaskComment {
   createdAt: string;
 }
 
+export interface TaskActivity {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -56,6 +62,8 @@ export interface Task {
   duration?: number;
   sessionsNeeded?: number;
   subject?: string;
+  projectId?: number | null;
+  projectName?: string;
   color?: string;
   icon?: string;
   createdAt: string;
@@ -68,6 +76,7 @@ export interface Task {
   nextOccurrence?: string | null;
   attachments?: Attachment[];
   comments?: TaskComment[];
+  activityLog?: TaskActivity[];
 }
 
 export interface Column {

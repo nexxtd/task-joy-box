@@ -33,7 +33,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.patch('/', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { theme, fontFamily, accentColor, accentHsl, language, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening } = req.body;
+    const { theme, fontFamily, accentColor, accentHsl, language, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled } = req.body;
 
     const [updatedSettings] = await db.update(userSettings)
       .set({
@@ -47,6 +47,7 @@ router.patch('/', requireAuth, async (req, res) => {
         energyMorning,
         energyAfternoon,
         energyEvening,
+        energyTrackerEnabled,
         updatedAt: new Date().toISOString(),
       } as UpdateUserSettings as any)
       .where(eq(userSettings.userId, userId))

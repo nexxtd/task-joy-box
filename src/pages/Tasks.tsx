@@ -1,22 +1,22 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, Priority, PRIORITY_CONFIG, Task, TaskStatus } from '@/types/board';
+import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, LABEL_COLORS } from '@/types/board';
 import {
   ArrowDown,
   ArrowUp,
   BarChart3,
   Brain,
-  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
   GripVertical,
-  MoreHorizontal,
+  FolderKanban,
   Paperclip,
   Plus,
   Search,
+  Tag,
   Sparkles,
   Star,
   Trash2,
@@ -113,6 +113,19 @@ const dueBadgeClass = (warning: DueWarningLevel, base: boolean) => {
   return 'bg-muted text-muted-foreground';
 };
 
+const TAG_COLOR_OPTIONS: LabelColor[] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+
+const randomTagColor = (): LabelColor => TAG_COLOR_OPTIONS[Math.floor(Math.random() * TAG_COLOR_OPTIONS.length)] || 'blue';
+
+const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+interface ProjectMeta {
+  id: number;
+  name: string;
+  color: string;
+  description: string;
+}
+
 interface NewTaskSubtaskDraft {
   id: string;
   text: string;
@@ -205,6 +218,21 @@ const Tasks: React.FC = () => {
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';
 
+  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
+  const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'status' | 'due' | 'duration' | 'project' | null>(null);
+  const [quickEditDueDate, setQuickEditDueDate] = useState('');
+  const [quickEditDueTime, setQuickEditDueTime] = useState('');
+  const [quickEditDuration, setQuickEditDuration] = useState(0);
+  const [quickEditStatus, setQuickEditStatus] = useState<TaskStatus>('to_do');
+  const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
+
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
@@ -223,6 +251,7 @@ const Tasks: React.FC = () => {
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
   const [newTaskColumnId, setNewTaskColumnId] = useState<string>('');
+  const [newTaskProjectId, setNewTaskProjectId] = useState<number | ''>('');
   const [newTaskSubtasks, setNewTaskSubtasks] = useState<NewTaskSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);
@@ -254,14 +283,43 @@ const Tasks: React.FC = () => {
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
 
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const response = await fetch('/api/projects', { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json().catch(() => ({}));
+        setProjects(Array.isArray(data.projects) ? data.projects : []);
+      } catch {
+        setProjects([]);
+      }
+    };
+    loadProjects();
+  }, []);
+
+  const allTags = useMemo<Label[]>(() => {
+    const byId = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byId.set(label.id, label));
+    board.tasks.forEach(task => task.labels.forEach(label => {
+      if (!byId.has(label.id)) byId.set(label.id, label);
+    }));
+    return Array.from(byId.values());
+  }, [board.tasks]);
+
+  const filteredTasksByBase = useMemo(() => {
+    return board.tasks.filter(task => {
+      const matchesSearch = task.title.toLowerCase().includes(search.toLowerCase().trim());
+      const matchesPriority = priorityFilter === 'all' ? true : task.priority === priorityFilter;
+      const matchesProject = projectFilterId === 'all' ? true : task.projectId === projectFilterId;
+      const matchesTags = tagFilterIds.length === 0
+        ? true
+        : tagFilterIds.every(tagId => task.labels.some(label => label.id === tagId));
+      return matchesSearch && matchesPriority && matchesProject && matchesTags;
+    });
+  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds]);
+
   const filtered = useMemo(() => {
-    const bySearch = board.tasks.filter(task =>
-      task.title.toLowerCase().includes(search.toLowerCase().trim())
-    );
-    const byPriority = bySearch.filter(task =>
-      priorityFilter === 'all' ? true : task.priority === priorityFilter
-    );
-    const byGroup = byPriority.filter(task =>
+    const byGroup = filteredTasksByBase.filter(task =>
       !groupFilterId ? true : task.columnId === groupFilterId
     );
 
@@ -305,7 +363,7 @@ const Tasks: React.FC = () => {
     });
 
     return { active: activeSorted, completed: completedSorted };
-  }, [board.tasks, groupFilterId, priorityFilter, search, sortByDueDate, sortDueDateDesc, orderedActiveIds]);
+  }, [filteredTasksByBase, groupFilterId, sortByDueDate, sortDueDateDesc, orderedActiveIds]);
 
   const matchingCount = filtered.active.length + filtered.completed.length;
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
@@ -460,6 +518,7 @@ const Tasks: React.FC = () => {
     setNewTaskDueTime('');
     setNewTaskDuration(60);
     setNewTaskColumnId('');
+    setNewTaskProjectId('');
     setNewTaskSubtasks([]);
     setNewSubtaskText('');
     setNewSubtaskDuration(10);
@@ -488,6 +547,8 @@ const Tasks: React.FC = () => {
       dueDate: newTaskDueDate || undefined,
       dueTime: newTaskDueTime || undefined,
       duration: Math.max(0, Number(newTaskDuration) || 0),
+      projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
+      projectName: newTaskProjectId === '' ? undefined : (projects.find(project => project.id === Number(newTaskProjectId))?.name || undefined),
       subtasks: newTaskSubtasks.map(st => ({
         id: st.id,
         text: st.text,
@@ -588,6 +649,80 @@ const Tasks: React.FC = () => {
   const newSubtaskTotal = newTaskSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
+  const openQuickEdit = (task: Task, field: 'status' | 'due' | 'duration' | 'project') => {
+    setQuickEditTaskId(task.id);
+    setQuickEditField(field);
+    setQuickEditStatus(getTaskStatus(task));
+    setQuickEditDueDate(task.dueDate || '');
+    setQuickEditDueTime(task.dueTime || '');
+    setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
+    setQuickEditProjectId(task.projectId || '');
+  };
+
+  const closeQuickEdit = () => {
+    setQuickEditTaskId(null);
+    setQuickEditField(null);
+  };
+
+  const applyQuickEdit = (task: Task) => {
+    const updates: Partial<Task> = {};
+    if (quickEditField === 'status') {
+      updates.status = quickEditStatus;
+      updates.completed = quickEditStatus === 'completed';
+      updates.completedAt = quickEditStatus === 'completed' ? task.completedAt || new Date().toISOString() : undefined;
+    }
+    if (quickEditField === 'due') {
+      updates.dueDate = quickEditDueDate || undefined;
+      updates.dueTime = quickEditDueTime || undefined;
+    }
+    if (quickEditField === 'duration') {
+      updates.duration = Math.max(0, Number(quickEditDuration) || 0);
+    }
+    if (quickEditField === 'project') {
+      updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
+      updates.projectName = quickEditProjectId === ''
+        ? undefined
+        : (projects.find(project => project.id === Number(quickEditProjectId))?.name || undefined);
+    }
+    updateTask(task.id, updates);
+    closeQuickEdit();
+  };
+
+  const toggleTaskTag = (task: Task, label: Label) => {
+    const has = task.labels.some(item => item.id === label.id);
+    const nextLabels = has
+      ? task.labels.filter(item => item.id !== label.id)
+      : [...task.labels, label];
+    updateTask(task.id, { labels: nextLabels });
+  };
+
+  const createTaskTag = (task: Task) => {
+    const name = normalizeTagName(newTagName);
+    if (!name) return;
+    const newLabel: Label = {
+      id: `tag-${crypto.randomUUID()}`,
+      name,
+      color: newTagColor,
+    };
+    updateTask(task.id, { labels: [...task.labels, newLabel] });
+    setNewTagName('');
+    setNewTagColor(randomTagColor());
+    setTagPickerOpen(false);
+  };
+
+  const deleteTagEverywhere = (tagId: string) => {
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+      }
+    });
+    setTagFilterIds(prev => prev.filter(id => id !== tagId));
+  };
+
+  const toggleTagFilter = (tagId: string) => {
+    setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
@@ -663,6 +798,111 @@ const Tasks: React.FC = () => {
             ))}
           </div>
 
+          <div className="flex flex-wrap gap-2 min-w-0">
+            {allTags.map(tag => {
+              const active = tagFilterIds.includes(tag.id);
+              const tagClass = LABEL_COLORS[tag.color];
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTagFilter(tag.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-all whitespace-nowrap ${
+                    active
+                      ? 'border-foreground/20 shadow-sm text-foreground'
+                      : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${tagClass}`} />
+                  <span>{tag.name}</span>
+                </button>
+              );
+            })}
+            {tagFilterIds.length > 0 && (
+              <button
+                onClick={() => setTagFilterIds([])}
+                className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              >
+                Clear tags
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setTagPickerOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              Tags
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {tagPickerOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-80 max-w-[90vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Tag filter</p>
+                      <p className="text-xs text-muted-foreground">Pick tags or create a new one.</p>
+                    </div>
+                    <button onClick={() => setTagPickerOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                    {allTags.map(tag => {
+                      const active = tagFilterIds.includes(tag.id);
+                      return (
+                        <div key={tag.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                          <button
+                            onClick={() => toggleTagFilter(tag.id)}
+                            className="flex flex-1 items-center gap-2 text-left"
+                          >
+                            <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[tag.color]}`} />
+                            <span className="text-sm text-foreground">{tag.name}</span>
+                            {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                          </button>
+                          <button
+                            onClick={() => deleteTagEverywhere(tag.id)}
+                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Delete tag everywhere"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <div className="flex gap-2">
+                      <input
+                        value={newTagName}
+                        onChange={e => setNewTagName(e.target.value)}
+                        placeholder="New tag"
+                        className="flex-1 rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button
+                        onClick={() => setNewTagColor(randomTagColor())}
+                        className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]} hover:opacity-90`}
+                        title="Random color"
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const current = board.tasks.find(task => task.id === openTaskId) || filteredTasksByBase[0];
+                        if (current) createTaskTag(current);
+                      }}
+                      disabled={!newTagName.trim()}
+                      className="w-full rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                    >
+                      Create tag
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="relative">
             <button
               onClick={() => setGroupDropdownOpen(!groupDropdownOpen)}
@@ -705,6 +945,52 @@ const Tasks: React.FC = () => {
                     </button>
                   ))}
                 </div>
+              </>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setProjectDropdownOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                projectFilterId !== 'all'
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>
+                {projectFilterId === 'all'
+                  ? 'Project Filter'
+                  : `Project: ${projects.find(project => project.id === projectFilterId)?.name || 'Selected'}`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </button>
+            {projectDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setProjectDropdownOpen(false)} />
+              <div className="absolute left-0 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-lg z-30 p-2">
+                <button
+                  onClick={() => { setProjectFilterId('all'); setProjectDropdownOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted"
+                >
+                  All projects
+                </button>
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {projects.map(project => (
+                    <button
+                      key={project.id}
+                      onClick={() => { setProjectFilterId(project.id); setProjectDropdownOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted flex items-center gap-2 ${
+                        projectFilterId === project.id ? 'bg-primary/10 text-primary' : ''
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                      <span className="flex-1 truncate">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
               </>
             )}
           </div>
@@ -766,6 +1052,8 @@ const Tasks: React.FC = () => {
                     const statusCfg = STATUS_CONFIG[status];
                     const dueWarning = getDueTimeWarning(task);
                     const taskDurFmt = formatDuration(task.duration || 0);
+                    const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
+                    const taskTags = task.labels.slice(0, 3);
 
                     return (
                       <Draggable
@@ -840,23 +1128,34 @@ const Tasks: React.FC = () => {
                                   {task.title}
                                 </span>
 
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}>
+                                <button
+                                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'status'); }}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}
+                                >
                                   {statusCfg.label}
-                                </span>
+                                </button>
 
                                 {task.dueDate && (
-                                  <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); openQuickEdit(task, 'due'); }}
+                                    className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}
+                                  >
                                     {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
                                       <Clock className="w-2.5 h-2.5 flex-shrink-0" />
                                     )}
-                                    {dueWarning === 'overdue' ? 'Overdue' : formatDate(task.dueDate)}
-                                  </span>
+                                    {dueWarning === 'overdue'
+                                      ? 'Overdue'
+                                      : `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}`}
+                                  </button>
                                 )}
 
                                 {taskDurFmt && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                  <button
+                                    onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
+                                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                                  >
                                     {taskDurFmt}
-                                  </span>
+                                  </button>
                                 )}
 
                                 {checklistTotal > 0 && (
@@ -870,15 +1169,38 @@ const Tasks: React.FC = () => {
                                     {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
                                   </span>
                                 )}
+
+                                {taskTags.length > 0 && taskTags.map(label => (
+                                  <span
+                                    key={label.id}
+                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                                  >
+                                    {label.name}
+                                  </span>
+                                ))}
+                                {task.labels.length > taskTags.length && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                    +{task.labels.length - taskTags.length}
+                                  </span>
+                                )}
                               </div>
 
-                              {/* Right side: group badge + actions */}
+                              {/* Right side: project badge + actions */}
                               <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {column && (
+                                {taskProject ? (
                                   <span
                                     className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white"
-                                    style={{ backgroundColor: column.color }}
+                                    style={{ backgroundColor: taskProject.color }}
                                   >
+                                    {taskProject.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">
+                                    My Tasks
+                                  </span>
+                                )}
+                                {column && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium border border-border text-muted-foreground bg-background">
                                     {column.title}
                                   </span>
                                 )}
@@ -903,6 +1225,84 @@ const Tasks: React.FC = () => {
                                 )}
                               </div>
                             </div>
+
+                            {quickEditTaskId === task.id && (
+                              <div
+                                onClick={e => e.stopPropagation()}
+                                className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl"
+                              >
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {quickEditField === 'status' && (
+                                    <select
+                                      value={quickEditStatus}
+                                      onChange={e => setQuickEditStatus(e.target.value as TaskStatus)}
+                                      onBlur={() => applyQuickEdit(task)}
+                                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                    >
+                                      {STATUS_OPTIONS.map(option => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {quickEditField === 'due' && (
+                                    <>
+                                      <input
+                                        type="date"
+                                        value={quickEditDueDate}
+                                        onChange={e => setQuickEditDueDate(e.target.value)}
+                                        onBlur={() => applyQuickEdit(task)}
+                                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                      />
+                                      <input
+                                        type="time"
+                                        value={quickEditDueTime}
+                                        onChange={e => setQuickEditDueTime(e.target.value)}
+                                        onBlur={() => applyQuickEdit(task)}
+                                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                      />
+                                    </>
+                                  )}
+                                  {quickEditField === 'duration' && (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={quickEditDuration}
+                                        onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))}
+                                        onBlur={() => applyQuickEdit(task)}
+                                        className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                      />
+                                      <span className="text-xs text-muted-foreground">minutes</span>
+                                    </div>
+                                  )}
+                                  {quickEditField === 'project' && (
+                                    <select
+                                      value={quickEditProjectId}
+                                      onChange={e => setQuickEditProjectId(e.target.value ? Number(e.target.value) : '')}
+                                      onBlur={() => applyQuickEdit(task)}
+                                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                    >
+                                      <option value="">My Tasks</option>
+                                      {projects.map(project => (
+                                        <option key={project.id} value={project.id}>{project.name}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  <button
+                                    onClick={() => applyQuickEdit(task)}
+                                    className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={closeQuickEdit}
+                                    className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
 
                             {isExpanded && !isDeleteMode && (
                               <div
@@ -1143,14 +1543,15 @@ const Tasks: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Group</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
                   <select
-                    value={newTaskColumnId || board.columns[0]?.id || ''}
-                    onChange={e => setNewTaskColumnId(e.target.value)}
+                    value={newTaskProjectId}
+                    onChange={e => setNewTaskProjectId(e.target.value ? Number(e.target.value) : '')}
                     className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                   >
-                    {board.columns.map(column => (
-                      <option key={column.id} value={column.id}>{column.title}</option>
+                    <option value="">My Tasks</option>
+                    {projects.map(project => (
+                      <option key={project.id} value={project.id}>{project.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1467,11 +1868,21 @@ const Tasks: React.FC = () => {
           task={openTask}
           onClose={() => setOpenTaskId(null)}
           boardColumns={board.columns}
+          projects={projects}
+          allTags={allTags}
           onUpdateTask={updateTask}
           onToggleChecklistItem={toggleChecklistItem}
           onAddChecklistItem={addChecklistItem}
           onDeleteChecklistItem={deleteChecklistItem}
           onDeleteTask={taskId => { setSingleDeleteTaskId(taskId); setOpenTaskId(null); }}
+          onToggleTag={toggleTaskTag}
+          onCreateTag={(taskId, name, color) => {
+            const task = board.tasks.find(item => item.id === taskId);
+            if (!task) return;
+            const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
+            updateTask(taskId, { labels: [...task.labels, label] });
+          }}
+          onDeleteTagEverywhere={deleteTagEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToTask={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -1607,12 +2018,17 @@ const Tasks: React.FC = () => {
 interface TaskFullViewProps {
   task: Task;
   boardColumns: Array<{ id: string; title: string; color: string }>;
+  projects: ProjectMeta[];
+  allTags: Label[];
   onClose: () => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   onToggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   onAddChecklistItem: (taskId: string, checklistId: string, text: string) => void;
   onDeleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onToggleTag: (taskId: string, tag: Label) => void;
+  onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
+  onDeleteTagEverywhere: (tagId: string) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToTask?: (taskId: string) => void;
@@ -1621,12 +2037,17 @@ interface TaskFullViewProps {
 const TaskFullView: React.FC<TaskFullViewProps> = ({
   task,
   boardColumns,
+  projects,
+  allTags,
   onClose,
   onUpdateTask,
   onToggleChecklistItem,
   onAddChecklistItem,
   onDeleteChecklistItem,
   onDeleteTask,
+  onToggleTag,
+  onCreateTag,
+  onDeleteTagEverywhere,
   isPremium,
 }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -1640,6 +2061,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
@@ -1655,8 +2080,24 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
   const currentStatus = getTaskStatus(task);
   const statusCfg = STATUS_CONFIG[currentStatus];
+  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
   const dueWarning = useMemo<DueWarningLevel>(() => getDueTimeWarning(task), [task.dueDate, task.dueTime, task.completed, task.status]);
+  const activityEntries = useMemo(() => {
+    const entries = [
+      { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
+      ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
+      { id: 'status', text: `Status set to ${statusCfg.label}`, createdAt: task.updatedAt || task.createdAt },
+      ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
+      ...(task.dueDate ? [{ id: 'due', text: `Due ${formatDate(task.dueDate)}${task.dueTime ? ` at ${task.dueTime}` : ''}`, createdAt: task.updatedAt || task.createdAt }] : []),
+      ...(task.comments || []).map(comment => ({
+        id: comment.id,
+        text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
+        createdAt: comment.createdAt,
+      })),
+    ];
+    return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [statusCfg.label, task.comments, task.createdAt, task.dueDate, task.dueTime, task.projectId, task.updatedAt, taskProject?.name]);
 
   const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -1758,6 +2199,15 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     }
   };
 
+  const createTagForTask = () => {
+    const name = normalizeTagName(newTagName);
+    if (!name) return;
+    onCreateTag(task.id, name, newTagColor);
+    setNewTagName('');
+    setNewTagColor(randomTagColor());
+    setTagPickerOpen(false);
+  };
+
   const addComment = () => {
     if (!newCommentText.trim()) return;
     onUpdateTask(task.id, {
@@ -1851,14 +2301,18 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Group</label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
             <select
-              value={task.columnId}
-              onChange={e => onUpdateTask(task.id, { columnId: e.target.value })}
+              value={task.projectId || ''}
+              onChange={e => onUpdateTask(task.id, {
+                projectId: e.target.value ? Number(e.target.value) : null,
+                projectName: e.target.value ? (projects.find(project => project.id === Number(e.target.value))?.name || undefined) : undefined,
+              })}
               className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
             >
-              {boardColumns.map(column => (
-                <option key={column.id} value={column.id}>{column.title}</option>
+              <option value="">My Tasks</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>{project.name}</option>
               ))}
             </select>
           </div>
@@ -1887,6 +2341,93 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             rows={4}
             className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
           />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Tag className="w-4 h-4 text-muted-foreground" />
+              Tags
+            </h3>
+            <button
+              onClick={() => setTagPickerOpen(prev => !prev)}
+              className="text-xs text-primary hover:underline"
+            >
+              {tagPickerOpen ? 'Close' : 'Edit'}
+            </button>
+          </div>
+
+          {task.labels.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {task.labels.map(label => (
+                <button
+                  key={label.id}
+                  onClick={() => onToggleTag(task.id, label)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                  <X className="w-3 h-3 opacity-80" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tagPickerOpen && (
+            <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-3">
+              <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                {allTags.map(label => {
+                  const active = task.labels.some(item => item.id === label.id);
+                  return (
+                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                      <button
+                        onClick={() => onToggleTag(task.id, label)}
+                        className="flex flex-1 items-center gap-2 text-left"
+                      >
+                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
+                        <span className="text-sm text-foreground">{label.name}</span>
+                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                      </button>
+                      <button
+                        onClick={() => onDeleteTagEverywhere(label.id)}
+                        className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete tag everywhere"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={newTagName}
+                  onChange={e => setNewTagName(e.target.value)}
+                  placeholder="Create tag"
+                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={() => setNewTagColor(randomTagColor())}
+                  className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
+                  title="Random color"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={createTagForTask}
+                  disabled={!newTagName.trim()}
+                  className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  Add tag
+                </button>
+                <button
+                  onClick={() => setTagPickerOpen(false)}
+                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
@@ -2100,6 +2641,29 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setActivityCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Activity</h3>
+            </div>
+            {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!activityCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
+              {activityEntries.map(entry => (
+                <div key={entry.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                  <p className="text-sm text-foreground">{entry.text}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{new Date(entry.createdAt).toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

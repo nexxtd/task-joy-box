@@ -12,6 +12,7 @@ import paymentRoutes from './routes/payment';
 import collaborationRoutes from './routes/collaboration';
 import organizationsRoutes from './routes/organizations';  // New organizations routes
 import workspaceRoutes from './routes/workspace';  // New workspace routes
+import projectsRoutes from './routes/projects';
 import goalsRoutes from './routes/goals';
 import habitsRoutes from './routes/habits';
 import notesRoutes from './routes/notes';
@@ -217,6 +218,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/organizations', organizationsRoutes);  // Add organizations routes
 app.use('/api/workspace', workspaceRoutes);  // Add workspace routes
+app.use('/api/projects', projectsRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/goals', goalsRoutes);

@@ -454,6 +454,46 @@ className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 t
               </div>
             )}
 
+            {/* Energy Insights Section */}
+            <div className="mb-8 bg-card border border-border rounded-xl p-5 animate-fade-in">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-yellow-500/10 rounded-lg">
+                  <ZapIcon className="w-5 h-5 text-yellow-500" />
+                </div>
+                <h2 className="text-base font-semibold text-foreground">Energy Patterns</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-muted/30 rounded-lg">
+                  <h3 className="font-semibold text-foreground mb-2">Morning Energy</h3>
+                  <p className="text-lg font-bold text-yellow-500 capitalize">
+                    {localStorage.getItem('energyMorning') || 'medium'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Default setting</p>
+                </div>
+                <div className="p-4 bg-muted/30 rounded-lg">
+                  <h3 className="font-semibold text-foreground mb-2">Afternoon Energy</h3>
+                  <p className="text-lg font-bold text-yellow-500 capitalize">
+                    {localStorage.getItem('energyAfternoon') || 'high'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Default setting</p>
+                </div>
+                <div className="p-4 bg-muted/30 rounded-lg">
+                  <h3 className="font-semibold text-foreground mb-2">Evening Energy</h3>
+                  <p className="text-lg font-bold text-yellow-500 capitalize">
+                    {localStorage.getItem('energyEvening') || 'low'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Default setting</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <h3 className="font-semibold text-foreground mb-2">Energy-Task Alignment</h3>
+                <p className="text-sm text-muted-foreground">
+                  Based on your energy patterns, high-priority tasks are best scheduled during your peak energy hours. 
+                  Consider adjusting your task schedule to align with your energy levels for maximum productivity.
+                </p>
+              </div>
+            </div>
+
             {/* Premium Plan Features Overview */}
             <div className="mb-8 bg-card border border-border rounded-xl p-5 animate-fade-in">
               <div className="flex items-center gap-3 mb-4">
