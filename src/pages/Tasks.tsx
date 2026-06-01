@@ -688,15 +688,21 @@ const Tasks: React.FC = () => {
     closeQuickEdit();
   };
 
-  const toggleTaskTag = (task: Task, label: Label) => {
+  const toggleTaskTag = (taskId: string, label: Label) => {
+    const task = board.tasks.find(item => item.id === taskId);
+    if (!task) return;
+    
     const has = task.labels.some(item => item.id === label.id);
     const nextLabels = has
       ? task.labels.filter(item => item.id !== label.id)
       : [...task.labels, label];
-    updateTask(task.id, { labels: nextLabels });
+    updateTask(taskId, { labels: nextLabels });
   };
 
-  const createTaskTag = (task: Task) => {
+  const createTaskTag = (taskId: string) => {
+    const task = board.tasks.find(item => item.id === taskId);
+    if (!task) return;
+    
     const name = normalizeTagName(newTagName);
     if (!name) return;
     const newLabel: Label = {
@@ -704,7 +710,7 @@ const Tasks: React.FC = () => {
       name,
       color: newTagColor,
     };
-    updateTask(task.id, { labels: [...task.labels, newLabel] });
+    updateTask(taskId, { labels: [...task.labels, newLabel] });
     setNewTagName('');
     setNewTagColor(randomTagColor());
     setTagPickerOpen(false);
@@ -890,6 +896,7 @@ const Tasks: React.FC = () => {
                     <button
                       onClick={() => {
                         const current = board.tasks.find(task => task.id === openTaskId) || filteredTasksByBase[0];
+                        if (current) createTaskTag(current.id);
                         if (current) createTaskTag(current);
                       }}
                       disabled={!newTagName.trim()}
