@@ -1,0 +1,35 @@
+Project Board — Full Spec
+Overall layout
+Multiple rows stacked vertically on the page. Each row is its own independent set of columns. There is a thin left sidebar per row, and the columns expand to the right of it. The board scrolls vertically to accommodate as many rows as the user creates. Each row scrolls horizontally independently if there are more columns than fit on screen.
+
+Rows
+The left sidebar of each row is a narrow vertical strip. It contains top to bottom:
+Three dots (···) — opens a dropdown
+▲ arrow
+A small circle with a faint border (outline dot)
+The row name written vertically (e.g. "SDA")
+Another filled circle dot at the bottom
+The sidebar has a light grey background, slightly darker than the main board background. There is a thin vertical border separating it from the columns.
+Three-dot menu options: Edit name, change colour, change icon, delete.
+Editing a row: Clicking edit name opens a small inline input where the user can rename the row. Clicking change colour opens a colour picker. Clicking change icon opens an icon picker. Changes apply immediately on save.
+Deleting a row: Same confirmation dialog as deleting a task. Once confirmed the row and all its columns disappear and all displaced task cards go into the displaced task cards tray bottom right.
+Collapsing a row (▲): Columns vanish. The row becomes exactly the narrow vertical sidebar strip — unchanged, with three dots, ▽ arrow, small outline circle, row name written vertically, filled circle at the bottom. Nothing else. Clicking ▽ brings the columns back. Collapsing a row does not delete any tasks — they are all still there when expanded again.
+Adding a row: At the bottom of all rows there is an "+ Add Row" button. Clicking it creates a new empty row with a default name, one empty default column, and prompts the user to rename it immediately.
+
+Columns
+Each column has a header with a small coloured dot, the column name, a task count number, a collapse arrow, and a three-dot menu on the right. Columns are separated by thin vertical borders. At the end of all columns there is an "+ Add Column" button.
+Three-dot menu options: Edit name, change colour, delete.
+Editing a column: Clicking edit name opens an inline input to rename the column. Clicking change colour opens a colour picker which updates the dot colour in the header. Changes apply immediately.
+Deleting a column: Same confirmation dialog as deleting a task. Once confirmed the column and all its tasks are removed. The displaced task cards go into the displaced task cards tray bottom right.
+Collapsing a column: Each column header has a collapse arrow next to the three-dot menu. Clicking it collapses the column down to just a thin vertical strip showing only the coloured dot and the column name written vertically, the same way a collapsed row works. The task count is hidden when collapsed. Clicking the arrow again expands the column back to full width with all tasks visible. Collapsing a column does not delete or hide any tasks — they are all still there when expanded again. Multiple columns can be collapsed at the same time.
+Task count: The number next to the column name updates automatically as tasks are added, moved, or completed.
+Column order: Columns can be reordered by dragging the column header left or right within the same row.
+
+Tasks
+Task cards sit inside each column. White, small rounded rectangle cards with the task name in small text. Some have a red date badge below the title and a subtask indicator (e.g. "0/1"). There is an "+ Add New Task" button at the bottom of each column.
+Moving tasks: Tasks can be dragged from one column to another within the same row, or dragged to a column in a different row entirely. The column task count updates automatically when a task is moved.
+Task cards: Each card shows the task name, and if set: a red due date badge, a subtask progress indicator (e.g. 0/1), and a priority indicator. Clicking a task card opens the full task view.
+Adding a task: Clicking "+ Add New Task" at the bottom of a column opens the task creation flow for that column. The task is added to that column by default.
+
+Displaced task cards tray
+Floating panel, bottom right. Only appears after a row or column is deleted. Labelled "Tasks". Shows all displaced task cards as draggable cards. The user drags them into any column on the board to rehome them. The tray stays open until all displaced tasks have been moved. If the user closes it without moving all tasks the tray minimises to a small icon in the bottom right and can be reopened by clicking it.

@@ -1,0 +1,90 @@
+Task Page — Changes & Updates
+
+Groups filter
+Groups dropdown button in the filter bar. Clicking opens a dropdown showing all project board columns with their colour dot and name. Clicking a group filters instantly. Button label updates to the selected group. Clear button at the top of the dropdown deselects it.
+
+Task row layout
+Group name pill on the far right with the group colour as background. Status badge shown inline next to the task title. Duration badge added next to the checklist badge showing estimated duration e.g. "30 mins". Hidden if no duration is set.
+
+Completed section
+Collapsible with a "Completed (x)" heading and a collapse arrow on the right. Clicking collapses and expands. The heading always stays visible. Never disappears entirely.
+
+Sort by Due Date
+Toggles between soonest first and latest first on each click. Upward arrow for soonest, downward arrow for latest.
+
+Delete mode
+Delete button in the top right filter bar. Clicking enters delete mode — every task row shows a checkbox. A fixed bar appears at the bottom once at least one task is selected showing Cancel on the left and "Delete selected — X tasks" in red on the right. Cancel exits delete mode. Delete shows the same confirmation dialog as deleting a single task.
+
+Delete button in task view
+Red delete button in the bottom right of the full task view modal. Same confirmation dialog as everywhere else.
+
+Recurring removed
+Removed from task creation, task editing, and the full task view. Only exists in the calendar.
+
+Attachments
+Premium feature. Non-premium users see the section title, "Attach files, images, and documents directly to your tasks", and a Subscribe button. Premium users see the full upload area and file list.
+
+Sub-tasks time remaining
+Next to the Sub-tasks section title on the right — live time remaining indicator. Task estimated duration minus total sub-task durations. Shows "10 mins left" in muted text, "Over by X mins" in orange if exceeded, "0 mins left" in green if matched. Updates live. Applies in both task view and task creation.
+
+Circle and square toggles (whole app)
+Circle toggle — task completion, sub-task completion, goal completion, sub-goal completion, habit completion. Fills green with checkmark when complete. Square toggle — checklist items only everywhere in the app. Fills green with checkmark when complete. Same size, animation, and colour behaviour everywhere.
+
+Status badge in task view comments
+Above the comment input shows the actual current status as a coloured badge and the due date e.g. "In Progress — Due: May 31". Updates automatically when status or due date changes.
+
+Task Analysis
+Premium feature. Non-premium users see the title, short description, and Subscribe button. Premium users get the full panel with four interactive tabs: Overview, Duration Check, Deadline Risk, Focus Suggestions. Clicking a task name in any tab jumps to that task in the list.
+
+Drag and reorder tasks
+Each task row has a drag handle on the far left — a subtle grip icon that appears on hover. Clicking and holding lets the user drag the task row up or down to manually reorder. Other rows shift to make space. Releasing drops the task in the new position. Manual order is saved and persists. If Sort by Due Date is active manual reordering is disabled — the drag handle is hidden and a tooltip on hover says "Disable sort to reorder manually."
+
+Due time warning
+If a task has a due time set and it is approaching today the due date badge turns orange when within 2 hours and red when within 30 minutes. A small clock icon appears next to the badge. If the due time has passed and the task is not complete the badge turns red and shows "Overdue." Applies on the task list row, in the expand dropdown, and in the full task view.
+
+AI Task Builder
+A button in the top right of the filter bar next to New Task labelled "AI Task." Clicking it opens a modal with a large text area and the placeholder "Describe your task, project, or goal in detail..." The user types or pastes anything — a full project brief, a rough idea, a list of things to do. Clicking Generate sends it to the AI which reads the input and creates a fully structured task with all relevant fields filled in:
+Task title — extracted or generated from the input
+Description — summarised from the input
+Priority — inferred from urgency language in the input
+Due date — extracted if a date is mentioned
+Due time — extracted if a time is mentioned
+Estimated duration — inferred from the scope of the task
+Group — suggested based on context if groups exist
+Status — set to To Do by default unless specified
+Sub-tasks — broken down automatically from the input with individual durations assigned to each
+Checklist items — generated for any step-by-step actions mentioned
+Once generated the full task view modal opens pre-filled with all the generated fields. The user can review, edit any field, add or remove sub-tasks, and then click Save to create the task or Discard to cancel. Nothing is saved until the user explicitly clicks Save.
+This is a Pro feature. Non-premium users see the AI Task button — clicking it shows the title "AI Task Builder", a short description "Describe any task or project in plain text and AI will build a fully structured task for you automatically", and a Subscribe button.
+
+Premium gating whole app
+Every premium or pro feature is visible but gated. Non-premium users see the feature title, a short description, and a Subscribe button. Cannot interact with the feature. Applies everywhere across the entire app.
+
+do this:
+Implement consistent Circle toggle (task/sub-task/goal/habit completion) across the app
+
+Implement consistent Square toggle (checklist items) across the app
+
+Add status badge above comment input in task view modal
+
+Complete AI Task Builder modal with full implementation
+
+Add premium gating for AI Task Builder (show subscribe for non-premium)
+
+Add premium gating for Attachments in task creation and view
+
+Add premium gating for Task Analysis panel with tabs
+
+Implement bulk delete confirmation dialog
+
+Add fixed bottom bar for delete mode with Cancel and Delete buttons
+
+Add sub-tasks time remaining indicator in task view and creation
+
+Verify task row layout has group pill, status badge, and duration badge
+
+Verify completed section is collapsible with heading always visible
+
+Verify drag handle is hidden when Sort by Due Date is active with tooltip
+
+Verify due time warning shows clock icon and color changes

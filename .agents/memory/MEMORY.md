@@ -1,0 +1,3 @@
+- [Task Joy Box — Toggle Components](toggle-components.md) — CircleToggle (task/subtask/goal/habit) and SquareToggle (checklist only) live in src/components/ToggleComponents.tsx.
+- [Task Joy Box — AI task builder](ai-task-builder.md) — /api/ai/task-builder endpoint added to server/routes/ai.ts; gated to isPro on frontend, always callable from backend.
+- [Task Joy Box — CORS](cors-fix.md) — Added .replit.dev/.riker.replit.dev/.replit.app domains to allowed CORS origins in server/index.ts.
