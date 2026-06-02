@@ -249,10 +249,12 @@ const SettingsPage: React.FC = () => {
   };
 
   const applyTheme = (t: string) => {
-    // ThemeContext manages class/data; but to keep no-flash we align selection with context.
-    // If ThemeContext is implemented via class, calling toggleTheme may not be enough for "system".
-    setSelectedTheme(t);
-    // best-effort: rely on ThemeContext existing selected theme state (it will re-render).
+    // ThemeContext selection must be one of the union literals.
+    if (t === 'light' || t === 'dark' || t === 'system') {
+      setSelectedTheme(t);
+    } else {
+      setSelectedTheme('system');
+    }
   };
 
   const fetchSettings = async () => {

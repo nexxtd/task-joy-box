@@ -84,7 +84,7 @@
     "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.18.1",
     "drizzle-orm": "^0.45.2",
     "embla-carousel-react": "^8.6.0",
     "eslint": "^8.57.0",
@@ -125,7 +125,7 @@
     "typescript": "^5.9.3",
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
-    "vite": "^5.4.10",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   },
   "devDependencies": {
