@@ -3,6 +3,56 @@ import { pool } from './db';
 export async function initDatabase() {
   try {
     console.log('Initializing database tables...');
+    
+    // First, check if support_tickets table exists
+    const checkSupportTickets = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'support_tickets'
+      );
+    `);
+    
+    if (!checkSupportTickets.rows[0].exists) {
+      console.log('Creating support tickets tables...');
+      
+      // Create support_tickets table
+      await pool.query(`
+        CREATE TABLE support_tickets (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          type TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          staff_replied BOOLEAN NOT NULL DEFAULT FALSE,
+          closed_at TEXT,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+        );
+      `);
+
+      // Create ticket_messages table
+      await pool.query(`
+        CREATE TABLE ticket_messages (
+          id SERIAL PRIMARY KEY,
+          ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+          sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          sender_type TEXT NOT NULL,
+          message TEXT NOT NULL,
+          read_by_user BOOLEAN NOT NULL DEFAULT FALSE,
+          read_by_staff BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        );
+      `);
+
+      // Create indexes for better performance
+      await pool.query(`CREATE INDEX support_tickets_user_id_idx ON support_tickets(user_id);`);
+      await pool.query(`CREATE INDEX support_tickets_status_idx ON support_tickets(status);`);
+      await pool.query(`CREATE INDEX ticket_messages_ticket_id_idx ON ticket_messages(ticket_id);`);
+      await pool.query(`CREATE INDEX ticket_messages_sender_id_idx ON ticket_messages(sender_id);`);
+      
+      console.log('Support tickets tables created successfully!');
+    }
 
     // Create board_snapshots table if it doesn't exist
     await pool.query(`
@@ -240,6 +290,42 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_note_id_idx ON note_tag_assignments(note_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_tag_id_idx ON note_tag_assignments(tag_id);`);
     console.log('Note tag tables verified');
+
+    // --- SUPPORT TICKETS TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        staff_replied BOOLEAN NOT NULL DEFAULT FALSE,
+        closed_at TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ticket_messages (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        sender_type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        read_by_user BOOLEAN NOT NULL DEFAULT FALSE,
+        read_by_staff BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+
+    // Create indexes for better performance
+    await pool.query(`CREATE INDEX IF NOT EXISTS support_tickets_user_id_idx ON support_tickets(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS support_tickets_status_idx ON support_tickets(status);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ticket_messages_ticket_id_idx ON ticket_messages(ticket_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ticket_messages_sender_id_idx ON ticket_messages(sender_id);`);
+    
+    console.log('Support tickets tables verified');
 
   } catch (error) {
     console.error('Database initialization error:', error);
