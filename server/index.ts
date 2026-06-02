@@ -33,18 +33,25 @@ import postgres from 'postgres';
 const app = express();
 
 // Create a postgres connection for session storage
+// For Supabase, we'll use a simple connection string approach
 const connectionString = process.env.DATABASE_URL!;
-const sessionPool = postgres(connectionString);
+let sessionStore: any;
 
-// For connect-pg-simple, the correct option is pgPromise or databaseURL
-const PostgresStore = connectPgSimple(session);
-const sessionStore = new PostgresStore({
-  conString: connectionString  // Use conString instead of conObject or pool
-});
+try {
+  // For connect-pg-simple, configure the session store
+  const PostgresStore = connectPgSimple(session);
+  sessionStore = new PostgresStore({
+    conString: connectionString
+  });
 
-sessionStore.on('error', (error: any) => {
-  console.error('Session store error:', error);
-});
+  sessionStore.on('error', (error: any) => {
+    console.error('Session store error:', error);
+  });
+} catch (error) {
+  console.error('Failed to initialize session store:', error);
+  // Fallback to memory store if database session store fails
+  sessionStore = new session.MemoryStore();
+}
 
 const PORT = parseInt(process.env.PORT || '3001');
 const isProduction = process.env.NODE_ENV === 'production';
@@ -222,10 +229,13 @@ app.use((req, res, next) => {
 });
 
 // Initialize database 
-initDatabase().catch(error => {
-  console.error('Failed to initialize database:', error);
-  process.exit(1);
-});
+initDatabase()
+  .then(() => console.log('Database initialized successfully'))
+  .catch(error => {
+    console.error('Database initialization failed:', error);
+    // Don't exit the process, as the app might still work with limited functionality
+    // Only exit if this is absolutely critical for your use case
+  });
 
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);

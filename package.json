@@ -69,7 +69,7 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.1.8",
     "antd": "^6.4.3",
     "autoprefixer": "^10.5.0",
     "bcryptjs": "^3.0.3",
@@ -84,8 +84,8 @@
     "crypto": "^1.0.1",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
-    "drizzle-kit": "^0.24.2",
-    "drizzle-orm": "^0.33.0",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "embla-carousel-react": "^8.6.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
@@ -125,8 +125,8 @@
     "typescript": "^5.9.3",
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.9"
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
