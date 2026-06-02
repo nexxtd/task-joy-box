@@ -69,6 +69,7 @@ export const tasks = pgTable('tasks', {
   order: integer('order').notNull(),
   recurrencePattern: text('recurrence_pattern'),
   nextOccurrence: text('next_occurrence'),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'setNull' }), // Added for project association
 });
 
 export const boardSnapshots = pgTable('board_snapshots', {
@@ -243,6 +244,19 @@ export const projects = pgTable('projects', {
   inviteCode: text('invite_code').notNull().unique(),
   archived: boolean('archived').default(false).notNull(),
   completed: boolean('completed').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+  order: integer('order').default(0).notNull(), // Added for project reordering
+});
+
+// Table for project-specific columns
+export const projectColumns = pgTable('project_columns', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  title: text('title').notNull(),
+  orderNum: integer('order_num').notNull(),
+  color: text('color').default('hsl(var(--muted-foreground))'),
+  icon: text('icon'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -420,5 +434,4 @@ export type UpdateOrganization = any;
 export type InsertOrganizationMember = any;
 export type InsertChatMessage = any;
 export type InsertGoal = any;
-export type InsertHabit = any;
 export type UpdateUserSettings = any;

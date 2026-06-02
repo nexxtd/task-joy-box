@@ -1,106 +1,40 @@
-import React, { useState } from 'react';
-import { Draggable, Droppable } from '@hello-pangea/dnd';
-import { Column as ColumnType, Task } from '@/types/board';
+import React from 'react';
 import { useBoardContext } from '@/context/BoardContext';
-import TaskCard from './TaskCard';
-import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { Task, Column } from '@/types/board';
+import { Card, CardContent } from '@/components/ui/card';
+import { Draggable, Droppable } from '@hello-pangea/dnd';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Brain } from 'lucide-react';
 
 interface BoardColumnProps {
-  column: ColumnType;
+  column: Column;
   tasks: Task[];
   index: number;
   onTaskClick: (task: Task) => void;
 }
 
 const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick }) => {
-  const { addTask, deleteColumn, updateColumn } = useBoardContext();
-  const [isAdding, setIsAdding] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<'urgent' | 'high' | 'medium' | 'low' | 'none'>('none');
-  const [dueDate, setDueDate] = useState('');
-  const [subject, setSubject] = useState('');
-  const [color, setColor] = useState('');
-  const [icon, setIcon] = useState('');
-  const [subtasks, setSubtasks] = useState<string[]>([]);
-  const [newSubtask, setNewSubtask] = useState('');
-  const [newFiles, setNewFiles] = useState<File[]>([]);
-  const [duration, setDuration] = useState<number>(60);
-  const [showRowUpgradePrompt, setShowRowUpgradePrompt] = useState(false);
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const isPremium = user?.subscriptionTier === 'premium';
-  const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
-  const [showMenu, setShowMenu] = useState(false);
-  const [editingColumnName, setEditingColumnName] = useState(false);
-  const [columnName, setColumnName] = useState(column.title);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showIconPicker, setShowIconPicker] = useState(false);
-  const [columnIcon, setColumnIcon] = useState(column.icon || '');
+  const { deleteTask, updateTask, moveTask } = useBoardContext();
 
-  const COLUMN_COLORS = [
-    '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
-    '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'
-  ];
-
-  const handleAddSubtask = () => {
-    if (newSubtask.trim()) {
-      setSubtasks([...subtasks, newSubtask.trim()]);
-      setNewSubtask('');
-    }
+  const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteTask(taskId);
   };
 
-  const removeSubtask = (index: number) => {
-    setSubtasks(subtasks.filter((_, i) => i !== index));
+  const handleToggleCompletion = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation();
+    updateTask(task.id, {
+      completed: !task.completed,
+      completedAt: !task.completed ? new Date().toISOString() : undefined,
+      status: !task.completed ? 'completed' : 'to_do'
+    });
   };
 
-  const handleAdd = async () => {
-    if (newTitle.trim()) {
-      const taskId = crypto.randomUUID();
-      addTask(column.id, newTitle.trim(), {
-        id: taskId,
-        description: description.trim(),
-        priority,
-        dueDate: dueDate || undefined,
-        subject: subject.trim() || undefined,
-        color: color || undefined,
-        icon: icon || undefined,
-        duration: duration || undefined,
-        subtasks: subtasks.length > 0 ? subtasks.map(s => ({ id: crypto.randomUUID(), text: s, completed: false })) : []
-      });
-
-      // Handle file uploads
-      if (newFiles.length > 0) {
-        for (const file of newFiles) {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('taskId', taskId);
-          try {
-            await fetch('/api/attachments/upload', {
-              method: 'POST',
-              body: formData,
-              credentials: 'include'
-            });
-          } catch (err) {
-            console.error('Failed to upload file:', file.name, err);
-          }
-        }
-      }
-      
-      setNewTitle('');
-      setDescription('');
-      setPriority('none');
-      setDueDate('');
-      setSubject('');
-      setColor('');
-      setIcon('');
-      setDuration(60);
-      setSubtasks([]);
-      setNewFiles([]);
-      setIsAdding(false);
-    }
+  const handleDeepFocusClick = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Implementation for deep focus mode
+    console.log('Starting deep focus for task:', task.title);
   };
 
   return (

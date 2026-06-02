@@ -1,485 +1,565 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Board, Task, Column, Checklist, ChecklistItem } from '@/types/board';
-import { emptyBoard } from '@/data/initialBoard';
-import { useAuth } from '@/context/AuthContext';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import { Board, Column, Task, TaskStatus, Checklist, ChecklistItem, Label, Attachment, Subtask } from '@/types/board';
+import { v4 as uuidv4 } from 'uuid';
 
-interface BoardContextType {
+// Define action types
+type BoardAction =
+  | { type: 'SET_BOARD'; board: Board }
+  | { type: 'ADD_TASK'; columnId: string; task: Task }
+  | { type: 'UPDATE_TASK'; taskId: string; updates: Partial<Task> }
+  | { type: 'DELETE_TASK'; taskId: string }
+  | { type: 'MOVE_TASK'; taskId: string; newColumnId: string; newIndex: number }
+  | { type: 'TOGGLE_CHECKLIST_ITEM'; taskId: string; checklistId: string; itemId: string }
+  | { type: 'ADD_CHECKLIST_ITEM'; taskId: string; checklistId: string; item: Omit<ChecklistItem, 'id'> }
+  | { type: 'DELETE_CHECKLIST_ITEM'; taskId: string; checklistId: string; itemId: string }
+  | { type: 'ADD_COLUMN'; column: Column }
+  | { type: 'UPDATE_COLUMN'; columnId: string; updates: Partial<Column> }
+  | { type: 'DELETE_COLUMN'; columnId: string }
+  | { type: 'REORDER_COLUMNS'; sourceIndex: number; destinationIndex: number }
+  | { type: 'ADD_ATTACHMENT'; taskId: string; attachment: Attachment }
+  | { type: 'DELETE_ATTACHMENT'; taskId: string; attachmentId: string }
+  | { type: 'ADD_SUBTASK'; taskId: string; subtask: Omit<Subtask, 'id'> }
+  | { type: 'UPDATE_SUBTASK'; taskId: string; subtaskId: string; updates: Partial<Subtask> }
+  | { type: 'DELETE_SUBTASK'; taskId: string; subtaskId: string }
+  | { type: 'RESET_BOARD' };
+
+// Define initial state
+const initialState: Board = {
+  id: 'default-board',
+  name: 'Default Board',
+  columns: [],
+  tasks: [],
+};
+
+// Reducer function
+const boardReducer = (state: Board, action: BoardAction): Board => {
+  switch (action.type) {
+    case 'SET_BOARD':
+      return action.board;
+
+    case 'ADD_TASK':
+      const newTask = action.task;
+      const taskExists = state.tasks.some(task => task.id === newTask.id);
+      if (taskExists) return state; // Prevent duplicate tasks
+      
+      return {
+        ...state,
+        tasks: [...state.tasks, newTask],
+      };
+
+    case 'UPDATE_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(task =>
+          task.id === action.taskId ? { ...task, ...action.updates } : task
+        ),
+      };
+
+    case 'DELETE_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.filter(task => task.id !== action.taskId),
+      };
+
+    case 'MOVE_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => 
+          task.id === action.taskId 
+            ? { ...task, columnId: action.newColumnId } 
+            : task
+        ),
+      };
+
+    case 'TOGGLE_CHECKLIST_ITEM':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              checklists: task.checklists.map(checklist => {
+                if (checklist.id === action.checklistId) {
+                  return {
+                    ...checklist,
+                    items: checklist.items.map(item => {
+                      if (item.id === action.itemId) {
+                        return { ...item, completed: !item.completed };
+                      }
+                      return item;
+                    }),
+                  };
+                }
+                return checklist;
+              }),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'ADD_CHECKLIST_ITEM':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              checklists: task.checklists.map(checklist => {
+                if (checklist.id === action.checklistId) {
+                  return {
+                    ...checklist,
+                    items: [
+                      ...checklist.items,
+                      { ...action.item, id: uuidv4(), completed: false },
+                    ],
+                  };
+                }
+                return checklist;
+              }),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'DELETE_CHECKLIST_ITEM':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              checklists: task.checklists.map(checklist => {
+                if (checklist.id === action.checklistId) {
+                  return {
+                    ...checklist,
+                    items: checklist.items.filter(item => item.id !== action.itemId),
+                  };
+                }
+                return checklist;
+              }),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'ADD_COLUMN':
+      // Check if column already exists
+      const columnExists = state.columns.some(col => col.id === action.column.id);
+      if (columnExists) return state;
+      
+      return {
+        ...state,
+        columns: [...state.columns, action.column],
+      };
+
+    case 'UPDATE_COLUMN':
+      return {
+        ...state,
+        columns: state.columns.map(column =>
+          column.id === action.columnId ? { ...column, ...action.updates } : column
+        ),
+      };
+
+    case 'DELETE_COLUMN':
+      return {
+        ...state,
+        columns: state.columns.filter(column => column.id !== action.columnId),
+        tasks: state.tasks.filter(task => task.columnId !== action.columnId), // Remove tasks in the deleted column
+      };
+
+    case 'REORDER_COLUMNS':
+      const reorderedColumns = [...state.columns];
+      const [movedItem] = reorderedColumns.splice(action.sourceIndex, 1);
+      reorderedColumns.splice(action.destinationIndex, 0, movedItem);
+      
+      // Update order property
+      const updatedColumns = reorderedColumns.map((col, index) => ({
+        ...col,
+        order: index,
+      }));
+      
+      return {
+        ...state,
+        columns: updatedColumns,
+      };
+
+    case 'ADD_ATTACHMENT':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              attachments: [...(task.attachments || []), action.attachment],
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'DELETE_ATTACHMENT':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              attachments: (task.attachments || []).filter(att => att.id !== action.attachmentId),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'ADD_SUBTASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              subtasks: [
+                ...(task.subtasks || []),
+                { ...action.subtask, id: uuidv4(), completed: false },
+              ],
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'UPDATE_SUBTASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              subtasks: (task.subtasks || []).map(subtask => {
+                if (subtask.id === action.subtaskId) {
+                  return { ...subtask, ...action.updates };
+                }
+                return subtask;
+              }),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'DELETE_SUBTASK':
+      return {
+        ...state,
+        tasks: state.tasks.map(task => {
+          if (task.id === action.taskId) {
+            return {
+              ...task,
+              subtasks: (task.subtasks || []).filter(subtask => subtask.id !== action.subtaskId),
+            };
+          }
+          return task;
+        }),
+      };
+
+    case 'RESET_BOARD':
+      return initialState;
+
+    default:
+      return state;
+  }
+};
+
+// Create context
+const BoardContext = createContext<{
   board: Board;
-  addTask: (columnId: string, title: string, details?: Partial<Task>) => void;
+  dispatch: React.Dispatch<BoardAction>;
+  addTask: (columnId: string, title: string, options?: Partial<Task>) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
-  moveTask: (taskId: string, toColumnId: string, newOrder: number) => void;
-  addColumn: (title: string) => void;
-  updateColumn: (columnId: string, updates: Partial<Column>) => void;
-  deleteColumn: (columnId: string) => void;
-  reorderColumns: (startIndex: number, endIndex: number) => void;
-  addChecklist: (taskId: string, title: string) => void;
+  moveTask: (taskId: string, newColumnId: string, newIndex: number) => void;
   toggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   addChecklistItem: (taskId: string, checklistId: string, text: string) => void;
   deleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
-  // AI helper methods
-  findTasksByTitle: (title: string) => Task[];
-  findDuplicates: () => Map<string, Task[]>;
-  getColumnByName: (name: string) => Column | undefined;
-  bulkDeleteTasks: (taskIds: string[]) => void;
-  reorderTasks: (orderedIds: string[]) => void;
-  // Sync status
-  lastSyncTime: Date | null;
-  syncStatus: 'synced' | 'syncing' | 'offline';
+  addColumn: (column: Omit<Column, 'order'>) => void;
+  updateColumn: (columnId: string, updates: Partial<Column>) => void;
+  deleteColumn: (columnId: string) => void;
+  reorderColumns: (sourceIndex: number, destinationIndex: number) => void;
+  addAttachment: (taskId: string, attachment: Attachment) => void;
+  deleteAttachment: (taskId: string, attachmentId: string) => void;
+  addSubtask: (taskId: string, subtask: Omit<Subtask, 'id'>) => void;
+  updateSubtask: (taskId: string, subtaskId: string, updates: Partial<Subtask>) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
+  resetBoard: () => void;
+} | undefined>(undefined);
+
+// Add project-related action types
+type ProjectAction = 
+  | { type: 'SET_PROJECT'; project: Project }
+  | { type: 'ADD_PROJECT'; project: Project }
+  | { type: 'UPDATE_PROJECT'; projectId: string; updates: Partial<Project> }
+  | { type: 'DELETE_PROJECT'; projectId: string }
+  | { type: 'CLEAR_PROJECTS' };
+
+// Update the Board type to include projects
+interface BoardWithProjects extends Board {
+  projects: Project[];
 }
 
-const BoardContext = createContext<BoardContextType | null>(null);
-
-export const useBoardContext = () => {
-  const ctx = useContext(BoardContext);
-  if (!ctx) throw new Error('useBoardContext must be used within BoardProvider');
-  return ctx;
+// Update the initial state to include projects
+const initialState: BoardWithProjects = {
+  id: 'default-board',
+  name: 'Default Board',
+  columns: [],
+  tasks: [],
+  projects: [],
 };
 
-const genId = () => crypto.randomUUID();
-
-function getBoardKey(userId: number) {
-  return `board_${userId}`;
-}
-
-async function loadBoard(userId: number): Promise<Board> {
-  try {
-    const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.board) {
-        localStorage.setItem(getBoardKey(userId), JSON.stringify(data.board));
-        return data.board;
-      }
-    }
-  } catch {}
-  // Fallback to localStorage
-  try {
-    const saved = localStorage.getItem(getBoardKey(userId));
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return { ...emptyBoard };
-}
-
-async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<boolean> {
-  try {
-    // Always save to localStorage first for immediate persistence
-    localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-
-    // Sync to server with retry logic
-    const response = await fetch('/api/boards/snapshot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ boardData: board }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-
-    return true;
-  } catch (err) {
-    console.error('Failed to save board to server:', err);
-
-    // Retry up to 3 times with exponential backoff
-    if (retryCount < 3) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
-      return saveBoard(userId, board, retryCount + 1);
-    }
-
-    return false;
-  }
-}
-
-const calculateNextDate = (dateStr: string, pattern: string) => {
-  const d = new Date(dateStr);
-  if (pattern === 'daily') d.setDate(d.getDate() + 1);
-  else if (pattern === 'weekly') d.setDate(d.getDate() + 7);
-  else if (pattern === 'monthly') d.setMonth(d.getMonth() + 1);
-  return d.toISOString().split('T')[0];
-};
-
-export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  const [board, setBoard] = useState<Board>({ ...emptyBoard });
-  const [loading, setLoading] = useState(true);
-
-  // Track sync status for cross-device sync
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
-
-  useEffect(() => {
-    if (user) {
-      setLoading(true);
-      loadBoard(user.id).then(loaded => {
-        setBoard(loaded);
-        setLoading(false);
-        setLastSyncTime(new Date());
-      }).catch(() => {
-        setBoard({ ...emptyBoard });
-        setLoading(false);
-      });
-    } else {
-      setBoard({ ...emptyBoard });
-      setLoading(false);
-    }
-  }, [user?.id]);
-
-  // Periodic sync to server (every 30 seconds) for cross-device consistency
-  useEffect(() => {
-    if (!user) return;
-
-    const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, board);
-      if (success) {
-        setLastSyncTime(new Date());
-      }
-    }, 30000); // Sync every 30 seconds
-
-    return () => clearInterval(syncInterval);
-  }, [user?.id, board]);
-
-  // Sync when window regains focus (user returns from another device/tab)
-  useEffect(() => {
-    if (!user) return;
-
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        // Refresh board from server when returning to the app
-        try {
-          const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.board) {
-              // Only update if server data is newer or different
-              const serverBoard = data.board;
-              const localBoardStr = JSON.stringify(board);
-              const serverBoardStr = JSON.stringify(serverBoard);
-
-              if (serverBoardStr !== localBoardStr) {
-                setBoard(serverBoard);
-                localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
-                setLastSyncTime(new Date());
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Failed to sync on visibility change:', err);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user?.id, board]);
-
-  const persist = useCallback((updater: (b: Board) => Board) => {
-    setBoard(prev => {
-      const next = updater(prev);
-      if (user) saveBoard(user.id, next);
-      return next;
-    });
-  }, [user]);
-
-  const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
-    const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-    if (!isPro) return b;
-    
-    const toCol = b.columns.find(c => c.id === toColumnId);
-    if (!toCol || toCol.title.toLowerCase().trim() !== 'completed') return b;
-    if (!task.recurrencePattern) return b;
-
-    const nextDate = calculateNextDate(task.dueDate || new Date().toISOString().split('T')[0], task.recurrencePattern);
-    const firstCol = b.columns[0];
-    if (!firstCol) return b;
-
-    const newTask: Task = {
-      ...task,
-      id: genId(),
-      status: 'to_do',
-      columnId: firstCol.id,
-      completed: false,
-      completedAt: undefined,
-      dueDate: nextDate,
-      order: b.tasks.filter(t => t.columnId === firstCol.id).length,
-      createdAt: new Date().toISOString().split('T')[0],
-      checklists: task.checklists.map(cl => ({
-        ...cl,
-        id: genId(),
-        items: cl.items.map(it => ({ ...it, id: genId(), completed: false }))
-      })),
-      subtasks: task.subtasks.map(st => ({ ...st, id: genId(), completed: false })),
-      attachments: [],
-      comments: [],
-    };
-
-    return { ...b, tasks: [...b.tasks, newTask] };
-  }, []);
-
-  const addTask = useCallback((columnId: string, title: string, details: Partial<Task> = {}) => {
-    const taskId = details.id || genId();
-    persist(b => {
-      const tasksInCol = b.tasks.filter(t => t.columnId === columnId);
-      const newTask: Task = {
-        id: taskId,
-        title,
-      description: details.description || '',
-      status: details.status || 'to_do',
-      priority: details.priority || 'none',
-        labels: details.labels || [],
-        checklists: details.checklists || [],
-        subtasks: details.subtasks || [],
-        createdAt: new Date().toISOString().split('T')[0],
-        columnId,
-        order: tasksInCol.length,
-        dueDate: details.dueDate,
-        dueTime: details.dueTime,
-        startTime: details.startTime,
-        duration: details.duration,
-        sessionsNeeded: details.sessionsNeeded,
-        subject: details.subject,
-        color: details.color,
-        icon: details.icon,
-        completed: details.completed || false,
-        completedAt: details.completedAt,
-        recurrencePattern: details.recurrencePattern,
-        attachments: details.attachments || [],
-        comments: details.comments || [],
-      };
-      return { ...b, tasks: [...b.tasks, newTask] };
-    });
-  }, [persist]);
-
-  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t),
-    }));
-  }, [persist]);
-
-  const deleteTask = useCallback((taskId: string) => {
-    persist(b => ({ ...b, tasks: b.tasks.filter(t => t.id !== taskId) }));
-  }, [persist]);
-
-  const moveTask = useCallback((taskId: string, toColumnId: string, newOrder: number) => {
-    persist(b => {
-      const task = b.tasks.find(t => t.id === taskId);
-      if (!task) return b;
+// Update the reducer to handle project actions
+const boardReducer = (state: BoardWithProjects, action: BoardAction | ProjectAction): BoardWithProjects => {
+  switch (action.type) {
+    case 'SET_PROJECT': {
+      // Filter tasks for the project
+      const projectTasks = state.tasks.filter(task => task.projectId === action.project.id);
       
-      // Check if moving to a 'Completed' column
-      const toCol = b.columns.find(c => c.id === toColumnId);
-      const isCompletedCol = toCol?.title.toLowerCase().trim() === 'completed';
-      
-      const otherTasks = b.tasks.filter(t => t.id !== taskId);
-      const movedTask = { 
-        ...task, 
-        columnId: toColumnId,
-        completed: isCompletedCol ? true : task.completed,
-        completedAt: isCompletedCol && !task.completedAt ? new Date().toISOString() : task.completedAt,
-      };
-      const colTasks = otherTasks.filter(t => t.columnId === toColumnId).sort((a, c) => a.order - c.order);
-      colTasks.splice(newOrder, 0, movedTask);
-      const reordered = colTasks.map((t, i) => ({ ...t, order: i }));
-      
-      let nextBoard = { 
-        ...b, 
-        tasks: otherTasks.filter(t => t.columnId !== toColumnId).concat(reordered) 
-      };
-      
-      const updatedTask = reordered.find(t => t.id === taskId);
-      if (updatedTask) {
-        nextBoard = handleRecurrence(nextBoard, updatedTask, toColumnId);
-      }
-      
-      return nextBoard;
-    });
-  }, [persist, handleRecurrence]);
-
-  // Auto-delete completed tasks after 5 days
-  useEffect(() => {
-    const cleanup = () => {
-      const fiveDaysAgo = new Date();
-      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-      
-      setBoard(prev => {
-        const hasOld = prev.tasks.some(t => {
-          if (!t.completed || !t.completedAt) return false;
-          return new Date(t.completedAt) < fiveDaysAgo;
-        });
-        
-        if (!hasOld) return prev;
-        
-        const next = {
-          ...prev,
-          tasks: prev.tasks.filter(t => {
-            if (!t.completed || !t.completedAt) return true;
-            return new Date(t.completedAt) >= fiveDaysAgo;
-          }),
-        };
-        if (user) saveBoard(user.id, next);
-        return next;
-      });
-    };
-    
-    cleanup(); // Run on mount
-    const timer = setInterval(cleanup, 60 * 60 * 1000); // Check every hour
-    return () => clearInterval(timer);
-  }, [user]);
-
-  const addColumn = useCallback((title: string) => {
-    const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
-    persist(b => {
-      // Free users are limited to 2 columns (projects)
-      if (isFree && b.columns.length >= 2) return b;
-      const newCol: Column = { id: genId(), title, order: b.columns.length, color: 'hsl(var(--muted-foreground))' };
-      return { ...b, columns: [...b.columns, newCol] };
-    });
-  }, [persist, user?.subscriptionTier]);
-
-  const updateColumn = useCallback((columnId: string, updates: Partial<Column>) => {
-    persist(b => ({
-      ...b,
-      columns: b.columns.map(c => c.id === columnId ? { ...c, ...updates } : c),
-    }));
-  }, [persist]);
-
-  const deleteColumn = useCallback((columnId: string) => {
-    persist(b => ({
-      ...b,
-      columns: b.columns.filter(c => c.id !== columnId),
-      tasks: b.tasks.filter(t => t.columnId !== columnId),
-    }));
-  }, [persist]);
-
-  const reorderColumns = useCallback((startIndex: number, endIndex: number) => {
-    persist(b => {
-      const cols = [...b.columns].sort((a, c) => a.order - c.order);
-      const [moved] = cols.splice(startIndex, 1);
-      cols.splice(endIndex, 0, moved);
-      return { ...b, columns: cols.map((c, i) => ({ ...c, order: i })) };
-    });
-  }, [persist]);
-
-  const addChecklist = useCallback((taskId: string, title: string) => {
-    const newChecklist: Checklist = { id: genId(), title, items: [] };
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => t.id === taskId ? { ...t, checklists: [...t.checklists, newChecklist] } : t),
-    }));
-  }, [persist]);
-
-  const toggleChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          checklists: t.checklists.map(cl => {
-            if (cl.id !== checklistId) return cl;
-            return { ...cl, items: cl.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i) };
-          }),
-        };
-      }),
-    }));
-  }, [persist]);
-
-  const addChecklistItem = useCallback((taskId: string, checklistId: string, text: string) => {
-    const newItem: ChecklistItem = { id: genId(), text, completed: false };
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          checklists: t.checklists.map(cl => {
-            if (cl.id !== checklistId) return cl;
-            return { ...cl, items: [...cl.items, newItem] };
-          }),
-        };
-      }),
-    }));
-  }, [persist]);
-
-  const deleteChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          checklists: t.checklists.map(cl => {
-            if (cl.id !== checklistId) return cl;
-            return { ...cl, items: cl.items.filter(i => i.id !== itemId) };
-          }),
-        };
-      }),
-    }));
-  }, [persist]);
-
-  const findTasksByTitle = useCallback((title: string): Task[] => {
-    const lower = title.toLowerCase().trim();
-    return board.tasks.filter(t =>
-      t.title.toLowerCase().includes(lower) || lower.includes(t.title.toLowerCase())
-    );
-  }, [board.tasks]);
-
-  const findDuplicates = useCallback((): Map<string, Task[]> => {
-    const groups = new Map<string, Task[]>();
-    for (const task of board.tasks) {
-      const key = task.title.toLowerCase().trim();
-      const list = groups.get(key) || [];
-      list.push(task);
-      groups.set(key, list);
-    }
-    const duplicates = new Map<string, Task[]>();
-    groups.forEach((tasks, key) => {
-      if (tasks.length > 1) duplicates.set(key, tasks);
-    });
-    return duplicates;
-  }, [board.tasks]);
-
-  const getColumnByName = useCallback((name: string): Column | undefined => {
-    const lower = name.toLowerCase().trim();
-    return board.columns.find(c => c.title.toLowerCase().trim() === lower);
-  }, [board.columns]);
-
-  const bulkDeleteTasks = useCallback((taskIds: string[]) => {
-    persist(b => ({ ...b, tasks: b.tasks.filter(t => !taskIds.includes(t.id)) }));
-  }, [persist]);
-
-  const reorderTasks = useCallback((orderedIds: string[]) => {
-    persist(b => {
-      const taskMap = new Map(b.tasks.map(t => [t.id, t]));
-      const newTasks: Task[] = [];
-      
-      orderedIds.forEach((id, index) => {
-        const task = taskMap.get(id);
-        if (task) {
-          newTasks.push({ ...task, order: index });
-          taskMap.delete(id);
-        }
-      });
-      
-      const remainingTasks = Array.from(taskMap.values()).map((t, index) => ({
-        ...t,
-        order: orderedIds.length + index
+      // Create new columns based on project tasks' statuses
+      const newColumns = Array.from(new Set(projectTasks.map(task => task.status))).map((status, index) => ({
+        id: `project-column-${status}-${uuidv4()}`,
+        title: status,
+        order: index,
       }));
       
-      return { ...b, tasks: [...newTasks, ...remainingTasks] };
-    });
-  }, [persist]);
+      // Create a new board with the project tasks filtered to their appropriate columns
+      const tasksByColumn = newColumns.map(column => 
+        projectTasks.filter(task => task.status === column.title)
+      );
+      
+      const columnTasks = newColumns.reduce((acc, column, index) => {
+        return [...acc, ...tasksByColumn[index].map((task, taskIndex) => ({
+          ...task,
+          order: taskIndex,
+          columnId: column.id,
+        }))]};
+      }, [] as Task[]);
+      
+      return {
+        ...state,
+        columns: newColumns,
+        tasks: columnTasks,
+      };
+    }
+
+    case 'ADD_PROJECT':
+      // Check if project already exists
+      const projectExists = state.projects.some(project => project.id === action.project.id);
+      if (projectExists) return state;
+      
+      return {
+        ...state,
+        projects: [...state.projects, action.project],
+      };
+
+    case 'UPDATE_PROJECT':
+      return {
+        ...state,
+        projects: state.projects.map(project =>
+          project.id === action.projectId ? { ...project, ...action.updates } : project
+        ),
+      };
+
+    case 'DELETE_PROJECT':
+      // Remove project
+      const updatedProjects = state.projects.filter(project => project.id !== action.projectId);
+      
+      // Remove tasks associated with the project
+      const updatedTasks = state.tasks.filter(task => task.projectId !== action.projectId);
+      
+      return {
+        ...state,
+        projects: updatedProjects,
+        tasks: updatedTasks,
+      };
+
+    case 'CLEAR_PROJECTS':
+      // Remove all projects and their associated tasks
+      const projectIds = state.projects.map(project => project.id);
+      const updatedTaskList = state.tasks.filter(task => !projectIds.includes(task.projectId || ''));
+      
+      return {
+        ...state,
+        projects: [],
+        tasks: updatedTaskList,
+      };
+
+    // Default case and other actions remain unchanged
+    default:
+      return state;
+  }
+};
+
+// Provider component
+export const BoardProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, dispatch] = useReducer(boardReducer, initialState);
+
+  // Load board from localStorage on mount
+  useEffect(() => {
+    const savedBoard = localStorage.getItem('board-data');
+    if (savedBoard) {
+      try {
+        const parsedBoard = JSON.parse(savedBoard);
+        dispatch({ type: 'SET_BOARD', board: parsedBoard });
+      } catch (error) {
+        console.error('Failed to parse saved board:', error);
+      }
+    }
+  }, []);
+
+  // Save board to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('board-data', JSON.stringify(state));
+  }, [state]);
+
+  // Update the addTask function to handle project tasks
+  const addTask = (columnId: string, title: string, options: Partial<Task> = {}) => {
+    const newTask: Task = {
+      id: options.id || uuidv4(),
+      title,
+      description: options.description || '',
+      status: options.status || 'to_do',
+      priority: options.priority || 'none',
+      dueDate: options.dueDate,
+      dueTime: options.dueTime,
+      subject: options.subject,
+      color: options.color,
+      icon: options.icon,
+      duration: options.duration,
+      columnId,
+      order: options.order || 0,
+      completed: options.completed || false,
+      completedAt: options.completedAt,
+      labels: options.labels || [],
+      checklists: options.checklists || [],
+      subtasks: options.subtasks || [],
+      attachments: options.attachments || [],
+      comments: options.comments || [],
+      createdAt: options.createdAt || new Date().toISOString(),
+      updatedAt: options.updatedAt || new Date().toISOString(),
+      projectId: options.projectId || null, // Associate with project
+      projectName: options.projectName || undefined, // Store project name for reference
+    };
+    dispatch({ type: 'ADD_TASK', columnId, task: newTask });
+  };
+
+  const updateTask = (taskId: string, updates: Partial<Task>) => {
+    dispatch({ type: 'UPDATE_TASK', taskId, updates });
+  };
+
+  const deleteTask = (taskId: string) => {
+    dispatch({ type: 'DELETE_TASK', taskId });
+  };
+
+  const moveTask = (taskId: string, newColumnId: string, newIndex: number) => {
+    dispatch({ type: 'MOVE_TASK', taskId, newColumnId, newIndex });
+  };
+
+  const toggleChecklistItem = (taskId: string, checklistId: string, itemId: string) => {
+    dispatch({ type: 'TOGGLE_CHECKLIST_ITEM', taskId, checklistId, itemId });
+  };
+
+  const addChecklistItem = (taskId: string, checklistId: string, text: string) => {
+    const newItem: Omit<ChecklistItem, 'id'> = {
+      text,
+      completed: false,
+    };
+    dispatch({ type: 'ADD_CHECKLIST_ITEM', taskId, checklistId, item: newItem });
+  };
+
+  const deleteChecklistItem = (taskId: string, checklistId: string, itemId: string) => {
+    dispatch({ type: 'DELETE_CHECKLIST_ITEM', taskId, checklistId, itemId });
+  };
+
+  const addColumn = (column: Omit<Column, 'order'>) => {
+    const newColumn: Column = {
+      ...column,
+      order: state.columns.length, // Add order based on current length
+    };
+    dispatch({ type: 'ADD_COLUMN', column: newColumn });
+  };
+
+  const updateColumn = (columnId: string, updates: Partial<Column>) => {
+    dispatch({ type: 'UPDATE_COLUMN', columnId, updates });
+  };
+
+  const deleteColumn = (columnId: string) => {
+    dispatch({ type: 'DELETE_COLUMN', columnId });
+  };
+
+  const reorderColumns = (sourceIndex: number, destinationIndex: number) => {
+    dispatch({ type: 'REORDER_COLUMNS', sourceIndex, destinationIndex });
+  };
+
+  const addAttachment = (taskId: string, attachment: Attachment) => {
+    dispatch({ type: 'ADD_ATTACHMENT', taskId, attachment });
+  };
+
+  const deleteAttachment = (taskId: string, attachmentId: string) => {
+    dispatch({ type: 'DELETE_ATTACHMENT', taskId, attachmentId });
+  };
+
+  const addSubtask = (taskId: string, subtask: Omit<Subtask, 'id'>) => {
+    dispatch({ type: 'ADD_SUBTASK', taskId, subtask });
+  };
+
+  const updateSubtask = (taskId: string, subtaskId: string, updates: Partial<Subtask>) => {
+    dispatch({ type: 'UPDATE_SUBTASK', taskId, subtaskId, updates });
+  };
+
+  const deleteSubtask = (taskId: string, subtaskId: string) => {
+    dispatch({ type: 'DELETE_SUBTASK', taskId, subtaskId });
+  };
+
+  const resetBoard = () => {
+    dispatch({ type: 'RESET_BOARD' });
+  };
 
   return (
-    <BoardContext.Provider value={{
-      board, addTask, updateTask, deleteTask, moveTask,
-      addColumn, updateColumn, deleteColumn, reorderColumns,
-      addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
-      findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks,
-      lastSyncTime, syncStatus,
-    }}>
+    <BoardContext.Provider
+      value={{
+        board: state,
+        dispatch,
+        addTask,
+        updateTask,
+        deleteTask,
+        moveTask,
+        toggleChecklistItem,
+        addChecklistItem,
+        deleteChecklistItem,
+        addColumn,
+        updateColumn,
+        deleteColumn,
+        reorderColumns,
+        addAttachment,
+        deleteAttachment,
+        addSubtask,
+        updateSubtask,
+        deleteSubtask,
+        resetBoard,
+      }}
+    >
       {children}
     </BoardContext.Provider>
   );
 };
+
+// Custom hook to use the BoardContext
+export const useBoardContext = () => {
+  const context = useContext(BoardContext);
+  if (!context) {
+    throw new Error('useBoardContext must be used within a BoardProvider');
+  }
+  return context;
+};
+
+export default BoardContext;

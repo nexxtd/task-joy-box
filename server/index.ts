@@ -20,6 +20,8 @@ import settingsRoutes from './routes/settings';
 import attachmentRoutes from './routes/attachments';
 import adminRoutes from './routes/admin';
 import boardRoutes from './routes/boards';
+import columnRoutes from './routes/columns'; // Import added for reference
+import projectColumnRoutes from './routes/project-columns'; // New import added
 import whiteboardsRoutes from './routes/whiteboards';
 import deepFocusRoutes from './routes/deepFocus';
 import path from 'path';

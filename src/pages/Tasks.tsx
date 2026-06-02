@@ -34,12 +34,6 @@ import {
 } from '@hello-pangea/dnd';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
-const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
-  { value: 'to_do', label: 'To Do' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'completed', label: 'Completed' },
-];
 
 type AnalysisTab = 'overview' | 'duration' | 'deadlines' | 'focus';
 
@@ -79,7 +73,7 @@ const getTaskStatus = (task: Task): TaskStatus => {
 };
 
 const getStatusLabel = (status: TaskStatus) =>
-  STATUS_OPTIONS.find(o => o.value === status)?.label || 'To Do';
+  status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1);
 
 const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
@@ -219,26 +213,23 @@ const Tasks: React.FC = () => {
   const isPro = user?.subscriptionTier === 'pro';
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
-  const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
-  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  // State for task list structure
+  const [expandedProjects, setExpandedProjects] = useState<number[]>([]);
+  const [expandedColumns, setExpandedColumns] = useState<{[key: string]: boolean}>({});
   const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
-  const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'status' | 'due' | 'duration' | 'project' | null>(null);
-  const [quickEditDueDate, setQuickEditDueDate] = useState('');
-  const [quickEditDueTime, setQuickEditDueTime] = useState('');
-  const [quickEditDuration, setQuickEditDuration] = useState(0);
-  const [quickEditStatus, setQuickEditStatus] = useState<TaskStatus>('to_do');
-  const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
-
+  
+  // AI task button state
+  const [aiTaskOpen, setAiTaskOpen] = useState(false);
+  
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
-  const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'high' | 'medium' | 'low'>('all');
-  const [groupFilterId, setGroupFilterId] = useState<string | null>(null);
   const [sortByDueDate, setSortByDueDate] = useState(false);
   const [sortDueDateDesc, setSortDueDateDesc] = useState(false);
 
@@ -250,8 +241,8 @@ const Tasks: React.FC = () => {
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
-  const [newTaskColumnId, setNewTaskColumnId] = useState<string>('');
   const [newTaskProjectId, setNewTaskProjectId] = useState<number | ''>('');
+  const [newTaskColumnId, setNewTaskColumnId] = useState<string>('');
   const [newTaskSubtasks, setNewTaskSubtasks] = useState<NewTaskSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);
@@ -265,7 +256,6 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   const [completedOpen, setCompletedOpen] = useState(true);
-  const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -280,8 +270,6 @@ const Tasks: React.FC = () => {
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
-
-  const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -306,105 +294,88 @@ const Tasks: React.FC = () => {
     return Array.from(byId.values());
   }, [board.tasks]);
 
-  const filteredTasksByBase = useMemo(() => {
-    return board.tasks.filter(task => {
+  // Get all tasks grouped by project and column
+  const groupedTasks = useMemo(() => {
+    const grouped: {[projectId: number]: {[columnId: string]: Task[]}} = {};
+    
+    // Group tasks by project and column
+    board.tasks.forEach(task => {
+      const projectId = task.projectId || 0; // 0 for tasks not assigned to any project
+      const columnId = task.columnId;
+      
+      if (!grouped[projectId]) {
+        grouped[projectId] = {};
+      }
+      if (!grouped[projectId][columnId]) {
+        grouped[projectId][columnId] = [];
+      }
+      
+      // Apply search and priority filters
       const matchesSearch = task.title.toLowerCase().includes(search.toLowerCase().trim());
       const matchesPriority = priorityFilter === 'all' ? true : task.priority === priorityFilter;
-      const matchesProject = projectFilterId === 'all' ? true : task.projectId === projectFilterId;
       const matchesTags = tagFilterIds.length === 0
         ? true
         : tagFilterIds.every(tagId => task.labels.some(label => label.id === tagId));
-      return matchesSearch && matchesPriority && matchesProject && matchesTags;
+        
+      if (matchesSearch && matchesPriority && matchesTags) {
+        grouped[projectId][columnId].push(task);
+      }
     });
-  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds]);
-
-  const filtered = useMemo(() => {
-    const byGroup = filteredTasksByBase.filter(task =>
-      !groupFilterId ? true : task.columnId === groupFilterId
-    );
-
-    const active = byGroup.filter(task => !isTaskCompleted(task));
-    const completed = byGroup.filter(task => isTaskCompleted(task));
-
-    const sortByDue = (a: Task, b: Task) => {
-      const aDate = a.dueDate ? new Date(`${a.dueDate}T${a.dueTime || '23:59'}`) : null;
-      const bDate = b.dueDate ? new Date(`${b.dueDate}T${b.dueTime || '23:59'}`) : null;
-      if (!aDate && !bDate) return 0;
-      if (!aDate) return 1;
-      if (!bDate) return -1;
-      const diff = aDate.getTime() - bDate.getTime();
-      return sortDueDateDesc ? -diff : diff;
-    };
-
-    const sortByPriorityOrder = (a: Task, b: Task) => {
-      const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
-      const diff = (order[a.priority] ?? 4) - (order[b.priority] ?? 4);
-      if (diff !== 0) return diff;
-      return (a.order || 0) - (b.order || 0);
-    };
-
-    let activeSorted: Task[];
-    if (sortByDueDate) {
-      activeSorted = [...active].sort(sortByDue);
-    } else if (orderedActiveIds.length > 0) {
-      const idSet = new Set(active.map(t => t.id));
-      const ordered = orderedActiveIds.filter(id => idSet.has(id));
-      const unordered = active.filter(t => !orderedActiveIds.includes(t.id));
-      const orderedTasks = ordered.map(id => active.find(t => t.id === id)!).filter(Boolean);
-      activeSorted = [...orderedTasks, ...unordered];
-    } else {
-      activeSorted = [...active].sort(sortByPriorityOrder);
-    }
-
-    const completedSorted = [...completed].sort((a, b) => {
-      const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-      const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-      return bTime - aTime;
+    
+    // Sort tasks within each column
+    Object.keys(grouped).forEach(projectId => {
+      Object.keys(grouped[parseInt(projectId)]).forEach(columnId => {
+        grouped[parseInt(projectId)][columnId].sort((a, b) => (a.order || 0) - (b.order || 0));
+      });
     });
+    
+    return grouped;
+  }, [board.tasks, search, priorityFilter, tagFilterIds]);
 
-    return { active: activeSorted, completed: completedSorted };
-  }, [filteredTasksByBase, groupFilterId, sortByDueDate, sortDueDateDesc, orderedActiveIds]);
+  const matchingCount = Object.values(groupedTasks).reduce((total, projectCols) => {
+    return total + Object.values(projectCols).reduce((sum, tasks) => sum + tasks.length, 0);
+  }, 0);
 
-  const matchingCount = filtered.active.length + filtered.completed.length;
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
 
-  const toggleSortByDueDate = () => {
-    if (!sortByDueDate) {
-      setSortByDueDate(true);
-      setSortDueDateDesc(false);
-    } else if (!sortDueDateDesc) {
-      setSortDueDateDesc(true);
-    } else {
-      setSortByDueDate(false);
-      setSortDueDateDesc(false);
-    }
+  const toggleProjectExpansion = (projectId: number) => {
+    setExpandedProjects(prev => 
+      prev.includes(projectId) 
+        ? prev.filter(id => id !== projectId) 
+        : [...prev, projectId]
+    );
   };
 
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination || sortByDueDate) return;
-    const items = [...filtered.active];
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    setOrderedActiveIds(items.map(t => t.id));
-    items.forEach((task, idx) => updateTask(task.id, { order: idx }));
+  const toggleColumnExpansion = (columnId: string) => {
+    setExpandedColumns(prev => ({
+      ...prev,
+      [columnId]: !prev[columnId]
+    }));
   };
 
   const runTaskAnalysis = useCallback((type: AnalysisTab) => {
     setActiveAnalysisTab(type);
     setAnalysisLoading(true);
-    const scope = [...filtered.active, ...filtered.completed];
-    const activeScope = scope.filter(task => !isTaskCompleted(task));
+    const allTasks = board.tasks.filter(task => {
+      const matchesSearch = task.title.toLowerCase().includes(search.toLowerCase().trim());
+      const matchesPriority = priorityFilter === 'all' ? true : task.priority === priorityFilter;
+      const matchesTags = tagFilterIds.length === 0
+        ? true
+        : tagFilterIds.every(tagId => task.labels.some(label => label.id === tagId));
+      return matchesSearch && matchesPriority && matchesTags;
+    });
+    const activeScope = allTasks.filter(task => !isTaskCompleted(task));
     const now = new Date();
     let result: AnalysisResult;
 
     if (type === 'overview') {
-      const completedCount = scope.filter(t => isTaskCompleted(t)).length;
-      const reviewCount = scope.filter(t => getTaskStatus(t) === 'review').length;
-      const withSubtasks = scope.filter(t => (t.subtasks || []).length > 0).length;
-      const withChecklist = scope.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
+      const completedCount = allTasks.filter(t => isTaskCompleted(t)).length;
+      const reviewCount = allTasks.filter(t => getTaskStatus(t) === 'review').length;
+      const withSubtasks = allTasks.filter(t => (t.subtasks || []).length > 0).length;
+      const withChecklist = allTasks.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
       result = {
         title: 'Task Overview',
-        summary: `${scope.length} tasks in current view`,
+        summary: `${allTasks.length} tasks in current view`,
         lines: [
           { text: `${activeScope.length} active` },
           { text: `${completedCount} completed` },
@@ -453,7 +424,7 @@ const Tasks: React.FC = () => {
       const candidates = activeScope
         .map(task => {
           const pw = ({ urgent: 4, high: 3, medium: 2, low: 1, none: 0 } as Record<string, number>)[task.priority] ?? 0;
-          const dw = task.dueDate ? Math.max(0, 100000000000 - new Date(`${task.dueDate}T${task.dueTime || '23:59'}`).getTime()) : 0;
+          const dw = task.dueDate ? Math.max(0, 100000000000 - new Date(`${task.dueDate}T${t.dueTime || '23:59'}`).getTime()) : 0;
           const ct = task.checklists.reduce((s, l) => s + l.items.length, 0);
           const cd = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
           const penalty = ct > 0 ? cd / ct : 0;
@@ -477,7 +448,7 @@ const Tasks: React.FC = () => {
       setAnalysisResult(result);
       setAnalysisLoading(false);
     }, 200);
-  }, [filtered]);
+  }, [board.tasks, search, priorityFilter, tagFilterIds]);
 
   const toggleTaskCompletion = (task: Task) => {
     if (isTaskCompleted(task)) {
@@ -517,8 +488,8 @@ const Tasks: React.FC = () => {
     setNewTaskDueDate('');
     setNewTaskDueTime('');
     setNewTaskDuration(60);
-    setNewTaskColumnId('');
     setNewTaskProjectId('');
+    setNewTaskColumnId('');
     setNewTaskSubtasks([]);
     setNewSubtaskText('');
     setNewSubtaskDuration(10);
@@ -649,45 +620,6 @@ const Tasks: React.FC = () => {
   const newSubtaskTotal = newTaskSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
-  const openQuickEdit = (task: Task, field: 'status' | 'due' | 'duration' | 'project') => {
-    setQuickEditTaskId(task.id);
-    setQuickEditField(field);
-    setQuickEditStatus(getTaskStatus(task));
-    setQuickEditDueDate(task.dueDate || '');
-    setQuickEditDueTime(task.dueTime || '');
-    setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
-    setQuickEditProjectId(task.projectId || '');
-  };
-
-  const closeQuickEdit = () => {
-    setQuickEditTaskId(null);
-    setQuickEditField(null);
-  };
-
-  const applyQuickEdit = (task: Task) => {
-    const updates: Partial<Task> = {};
-    if (quickEditField === 'status') {
-      updates.status = quickEditStatus;
-      updates.completed = quickEditStatus === 'completed';
-      updates.completedAt = quickEditStatus === 'completed' ? task.completedAt || new Date().toISOString() : undefined;
-    }
-    if (quickEditField === 'due') {
-      updates.dueDate = quickEditDueDate || undefined;
-      updates.dueTime = quickEditDueTime || undefined;
-    }
-    if (quickEditField === 'duration') {
-      updates.duration = Math.max(0, Number(quickEditDuration) || 0);
-    }
-    if (quickEditField === 'project') {
-      updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
-      updates.projectName = quickEditProjectId === ''
-        ? undefined
-        : (projects.find(project => project.id === Number(quickEditProjectId))?.name || undefined);
-    }
-    updateTask(task.id, updates);
-    closeQuickEdit();
-  };
-
   const toggleTaskTag = (taskId: string, label: Label) => {
     const task = board.tasks.find(item => item.id === taskId);
     if (!task) return;
@@ -730,7 +662,7 @@ const Tasks: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
         <div>
           <h1 className="text-lg font-bold text-foreground">All Tasks</h1>
@@ -739,7 +671,7 @@ const Tasks: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setAiBuilderOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border bg-primary/10 border-primary/20 text-primary hover:bg-primary/15 transition-all"
+            className="hidden md:flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border bg-primary/10 border-primary/20 text-primary hover:bg-primary/15 transition-all"
           >
             <Sparkles className="w-4 h-4" />
             AI Task
@@ -895,7 +827,7 @@ const Tasks: React.FC = () => {
                     </div>
                     <button
                       onClick={() => {
-                        const current = board.tasks.find(task => task.id === openTaskId) || filteredTasksByBase[0];
+                        const current = board.tasks.find(task => task.id === openTaskId) || board.tasks[0];
                         if (current) createTaskTag(current.id);
                         
                       }}
@@ -910,120 +842,10 @@ const Tasks: React.FC = () => {
             )}
           </div>
 
-          <div className="relative">
-            <button
-              onClick={() => setGroupDropdownOpen(!groupDropdownOpen)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
-                groupFilterId
-                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>
-                {groupFilterId
-                  ? `Group: ${board.columns.find(c => c.id === groupFilterId)?.title || ''}`
-                  : 'Group Filter'}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 ml-1" />
-            </button>
-
-            {groupDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setGroupDropdownOpen(false)} />
-                <div className="absolute left-0 mt-1.5 w-52 bg-card border border-border rounded-xl shadow-lg z-30 py-1 animate-fade-in">
-                  <button
-                    onClick={() => { setGroupFilterId(null); setGroupDropdownOpen(false); }}
-                    className={`w-full text-left px-3.5 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between ${!groupFilterId ? 'text-primary font-semibold' : 'text-foreground'}`}
-                  >
-                    All Groups
-                    {!groupFilterId && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </button>
-                  <div className="h-px bg-border my-1" />
-                  {board.columns.map(column => (
-                    <button
-                      key={column.id}
-                      onClick={() => { setGroupFilterId(column.id); setGroupDropdownOpen(false); }}
-                      className={`w-full text-left px-3.5 py-2 text-xs hover:bg-muted transition-colors flex items-center gap-2 ${groupFilterId === column.id ? 'text-primary font-semibold' : 'text-foreground'}`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-                      <span className="flex-1">{column.title}</span>
-                      {groupFilterId === column.id && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setProjectDropdownOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
-                projectFilterId !== 'all'
-                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              <FolderKanban className="w-3.5 h-3.5" />
-              <span>
-                {projectFilterId === 'all'
-                  ? 'Project Filter'
-                  : `Project: ${projects.find(project => project.id === projectFilterId)?.name || 'Selected'}`}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 ml-1" />
-            </button>
-            {projectDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setProjectDropdownOpen(false)} />
-              <div className="absolute left-0 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-lg z-30 p-2">
-                <button
-                  onClick={() => { setProjectFilterId('all'); setProjectDropdownOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted"
-                >
-                  All projects
-                </button>
-                <div className="space-y-1 max-h-52 overflow-y-auto">
-                  {projects.map(project => (
-                    <button
-                      key={project.id}
-                      onClick={() => { setProjectFilterId(project.id); setProjectDropdownOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted flex items-center gap-2 ${
-                        projectFilterId === project.id ? 'bg-primary/10 text-primary' : ''
-                      }`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
-                      <span className="flex-1 truncate">{project.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              </>
-            )}
-          </div>
-
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={toggleSortByDueDate}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border transition-all ${
-                sortByDueDate
-                  ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground'
-              }`}
-              title={sortByDueDate ? (sortDueDateDesc ? 'Latest first — click to disable' : 'Soonest first — click for latest first') : 'Sort by due date'}
-            >
-              {sortByDueDate && sortDueDateDesc ? (
-                <ArrowDown className="w-3.5 h-3.5" />
-              ) : sortByDueDate ? (
-                <ArrowUp className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowUp className="w-3.5 h-3.5 opacity-40" />
-              )}
-              Sort by Due Date
-            </button>
-            <button
               onClick={() => { setAnalysisPanelOpen(true); runTaskAnalysis(activeAnalysisTab); }}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Task Analysis
@@ -1033,441 +855,594 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-5xl mx-auto space-y-4">
-          {filtered.active.length === 0 && filtered.completed.length === 0 && (
-            <div className="text-center py-16">
-              <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
-              <p className="text-sm text-muted-foreground">No tasks found</p>
-            </div>
-          )}
-
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="active-tasks">
-              {(provided) => (
-                <div
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  className="space-y-2"
-                >
-                  {filtered.active.map((task, index) => {
-                    const column = board.columns.find(c => c.id === task.columnId);
-                    const isExpanded = expandedTaskIds.includes(task.id);
-                    const subtaskCount = task.subtasks?.length || 0;
-                    const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
-                    const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-                    const status = getTaskStatus(task);
-                    const statusCfg = STATUS_CONFIG[status];
-                    const dueWarning = getDueTimeWarning(task);
-                    const taskDurFmt = formatDuration(task.duration || 0);
-                    const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
-                    const taskTags = task.labels.slice(0, 3);
-
+        <div className="max-w-5xl mx-auto">
+          {/* Task List Structure */}
+          <div className="space-y-6">
+            {/* My Tasks Section */}
+            <div className="space-y-2">
+              <div 
+                className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer"
+                onClick={() => toggleProjectExpansion(0)}
+              >
+                <span className="font-semibold text-foreground">MY TASKS</span>
+                <span className="text-xs text-muted-foreground">({(groupedTasks[0] ? Object.values(groupedTasks[0]).flat().length : 0)})</span>
+                <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${expandedProjects.includes(0) ? 'rotate-180' : ''}`} />
+              </div>
+              
+              {expandedProjects.includes(0) && groupedTasks[0] && (
+                <div className="pl-4 space-y-2">
+                  {Object.entries(groupedTasks[0]).map(([columnId, tasks]) => {
+                    const column = board.columns.find(col => col.id === columnId);
+                    if (!column) return null;
+                    
                     return (
-                      <Draggable
-                        key={task.id}
-                        draggableId={task.id}
-                        index={index}
-                        isDragDisabled={sortByDueDate || isDeleteMode}
-                      >
-                        {(dragProvided, dragSnapshot) => (
-                          <div
-                            ref={dragProvided.innerRef}
-                            {...dragProvided.draggableProps}
-                            onClick={() => {
-                              if (isDeleteMode) {
-                                setSelectedDeleteTaskIds(prev =>
-                                  prev.includes(task.id)
-                                    ? prev.filter(id => id !== task.id)
-                                    : [...prev, task.id]
-                                );
-                              } else {
-                                setOpenTaskId(task.id);
-                              }
-                            }}
-                            className={`group border rounded-xl bg-card transition-all duration-200 cursor-pointer ${
-                              dragSnapshot.isDragging
-                                ? 'shadow-xl border-primary/30 bg-card/95'
-                                : isDeleteMode
-                                ? selectedDeleteTaskIds.includes(task.id)
-                                  ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
-                                  : 'border-border hover:bg-muted/20'
-                                : 'border-border hover:border-border/80 hover:shadow-sm'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 px-3 py-3">
-                              {isDeleteMode ? (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDeleteTaskIds.includes(task.id)}
-                                  onChange={() => {}}
-                                  onClick={e => e.stopPropagation()}
-                                  className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
-                                />
-                              ) : (
-                                <>
-                                  <div
-                                    {...dragProvided.dragHandleProps}
-                                    className={`flex-shrink-0 transition-opacity ${sortByDueDate ? 'opacity-0 pointer-events-none w-0 overflow-hidden' : 'opacity-0 group-hover:opacity-100 hover:opacity-100'}`}
-                                    title={sortByDueDate ? 'Disable sort to reorder manually' : 'Drag to reorder'}
-                                    onClick={e => e.stopPropagation()}
-                                  >
-                                    <GripVertical className="w-4 h-4 text-muted-foreground/50 hover:text-muted-foreground cursor-grab active:cursor-grabbing" />
-                                  </div>
-                                  <div
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      toggleTaskCompletion(task);
-                                    }}
-                                  >
-                                    <CircleToggle
-                                      completed={isTaskCompleted(task)}
-                                      onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
-                                      size="md"
-                                      title="Mark complete"
-                                    />
-                                  </div>
-                                </>
-                              )}
+                      <div key={columnId} className="space-y-2">
+                        <div 
+                          className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted cursor-pointer"
+                          onClick={() => toggleColumnExpansion(columnId)}
+                        >
+                          <span className="font-medium text-muted-foreground">{column.title}</span>
+                          <span className="text-xs text-muted-foreground">({tasks.length})</span>
+                          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${expandedColumns[columnId] ? 'rotate-180' : ''}`} />
+                        </div>
+                        
+                        {expandedColumns[columnId] && (
+                          <div className="pl-4 space-y-2">
+                            {tasks.map(task => {
+                              const isExpanded = expandedTaskIds.includes(task.id);
+                              const subtaskCount = task.subtasks?.length || 0;
+                              const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
+                              const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+                              const status = getTaskStatus(task);
+                              const statusCfg = STATUS_CONFIG[status];
+                              const dueWarning = getDueTimeWarning(task);
+                              const taskDurFmt = formatDuration(task.duration || 0);
+                              const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
+                              const taskTags = task.labels.slice(0, 3);
 
-                              {/* Title + inline meta */}
-                              <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-                                <span className="text-sm font-medium text-left text-foreground truncate">
-                                  {task.title}
-                                </span>
-
-                                <button
-                                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'status'); }}
-                                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}
+                              return (
+                                <div
+                                  key={task.id}
+                                  onClick={() => {
+                                    if (isDeleteMode) {
+                                      setSelectedDeleteTaskIds(prev =>
+                                        prev.includes(task.id)
+                                          ? prev.filter(id => id !== task.id)
+                                          : [...prev, task.id]
+                                      );
+                                    } else {
+                                      setOpenTaskId(task.id);
+                                    }
+                                  }}
+                                  className={`border rounded-xl bg-card transition-all duration-200 cursor-pointer ${
+                                    isDeleteMode
+                                      ? selectedDeleteTaskIds.includes(task.id)
+                                        ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+                                        : 'border-border hover:bg-muted/20'
+                                      : 'border-border hover:border-border/80 hover:shadow-sm'
+                                  }`}
                                 >
-                                  {statusCfg.label}
-                                </button>
-
-                                {task.dueDate && (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); openQuickEdit(task, 'due'); }}
-                                    className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}
-                                  >
-                                    {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
-                                      <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                                    )}
-                                    {dueWarning === 'overdue'
-                                      ? 'Overdue'
-                                      : `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}`}
-                                  </button>
-                                )}
-
-                                {taskDurFmt && (
-                                  <button
-                                    onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                                    className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                                  >
-                                    {taskDurFmt}
-                                  </button>
-                                )}
-
-                                {checklistTotal > 0 && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                                    {checklistDone}/{checklistTotal} items
-                                  </span>
-                                )}
-
-                                {subtaskCount > 0 && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                                    {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
-                                  </span>
-                                )}
-
-                                {taskTags.length > 0 && taskTags.map(label => (
-                                  <span
-                                    key={label.id}
-                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                                  >
-                                    {label.name}
-                                  </span>
-                                ))}
-                                {task.labels.length > taskTags.length && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                                    +{task.labels.length - taskTags.length}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Right side: project badge + actions */}
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                {taskProject ? (
-                                  <span
-                                    className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white"
-                                    style={{ backgroundColor: taskProject.color }}
-                                  >
-                                    {taskProject.name}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-muted text-muted-foreground">
-                                    My Tasks
-                                  </span>
-                                )}
-                                {column && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-medium border border-border text-muted-foreground bg-background">
-                                    {column.title}
-                                  </span>
-                                )}
-
-                                {!isDeleteMode && (
-                                  <>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
-                                      className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
-                                      title={isExpanded ? 'Collapse' : 'Expand'}
-                                    >
-                                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                    </button>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-                                      className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                                      title="Open Deep Focus"
-                                    >
-                                      <Brain className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            {quickEditTaskId === task.id && (
-                              <div
-                                onClick={e => e.stopPropagation()}
-                                className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  {quickEditField === 'status' && (
-                                    <select
-                                      value={quickEditStatus}
-                                      onChange={e => setQuickEditStatus(e.target.value as TaskStatus)}
-                                      onBlur={() => applyQuickEdit(task)}
-                                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                    >
-                                      {STATUS_OPTIONS.map(option => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  {quickEditField === 'due' && (
-                                    <>
+                                  <div className="flex items-center gap-2 px-3 py-3">
+                                    {isDeleteMode ? (
                                       <input
-                                        type="date"
-                                        value={quickEditDueDate}
-                                        onChange={e => setQuickEditDueDate(e.target.value)}
-                                        onBlur={() => applyQuickEdit(task)}
-                                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                        type="checkbox"
+                                        checked={selectedDeleteTaskIds.includes(task.id)}
+                                        onChange={() => {}}
+                                        onClick={e => e.stopPropagation()}
+                                        className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
                                       />
-                                      <input
-                                        type="time"
-                                        value={quickEditDueTime}
-                                        onChange={e => setQuickEditDueTime(e.target.value)}
-                                        onBlur={() => applyQuickEdit(task)}
-                                        className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                      />
-                                    </>
-                                  )}
-                                  {quickEditField === 'duration' && (
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        value={quickEditDuration}
-                                        onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        onBlur={() => applyQuickEdit(task)}
-                                        className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                      />
-                                      <span className="text-xs text-muted-foreground">minutes</span>
-                                    </div>
-                                  )}
-                                  {quickEditField === 'project' && (
-                                    <select
-                                      value={quickEditProjectId}
-                                      onChange={e => setQuickEditProjectId(e.target.value ? Number(e.target.value) : '')}
-                                      onBlur={() => applyQuickEdit(task)}
-                                      className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                                    >
-                                      <option value="">My Tasks</option>
-                                      {projects.map(project => (
-                                        <option key={project.id} value={project.id}>{project.name}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  <button
-                                    onClick={() => applyQuickEdit(task)}
-                                    className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    onClick={closeQuickEdit}
-                                    className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {isExpanded && !isDeleteMode && (
-                              <div
-                                onClick={e => e.stopPropagation()}
-                                className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl"
-                              >
-                                <div>
-                                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
-                                  <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
-                                </div>
-
-                                {task.subtasks.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
-                                    <div className="space-y-1.5">
-                                      {task.subtasks.map(subtask => (
-                                        <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
+                                    ) : (
+                                      <>
+                                        <div
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            toggleTaskCompletion(task);
+                                          }}
+                                        >
                                           <CircleToggle
-                                            completed={subtask.completed}
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              updateTask(task.id, {
-                                                subtasks: task.subtasks.map(st =>
-                                                  st.id === subtask.id ? { ...st, completed: !st.completed } : st
-                                                ),
-                                              });
-                                            }}
-                                            size="sm"
+                                            completed={isTaskCompleted(task)}
+                                            onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
+                                            size="md"
+                                            title="Mark complete"
                                           />
-                                          <span className={subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>{subtask.text}</span>
-                                          {subtask.durationMinutes > 0 && (
-                                            <span className="text-xs text-muted-foreground ml-auto">{subtask.durationMinutes} min</span>
-                                          )}
                                         </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
+                                      </>
+                                    )}
 
-                                {task.checklists.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Checklist</h4>
-                                    <div className="space-y-1.5">
-                                      {task.checklists.map(checklist =>
-                                        checklist.items.map(item => (
-                                          <div key={item.id} className="flex items-center gap-2.5 text-sm">
-                                            <SquareToggle
-                                              completed={item.completed}
-                                              onClick={e => {
-                                                e.stopPropagation();
-                                                toggleChecklistItem(task.id, checklist.id, item.id);
-                                              }}
-                                              size="md"
-                                            />
-                                            <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
-                                          </div>
-                                        ))
+                                    {/* Title + inline meta */}
+                                    <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-sm font-medium text-left text-foreground truncate">
+                                        {task.title}
+                                      </span>
+
+                                      <button
+                                        onClick={e => { e.stopPropagation(); }}
+                                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}
+                                      >
+                                        {statusCfg.label}
+                                      </button>
+
+                                      {task.dueDate && (
+                                        <button
+                                          onClick={e => { e.stopPropagation(); }}
+                                          className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}
+                                        >
+                                          {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
+                                            <Clock className="w-2.5 h-2.5 flex-shrink-0" />
+                                          )}
+                                          {dueWarning === 'overdue'
+                                            ? 'Overdue'
+                                            : `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}`}
+                                        </button>
+                                      )}
+
+                                      {taskDurFmt && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                          {taskDurFmt}
+                                        </span>
+                                      )}
+
+                                      {checklistTotal > 0 && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                          {checklistDone}/{checklistTotal} items
+                                        </span>
+                                      )}
+
+                                      {subtaskCount > 0 && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                          {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
+                                        </span>
+                                      )}
+
+                                      {taskTags.length > 0 && taskTags.map(label => (
+                                        <span
+                                          key={label.id}
+                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                                        >
+                                          {label.name}
+                                        </span>
+                                      ))}
+                                      {task.labels.length > taskTags.length && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                          +{task.labels.length - taskTags.length}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Right side: actions */}
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      {!isDeleteMode && (
+                                        <>
+                                          <button
+                                            onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
+                                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+                                            title={isExpanded ? 'Collapse' : 'Expand'}
+                                          >
+                                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                          </button>
+                                          <button
+                                            onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
+                                            className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                                            title="Open Deep Focus"
+                                          >
+                                            <Brain className="w-3.5 h-3.5" />
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </div>
-                                )}
 
-                                <div className="flex justify-end pt-1">
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setSingleDeleteTaskId(task.id);
-                                    }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Delete Task
-                                  </button>
+                                  {isExpanded && !isDeleteMode && (
+                                    <div
+                                      onClick={e => e.stopPropagation()}
+                                      className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl"
+                                    >
+                                      <div>
+                                        <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
+                                        <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
+                                      </div>
+
+                                      {task.subtasks.length > 0 && (
+                                        <div>
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
+                                          <div className="space-y-1.5">
+                                            {task.subtasks.map(subtask => (
+                                              <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
+                                                <CircleToggle
+                                                  completed={subtask.completed}
+                                                  onClick={e => {
+                                                    e.stopPropagation();
+                                                    updateTask(task.id, {
+                                                      subtasks: task.subtasks.map(st =>
+                                                        st.id === subtask.id ? { ...st, completed: !st.completed } : st
+                                                      ),
+                                                    });
+                                                  }}
+                                                  size="sm"
+                                                />
+                                                <span className={subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>{subtask.text}</span>
+                                                {subtask.durationMinutes > 0 && (
+                                                  <span className="text-xs text-muted-foreground ml-auto">{subtask.durationMinutes} min</span>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {task.checklists.length > 0 && (
+                                        <div>
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Checklist</h4>
+                                          <div className="space-y-1.5">
+                                            {task.checklists.map(checklist =>
+                                              checklist.items.map(item => (
+                                                <div key={item.id} className="flex items-center gap-2.5 text-sm">
+                                                  <SquareToggle
+                                                    completed={item.completed}
+                                                    onClick={e => {
+                                                      e.stopPropagation();
+                                                      toggleChecklistItem(task.id, checklist.id, item.id);
+                                                    }}
+                                                    size="md"
+                                                  />
+                                                  <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
+                                                </div>
+                                              ))
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <div className="flex justify-end pt-1">
+                                        <button
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            setSingleDeleteTaskId(task.id);
+                                          }}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                          Delete Task
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })}
                           </div>
                         )}
-                      </Draggable>
+                      </div>
                     );
                   })}
-                  {provided.placeholder}
                 </div>
               )}
-            </Droppable>
-          </DragDropContext>
+            </div>
 
-          {filtered.completed.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border/80">
-              <div className="border border-label-green/20 rounded-xl bg-label-green/5">
-                <button
-                  onClick={() => setCompletedOpen(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
+            {/* Project Sections */}
+            {projects.map(project => (
+              <div key={project.id} className="space-y-2">
+                <div 
+                  className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer"
+                  onClick={() => toggleProjectExpansion(project.id)}
                 >
-                  <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Completed ({filtered.completed.length})
-                  </span>
-                  {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                </button>
+                  <span className="font-semibold text-foreground">{project.name.toUpperCase()}</span>
+                  <span className="text-xs text-muted-foreground">({
+                    groupedTasks[project.id] 
+                      ? Object.values(groupedTasks[project.id]).reduce((sum, tasks) => sum + tasks.length, 0) 
+                      : 0
+                  })</span>
+                  <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${expandedProjects.includes(project.id) ? 'rotate-180' : ''}`} />
+                </div>
+                
+                {expandedProjects.includes(project.id) && groupedTasks[project.id] && (
+                  <div className="pl-4 space-y-2">
+                    {Object.entries(groupedTasks[project.id]).map(([columnId, tasks]) => {
+                      const column = board.columns.find(col => col.id === columnId);
+                      if (!column) return null;
+                      
+                      return (
+                        <div key={columnId} className="space-y-2">
+                          <div 
+                            className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 hover:bg-muted cursor-pointer"
+                            onClick={() => toggleColumnExpansion(columnId)}
+                          >
+                            <span className="font-medium text-muted-foreground">{column.title}</span>
+                            <span className="text-xs text-muted-foreground">({tasks.length})</span>
+                            <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${expandedColumns[columnId] ? 'rotate-180' : ''}`} />
+                          </div>
+                          
+                          {expandedColumns[columnId] && (
+                            <div className="pl-4 space-y-2">
+                              {tasks.map(task => {
+                                const isExpanded = expandedTaskIds.includes(task.id);
+                                const subtaskCount = task.subtasks?.length || 0;
+                                const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
+                                const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+                                const status = getTaskStatus(task);
+                                const statusCfg = STATUS_CONFIG[status];
+                                const dueWarning = getDueTimeWarning(task);
+                                const taskDurFmt = formatDuration(task.duration || 0);
+                                const taskProject = task.projectId ? projects.find(proj => proj.id === task.projectId) || null : null;
+                                const taskTags = task.labels.slice(0, 3);
 
-                {completedOpen && (
-                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                    {filtered.completed.map(task => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          if (isDeleteMode) {
-                            setSelectedDeleteTaskIds(prev =>
-                              prev.includes(task.id)
-                                ? prev.filter(id => id !== task.id)
-                                : [...prev, task.id]
-                            );
-                          } else {
-                            setOpenTaskId(task.id);
-                          }
-                        }}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
-                          isDeleteMode
-                            ? selectedDeleteTaskIds.includes(task.id)
-                              ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
-                              : 'border-border bg-background/50 hover:bg-muted/20'
-                            : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
-                        }`}
-                      >
-                        {isDeleteMode ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedDeleteTaskIds.includes(task.id)}
-                            onChange={() => {}}
-                            onClick={e => e.stopPropagation()}
-                            className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
-                          />
-                        ) : (
-                          <CircleToggle
-                            completed
-                            onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
-                            size="md"
-                            title="Mark active"
-                          />
-                        )}
+                                return (
+                                  <div
+                                    key={task.id}
+                                    onClick={() => {
+                                      if (isDeleteMode) {
+                                        setSelectedDeleteTaskIds(prev =>
+                                          prev.includes(task.id)
+                                            ? prev.filter(id => id !== task.id)
+                                            : [...prev, task.id]
+                                        );
+                                      } else {
+                                        setOpenTaskId(task.id);
+                                      }
+                                    }}
+                                    className={`border rounded-xl bg-card transition-all duration-200 cursor-pointer ${
+                                      isDeleteMode
+                                        ? selectedDeleteTaskIds.includes(task.id)
+                                          ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+                                          : 'border-border hover:bg-muted/20'
+                                        : 'border-border hover:border-border/80 hover:shadow-sm'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 px-3 py-3">
+                                      {isDeleteMode ? (
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedDeleteTaskIds.includes(task.id)}
+                                          onChange={() => {}}
+                                          onClick={e => e.stopPropagation()}
+                                          className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+                                        />
+                                      ) : (
+                                        <>
+                                          <div
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              toggleTaskCompletion(task);
+                                            }}
+                                          >
+                                            <CircleToggle
+                                              completed={isTaskCompleted(task)}
+                                              onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
+                                              size="md"
+                                              title="Mark complete"
+                                            />
+                                          </div>
+                                        </>
+                                      )}
 
-                        <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
-                          {task.title}
-                        </span>
+                                      {/* Title + inline meta */}
+                                      <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-sm font-medium text-left text-foreground truncate">
+                                          {task.title}
+                                        </span>
 
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
-                          Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
-                        </span>
-                      </div>
-                    ))}
+                                        <button
+                                          onClick={e => { e.stopPropagation(); }}
+                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}
+                                        >
+                                          {statusCfg.label}
+                                        </button>
+
+                                        {task.dueDate && (
+                                          <button
+                                            onClick={e => { e.stopPropagation(); }}
+                                            className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}
+                                          >
+                                            {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
+                                              <Clock className="w-2.5 h-2.5 flex-shrink-0" />
+                                            )}
+                                            {dueWarning === 'overdue'
+                                              ? 'Overdue'
+                                              : `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}`}
+                                          </button>
+                                        )}
+
+                                        {taskDurFmt && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                            {taskDurFmt}
+                                          </span>
+                                        )}
+
+                                        {checklistTotal > 0 && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                            {checklistDone}/{checklistTotal} items
+                                          </span>
+                                        )}
+
+                                        {subtaskCount > 0 && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                            {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
+                                          </span>
+                                        )}
+
+                                        {taskTags.length > 0 && taskTags.map(label => (
+                                          <span
+                                            key={label.id}
+                                            className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                                          >
+                                            {label.name}
+                                          </span>
+                                        ))}
+                                        {task.labels.length > taskTags.length && (
+                                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                            +{task.labels.length - taskTags.length}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Right side: actions */}
+                                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        {!isDeleteMode && (
+                                          <>
+                                            <button
+                                              onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
+                                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+                                              title={isExpanded ? 'Collapse' : 'Expand'}
+                                            >
+                                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                            </button>
+                                            <button
+                                              onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
+                                              className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                                              title="Open Deep Focus"
+                                            >
+                                              <Brain className="w-3.5 h-3.5" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {isExpanded && !isDeleteMode && (
+                                      <div
+                                        onClick={e => e.stopPropagation()}
+                                        className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl"
+                                      >
+                                        <div>
+                                          <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
+                                          <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
+                                        </div>
+
+                                        {task.subtasks.length > 0 && (
+                                          <div>
+                                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
+                                            <div className="space-y-1.5">
+                                              {task.subtasks.map(subtask => (
+                                                <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
+                                                  <CircleToggle
+                                                    completed={subtask.completed}
+                                                    onClick={e => {
+                                                      e.stopPropagation();
+                                                      updateTask(task.id, {
+                                                        subtasks: task.subtasks.map(st =>
+                                                          st.id === subtask.id ? { ...st, completed: !st.completed } : st
+                                                        ),
+                                                      });
+                                                    }}
+                                                    size="sm"
+                                                  />
+                                                  <span className={subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>{subtask.text}</span>
+                                                  {subtask.durationMinutes > 0 && (
+                                                    <span className="text-xs text-muted-foreground ml-auto">{subtask.durationMinutes} min</span>
+                                                  )}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {task.checklists.length > 0 && (
+                                          <div>
+                                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Checklist</h4>
+                                            <div className="space-y-1.5">
+                                              {task.checklists.map(checklist =>
+                                                checklist.items.map(item => (
+                                                  <div key={item.id} className="flex items-center gap-2.5 text-sm">
+                                                    <SquareToggle
+                                                      completed={item.completed}
+                                                      onClick={e => {
+                                                        e.stopPropagation();
+                                                        toggleChecklistItem(task.id, checklist.id, item.id);
+                                                      }}
+                                                      size="md"
+                                                    />
+                                                    <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
+                                                  </div>
+                                                ))
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        <div className="flex justify-end pt-1">
+                                          <button
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              setSingleDeleteTaskId(task.id);
+                                            }}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Delete Task
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Floating AI Task Button */}
+      <button
+        onClick={() => setAiTaskOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-foreground text-background flex items-center justify-center shadow-lg hover:shadow-xl transition-all z-50"
+      >
+        <Sparkles className="w-5 h-5" />
+      </button>
+
+      {aiTaskOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setAiTaskOpen(false)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">AI Task Assistant</h3>
+              <button onClick={() => setAiTaskOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-muted-foreground mb-4">Describe your task and AI will help create it for you.</p>
+            
+            <textarea
+              autoFocus
+              value={aiBuilderInput}
+              onChange={e => setAiBuilderInput(e.target.value)}
+              placeholder="Describe your task in detail..."
+              rows={4}
+              className="w-full bg-muted/40 border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setAiTaskOpen(false)}
+                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setAiTaskOpen(false);
+                  setAiBuilderOpen(true);
+                }}
+                disabled={!aiBuilderInput.trim()}
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {addingTask && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setAddingTask(false)}>
@@ -1502,9 +1477,10 @@ const Tasks: React.FC = () => {
                     onChange={e => setNewTaskStatus(e.target.value as TaskStatus)}
                     className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                   >
-                    {STATUS_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
+                    <option value="to_do">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="review">Review</option>
+                    <option value="completed">Completed</option>
                   </select>
                 </div>
                 <div>
@@ -1873,10 +1849,10 @@ const Tasks: React.FC = () => {
       {openTask && (
         <TaskFullView
           task={openTask}
-          onClose={() => setOpenTaskId(null)}
           boardColumns={board.columns}
           projects={projects}
           allTags={allTags}
+          onClose={() => setOpenTaskId(null)}
           onUpdateTask={updateTask}
           onToggleChecklistItem={toggleChecklistItem}
           onAddChecklistItem={addChecklistItem}
@@ -2067,10 +2043,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [tagPickerOpen, setTagPickerOpen] = useState(false);
-  const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
@@ -2174,7 +2146,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;
-    setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
       if (canUseServerAttachmentApi) {
@@ -2195,7 +2166,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
-    setUploading(false);
     e.currentTarget.value = '';
   };
 
@@ -2260,9 +2230,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               }}
               className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
             >
-              {STATUS_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
+              <option value="to_do">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="review">Review</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
           <div>
@@ -2604,16 +2575,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
                     <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                   </div>
-                  <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
+                  <input type="file" multiple onChange={handleFileUpload} className="hidden" />
                 </label>
-                {uploading && (
-                  <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
               </div>
               {(task.attachments || []).length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
@@ -2708,23 +2671,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusCfg.className}`}>
-              {statusCfg.label}
-            </span>
-            {task.dueDate && (
-              <span className={`text-xs flex items-center gap-1 ${
-                dueWarning === 'overdue' || dueWarning === 'imminent' ? 'text-destructive' :
-                dueWarning === 'soon' ? 'text-orange-500' : 'text-muted-foreground'
-              }`}>
-                {dueWarning && <Clock className="w-3 h-3" />}
-                Due: {formatDate(task.dueDate)}
-                {task.dueTime && ` at ${task.dueTime}`}
-              </span>
-            )}
-          </div>
-
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-2">
             <input
               value={newCommentText}
               onChange={e => setNewCommentText(e.target.value)}
