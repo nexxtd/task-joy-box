@@ -261,7 +261,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Priority</label>
                   <select
                     value={priority}
-                    onChange={e => setPriority(e.target.value as any)}
+                    onChange={e => setPriority(e.target.value as 'urgent' | 'high' | 'medium' | 'low' | 'none')}
                     className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
                   >
                     <option value="none">None</option>
@@ -418,13 +418,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 </button>
               </div>
             </div>
-            <button
-              onClick={() => setIsAdding(true)}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Task
-            </button>
+          ) : null}
+          <button
+            onClick={() => setIsAdding(true)}
+            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Task
+          </button>
         </div>
       )}
     </Draggable>
