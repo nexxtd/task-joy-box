@@ -1,0 +1,105 @@
+Support Page & Ticket System — Full Spec
+
+Overall layout
+The page is titled "Support". The four main cards sit in a 2x2 grid at the top of the page.
+
+Four main cards
+Each card follows the same layout — a small rounded icon box in the top left with the feature icon inside, bold title below the icon, short description underneath, and a full width button at the bottom.
+AI Assistant
+Description: Get intelligent task suggestions, automated prioritisation, and productivity insights.
+Button: Open AI Chat — links to the Planora AI chat page
+FAQs
+Description: Find answers to common questions.
+Button: View FAQs — opens the FAQs page
+Resources
+Description: How-to guides and walkthroughs for every feature.
+Button: View Resources — opens the resources page
+Submit
+Description: Submit a suggestion, bug, report, or support request.
+Button: Submit — opens the submit form page
+
+FAQs page
+A full page with an X button in the top right that closes the page and returns to the support page. The page is split into two panels side by side. On the left is a list of all FAQ questions. Each question is a clickable row. Clicking a question highlights it in the left panel and shows the full answer in the right panel. The right panel shows the question as a bold heading and the answer as a paragraph below it. Common questions include:
+How do I create a task
+How do I use the calendar
+How do I set a goal
+What is deep focus
+How do habits work
+What is the difference between free and premium
+How do I delete a row on the project board
+How do I create a whiteboard
+How do I use the AI assistant
+How do I track a habit
+How do I connect tasks to goals
+How do I use deep focus mode
+How do I schedule tasks on the calendar
+How do I create sub-tasks
+
+Resources page
+A full page with an X button in the top right that closes the page and returns to the support page. The page is split into two panels side by side. On the left is a list of all guides organised into categories: Getting Started, Tasks, Projects, Calendar, Goals, Habits, Notes, Whiteboard, AI Features. Each category is a collapsible section with its guides listed underneath. Clicking a guide highlights it in the left panel and loads the full guide content in the right panel. The right panel shows the guide title as a bold heading and the full step by step instructions below it. The right panel is scrollable for long guides.
+
+Submit page
+A form page with the following fields:
+Type — a selector with four options: Suggestion, Bug, Report, Support
+Subject — a short text input summarising the issue or suggestion
+Message — a large text area where the user writes their full message in detail
+A Submit button at the bottom
+Users can only have one open ticket at a time. If the user already has an open ticket the Submit button is disabled and a message shows: "You already have an open ticket. Please wait for a response before submitting a new one."
+When the user clicks Submit:
+The form is sent to the admin panel as a new ticket
+No ticket appears in the user's settings until a staff member replies
+A toast notification appears in the bottom right of the screen:
+Suggestion: "Thank you for your suggestion! We really appreciate your feedback."
+Bug: "Thank you for reporting this bug. Our team will look into it."
+Report: "Thank you for your report. We will review it shortly."
+Support: "Thank you for reaching out. A member of our team will get back to you soon."
+
+Admin panel — Tickets tab
+A list of all submitted tickets from all users. Each ticket in the list shows:
+Type badge (Suggestion, Bug, Report, Support)
+Subject line
+Username of the user who submitted it
+Date and time submitted
+A notification icon if the user has sent an unread message
+Clicking a ticket opens a conversation panel in the bottom right of the screen. The panel shows:
+The ticket ID and the user's name at the top of the panel
+A Close Ticket button at the top of the panel next to the ticket ID and user name
+The full conversation thread in the middle — user messages on the left, staff messages on the right
+A text input field at the bottom with a Send button. Typing and clicking Send instantly sends the message to the conversation and the user sees it in real time
+The user's name at the top of the panel is clickable. Clicking it opens a user data panel showing:
+Email, name
+Number of tasks, goals, habits
+Insights: how many of each are completed
+Feature usage — a list of main features each as a collapsible dropdown:
+Tasks — expands to show: sub-tasks created, checklists used, attachments added, deep focus sessions started, times AI prioritise used
+Projects — expands to show: rows created, columns created, tasks moved between columns, whiteboards created
+Goals — expands to show: sub-goals created, goals completed, progress manually updated
+Habits — expands to show: habits created, total completions, streaks achieved, times per day used
+Calendar — expands to show: slots created, recurring slots created, smart schedule used, daily plan used
+Notes — expands to show: notes created, tags created, notes pinned, files attached
+Whiteboard — expands to show each tool with its own usage count: sticky notes placed, text blocks placed, document blocks placed, image blocks placed, shapes placed, task blocks placed, tables placed, link blocks placed, comment blocks placed, connections made
+Insights — expands to show: times insights page visited, times AI analysis run
+AI Assistant — expands to show: total messages sent to Planora, tasks created via AI, tasks updated via AI
+
+Ticket closing rules
+The staff member can close a ticket using the Close Ticket button at the top of the conversation panel.
+Scenario 1 — Staff closes without ever replying
+Applies to Suggestion, Bug, and Report tickets where the staff member has read the submission but does not need to respond. The staff member clicks Close Ticket and the ticket is closed silently. The user receives no notification and no ticket ever appears in their settings Open Tickets tab. The ticket moves to the Resolved section in the admin panel only.
+Scenario 2 — Staff closes after replying
+If the staff member has sent at least one reply and then closes the ticket the user is notified. A notification appears in the app letting the user know their ticket has been closed. The ticket moves to the Resolved section at the bottom of the user's Open Tickets tab and is marked with a Closed badge. The user can still read the full conversation but cannot reply. The conversation panel shows "This ticket has been closed" at the bottom in place of the reply input.
+
+Open Tickets tab (user settings)
+Sits below the Privacy tab in the settings sidebar. Only appears once a staff member has replied to a submission. Shows the user's single open ticket with:
+Type badge
+Subject line
+Date submitted
+A notification indicator if the staff member has replied and the user has not yet read it
+Clicking the ticket opens a conversation panel in the bottom right of the screen. The panel shows:
+The ticket ID and the staff member's name at the top
+The full conversation thread — user messages on the right, staff messages on the left
+A text input field at the bottom with a Send button. Typing and clicking Send instantly sends the message and the staff member sees it in real time
+If the ticket has been closed by the staff member after replying the user sees a "This ticket has been closed" message at the bottom of the panel in place of the reply input. The closed ticket moves to a Resolved section at the bottom of the Open Tickets tab marked with a Closed badge. The user can still read the full conversation but cannot reply.
+
+Conversation system
+The conversation works like a basic messenger. Messages appear in chronological order. User messages are on the right, staff messages are on the left — and the reverse in the admin panel. Each message shows the sender name, message content, and timestamp. Both sides see a notification indicator when there is an unread message. Either side can reopen a resolved ticket by sending a new message which moves it back to open automatically — but only if the staff member has previously replied. If the ticket was closed without a reply it stays closed and the user cannot reopen it.
+
