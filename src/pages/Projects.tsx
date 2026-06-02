@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, DropResult, Draggable } from '@hello-pangea/dnd';
 import {
   CheckCircle2,
   CircleDotDashed,
