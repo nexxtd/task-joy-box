@@ -409,6 +409,29 @@ export const deepFocusSessions = pgTable('deep_focus_sessions', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const supportTickets = pgTable('support_tickets', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  type: text('type').notNull(),
+  subject: text('subject').notNull(),
+  status: text('status').default('open').notNull(),
+  staffReplied: boolean('staff_replied').default(false).notNull(),
+  closedAt: text('closed_at'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const ticketMessages = pgTable('ticket_messages', {
+  id: serial('id').primaryKey(),
+  ticketId: integer('ticket_id').references(() => supportTickets.id).notNull(),
+  senderId: integer('sender_id').references(() => users.id).notNull(),
+  senderType: text('sender_type').notNull(),
+  message: text('message').notNull(),
+  readByUser: boolean('read_by_user').default(false).notNull(),
+  readByStaff: boolean('read_by_staff').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 // Types exported via any to avoid inference issues on Render
 export type InsertUser = any;
 export type UpdateUser = any;

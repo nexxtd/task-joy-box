@@ -16,10 +16,17 @@ import {
   Target,
   CheckSquare,
   BarChart3,
-  Eye
+  Eye,
+  MessageSquare,
+  Bell,
+  ChevronDown,
+  ChevronUp,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import TicketConversation from '@/components/TicketConversation';
 
 interface AdminStats {
   summary: {
@@ -52,7 +59,7 @@ interface SystemSetting {
 }
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'settings' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'settings' | 'users' | 'tickets'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [settings, setSettings] = useState<SystemSetting[]>([]);
@@ -235,6 +242,89 @@ const AdminDashboard = () => {
     }
   };
 
+  const [adminTickets, setAdminTickets] = useState<any[]>([]);
+  const [activePanelTicket, setActivePanelTicket] = useState<any | null>(null);
+  const [panelMessages, setPanelMessages] = useState<any[]>([]);
+  const [sendingAdminMessage, setSendingAdminMessage] = useState(false);
+  const [userDataPanel, setUserDataPanel] = useState<any | null>(null);
+  const [userFullDetails, setUserFullDetails] = useState<any | null>(null);
+  const [expandedUsage, setExpandedUsage] = useState<Set<string>>(new Set());
+
+  const fetchTickets = async () => {
+    try {
+      const res = await fetch('/api/admin/tickets', { credentials: 'include' });
+      if (res.ok) setAdminTickets(await res.json());
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (activeTab === 'tickets') fetchTickets();
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!activePanelTicket) return;
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setPanelMessages(data.messages || []);
+          setActivePanelTicket((prev: any) => prev ? { ...prev, ...data.ticket } : null);
+          setAdminTickets(prev => prev.map((t: any) => t.id === data.ticket.id ? { ...t, ...data.ticket, unreadCount: 0 } : t));
+        }
+      } catch {}
+    };
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [activePanelTicket?.id]);
+
+  const handleAdminSendMessage = async (text: string) => {
+    if (!activePanelTicket) return;
+    setSendingAdminMessage(true);
+    try {
+      await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message: text }),
+      });
+      const res = await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setPanelMessages(data.messages || []);
+        setActivePanelTicket((prev: any) => prev ? { ...prev, ...data.ticket } : null);
+      }
+    } catch {} finally {
+      setSendingAdminMessage(false);
+    }
+  };
+
+  const handleCloseTicket = async () => {
+    if (!activePanelTicket) return;
+    await fetch(`/api/admin/tickets/${activePanelTicket.id}/close`, { method: 'PATCH', credentials: 'include' });
+    setActivePanelTicket((prev: any) => prev ? { ...prev, status: 'closed' } : null);
+    fetchTickets();
+  };
+
+  const handleViewUserData = async (userId: number) => {
+    setUserDataPanel({ loading: true });
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/full-details`, { credentials: 'include' });
+      if (res.ok) setUserFullDetails(await res.json());
+      setUserDataPanel({ open: true });
+    } catch {
+      setUserDataPanel(null);
+    }
+  };
+
+  const TYPE_COLORS: Record<string, string> = {
+    suggestion: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    bug: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    report: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    support: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  };
+
   const fetchUserDetails = async (user: User) => {
     setSelectedUser(user);
     setUserDetails(null);
@@ -287,7 +377,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background/50 p-8 pt-12">
+    <div className="min-h-screen bg-background/50 p-8 pt-12 relative">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -298,18 +388,21 @@ const AdminDashboard = () => {
             </h1>
             <p className="text-muted-foreground mt-2">Manage your platform features, coupons, and see real-time performance.</p>
           </div>
-          <div className="flex items-center gap-2 bg-muted p-1 rounded-xl">
-            {(['overview', 'coupons', 'settings', 'users'] as const).map(tab => (
+          <div className="flex items-center gap-2 bg-muted p-1 rounded-xl flex-wrap">
+            {(['overview', 'coupons', 'settings', 'users', 'tickets'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2 rounded-lg capitalize transition-all ${
+                className={`px-5 py-2 rounded-lg capitalize transition-all flex items-center gap-1.5 ${
                   activeTab === tab 
                   ? 'bg-background text-foreground shadow-sm shadow-black/5' 
                   : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab}
+                {tab === 'tickets' && adminTickets.some((t: any) => t.unreadCount > 0) && (
+                  <span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />
+                )}
               </button>
             ))}
           </div>
@@ -792,6 +885,178 @@ const AdminDashboard = () => {
           </form>
         </div>
       )}
+
+      {activeTab === 'tickets' && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Support Tickets</h2>
+            <button onClick={fetchTickets} className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 bg-muted rounded-lg transition-colors">Refresh</button>
+          </div>
+          {adminTickets.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No tickets submitted yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {adminTickets.filter((t: any) => t.status === 'open').map((ticket: any) => (
+                <button
+                  key={ticket.id}
+                  onClick={() => setActivePanelTicket(ticket)}
+                  className={`w-full flex items-center justify-between p-4 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left ${activePanelTicket?.id === ticket.id ? 'border-primary' : 'border-border'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {ticket.unreadCount > 0 && <span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />}
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{ticket.subject}</p>
+                      <p className="text-xs text-muted-foreground">{ticket.userName} · {ticket.userEmail}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <span className="text-xs text-muted-foreground hidden sm:block">{ticket.createdAt ? format(new Date(ticket.createdAt), 'MMM d, HH:mm') : ''}</span>
+                    {!ticket.staffReplied && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">New</span>}
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
+                  </div>
+                </button>
+              ))}
+              {adminTickets.filter((t: any) => t.status === 'closed').length > 0 && (
+                <>
+                  <p className="text-xs font-semibold text-muted-foreground pt-4 pb-1 uppercase tracking-wider">Resolved</p>
+                  {adminTickets.filter((t: any) => t.status === 'closed').map((ticket: any) => (
+                    <button
+                      key={ticket.id}
+                      onClick={() => setActivePanelTicket(ticket)}
+                      className={`w-full flex items-center justify-between p-4 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left opacity-60 ${activePanelTicket?.id === ticket.id ? 'border-primary opacity-100' : 'border-border'}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{ticket.subject}</p>
+                          <p className="text-xs text-muted-foreground">{ticket.userName}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <span className="text-xs text-muted-foreground hidden sm:block">{ticket.closedAt ? format(new Date(ticket.closedAt), 'MMM d') : ''}</span>
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    {activePanelTicket && (
+      <TicketConversation
+          ticket={{ ...activePanelTicket, userName: activePanelTicket.userName }}
+          messages={panelMessages}
+          viewAs="admin"
+          currentUserName="Support"
+          onClose={() => { setActivePanelTicket(null); setPanelMessages([]); }}
+          onCloseTicket={handleCloseTicket}
+          onSendMessage={handleAdminSendMessage}
+          onUserNameClick={() => activePanelTicket?.userId && handleViewUserData(activePanelTicket.userId)}
+          sending={sendingAdminMessage}
+        />
+      )}
+
+      {userDataPanel?.open && userFullDetails && userFullDetails.user && (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-end" onClick={() => { setUserDataPanel(null); setUserFullDetails(null); }}>
+        <div className="w-[440px] h-full bg-card overflow-y-auto shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
+            <h2 className="text-base font-bold">User Details</h2>
+            <button onClick={() => { setUserDataPanel(null); setUserFullDetails(null); }} className="p-1 hover:bg-muted rounded-lg transition-colors">
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="p-6 space-y-5 flex-1">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                {(userFullDetails.user.name || '?')[0].toUpperCase()}
+              </div>
+              <div>
+                <p className="font-bold text-foreground">{userFullDetails.user.name}</p>
+                <p className="text-sm text-muted-foreground">{userFullDetails.user.email}</p>
+                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${userFullDetails.user.tier === 'premium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : userFullDetails.user.tier === 'pro' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
+                  {userFullDetails.user.tier}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Tasks', value: userFullDetails.stats.tasks },
+                { label: 'Goals', value: userFullDetails.stats.goals },
+                { label: 'Habits', value: userFullDetails.stats.habits },
+              ].map(s => (
+                <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-foreground">{s.value}</p>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                </div>
+              ))}
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Feature Usage</p>
+              {[
+                { id: 'tasks', label: 'Tasks', items: [
+                  { label: 'Total tasks', value: userFullDetails.featureUsage.tasks.total },
+                  { label: 'Completed', value: userFullDetails.featureUsage.tasks.completed },
+                  { label: 'Checklists', value: userFullDetails.featureUsage.tasks.checklists },
+                  { label: 'Attachments', value: userFullDetails.featureUsage.tasks.attachments },
+                  { label: 'Deep focus sessions', value: userFullDetails.featureUsage.tasks.deepFocusSessions },
+                ]},
+                { id: 'projects', label: 'Projects', items: [
+                  { label: 'Boards', value: userFullDetails.featureUsage.projects.boards },
+                  { label: 'Whiteboards', value: userFullDetails.featureUsage.projects.whiteboards },
+                ]},
+                { id: 'goals', label: 'Goals', items: [
+                  { label: 'Goals created', value: userFullDetails.featureUsage.goals.total },
+                  { label: 'Goals completed', value: userFullDetails.featureUsage.goals.completed },
+                ]},
+                { id: 'habits', label: 'Habits', items: [
+                  { label: 'Habits created', value: userFullDetails.featureUsage.habits.total },
+                  { label: 'Total completions', value: userFullDetails.featureUsage.habits.totalCompletions },
+                  { label: 'Highest streak', value: userFullDetails.featureUsage.habits.highestStreak },
+                ]},
+                { id: 'notes', label: 'Notes', items: [
+                  { label: 'Notes created', value: userFullDetails.featureUsage.notes.total },
+                  { label: 'Tags created', value: userFullDetails.featureUsage.notes.tags },
+                  { label: 'Pinned notes', value: userFullDetails.featureUsage.notes.pinned },
+                ]},
+                { id: 'whiteboard', label: 'Whiteboard', items: [
+                  { label: 'Whiteboards created', value: userFullDetails.featureUsage.whiteboard.whiteboardsCreated },
+                  ...Object.entries(userFullDetails.featureUsage.whiteboard.items || {}).map(([k, v]) => ({ label: k, value: v as number })),
+                ]},
+                { id: 'ai', label: 'AI Assistant', items: [
+                  { label: 'Total AI messages', value: userFullDetails.featureUsage.ai.totalMessages },
+                ]},
+              ].map(section => (
+                <div key={section.id} className="border border-border rounded-xl overflow-hidden mb-2">
+                  <button
+                    onClick={() => setExpandedUsage(prev => { const next = new Set(prev); next.has(section.id) ? next.delete(section.id) : next.add(section.id); return next; })}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold hover:bg-muted transition-colors"
+                  >
+                    {section.label}
+                    {expandedUsage.has(section.id) ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {expandedUsage.has(section.id) && (
+                    <div className="border-t border-border divide-y divide-border/50">
+                      {section.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-4 py-2">
+                          <span className="text-xs text-muted-foreground">{item.label}</span>
+                          <span className="text-xs font-bold text-foreground">{item.value ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

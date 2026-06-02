@@ -3,7 +3,7 @@ import {
   Palette, Bell, Globe, Calendar, Battery,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot
 } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
 import EnergyAnalytics from '@/components/EnergyAnalytics';
+import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -92,6 +93,12 @@ const SettingsPage: React.FC = () => {
   const isTopTier = user?.subscriptionTier === 'premium';
   const isMidTier = user?.subscriptionTier === 'pro';
 
+  const [userTickets, setUserTickets] = useState<TicketData[]>([]);
+  const [hasTickets, setHasTickets] = useState(false);
+  const [activePanelTicket, setActivePanelTicket] = useState<TicketData | null>(null);
+  const [panelMessages, setPanelMessages] = useState<TicketMessage[]>([]);
+  const [sendingMessage, setSendingMessage] = useState(false);
+
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -100,11 +107,65 @@ const SettingsPage: React.FC = () => {
     { id: 'history', label: 'History', icon: History },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
+    ...(hasTickets ? [{ id: 'tickets', label: 'Open Tickets', icon: MessageSquare }] : []),
   ];
+
+  const fetchUserTickets = async () => {
+    try {
+      const res = await fetch('/api/support/tickets/my', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setUserTickets(data);
+        setHasTickets(data.length > 0);
+      }
+    } catch {}
+  };
 
   useEffect(() => {
     fetchSettings();
+    fetchUserTickets();
   }, []);
+
+  useEffect(() => {
+    if (!activePanelTicket) return;
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setPanelMessages(data.messages || []);
+          setActivePanelTicket(prev => prev ? { ...prev, ...data.ticket } : null);
+          setUserTickets(prev => prev.map(t => t.id === data.ticket.id ? { ...t, ...data.ticket } : t));
+        }
+      } catch {}
+    };
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [activePanelTicket?.id]);
+
+  const handleSendTicketMessage = async (text: string) => {
+    if (!activePanelTicket) return;
+    setSendingMessage(true);
+    try {
+      const res = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message: text }),
+      });
+      if (res.ok) {
+        const data = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
+        if (data.ok) {
+          const msgs = await data.json();
+          setPanelMessages(msgs.messages || []);
+          setActivePanelTicket(prev => prev ? { ...prev, ...msgs.ticket } : null);
+        }
+      }
+    } catch {} finally {
+      setSendingMessage(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -547,7 +608,7 @@ const SettingsPage: React.FC = () => {
   const tasksWithDates = board.tasks.filter(t => t.dueDate).length;
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto relative">
       <header className="px-6 py-3 border-b border-border flex items-center justify-between">
         <h1 className="text-base font-bold text-foreground">Settings</h1>
         {saved && (
@@ -1013,6 +1074,65 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
+          {activeSection === 'tickets' && (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-foreground mb-3">Your Tickets</h2>
+              {userTickets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tickets to display.</p>
+              ) : (
+                <div className="space-y-2">
+                  {userTickets.filter(t => t.status === 'open').map(ticket => (
+                    <button
+                      key={ticket.id}
+                      onClick={() => setActivePanelTicket(ticket)}
+                      className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          ticket.type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                          ticket.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                          ticket.type === 'report' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                        }`}>{ticket.type}</span>
+                        <span className="text-sm font-medium truncate">{ticket.subject}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
+                      </div>
+                    </button>
+                  ))}
+                  {userTickets.filter(t => t.status === 'closed').length > 0 && (
+                    <>
+                      <p className="text-xs font-semibold text-muted-foreground pt-3 pb-1 uppercase tracking-wider">Resolved</p>
+                      {userTickets.filter(t => t.status === 'closed').map(ticket => (
+                        <button
+                          key={ticket.id}
+                          onClick={() => setActivePanelTicket(ticket)}
+                          className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left opacity-70"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              ticket.type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                              ticket.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                              ticket.type === 'report' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                            }`}>{ticket.type}</span>
+                            <span className="text-sm font-medium truncate">{ticket.subject}</span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                            <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeSection === 'security' && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-foreground mb-3">Privacy & Security</h2>
@@ -1041,6 +1161,17 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
       </div>
+      {activePanelTicket && (
+        <TicketConversation
+          ticket={activePanelTicket}
+          messages={panelMessages}
+          viewAs="user"
+          currentUserName={user?.name || 'You'}
+          onClose={() => { setActivePanelTicket(null); setPanelMessages([]); }}
+          onSendMessage={handleSendTicketMessage}
+          sending={sendingMessage}
+        />
+      )}
     </div>
   );
 };
