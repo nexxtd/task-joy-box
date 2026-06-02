@@ -85,6 +85,7 @@ export interface Column {
   order: number;
   color: string;
   icon?: string;
+  projectId?: number | null;
 }
 
 export interface Board {
@@ -94,15 +95,7 @@ export interface Board {
   tasks: Task[];
 }
 
-export const DEFAULT_LABELS: Label[] = [
-  { id: 'l1', name: 'Bug', color: 'red' },
-  { id: 'l2', name: 'Feature', color: 'blue' },
-  { id: 'l3', name: 'Urgent', color: 'orange' },
-  { id: 'l4', name: 'Design', color: 'purple' },
-  { id: 'l5', name: 'Documentation', color: 'green' },
-  { id: 'l6', name: 'Enhancement', color: 'yellow' },
-  { id: 'l7', name: 'Question', color: 'pink' },
-];
+export const DEFAULT_LABELS: Label[] = [];
 
 export const PRIORITY_CONFIG: Record<Exclude<Priority, 'none'>, { label: string; className: string }> = {
   urgent: { label: 'Urgent', className: 'bg-priority-urgent' },

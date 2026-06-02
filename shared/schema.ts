@@ -1,47 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, json } from 'drizzle-orm/pg-core';
-
-// Define types for JSON fields
-type Label = {
-  id: string;
-  name: string;
-  color: string;
-};
-
-type ChecklistItem = {
-  id: string;
-  text: string;
-  completed: boolean;
-};
-
-type Checklist = {
-  id: string;
-  title: string;
-  items: ChecklistItem[];
-};
-
-type Subtask = {
-  id: string;
-  text: string;
-  completed: boolean;
-};
-
-type Attachment = {
-  id: string;
-  taskId: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-  fileUrl: string;
-  createdAt: string;
-};
-
-type Comment = {
-  id: string;
-  taskId: string;
-  userId: number;
-  content: string;
-  createdAt: string;
-};
+import { pgTable, serial, integer, text, boolean, timestamp } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -100,13 +57,9 @@ export const tasks = pgTable('tasks', {
   columnId: integer('column_id').references(() => columns.id).notNull(),
   title: text('title').notNull(),
   description: text('description'),
-  status: text('status').default('to_do'), // Add status field
   priority: text('priority').default('none'),
   dueDate: text('due_date'),
   dueTime: text('due_time'),
-  subject: text('subject'), // Add subject field
-  color: text('color'), // Add color field
-  icon: text('icon'), // Add icon field
   duration: integer('duration'),
   sessionsNeeded: integer('sessions_needed').default(1),
   completed: boolean('completed').default(false),
@@ -116,12 +69,6 @@ export const tasks = pgTable('tasks', {
   order: integer('order').notNull(),
   recurrencePattern: text('recurrence_pattern'),
   nextOccurrence: text('next_occurrence'),
-  labels: json('labels').$type<Label[]>(), // Add labels field
-  checklists: json('checklists').$type<Checklist[]>(), // Add checklists field
-  subtasks: json('subtasks').$type<Subtask[]>(), // Add subtasks field
-  attachments: json('attachments').$type<Attachment[]>(), // Add attachments field
-  comments: json('comments').$type<Comment[]>(), // Add comments field
-  projectId: integer('project_id').references(() => projects.id, { onDelete: 'set null' }), // Added for project association
 });
 
 export const boardSnapshots = pgTable('board_snapshots', {
@@ -298,19 +245,6 @@ export const projects = pgTable('projects', {
   completed: boolean('completed').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-  order: integer('order').default(0).notNull(), // Added for project reordering
-});
-
-// Table for project-specific columns
-export const projectColumns = pgTable('project_columns', {
-  id: serial('id').primaryKey(),
-  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
-  title: text('title').notNull(),
-  orderNum: integer('order_num').notNull(),
-  color: text('color').default('hsl(var(--muted-foreground))'),
-  icon: text('icon'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const projectMembers = pgTable('project_members', {
@@ -339,24 +273,17 @@ export const goals = pgTable('goals', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
-// Define types for habits
-type InsertHabit = {
-  userId: number;
-  title: string;
-  category: string;
-  color: string;
-  streak: number;
-  completedDays: string[];
-};
-
 export const habits = pgTable('habits', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
   title: text('title').notNull(),
-  category: text('category').default('Personal'),
-  color: text('color').default('primary'),
-  streak: integer('streak').default(0),
-  completedDays: text('completed_days').array().default([]),
+  category: text('category').default('Personal').notNull(),
+  color: text('color').default('primary').notNull(),
+  streak: integer('streak').default(0).notNull(),
+  completedDays: text('completed_days').default('[]').notNull(), // JSON array of ISO dates
+  dailyTime: integer('daily_time'), // minutes per day required
+  durationDays: integer('duration_days'), // e.g. 30, 60, 90 days
+  displayOrder: integer('display_order').default(0),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -493,4 +420,5 @@ export type UpdateOrganization = any;
 export type InsertOrganizationMember = any;
 export type InsertChatMessage = any;
 export type InsertGoal = any;
+export type InsertHabit = any;
 export type UpdateUserSettings = any;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, AlertTriangle, Volume2, VolumeX, CheckCircle2, LifeBuoy } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, AlertTriangle, Volume2, VolumeX, CheckCircle2, LifeBuoy, Trash2 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 
@@ -170,7 +170,7 @@ function playCompletionBeep(ctx: AudioContext) {
 }
 
 const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
-  const { board, updateTask, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem } = useBoardContext();
+  const { board, updateTask, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem, deleteChecklistItem } = useBoardContext();
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(propTask || null);
   const [activePill, setActivePill] = useState<Pill>('30');
@@ -411,6 +411,13 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     });
   }, [selectedTask, updateTask]);
 
+  const deleteSubtask = useCallback((id: string) => {
+    if (!selectedTask) return;
+    updateTask(selectedTask.id, {
+      subtasks: selectedTask.subtasks.filter(s => s.id !== id),
+    });
+  }, [selectedTask, updateTask]);
+
   const handleAddChecklistItem = useCallback(() => {
     if (!selectedTask || !newChecklistText.trim()) return;
     const text = newChecklistText.trim();
@@ -633,7 +640,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
               <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
                 {taskSubtasks.map(sub => (
-                  <div key={sub.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30">
+                  <div key={sub.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30 group">
                     <button
                       onClick={() => toggleSubtask(sub.id)}
                       className={`w-4.5 h-4.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
@@ -653,8 +660,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       {sub.text}
                     </span>
                     {(sub.durationMinutes ?? 0) > 0 && (
-                      <span className="text-xs flex-shrink-0 text-muted-foreground">{sub.durationMinutes} min</span>
+                      <span className="text-xs flex-shrink-0 text-muted-foreground mr-1">{sub.durationMinutes} min</span>
                     )}
+                    <button
+                      onClick={() => deleteSubtask(sub.id)}
+                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      title="Delete subtask"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ))}
                 {taskSubtasks.length === 0 && (
@@ -699,7 +713,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
                 <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
                   {focusChecklistItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30">
+                    <div key={item.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30 group">
                       <input
                         type="checkbox"
                         checked={item.completed}
@@ -709,6 +723,13 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       <span className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                         {item.text}
                       </span>
+                      <button
+                        onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete item"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                   {focusChecklistItems.length === 0 && (

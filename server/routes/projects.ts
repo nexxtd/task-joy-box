@@ -1,127 +1,100 @@
-import express from 'express';
-import { eq, and, or, asc, inArray, sql } from 'drizzle-orm';
-import { db } from '../db';
-import { projects, projectMembers, projectColumns, tasks as taskSchema, users } from '../../shared/schema';
+import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { Router } from 'express';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db';
+import { requireAuth, AuthRequest } from '../middleware/auth';
+import { projectMembers, projects, users } from '../../shared/schema';
 
 const router = Router();
 
-// Serialize project to include member information
+const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
+  free: 5,
+  premium: 10,
+  pro: 20,
+};
+
+type ProjectRole = 'owner' | 'member';
+
+function getPlanTier(tier?: string | null): 'free' | 'premium' | 'pro' {
+  if (tier === 'pro') return 'pro';
+  if (tier === 'premium') return 'premium';
+  return 'free';
+}
+
+async function getProjectMembershipCount(userId: number) {
+  const rows = await db
+    .select({ count: projectMembers.id })
+    .from(projectMembers)
+    .where(eq(projectMembers.userId, userId));
+  return rows.length;
+}
+
 async function serializeProject(projectId: number) {
-  // Get the project details
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(eq(projects.id, projectId));
-  
-  if (!project) {
-    throw new Error('Project not found');
-  }
-  
-  // Get project members
+  const project = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (project.length === 0) return null;
+
   const members = await db
-    .select({ 
-      id: projectMembers.id,
-      projectId: projectMembers.projectId,
-      userId: projectMembers.userId,
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
       role: projectMembers.role,
-      createdAt: projectMembers.createdAt,
-      updatedAt: projectMembers.updatedAt
     })
     .from(projectMembers)
+    .innerJoin(users, eq(users.id, projectMembers.userId))
     .where(eq(projectMembers.projectId, projectId));
-  
-  // Get user details for each member
-  const userIds = members.map(m => m.userId);
-  const userDetails = await db
-    .select({ id: users.id, name: users.name, email: users.email, avatarUrl: users.avatarUrl })
-    .from(users)
-    .where(inArray(users.id, userIds));
-  
-  // Combine member info with user details
-  const projectMembersWithDetails = members.map(member => {
-    const user = userDetails.find(u => u.id === member.userId);
-    return {
-      ...member,
-      user: user ? { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl } : null
-    };
-  });
-  
+
   return {
-    ...project,
-    members: projectMembersWithDetails
+    ...project[0],
+    members: members.map(member => ({
+      id: member.id,
+      name: member.name || member.email.split('@')[0],
+      email: member.email,
+      role: member.role as ProjectRole,
+    })),
+    memberCount: members.length,
   };
 }
 
-// Get all projects for the current user
-router.get('/', async (req: any, res) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Get projects where user is a member
-    const projectMemberships = await db
-      .select({ projectId: projectMembers.projectId })
+    const rows = await db
+      .select({
+        id: projects.id,
+      })
       .from(projectMembers)
-      .where(eq(projectMembers.userId, req.userId));
+      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
+      .where(eq(projectMembers.userId, req.userId!));
 
-    const projectIds = projectMemberships.map(p => p.projectId);
-    
-    let projectsData = [];
-    if (projectIds.length > 0) {
-      projectsData = await db
-        .select()
-        .from(projects)
-        .where(
-          or(
-            eq(projects.ownerId, req.userId), // Owned projects
-            inArray(projects.id, projectIds)  // Member projects
-          )
-        )
-        .orderBy(asc(projects.order));
-    } else {
-      // If user is not a member of any projects, only show owned projects
-      projectsData = await db
-        .select()
-        .from(projects)
-        .where(eq(projects.ownerId, req.userId))
-        .orderBy(asc(projects.order));
-    }
-
-    res.json({ projects: projectsData });
+    const serialised = await Promise.all(rows.map(row => serializeProject(row.id)));
+    res.json({ projects: serialised.filter(Boolean) });
   } catch (error) {
     console.error('Get projects error:', error);
     res.status(500).json({ error: 'Failed to get projects' });
   }
 });
 
-// Create a new project
-router.post('/', async (req: any, res) => {
+router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { name, description, color, order } = req.body;
-
-    if (!name || name.trim().length < 2) {
+    const { name, description, color } = req.body;
+    if (!name || String(name).trim().length < 2) {
       return res.status(400).json({ error: 'Project name must be at least 2 characters' });
     }
 
-    // Check project limit for free users
-    const existingProjects = await db
-      .select()
-      .from(projects)
-      .innerJoin(projectMembers, eq(projects.id, projectMembers.projectId))
-      .where(and(eq(projectMembers.userId, req.userId), eq(projects.archived, false)));
+    const userRow = await db
+      .select({ subscriptionTier: users.subscriptionTier })
+      .from(users)
+      .where(eq(users.id, req.userId!));
+    const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+    const projectCount = await getProjectMembershipCount(req.userId!);
 
-    const tier = req.user?.subscriptionTier || 'free';
-    const limit = tier === 'pro' ? 20 : tier === 'premium' ? 10 : 5;
-
-    if (existingProjects.length >= limit) {
-      return res.status(402).json({ error: `Project limit reached for ${tier} plan` });
+    if (projectCount >= PLAN_LIMITS[planTier]) {
+      return res.status(402).json({
+        error: 'PLAN_LIMIT_REACHED',
+        message: `You have reached your ${planTier} plan limit of ${PLAN_LIMITS[planTier]} projects.`,
+        limit: PLAN_LIMITS[planTier],
+        current: projectCount,
+      });
     }
 
     const inviteCode = crypto.randomBytes(16).toString('hex');
@@ -131,7 +104,6 @@ router.post('/', async (req: any, res) => {
       color: String(color || '#3b82f6'),
       ownerId: req.userId!,
       inviteCode,
-      order: order || 0,
     }).returning();
 
     await db.insert(projectMembers).values({
@@ -148,309 +120,233 @@ router.post('/', async (req: any, res) => {
   }
 });
 
-// Update a project
-router.patch('/:projectId', async (req: any, res) => {
+router.patch('/:projectId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
-    
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+
+    if (membership.length === 0) {
+      return res.status(403).json({ error: 'Not a member of this project' });
     }
 
-    // Check if user is the owner of the project
-    const [project] = await db
-      .select({ ownerId: projects.ownerId })
-      .from(projects)
-      .where(eq(projects.id, projectId));
-
-    if (!project || project.ownerId !== req.userId) {
-      return res.status(403).json({ error: 'Only project owner can update the project' });
+    const updates: any = {};
+    for (const key of ['name', 'description', 'color', 'archived', 'completed'] as const) {
+      if (key in req.body) updates[key] = req.body[key];
     }
 
-    const updates = req.body;
-    await db
-      .update(projects)
+    if (typeof updates.name === 'string' && updates.name.trim().length < 2) {
+      return res.status(400).json({ error: 'Project name must be at least 2 characters' });
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    await db.update(projects)
       .set({ ...updates, updatedAt: new Date().toISOString() })
       .where(eq(projects.id, projectId));
 
-    const [updatedProject] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId));
-
-    res.json({ project: updatedProject });
+    const project = await serializeProject(projectId);
+    res.json({ project });
   } catch (error) {
     console.error('Update project error:', error);
     res.status(500).json({ error: 'Failed to update project' });
   }
 });
 
-// Delete a project
-router.delete('/:projectId', async (req: any, res) => {
+router.delete('/:projectId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
-    
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
     }
 
-    // Check if user is the owner of the project
-    const [project] = await db
-      .select({ ownerId: projects.ownerId })
-      .from(projects)
-      .where(eq(projects.id, projectId));
-
-    if (!project || project.ownerId !== req.userId) {
-      return res.status(403).json({ error: 'Only project owner can delete the project' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can delete this project' });
     }
 
     await db.delete(projects).where(eq(projects.id, projectId));
-    res.json({ message: 'Project deleted successfully' });
+    res.json({ ok: true });
   } catch (error) {
     console.error('Delete project error:', error);
     res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
-// Invite a member to a project
-router.post('/:projectId/invite', async (req: any, res) => {
+router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
     const { email } = req.body;
-    
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    // Check if user is the owner of the project
-    const [project] = await db
-      .select({ ownerId: projects.ownerId })
-      .from(projects)
-      .where(eq(projects.id, projectId));
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
 
-    if (!project || project.ownerId !== req.userId) {
-      return res.status(403).json({ error: 'Only project owner can invite members' });
-    }
-
-    // Find the user by email
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email));
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Check if user is already a member
-    const existingMembership = await db
+    const membership = await db
       .select()
       .from(projectMembers)
-      .where(and(
-        eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, user.id)
-      ));
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Not a member of this project' });
 
-    if (existingMembership.length > 0) {
+    const targetUser = await db.select().from(users).where(eq(users.email, String(email).trim().toLowerCase()));
+    if (targetUser.length === 0) {
+      return res.status(202).json({
+        message: 'Invite link generated. The user can join after creating an account.',
+        inviteCode: project[0].inviteCode,
+      });
+    }
+
+    const recipient = targetUser[0];
+    const recipientProjectCount = await getProjectMembershipCount(recipient.id);
+    const recipientPlanTier = getPlanTier(recipient.subscriptionTier);
+    const recipientLimit = PLAN_LIMITS[recipientPlanTier];
+
+    if (recipientProjectCount >= recipientLimit) {
+      return res.status(402).json({
+        error: 'RECIPIENT_LIMIT_REACHED',
+        message: 'This user cannot join any more projects on their current plan.',
+        limit: recipientLimit,
+      });
+    }
+
+    const existing = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, recipient.id)));
+    if (existing.length > 0) {
       return res.status(400).json({ error: 'User is already a member of this project' });
     }
 
-    // Add user as a member
-    const [member] = await db
-      .insert(projectMembers)
-      .values({
-        projectId,
-        userId: user.id,
-        role: 'member',
-      })
-      .returning();
+    await db.insert(projectMembers).values({
+      projectId,
+      userId: recipient.id,
+      role: 'member',
+    });
 
-    res.json({ member });
+    const projectData = await serializeProject(projectId);
+    res.json({ project: projectData, message: 'User added to project' });
   } catch (error) {
-    console.error('Invite member error:', error);
+    console.error('Invite project member error:', error);
     res.status(500).json({ error: 'Failed to invite member' });
   }
 });
 
+router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { inviteCode } = req.params;
+    const project = await db.select().from(projects).where(eq(projects.inviteCode, inviteCode));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
 
-// Remove a member from a project
-router.delete('/:projectId/members/:userId', async (req: any, res) => {
+    const projectId = project[0].id;
+    const existing = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (existing.length > 0) {
+      return res.json({ project: await serializeProject(projectId) });
+    }
+
+    const userRow = await db
+      .select({ subscriptionTier: users.subscriptionTier })
+      .from(users)
+      .where(eq(users.id, req.userId!));
+    const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+    const currentCount = await getProjectMembershipCount(req.userId!);
+    if (currentCount >= PLAN_LIMITS[planTier]) {
+      return res.status(402).json({
+        error: 'PLAN_LIMIT_REACHED',
+        message: 'You cannot join any more projects on your current plan.',
+      });
+    }
+
+    await db.insert(projectMembers).values({
+      projectId,
+      userId: req.userId!,
+      role: 'member',
+    });
+
+    res.json({ project: await serializeProject(projectId) });
+  } catch (error) {
+    console.error('Join project error:', error);
+    res.status(500).json({ error: 'Failed to join project' });
+  }
+});
+
+// Update member role (owner only)
+router.patch('/:projectId/members/:memberId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
-    const userId = parseInt(req.params.userId, 10);
-    
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const memberId = parseInt(req.params.memberId, 10);
+    const { role } = req.body;
+
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can update member roles' });
     }
 
-    // Check if user is the owner of the project
-    const [project] = await db
-      .select({ ownerId: projects.ownerId })
-      .from(projects)
-      .where(eq(projects.id, projectId));
+    await db.update(projectMembers)
+      .set({ role, updatedAt: new Date().toISOString() })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, memberId)));
 
-    if (!project || project.ownerId !== req.userId) {
-      return res.status(403).json({ error: 'Only project owner can remove members' });
+    const projectData = await serializeProject(projectId);
+    res.json({ project: projectData, message: 'Member role updated' });
+  } catch (error) {
+    console.error('Update member role error:', error);
+    res.status(500).json({ error: 'Failed to update member role' });
+  }
+});
+
+// Remove member (owner only)
+router.delete('/:projectId/members/:memberId', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const memberId = parseInt(req.params.memberId, 10);
+
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can remove members' });
     }
 
-    // Don't allow removing the owner
-    if (userId === project.ownerId) {
-      return res.status(400).json({ error: 'Cannot remove the project owner' });
+    if (memberId === req.userId!) {
+      return res.status(400).json({ error: 'Owners cannot remove themselves from the project' });
     }
 
-    await db
-      .delete(projectMembers)
-      .where(and(
-        eq(projectMembers.projectId, projectId),
-        eq(projectMembers.userId, userId)
-      ));
+    await db.delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, memberId)));
 
-    res.json({ message: 'Member removed successfully' });
+    const projectData = await serializeProject(projectId);
+    res.json({ project: projectData, message: 'Member removed from project' });
   } catch (error) {
     console.error('Remove member error:', error);
     res.status(500).json({ error: 'Failed to remove member' });
   }
 });
 
-// Add project column
-router.post('/:projectId/columns', async (req: any, res) => {
+// Leave project (non-owner members)
+router.post('/:projectId/leave', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
-    const { title, order, color } = req.body;
 
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+
+    if (project[0].ownerId === req.userId!) {
+      return res.status(400).json({ error: 'Owners cannot leave their own project. You can delete it instead.' });
     }
 
-    // Check if user is a member of the project
-    const membership = await db
-      .select()
-      .from(projectMembers)
+    await db.delete(projectMembers)
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
 
-    if (membership.length === 0) {
-      return res.status(403).json({ error: 'Not a member of this project' });
-    }
-
-    const [column] = await db.insert(projectColumns).values({
-      projectId,
-      title,
-      orderNum: order || 0,
-      color: color || '#9CA3AF',
-    }).returning();
-
-    res.json({ column });
+    res.json({ success: true, message: 'Left the project successfully' });
   } catch (error) {
-    console.error('Add column error:', error);
-    res.status(500).json({ error: 'Failed to add column' });
-  }
-});
-
-// Update project column
-router.patch('/:projectId/columns/:columnId', async (req: any, res) => {
-  try {
-    const projectId = parseInt(req.params.projectId, 10);
-    const columnId = parseInt(req.params.columnId, 10);
-    const updates = req.body;
-
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Check if user is a member of the project
-    const membership = await db
-      .select()
-      .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
-
-    if (membership.length === 0) {
-      return res.status(403).json({ error: 'Not a member of this project' });
-    }
-
-    await db.update(projectColumns)
-      .set({ ...updates, updatedAt: new Date().toISOString() })
-      .where(and(eq(projectColumns.id, columnId), eq(projectColumns.projectId, projectId)));
-
-    const [updatedColumn] = await db
-      .select()
-      .from(projectColumns)
-      .where(and(eq(projectColumns.id, columnId), eq(projectColumns.projectId, projectId)));
-
-    res.json({ column: updatedColumn });
-  } catch (error) {
-    console.error('Update column error:', error);
-    res.status(500).json({ error: 'Failed to update column' });
-  }
-});
-
-// Delete project column
-router.delete('/:projectId/columns/:columnId', async (req: any, res) => {
-  try {
-    const projectId = parseInt(req.params.projectId, 10);
-    const columnId = parseInt(req.params.columnId, 10);
-
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // Check if user is a member of the project
-    const membership = await db
-      .select()
-      .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
-
-    if (membership.length === 0) {
-      return res.status(403).json({ error: 'Not a member of this project' });
-    }
-
-    await db.delete(projectColumns)
-      .where(and(eq(projectColumns.id, columnId), eq(projectColumns.projectId, projectId)));
-
-    res.json({ message: 'Column deleted successfully' });
-  } catch (error) {
-    console.error('Delete column error:', error);
-    res.status(500).json({ error: 'Failed to delete column' });
-  }
-});
-
-
-// Reorder projects
-router.patch('/reorder', async (req: any, res) => {
-  try {
-    if (!req.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { projects: orderedProjects } = req.body;
-
-    if (!Array.isArray(orderedProjects)) {
-      return res.status(400).json({ error: 'Invalid request body' });
-    }
-
-    // Verify that all projects belong to the user
-    for (const project of orderedProjects) {
-      const [proj] = await db
-        .select({ ownerId: projects.ownerId })
-        .from(projects)
-        .where(eq(projects.id, project.id));
-
-      if (!proj || proj.ownerId !== req.userId) {
-        return res.status(403).json({ error: 'Unauthorized to reorder some projects' });
-      }
-    }
-
-    // Update the order for each project
-    for (const project of orderedProjects) {
-      await db
-        .update(projects)
-        .set({ order: project.order, updatedAt: new Date().toISOString() })
-        .where(eq(projects.id, project.id));
-    }
-
-    res.json({ message: 'Projects reordered successfully' });
-  } catch (error) {
-    console.error('Reorder projects error:', error);
-    res.status(500).json({ error: 'Failed to reorder projects' });
+    console.error('Leave project error:', error);
+    res.status(500).json({ error: 'Failed to leave project' });
   }
 });
 
