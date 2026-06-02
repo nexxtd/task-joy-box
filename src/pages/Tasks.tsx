@@ -226,7 +226,7 @@ const Tasks: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'status' | 'due' | 'duration' | 'project' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
   const [quickEditDueDate, setQuickEditDueDate] = useState('');
   const [quickEditDueTime, setQuickEditDueTime] = useState('');
   const [quickEditDuration, setQuickEditDuration] = useState(0);
@@ -565,13 +565,12 @@ const Tasks: React.FC = () => {
       completed: false,
     }));
 
+    // Status + due are intentionally not exposed in this flow anymore.
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
-      status: newTaskStatus,
+      status: 'to_do',
       priority: newTaskPriority,
-      dueDate: newTaskDueDate || undefined,
-      dueTime: newTaskDueTime || undefined,
       duration: Math.max(0, Number(newTaskDuration) || 0),
       projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
       projectName: newTaskProjectId === '' ? undefined : (projects.find(project => project.id === Number(newTaskProjectId))?.name || undefined),
@@ -593,8 +592,8 @@ const Tasks: React.FC = () => {
         fileUrl: URL.createObjectURL(file),
         createdAt: new Date().toISOString(),
       })),
-      completed: newTaskStatus === 'completed',
-      completedAt: newTaskStatus === 'completed' ? new Date().toISOString() : undefined,
+      completed: false,
+      completedAt: undefined,
     });
 
     resetTaskDraft();
@@ -675,12 +674,10 @@ const Tasks: React.FC = () => {
   const newSubtaskTotal = newTaskSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
-  const openQuickEdit = (task: Task, field: 'status' | 'due' | 'duration' | 'project') => {
+  const openQuickEdit = (task: Task, field: 'duration' | 'project') => {
     setQuickEditTaskId(task.id);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(task));
-    setQuickEditDueDate(task.dueDate || '');
-    setQuickEditDueTime(task.dueTime || '');
     setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
     setQuickEditProjectId(task.projectId || '');
   };
@@ -692,15 +689,6 @@ const Tasks: React.FC = () => {
 
   const applyQuickEdit = (task: Task) => {
     const updates: Partial<Task> = {};
-    if (quickEditField === 'status') {
-      updates.status = quickEditStatus;
-      updates.completed = quickEditStatus === 'completed';
-      updates.completedAt = quickEditStatus === 'completed' ? task.completedAt || new Date().toISOString() : undefined;
-    }
-    if (quickEditField === 'due') {
-      updates.dueDate = quickEditDueDate || undefined;
-      updates.dueTime = quickEditDueTime || undefined;
-    }
     if (quickEditField === 'duration') {
       updates.duration = Math.max(0, Number(quickEditDuration) || 0);
     }
@@ -806,25 +794,6 @@ const Tasks: React.FC = () => {
           )}
           <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
-            <button
-              onClick={e => { e.stopPropagation(); openQuickEdit(task, 'status'); }}
-              className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg.className}`}
-            >
-              {statusCfg.label}
-            </button>
-            {task.dueDate && (
-              <button
-                onClick={e => { e.stopPropagation(); openQuickEdit(task, 'due'); }}
-                className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${dueBadgeClass(dueWarning, true)}`}
-              >
-                {(dueWarning === 'soon' || dueWarning === 'imminent' || dueWarning === 'overdue') && (
-                  <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                )}
-                {dueWarning === 'overdue'
-                  ? 'Overdue'
-                  : `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}`}
-              </button>
-            )}
             {taskDurFmt && (
               <button
                 onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
@@ -879,17 +848,6 @@ const Tasks: React.FC = () => {
         {quickEditTaskId === task.id && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
             <div className="flex flex-wrap items-center gap-2">
-              {quickEditField === 'status' && (
-                <select value={quickEditStatus} onChange={e => setQuickEditStatus(e.target.value as TaskStatus)} onBlur={() => applyQuickEdit(task)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  {STATUS_OPTIONS.map(option => (<option key={option.value} value={option.value}>{option.label}</option>))}
-                </select>
-              )}
-              {quickEditField === 'due' && (
-                <>
-                  <input type="date" value={quickEditDueDate} onChange={e => setQuickEditDueDate(e.target.value)} onBlur={() => applyQuickEdit(task)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                  <input type="time" value={quickEditDueTime} onChange={e => setQuickEditDueTime(e.target.value)} onBlur={() => applyQuickEdit(task)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                </>
-              )}
               {quickEditField === 'duration' && (
                 <div className="flex items-center gap-2">
                   <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(task)} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
@@ -913,24 +871,55 @@ const Tasks: React.FC = () => {
               <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
               <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
             </div>
-            {task.subtasks.length > 0 && (
-              <div>
-                <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
-                <div className="space-y-1.5">
-                  {task.subtasks.map(subtask => (
-                    <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
-                      <CircleToggle
-                        completed={subtask.completed}
-                        onClick={e => { e.stopPropagation(); updateTask(task.id, { subtasks: task.subtasks.map(st => st.id === subtask.id ? { ...st, completed: !st.completed } : st) }); }}
-                        size="sm"
-                      />
-                      <span className={subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>{subtask.text}</span>
-                      {subtask.durationMinutes > 0 && <span className="text-xs text-muted-foreground ml-auto">{subtask.durationMinutes} min</span>}
-                    </div>
-                  ))}
+            {(() => {
+              const subtasks: Array<{ id: string; text?: string; completed?: boolean; durationMinutes?: number }> = Array.isArray(task.subtasks)
+                ? (task.subtasks as any)
+                : [];
+
+              if (subtasks.length === 0) return null;
+
+              return (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
+                  <div className="space-y-1.5">
+                    {subtasks.map(subtask => {
+                      const completed = Boolean(subtask.completed);
+                      const durationMinutes = Number(subtask.durationMinutes) || 0;
+                      const text = String(subtask.text ?? '');
+
+                      return (
+                        <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
+                          <CircleToggle
+                            completed={completed}
+                            onClick={e => {
+                              e.stopPropagation();
+
+                              const nextSubtasks = subtasks.map(st => {
+                                const stCompleted = Boolean(st.completed);
+                                return st.id === subtask.id
+                                  ? { ...st, completed: !stCompleted }
+                                  : st;
+                              });
+
+                              updateTask(task.id, { subtasks: nextSubtasks as any });
+                            }}
+                            size="sm"
+                          />
+
+                          <span className={completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>
+                            {text}
+                          </span>
+
+                          {durationMinutes > 0 && (
+                            <span className="text-xs text-muted-foreground ml-auto">{durationMinutes} min</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             {task.checklists.length > 0 && (
               <div>
                 <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Checklist</h4>
@@ -1371,18 +1360,6 @@ const Tasks: React.FC = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
-                  <select
-                    value={newTaskStatus}
-                    onChange={e => setNewTaskStatus(e.target.value as TaskStatus)}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  >
-                    {STATUS_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
                   <select
                     value={newTaskPriority}
@@ -1395,24 +1372,6 @@ const Tasks: React.FC = () => {
                     <option value="low">Low</option>
                     <option value="none">None</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Due date</label>
-                  <input
-                    type="date"
-                    value={newTaskDueDate}
-                    onChange={e => setNewTaskDueDate(e.target.value)}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Due time</label>
-                  <input
-                    type="time"
-                    value={newTaskDueTime}
-                    onChange={e => setNewTaskDueTime(e.target.value)}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  />
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
@@ -1437,6 +1396,7 @@ const Tasks: React.FC = () => {
                     ))}
                   </select>
                 </div>
+                <div />
               </div>
 
               <div>
@@ -1960,18 +1920,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const subtaskTimeRemaining = taskDuration - subtaskTotal;
   const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
 
-  const currentStatus = getTaskStatus(task);
-  const statusCfg = STATUS_CONFIG[currentStatus];
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
-  const dueWarning = useMemo<DueWarningLevel>(() => getDueTimeWarning(task), [task.dueDate, task.dueTime, task.completed, task.status]);
   const activityEntries = useMemo(() => {
     const entries = [
       { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
       ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
-      { id: 'status', text: `Status set to ${statusCfg.label}`, createdAt: task.updatedAt || task.createdAt },
       ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
-      ...(task.dueDate ? [{ id: 'due', text: `Due ${formatDate(task.dueDate)}${task.dueTime ? ` at ${task.dueTime}` : ''}`, createdAt: task.updatedAt || task.createdAt }] : []),
       ...(task.comments || []).map(comment => ({
         id: comment.id,
         text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
@@ -1979,7 +1934,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       })),
     ];
     return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [statusCfg.label, task.comments, task.createdAt, task.dueDate, task.dueTime, task.projectId, task.updatedAt, taskProject?.name]);
+  }, [task.comments, task.createdAt, task.projectId, task.updatedAt, taskProject?.name]);
 
   const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -2126,21 +2081,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
-            <select
-              value={currentStatus}
-              onChange={e => {
-                const s = e.target.value as TaskStatus;
-                onUpdateTask(task.id, { status: s, completed: s === 'completed', completedAt: s === 'completed' ? new Date().toISOString() : undefined });
-              }}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            >
-              {STATUS_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
             <select
               value={task.priority}
@@ -2153,24 +2093,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               <option value="low">Low</option>
               <option value="none">None</option>
             </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Due date</label>
-            <input
-              type="date"
-              value={task.dueDate || ''}
-              onChange={e => onUpdateTask(task.id, { dueDate: e.target.value || undefined })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Due time</label>
-            <input
-              type="time"
-              value={task.dueTime || ''}
-              onChange={e => onUpdateTask(task.id, { dueTime: e.target.value || undefined })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            />
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
@@ -2200,20 +2122,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
         </div>
 
-        {dueWarning && (
-          <div className={`text-sm px-3 py-2 rounded-lg flex items-center gap-2 ${
-            dueWarning === 'overdue' || dueWarning === 'imminent'
-              ? 'bg-destructive/10 text-destructive border border-destructive/20'
-              : 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/30'
-          }`}>
-            <Clock className="w-4 h-4 flex-shrink-0" />
-            {dueWarning === 'overdue'
-              ? 'This task is overdue.'
-              : dueWarning === 'imminent'
-              ? 'Due in less than 30 minutes!'
-              : 'Due in less than 2 hours — running out of time.'}
-          </div>
-        )}
+        {/* due/status removed from Task view */}
 
         <div>
           <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
@@ -2583,21 +2492,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusCfg.className}`}>
-              {statusCfg.label}
-            </span>
-            {task.dueDate && (
-              <span className={`text-xs flex items-center gap-1 ${
-                dueWarning === 'overdue' || dueWarning === 'imminent' ? 'text-destructive' :
-                dueWarning === 'soon' ? 'text-orange-500' : 'text-muted-foreground'
-              }`}>
-                {dueWarning && <Clock className="w-3 h-3" />}
-                Due: {formatDate(task.dueDate)}
-                {task.dueTime && ` at ${task.dueTime}`}
-              </span>
-            )}
-          </div>
+          {/* Removed status + due from comments header area */}
 
           <div className="flex gap-2">
             <input
