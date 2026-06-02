@@ -1,5 +1,5 @@
 import express from 'express';
-import { eq, and, or, asc, desc } from 'drizzle-orm';
+import { eq, and, or, asc, desc, isNull } from 'drizzle-orm';
 import { db } from '../db';
 import { tasks as taskSchema, columns, boards, projectMembers, projects } from '../../shared/schema';
 
@@ -28,7 +28,7 @@ router.get('/', async (req: any, res) => {
         .where(
           or(
             ...projectIds.map(id => eq(taskSchema.projectId, id)),
-            eq(taskSchema.projectId, null)
+            isNull(taskSchema.projectId)
           )
         )
         .orderBy(asc(taskSchema.order));
@@ -36,7 +36,7 @@ router.get('/', async (req: any, res) => {
       tasks = await db
         .select()
         .from(taskSchema)
-        .where(eq(taskSchema.projectId, null))
+        .where(isNull(taskSchema.projectId))
         .orderBy(asc(taskSchema.order));
     }
 
@@ -57,22 +57,13 @@ router.post('/', async (req: any, res) => {
     const {
       title,
       description,
-      status,
       priority,
       dueDate,
       dueTime,
-      subject,
-      color,
-      icon,
       duration,
       columnId,
       order,
-      labels,
-      checklists,
-      subtasks,
-      attachments,
-      comments,
-      projectId, // New field for project association
+      projectId,
     } = req.body;
 
     if (!title || !columnId) {
@@ -107,28 +98,30 @@ router.post('/', async (req: any, res) => {
       }
     }
 
+    // First, get the boardId from the column
+    const [column] = await db
+      .select({ boardId: columns.boardId })
+      .from(columns)
+      .where(eq(columns.id, parseInt(columnId)));
+
+    if (!column) {
+      return res.status(400).json({ error: 'Invalid column' });
+    }
+
     const [task] = await db
       .insert(taskSchema)
       .values({
+        boardId: column.boardId,
         title,
         description: description || '',
-        status: status || 'to_do',
         priority: priority || 'none',
         dueDate: dueDate || null,
         dueTime: dueTime || null,
-        subject: subject || null,
-        color: color || null,
-        icon: icon || null,
         duration: duration || null,
         columnId: parseInt(columnId),
         order: order || 0,
         completed: false,
         completedAt: null,
-        labels: labels || [],
-        checklists: checklists || [],
-        subtasks: subtasks || [],
-        attachments: attachments || [],
-        comments: comments || [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         projectId: projectId || null, // Associate with project
@@ -193,9 +186,23 @@ router.patch('/:taskId', async (req: any, res) => {
       }
     }
 
+    // 过滤掉不在模式中的字段
+    const { 
+      // 保留的字段
+      title, description, priority, dueDate, dueTime, duration, 
+      columnId, order, completed, completedAt, updatedAt,
+      // 项目相关字段
+      projectId
+    } = updates;
+    
     await db
       .update(taskSchema)
-      .set({ ...updates, updatedAt: new Date().toISOString() })
+      .set({ 
+        title, description, priority, dueDate, dueTime, duration, 
+        columnId: parseInt(columnId), order, completed, completedAt,
+        updatedAt: new Date().toISOString(),
+        projectId
+      })
       .where(eq(taskSchema.id, taskId));
 
     const [updatedTask] = await db

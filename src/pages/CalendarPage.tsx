@@ -550,7 +550,12 @@ const CalendarPage: React.FC = () => {
       )}
 
       {currentTask && (
-        <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} />
+        <TaskDetailModal 
+          task={currentTask} 
+          isOpen={!!currentTask} 
+          onClose={() => setSelectedTask(null)} 
+        />
+
       )}
     </div>
   );

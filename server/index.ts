@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
 import fs from 'fs';
+import { sql } from 'drizzle-orm';
 import authRoutes from './routes/auth';
 import aiRoutes from './routes/ai';
 import calendarRoutes from './routes/calendar';
@@ -13,7 +14,6 @@ import collaborationRoutes from './routes/collaboration';
 import organizationsRoutes from './routes/organizations';  // New organizations routes
 import workspaceRoutes from './routes/workspace';  // New workspace routes
 import projectsRoutes from './routes/projects';
-import projectsV2Routes from './routes/projects-v2';
 import goalsRoutes from './routes/goals';
 import habitsRoutes from './routes/habits';
 import notesRoutes from './routes/notes';
@@ -21,26 +21,31 @@ import settingsRoutes from './routes/settings';
 import attachmentRoutes from './routes/attachments';
 import adminRoutes from './routes/admin';
 import boardRoutes from './routes/boards';
-import columnRoutes from './routes/columns'; // Import added for reference
 import projectColumnRoutes from './routes/project-columns'; // New import added
 import whiteboardsRoutes from './routes/whiteboards';
 import deepFocusRoutes from './routes/deepFocus';
 import path from 'path';
-import connectPg from 'connect-pg-simple';
-import { pool } from './db';
+import connectPgSimple from 'connect-pg-simple';
+import { db } from './db'; // Use db instead of pool
 import { initDatabase } from './init-db';
+import postgres from 'postgres';
 
-const PostgresStore = connectPg(session);
+const app = express();
+
+// Create a postgres connection for session storage
+const connectionString = process.env.DATABASE_URL!;
+const sessionPool = postgres(connectionString);
+
+// For connect-pg-simple, the correct option is pgPromise or databaseURL
+const PostgresStore = connectPgSimple(session);
 const sessionStore = new PostgresStore({
-  pool: pool,
-  createTableIfMissing: true
+  conString: connectionString  // Use conString instead of conObject or pool
 });
 
 sessionStore.on('error', (error: any) => {
   console.error('Session store error:', error);
 });
 
-const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
 const isProduction = process.env.NODE_ENV === 'production';
 // Use the RENDER_EXTERNAL_URL if available, otherwise default to a standard URL
@@ -216,14 +221,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// Initialize database 
+initDatabase().catch(error => {
+  console.error('Failed to initialize database:', error);
+  process.exit(1);
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/collaboration', collaborationRoutes);
-app.use('/api/organizations', organizationsRoutes);  // Add organizations routes
-app.use('/api/workspace', workspaceRoutes);  // Add workspace routes
-app.use('/api/projects', projectsV2Routes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/collaboration', collaborationRoutes);
+app.use('/api/organizations', organizationsRoutes);
+app.use('/api/workspace', workspaceRoutes);
+app.use('/api/projects', projectsRoutes); // Removed projectsV2Routes
 app.use('/api/goals', goalsRoutes);
 app.use('/api/habits', habitsRoutes);
 app.use('/api/notes', notesRoutes);
@@ -231,14 +242,12 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/boards', boardRoutes);
+app.use('/api/projects/columns', projectColumnRoutes);
 app.use('/api/whiteboards', whiteboardsRoutes);
 app.use('/api/deep-focus', deepFocusRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {
-    // Test database connection
-    const dbTest = await pool.query('SELECT NOW()');
-    
     // Check environment variables
     const envStatus = {
       DATABASE_URL: !!process.env.DATABASE_URL,
@@ -247,11 +256,14 @@ app.get('/api/health', async (_req, res) => {
       NODE_ENV: process.env.NODE_ENV,
       PORT: process.env.PORT
     };
+
+    // Test database connection - use db instead of pool
+    const result = await db.execute(sql`SELECT NOW() as now`);
     
     res.json({ 
       ok: true, 
       database: 'connected',
-      dbTime: dbTest.rows[0].now,
+      dbTime: Array.isArray(result) ? result[0]?.now : new Date().toISOString(), // Handle result appropriately
       environment: envStatus
     });
   } catch (error: any) {

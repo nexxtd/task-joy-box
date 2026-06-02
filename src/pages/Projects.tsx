@@ -50,6 +50,13 @@ interface Milestone {
 
 const Projects: React.FC = () => {
   const { user } = useAuth();
+  // Type for API response
+  interface ApiResponse<T> {
+    success: boolean;
+    data: T;
+    message?: string;
+  }
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -89,10 +96,16 @@ const Projects: React.FC = () => {
       try {
         const response = await fetch('/api/projects', { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to load projects');
-        const data = await response.json();
-        // Sort projects by order
-        const sortedProjects = [...data.projects].sort((a: Project, b: Project) => a.order - b.order);
-        setProjects(sortedProjects);
+        
+        const data: ApiResponse<Project[]> = await response.json();
+        
+        if (data.success) {
+          // Sort projects by order
+          const sortedProjects = [...data.data].sort((a: Project, b: Project) => a.order - b.order);
+          setProjects(sortedProjects);
+        } else {
+          throw new Error(data.message || 'Failed to load projects');
+        }
       } catch (error) {
         console.error('Error loading projects:', error);
         toast({ title: 'Error', description: 'Failed to load projects' });
@@ -107,8 +120,14 @@ const Projects: React.FC = () => {
       try {
         const response = await fetch('/api/users', { credentials: 'include' });
         if (!response.ok) throw new Error('Failed to load users');
-        const data = await response.json();
-        setUsers(data.users || []);
+        
+        const data: ApiResponse<User[]> = await response.json();
+        
+        if (data.success) {
+          setUsers(data.data || []);
+        } else {
+          throw new Error(data.message || 'Failed to load users');
+        }
       } catch (error) {
         console.error('Error loading users:', error);
         toast({ title: 'Error', description: 'Failed to load users' });
@@ -167,11 +186,16 @@ const Projects: React.FC = () => {
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setProjects(projects.map(p => p.id === data.project.id ? data.project : p));
-        setEditingProject(null);
-        setIsEditModalOpen(false);
-        toast({ title: 'Success', description: 'Project updated successfully' });
+        const data: ApiResponse<Project> = await response.json();
+        
+        if (data.success) {
+          setProjects(projects.map(p => p.id === data.data.id ? data.data : p));
+          setEditingProject(null);
+          setIsEditModalOpen(false);
+          toast({ title: 'Success', description: 'Project updated successfully' });
+        } else {
+          throw new Error(data.message || 'Failed to update project');
+        }
       } else {
         throw new Error('Failed to update project');
       }
@@ -191,10 +215,16 @@ const Projects: React.FC = () => {
       });
       
       if (response.ok) {
-        setProjects(projects.filter(p => p.id !== projectToDelete));
-        setProjectToDelete(null);
-        setIsDeleteModalOpen(false);
-        toast({ title: 'Success', description: 'Project deleted successfully' });
+        const data: ApiResponse<{id: number}> = await response.json();
+        
+        if (data.success) {
+          setProjects(projects.filter(p => p.id !== data.data.id));
+          setProjectToDelete(null);
+          setIsDeleteModalOpen(false);
+          toast({ title: 'Success', description: 'Project deleted successfully' });
+        } else {
+          throw new Error(data.message || 'Failed to delete project');
+        }
       } else {
         throw new Error('Failed to delete project');
       }
@@ -205,10 +235,10 @@ const Projects: React.FC = () => {
   };
 
   const handleArchiveProject = async (projectId: number) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
     try {
-      const project = projects.find(p => p.id === projectId);
-      if (!project) return;
-      
       const response = await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -230,10 +260,10 @@ const Projects: React.FC = () => {
   };
 
   const handleCompleteProject = async (projectId: number) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    
     try {
-      const project = projects.find(p => p.id === projectId);
-      if (!project) return;
-      
       const response = await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -510,7 +540,7 @@ const Projects: React.FC = () => {
                     <p className="text-gray-600">{selectedProject.description}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setEditingProject(selectedProject) || setIsEditModalOpen(true)}>
+                    <Button variant="outline" onClick={() => {setEditingProject(selectedProject); setIsEditModalOpen(true);}}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit
                     </Button>
@@ -632,13 +662,8 @@ const Projects: React.FC = () => {
               <div className="h-full">
                 <iframe 
                   src={`/project-board?projectId=${selectedProject.id}`} 
-                  className="w-full border-0"
-                  style={{ minHeight: 'calc(100vh - 200px)' }}
+                  className="w-full h-full min-h-[calc(100vh-200px)] border-0"
                   title="Project Board"
-                  onLoad={(e) => {
-                    const iframe = e.target as HTMLIFrameElement;
-                    iframe.style.height = `${iframe.contentWindow?.document.body.scrollHeight}px`;
-                  }}
                 />
               </div>
             </TabsContent>

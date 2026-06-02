@@ -1,10 +1,58 @@
 import express from 'express';
-import { eq, and, or, asc, inArray } from 'drizzle-orm';
+import { eq, and, or, asc, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { projects, projectMembers, projectColumns, tasks as taskSchema, users } from '../../shared/schema';
 import crypto from 'crypto';
+import { Router } from 'express';
 
-const router = express.Router();
+const router = Router();
+
+// Serialize project to include member information
+async function serializeProject(projectId: number) {
+  // Get the project details
+  const [project] = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.id, projectId));
+  
+  if (!project) {
+    throw new Error('Project not found');
+  }
+  
+  // Get project members
+  const members = await db
+    .select({ 
+      id: projectMembers.id,
+      projectId: projectMembers.projectId,
+      userId: projectMembers.userId,
+      role: projectMembers.role,
+      createdAt: projectMembers.createdAt,
+      updatedAt: projectMembers.updatedAt
+    })
+    .from(projectMembers)
+    .where(eq(projectMembers.projectId, projectId));
+  
+  // Get user details for each member
+  const userIds = members.map(m => m.userId);
+  const userDetails = await db
+    .select({ id: users.id, name: users.name, email: users.email, avatarUrl: users.avatarUrl })
+    .from(users)
+    .where(inArray(users.id, userIds));
+  
+  // Combine member info with user details
+  const projectMembersWithDetails = members.map(member => {
+    const user = userDetails.find(u => u.id === member.userId);
+    return {
+      ...member,
+      user: user ? { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl } : null
+    };
+  });
+  
+  return {
+    ...project,
+    members: projectMembersWithDetails
+  };
+}
 
 // Get all projects for the current user
 router.get('/', async (req: any, res) => {
@@ -287,7 +335,7 @@ router.post('/:projectId/columns', async (req: any, res) => {
     const [column] = await db.insert(projectColumns).values({
       projectId,
       title,
-      order: order || 0,
+      orderNum: order || 0,
       color: color || '#9CA3AF',
     }).returning();
 

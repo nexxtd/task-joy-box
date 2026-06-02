@@ -13,59 +13,76 @@ import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { Clock, Trash2, Plus } from 'lucide-react';
 
 interface TaskDetailModalProps {
-  task: Task;
+  task: Task | null;
+  isOpen: boolean;
   onClose: () => void;
 }
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose }) => {
   const { updateTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, addSubtask, updateSubtask, deleteSubtask } = useBoardContext();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedTask, setEditedTask] = useState<Task>(task);
+  const [editedTask, setEditedTask] = useState<Task | null>(task);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newChecklistText, setNewChecklistText] = useState('');
 
   const handleSave = () => {
-    updateTask(task.id, editedTask);
-    setIsEditing(false);
-    onClose();
+    if (editedTask) {
+      updateTask(editedTask.id, editedTask);
+      setIsEditing(false);
+      onClose();
+    }
   };
 
   const handleAddSubtask = () => {
-    if (newSubtaskText.trim()) {
-      addSubtask(task.id, { text: newSubtaskText.trim(), completed: false, durationMinutes: 0 });
+    if (newSubtaskText.trim() && editedTask) {
+      addSubtask(editedTask.id, { text: newSubtaskText.trim(), completed: false, durationMinutes: 0 });
       setNewSubtaskText('');
     }
   };
 
   const handleAddChecklistItem = () => {
-    if (newChecklistText.trim()) {
-      const checklistId = task.checklists[0]?.id || `checklist-${Date.now()}`;
-      if (!task.checklists.some(cl => cl.id === checklistId)) {
+    if (newChecklistText.trim() && editedTask) {
+      const checklistId = editedTask.checklists[0]?.id || `checklist-${Date.now()}`;
+      if (!editedTask.checklists.some(cl => cl.id === checklistId)) {
         // Create a new checklist if none exists
         const newChecklist: Checklist = {
           id: checklistId,
           title: 'Checklist',
           items: []
         };
-        updateTask(task.id, {
-          checklists: [...task.checklists, newChecklist]
+        updateTask(editedTask.id, {
+          checklists: [...editedTask.checklists, newChecklist]
         });
       }
-      addChecklistItem(task.id, checklistId, newChecklistText.trim());
+      addChecklistItem(editedTask.id, checklistId, newChecklistText.trim());
       setNewChecklistText('');
     }
   };
 
   const handleDeleteSubtask = (subtaskId: string) => {
-    deleteSubtask(task.id, subtaskId);
+    if (editedTask) {
+      deleteSubtask(editedTask.id, subtaskId);
+    }
   };
 
   const handleDeleteChecklistItem = (checklistId: string, itemId: string) => {
-    deleteChecklistItem(task.id, checklistId, itemId);
+    if (editedTask) {
+      deleteChecklistItem(editedTask.id, checklistId, itemId);
+    }
+  };
+
+  const handleToggleSubtask = (subtaskId: string, checked: boolean) => {
+    if (!editedTask || !editedTask.subtasks) return;
+
+    const updatedSubtasks = editedTask.subtasks.map(subtask => 
+      subtask.id === subtaskId ? { ...subtask, completed: Boolean(checked) } : subtask
+    );
+
+    setEditedTask({ ...editedTask, subtasks: updatedSubtasks });
   };
 
   return (
-    <Dialog open={!!task} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -122,7 +139,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                     <Checkbox
                       checked={subtask.completed}
                       onCheckedChange={(checked) => {
-                        updateSubtask(task.id, subtask.id, { completed: checked });
+                        updateSubtask(task.id, subtask.id, { completed: !!checked });
                       }}
                     />
                     <span className={subtask.completed ? 'line-through text-gray-500' : ''}>
@@ -217,7 +234,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                   setIsEditing(false);
                   setEditedTask(task);
                 } else {
-                  deleteTask(task.id);
+                  if (task) {
+                    deleteTask(task.id);
+                  }
                   onClose();
                 }
               }}

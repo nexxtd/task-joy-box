@@ -28,9 +28,51 @@ const AIChat: React.FC = () => {
   const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   
   const {
-    board, addTask, updateTask, deleteTask, moveTask,
-    findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks
+    board, addTask, updateTask, deleteTask, moveTask
   } = useBoardContext();
+
+  // Replace getColumnByName with a helper function
+  const getColumnByName = (name: string) => {
+    return board.columns.find(col => col.title.toLowerCase().includes(name.toLowerCase()));
+  };
+
+  // Replace findTasksByTitle with a helper function
+  const findTasksByTitle = (title: string) => {
+    return board.tasks.filter(task => 
+      task.title.toLowerCase().includes(title.toLowerCase())
+    );
+  };
+
+  // Replace findDuplicates with a helper function that mimics Map interface
+  const findDuplicates = () => {
+    const groupedTasks = new Map<string, Task[]>();
+    board.tasks.forEach(task => {
+      const titleKey = task.title.toLowerCase();
+      if (groupedTasks.has(titleKey)) {
+        groupedTasks.get(titleKey)?.push(task);
+      } else {
+        groupedTasks.set(titleKey, [task]);
+      }
+    });
+    
+    // Create a filtered map with only duplicates
+    const duplicateGroups = new Map<string, Task[]>();
+    groupedTasks.forEach((tasks, title) => {
+      if (tasks.length > 1) {
+        duplicateGroups.set(title, tasks);
+      }
+    });
+    
+    // Add a size property for compatibility
+    (duplicateGroups as any).size = duplicateGroups.size;
+    
+    return duplicateGroups;
+  };
+
+  // Replace bulkDeleteTasks with a helper function
+  const bulkDeleteTasks = (taskIds: string[]) => {
+    taskIds.forEach(id => deleteTask(id));
+  };
 
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);

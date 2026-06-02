@@ -65,6 +65,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.7.0",
@@ -105,6 +106,7 @@
     "paypal-rest-sdk": "^1.8.1",
     "pg": "^8.20.0",
     "postcss": "^8.5.13",
+    "postgres": "^3.4.9",
     "react": "^18.3.1",
     "react-day-picker": "8.10.1",
     "react-dom": "^18.3.1",
@@ -121,6 +123,7 @@
     "tsc-alias": "^1.8.17",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "uuid": "^14.0.0",
     "vaul": "^1.1.2",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"

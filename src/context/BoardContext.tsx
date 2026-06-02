@@ -26,7 +26,7 @@ type BoardAction =
 // Define initial state
 const initialState: Board = {
   id: 'default-board',
-  name: 'Default Board',
+  title: 'Default Board',
   columns: [],
   tasks: [],
 };
@@ -295,110 +295,6 @@ const BoardContext = createContext<{
   resetBoard: () => void;
 } | undefined>(undefined);
 
-// Add project-related action types
-type ProjectAction = 
-  | { type: 'SET_PROJECT'; project: Project }
-  | { type: 'ADD_PROJECT'; project: Project }
-  | { type: 'UPDATE_PROJECT'; projectId: string; updates: Partial<Project> }
-  | { type: 'DELETE_PROJECT'; projectId: string }
-  | { type: 'CLEAR_PROJECTS' };
-
-// Update the Board type to include projects
-interface BoardWithProjects extends Board {
-  projects: Project[];
-}
-
-// Update the initial state to include projects
-const initialState: BoardWithProjects = {
-  id: 'default-board',
-  name: 'Default Board',
-  columns: [],
-  tasks: [],
-  projects: [],
-};
-
-// Update the reducer to handle project actions
-const boardReducer = (state: BoardWithProjects, action: BoardAction | ProjectAction): BoardWithProjects => {
-  switch (action.type) {
-    case 'SET_PROJECT': {
-      // Filter tasks for the project
-      const projectTasks = state.tasks.filter(task => task.projectId === action.project.id);
-      
-      // Create new columns based on project tasks' statuses
-      const newColumns = Array.from(new Set(projectTasks.map(task => task.status))).map((status, index) => ({
-        id: `project-column-${status}-${uuidv4()}`,
-        title: status,
-        order: index,
-      }));
-      
-      // Create a new board with the project tasks filtered to their appropriate columns
-      const tasksByColumn = newColumns.map(column => 
-        projectTasks.filter(task => task.status === column.title)
-      );
-      
-      const columnTasks = newColumns.reduce((acc, column, index) => {
-        return [...acc, ...tasksByColumn[index].map((task, taskIndex) => ({
-          ...task,
-          order: taskIndex,
-          columnId: column.id,
-        }))]};
-      }, [] as Task[]);
-      
-      return {
-        ...state,
-        columns: newColumns,
-        tasks: columnTasks,
-      };
-    }
-
-    case 'ADD_PROJECT':
-      // Check if project already exists
-      const projectExists = state.projects.some(project => project.id === action.project.id);
-      if (projectExists) return state;
-      
-      return {
-        ...state,
-        projects: [...state.projects, action.project],
-      };
-
-    case 'UPDATE_PROJECT':
-      return {
-        ...state,
-        projects: state.projects.map(project =>
-          project.id === action.projectId ? { ...project, ...action.updates } : project
-        ),
-      };
-
-    case 'DELETE_PROJECT':
-      // Remove project
-      const updatedProjects = state.projects.filter(project => project.id !== action.projectId);
-      
-      // Remove tasks associated with the project
-      const updatedTasks = state.tasks.filter(task => task.projectId !== action.projectId);
-      
-      return {
-        ...state,
-        projects: updatedProjects,
-        tasks: updatedTasks,
-      };
-
-    case 'CLEAR_PROJECTS':
-      // Remove all projects and their associated tasks
-      const projectIds = state.projects.map(project => project.id);
-      const updatedTaskList = state.tasks.filter(task => !projectIds.includes(task.projectId || ''));
-      
-      return {
-        ...state,
-        projects: [],
-        tasks: updatedTaskList,
-      };
-
-    // Default case and other actions remain unchanged
-    default:
-      return state;
-  }
-};
-
 // Provider component
 export const BoardProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(boardReducer, initialState);
@@ -421,7 +317,7 @@ export const BoardProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     localStorage.setItem('board-data', JSON.stringify(state));
   }, [state]);
 
-  // Update the addTask function to handle project tasks
+  // Action creators
   const addTask = (columnId: string, title: string, options: Partial<Task> = {}) => {
     const newTask: Task = {
       id: options.id || uuidv4(),
