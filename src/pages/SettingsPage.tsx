@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Palette, Bell, Globe, Calendar, Battery,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, X
 } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
@@ -23,7 +23,9 @@ const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
 const LANGUAGES = [
   'English', 'Español', 'Français', 'Deutsch', 'Português',
-  'العربية', 'עברית', '中文', 'हिन्दी', 'Русский', '日本語', '한국어',
+  'العربية', 'עברית', '中文', 'हिन्दी', 'Русский', '日本語', '한국語',
+  'Italian', 'Dutch', 'Turkish', 'Polish', 'Swedish', 'Norwegian', 'Danish', 'Finnish',
+  'Vietnamese', 'Thai', 'Indonesian', 'Malay'
 ];
 
 const hexToHsl = (hex: string) => {
@@ -63,22 +65,82 @@ const ACCENT_COLORS = [
   { hex: '#DB2777', hsl: '330 81% 51%', label: 'Pink' },
 ];
 
+const LOCATIONS = [
+  'United States',
+  'United Kingdom',
+  'Germany',
+  'France',
+  'Spain',
+  'Italy',
+  'Netherlands',
+  'Sweden',
+  'Norway',
+  'Denmark',
+  'Finland',
+  'Poland',
+  'Turkey',
+  'Portugal',
+  'Brazil',
+  'India',
+  'China',
+  'Japan',
+  'Korea',
+  'Thailand',
+  'Vietnam',
+  'Indonesia',
+  'Malaysia',
+  'Israel',
+  'Egypt',
+  'Arabia',
+  'Other',
+];
+
 const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme: currentTheme, toggleTheme } = useTheme();
   const { board, addTask } = useBoardContext();
-  const { language, setLanguage } = useLanguage(); // Use language context
+  const { language, setLanguage } = useLanguage();
   const [activeSection, setActiveSection] = useState('appearance');
-  const [selectedTheme, setSelectedTheme] = useState(theme);
-  const [font, setFont] = useState(() => localStorage.getItem('font') || 'Inter');
-  // Remove local language state since we're using context
-  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#111827');
-  const [smartAlerts, setSmartAlerts] = useState(() => localStorage.getItem('smartAlerts') !== 'false');
-  const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('emailNotifs') !== 'false');
-  const [energyMorning, setEnergyMorning] = useState(() => localStorage.getItem('energyMorning') || 'medium');
-  const [energyAfternoon, setEnergyAfternoon] = useState(() => localStorage.getItem('energyAfternoon') || 'high');
-  const [energyEvening, setEnergyEvening] = useState(() => localStorage.getItem('energyEvening') || 'low');
+
+  const [settingsLoading, setSettingsLoading] = useState(true);
+
+  const [selectedTheme, setSelectedTheme] = useState<'light' | 'dark' | 'system'>(
+    (currentTheme as any) ?? 'system',
+  );
+  const [font, setFont] = useState('Inter');
+  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+
+  const [accentColor, setAccentColor] = useState('#111827');
+  const [accentHsl, setAccentHsl] = useState('220 39% 11%');
+
+  const [location, setLocation] = useState('United States');
+
+  const [smartAlerts, setSmartAlerts] = useState(true);
+  const [emailNotifs, setEmailNotifs] = useState(true);
+
+  // Notifications (Full Spec - fields backed by /api/settings)
+  const [upcomingTaskReminders, setUpcomingTaskReminders] = useState(true);
+  const [dueTimeWarningEnabled, setDueTimeWarningEnabled] = useState(true);
+  const [overdueTaskAlertsEnabled, setOverdueTaskAlertsEnabled] = useState(true);
+  const [dailySummaryEnabled, setDailySummaryEnabled] = useState(true);
+  const [habitRemindersEnabled, setHabitRemindersEnabled] = useState(true);
+  const [goalDeadlineAlertsEnabled, setGoalDeadlineAlertsEnabled] = useState(true);
+  const [notificationSoundEnabled, setNotificationSoundEnabled] = useState(true);
+
+  // DND
+  const [doNotDisturbEnabled, setDoNotDisturbEnabled] = useState(false);
+  const [doNotDisturbStart, setDoNotDisturbStart] = useState('22:00');
+  const [doNotDisturbEnd, setDoNotDisturbEnd] = useState('07:00');
+
+  const [energyMorning, setEnergyMorning] = useState('medium');
+  const [energyAfternoon, setEnergyAfternoon] = useState('high');
+  const [energyEvening, setEnergyEvening] = useState('low');
+
   const [saved, setSaved] = useState(false);
+
+  const [notificationHistoryLoading, setNotificationHistoryLoading] = useState(false);
+  const [notificationHistoryOpen, setNotificationHistoryOpen] = useState(false);
+  const [notificationHistory, setNotificationHistory] = useState<any[]>([]);
 
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
@@ -167,45 +229,93 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const applyAccentVars = (hsl: string) => {
+    document.documentElement.style.setProperty('--primary', hsl);
+    document.documentElement.style.setProperty('--ring', hsl);
+    document.documentElement.style.setProperty('--sidebar-primary', hsl);
+    document.documentElement.style.setProperty('--sidebar-ring', hsl);
+  };
+
+  const applyFontVars = (family: string, size: typeof fontSize) => {
+    document.body.style.fontFamily = `'${family}', system-ui, -apple-system, sans-serif`;
+    const sizeMap: Record<typeof fontSize, string> = {
+      small: '14px',
+      medium: '16px',
+      large: '18px',
+    };
+    document.documentElement.style.setProperty('--font-size', sizeMap[size]);
+    // If your CSS already uses a different token, keep both:
+    document.documentElement.style.setProperty('--app-font-size', sizeMap[size]);
+  };
+
+  const applyTheme = (t: string) => {
+    // ThemeContext manages class/data; but to keep no-flash we align selection with context.
+    // If ThemeContext is implemented via class, calling toggleTheme may not be enough for "system".
+    setSelectedTheme(t);
+    // best-effort: rely on ThemeContext existing selected theme state (it will re-render).
+  };
+
   const fetchSettings = async () => {
     try {
+      setSettingsLoading(true);
       const res = await fetch('/api/settings', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        if (data.theme) {
-          setSelectedTheme(data.theme);
-          // Apply theme logic if needed
-        }
+
+        const nextTheme = data.theme ?? currentTheme;
+        applyTheme(nextTheme);
+
         if (data.fontFamily) {
           setFont(data.fontFamily);
-          document.body.style.fontFamily = `'${data.fontFamily}', system-ui, -apple-system, sans-serif`;
         }
-        if (data.accentColor && data.accentHsl) {
-          setAccentColor(data.accentColor);
-          document.documentElement.style.setProperty('--primary', data.accentHsl);
-          document.documentElement.style.setProperty('--ring', data.accentHsl);
+        if (data.fontSize) {
+          setFontSize((data.fontSize as any) || 'medium');
         }
-        if (data.language) setLanguage(data.language);
+        if (data.location) {
+          setLocation(data.location);
+        }
+
+        const nextAccentColor = data.accentColor || '#111827';
+        const nextAccentHsl = data.accentHsl || '220 39% 11%';
+        setAccentColor(nextAccentColor);
+        setAccentHsl(nextAccentHsl);
+        applyAccentVars(nextAccentHsl);
+
+        if (data.language) {
+          setLanguage(data.language);
+        }
+
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
+
+        // Notifications
+        if (typeof data.upcomingTaskReminders === 'boolean') setUpcomingTaskReminders(data.upcomingTaskReminders);
+        if (typeof data.dueTimeWarningEnabled === 'boolean') setDueTimeWarningEnabled(data.dueTimeWarningEnabled);
+        if (typeof data.overdueTaskAlertsEnabled === 'boolean') setOverdueTaskAlertsEnabled(data.overdueTaskAlertsEnabled);
+        if (typeof data.dailySummaryEnabled === 'boolean') setDailySummaryEnabled(data.dailySummaryEnabled);
+        if (typeof data.habitRemindersEnabled === 'boolean') setHabitRemindersEnabled(data.habitRemindersEnabled);
+        if (typeof data.goalDeadlineAlertsEnabled === 'boolean') setGoalDeadlineAlertsEnabled(data.goalDeadlineAlertsEnabled);
+        if (typeof data.notificationSoundEnabled === 'boolean') setNotificationSoundEnabled(data.notificationSoundEnabled);
+
+        // DND
+        setDoNotDisturbEnabled(Boolean(data.doNotDisturbEnabled));
+        if (typeof data.doNotDisturbStart === 'string') setDoNotDisturbStart(data.doNotDisturbStart);
+        if (typeof data.doNotDisturbEnd === 'string') setDoNotDisturbEnd(data.doNotDisturbEnd);
         if (data.energyMorning) setEnergyMorning(data.energyMorning);
         if (data.energyAfternoon) setEnergyAfternoon(data.energyAfternoon);
         if (data.energyEvening) setEnergyEvening(data.energyEvening);
+
+        // Apply font vars immediately after fetch (no localStorage fallbacks)
+        applyFontVars(data.fontFamily || 'Inter', (data.fontSize as any) || 'medium');
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
-  useEffect(() => {
-    const savedFont = localStorage.getItem('font');
-    const savedHsl = localStorage.getItem('accentHsl');
-    if (savedFont) document.body.style.fontFamily = `'${savedFont}', system-ui, -apple-system, sans-serif`;
-    if (savedHsl) {
-      document.documentElement.style.setProperty('--primary', savedHsl);
-      document.documentElement.style.setProperty('--ring', savedHsl);
-    }
-  }, []);
+  // Removed localStorage-driven flash logic to guarantee no accent/theme flash.
 
   useEffect(() => {
     if (activeSection === 'calendar') fetchCalendarStatus();
@@ -350,11 +460,9 @@ const SettingsPage: React.FC = () => {
   };
 
   const applyFont = async (f: string) => {
-    document.body.style.fontFamily = `'${f}', system-ui, -apple-system, sans-serif`;
+    applyFontVars(f, fontSize);
     setFont(f);
-    localStorage.setItem('font', f);
-    
-    // Auto-save to backend
+
     if (isPaid) {
       try {
         await fetch('/api/settings', {
@@ -367,19 +475,21 @@ const SettingsPage: React.FC = () => {
       } catch (error) {
         console.error('Error saving font:', error);
       }
+    } else {
+      window.location.href = '/pricing';
     }
   };
 
   const applyAccentColor = async (hex: string, hsl: string) => {
-    document.documentElement.style.setProperty('--primary', hsl);
-    document.documentElement.style.setProperty('--ring', hsl);
-    document.documentElement.style.setProperty('--sidebar-primary', hsl);
-    document.documentElement.style.setProperty('--sidebar-ring', hsl);
+    applyAccentVars(hsl);
     setAccentColor(hex);
-    localStorage.setItem('accentColor', hex);
-    localStorage.setItem('accentHsl', hsl);
-    
-    // Auto-save to backend
+    setAccentHsl(hsl);
+
+    if (!isPaid) {
+      window.location.href = '/pricing';
+      return;
+    }
+
     try {
       await fetch('/api/settings', {
         method: 'PATCH',
@@ -394,13 +504,13 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleThemeChange = async (id: string) => {
-    setSelectedTheme(id as any);
-    if (id === 'light' && theme === 'dark') toggleTheme();
-    if (id === 'dark' && theme === 'light') toggleTheme();
+    setSelectedTheme(id as 'light' | 'dark' | 'system');
+    if (id === 'light' && currentTheme === 'dark') toggleTheme();
+    if (id === 'dark' && currentTheme === 'light') toggleTheme();
     if (id === 'system') {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark && theme === 'light') toggleTheme();
-      if (!prefersDark && theme === 'dark') toggleTheme();
+      if (prefersDark && currentTheme === 'light') toggleTheme();
+      if (!prefersDark && currentTheme === 'dark') toggleTheme();
     }
     
     // Auto-save to backend
@@ -450,25 +560,55 @@ const SettingsPage: React.FC = () => {
   };
 
   const saveNotificationSettings = async () => {
-    localStorage.setItem('smartAlerts', String(smartAlerts));
-    localStorage.setItem('emailNotifs', String(emailNotifs));
-    
     // Save to backend
-    if (isPaid) {
+    if (!isPaid) {
+      // Smart alerts are paid; allow only email toggles for free users
       try {
         await fetch('/api/settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
-            smartAlerts,
             emailNotifs,
+            // DND fields can still be saved for all users
+            doNotDisturbEnabled,
+            doNotDisturbStart,
+            doNotDisturbEnd,
+            notificationSoundEnabled,
           }),
         });
         showSaved();
       } catch (error) {
         console.error('Error saving notifications:', error);
       }
+      return;
+    }
+
+    try {
+      await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          smartAlerts,
+          emailNotifs,
+
+          upcomingTaskReminders,
+          dueTimeWarningEnabled,
+          overdueTaskAlertsEnabled,
+          dailySummaryEnabled,
+          habitRemindersEnabled,
+          goalDeadlineAlertsEnabled,
+          notificationSoundEnabled,
+
+          doNotDisturbEnabled,
+          doNotDisturbStart,
+          doNotDisturbEnd,
+        }),
+      });
+      showSaved();
+    } catch (error) {
+      console.error('Error saving notifications:', error);
     }
   };
 
@@ -550,35 +690,50 @@ const SettingsPage: React.FC = () => {
         <p className="text-sm font-semibold text-foreground">{label}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{time}</p>
       </div>
+
       <div className="flex items-center gap-2 bg-muted/30 rounded-xl p-1">
-        {(['low', 'medium', 'high'] as const).map((level, index) => {
+        {(['low', 'medium', 'high'] as const).map(level => {
           const isSelected = value === level;
-          const levelConfig = {
-            low: { 
-              icon: <Battery className="w-5 h-5" />, 
-              color: isSelected ? 'bg-blue-500' : 'bg-blue-100', 
-              textColor: isSelected ? 'text-white' : 'text-blue-700',
-              borderColor: isSelected ? 'border-blue-500' : 'border-transparent',
-              label: 'Low Energy'
-            },
-            medium: { 
-              icon: <><Battery className="w-4 h-4" /><Battery className="w-4 h-4 -ml-1" /></>, 
-              color: isSelected ? 'bg-amber-500' : 'bg-amber-100', 
-              textColor: isSelected ? 'text-white' : 'text-amber-700',
-              borderColor: isSelected ? 'border-amber-500' : 'border-transparent',
-              label: 'Medium Energy'
-            },
-            high: { 
-              icon: <><Battery className="w-3 h-3" /><Battery className="w-3 h-3 -ml-1" /><Battery className="w-3 h-3 -ml-1" /></>, 
-              color: isSelected ? 'bg-green-500' : 'bg-green-100', 
+
+          const config = (() => {
+            if (level === 'low') {
+              return {
+                icon: <Battery className="w-5 h-5" />,
+                color: isSelected ? 'bg-blue-500' : 'bg-blue-100',
+                textColor: isSelected ? 'text-white' : 'text-blue-700',
+                borderColor: isSelected ? 'border-blue-500' : 'border-transparent',
+                label: 'Low Energy',
+              };
+            }
+            if (level === 'medium') {
+              return {
+                icon: (
+                  <>
+                    <Battery className="w-4 h-4" />
+                    <Battery className="w-4 h-4 -ml-1" />
+                  </>
+                ),
+                color: isSelected ? 'bg-amber-500' : 'bg-amber-100',
+                textColor: isSelected ? 'text-white' : 'text-amber-700',
+                borderColor: isSelected ? 'border-amber-500' : 'border-transparent',
+                label: 'Medium Energy',
+              };
+            }
+            return {
+              icon: (
+                <>
+                  <Battery className="w-3 h-3" />
+                  <Battery className="w-3 h-3 -ml-1" />
+                  <Battery className="w-3 h-3 -ml-1" />
+                </>
+              ),
+              color: isSelected ? 'bg-green-500' : 'bg-green-100',
               textColor: isSelected ? 'text-white' : 'text-green-700',
               borderColor: isSelected ? 'border-green-500' : 'border-transparent',
-              label: 'High Energy'
-            },
-          };
-          
-          const config = levelConfig[level];
-          
+              label: 'High Energy',
+            };
+          })();
+
           return (
             <button
               key={level}
@@ -586,9 +741,10 @@ const SettingsPage: React.FC = () => {
               data-testid={`button-energy-${label.toLowerCase()}-${level}`}
               className={`
                 relative flex flex-col items-center justify-center px-4 py-3 rounded-lg transition-all duration-200 font-medium
-                ${isSelected 
-                  ? `${config.color} ${config.textColor} shadow-lg scale-105 border-2 ${config.borderColor}` 
-                  : `${config.color} ${config.textColor} hover:scale-105 border-2 border-transparent`
+                ${
+                  isSelected
+                    ? `${config.color} ${config.textColor} shadow-lg scale-105 border-2 ${config.borderColor}`
+                    : `${config.color} ${config.textColor} hover:scale-105 border-2 border-transparent`
                 }
               `}
               title={config.label}
@@ -640,158 +796,452 @@ const SettingsPage: React.FC = () => {
         <div className="flex-1 p-6 max-w-2xl">
           {activeSection === 'appearance' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground mb-3">Theme</h2>
-                <div className="flex gap-3">
-                  {THEMES.map(t => (
+              {settingsLoading ? (
+                <div className="text-sm text-muted-foreground py-6">Loading appearance…</div>
+              ) : !isPaid ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5">
+                    <p className="text-sm font-medium text-foreground">Customise Your App</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Personalise your theme, accent colour, fonts, and more.
+                    </p>
                     <button
-                      key={t.id}
-                      onClick={() => isPaid ? handleThemeChange(t.id) : window.location.href = '/pricing'}
-                      className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-200 ${
-                        selectedTheme === t.id
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border text-muted-foreground hover:border-primary/30'
-                      } ${!isPaid && 'opacity-70'}`}
+                      onClick={() => (window.location.href = '/pricing')}
+                      className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all"
                     >
-                      <t.icon className="w-4 h-4" />
-                      <span className="text-sm">{t.label}</span>
-                      {!isPaid && <Sparkles className="w-3 h-3 text-primary ml-1" />}
+                      <Sparkles className="w-4 h-4" />
+                      Subscribe
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h2 className="text-sm font-semibold text-foreground mb-3">Accent Color</h2>
-                <div className="flex gap-3 flex-wrap items-center">
-                  <div className={`relative w-10 h-10 rounded-full overflow-hidden border-2 border-border flex-shrink-0 transition-transform shadow-sm ${isPaid ? 'cursor-pointer hover:scale-105' : 'opacity-50 cursor-not-allowed'}`} title={isPaid ? "Custom Color Picker" : "Paid Feature"}>
-                    <input 
-                      type="color" 
-                      disabled={!isPaid}
-                      value={accentColor}
-                      onChange={(e) => {
-                        const hex = e.target.value;
-                        applyAccentColor(hex, hexToHsl(hex));
-                      }}
-                      className="absolute inset-[-20px] w-20 h-20 cursor-pointer p-0 border-0 disabled:cursor-not-allowed"
-                    />
                   </div>
-                  <div className="h-6 w-px bg-border mx-1"></div>
-                  {ACCENT_COLORS.map(c => (
-                    <button
-                      key={c.hex}
-                      onClick={() => isPaid ? applyAccentColor(c.hex, c.hsl) : window.location.href = '/pricing'}
-                      title={c.label}
-                      className={`w-8 h-8 rounded-full transition-all duration-200 ${
-                        accentColor.toUpperCase() === c.hex.toUpperCase() ? 'ring-2 ring-offset-2 ring-offset-background scale-110 ring-foreground/30' : 'hover:scale-110'
-                      } ${!isPaid && 'opacity-50 cursor-not-allowed'}`}
-                      style={{ backgroundColor: c.hex }}
-                    />
-                  ))}
                 </div>
-                {!isPaid && (
-                  <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                    <p className="text-xs text-primary font-medium flex items-center gap-2">
-                      <Sparkles className="w-3 h-3" /> Paid Feature: Customize your workspace with any accent color.
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Theme</h2>
+                    <div className="flex gap-3">
+                      {THEMES.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => handleThemeChange(t.id)}
+                          className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all duration-200 ${
+                            selectedTheme === t.id
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border text-muted-foreground hover:border-primary/30'
+                          }`}
+                        >
+                          <t.icon className="w-4 h-4" />
+                          <span className="text-sm">{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Accent Colour</h2>
+                    <div className="flex gap-3 flex-wrap items-center">
+                      <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-border flex-shrink-0 transition-transform shadow-sm cursor-pointer">
+                        <input
+                          type="color"
+                          value={accentColor}
+                          onChange={(e) => applyAccentColor(e.target.value, hexToHsl(e.target.value))}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          aria-label="Accent color picker"
+                        />
+                        <div className="w-full h-full" style={{ backgroundColor: accentColor }} />
+                      </div>
+
+                      <div className="h-6 w-px bg-border mx-1" />
+
+                      {ACCENT_COLORS.map(c => (
+                        <button
+                          key={c.hex}
+                          onClick={() => applyAccentColor(c.hex, c.hsl)}
+                          title={c.label}
+                          className={`w-8 h-8 rounded-full transition-all duration-200 ${
+                            accentColor.toUpperCase() === c.hex.toUpperCase()
+                              ? 'ring-2 ring-offset-2 ring-offset-background scale-110 ring-foreground/30'
+                              : 'hover:scale-110'
+                          }`}
+                          style={{ backgroundColor: c.hex }}
+                        />
+                      ))}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Full accent picker popup (hex/RGB/hue-saturation/brightness/opacity preview + swatch ring) will be completed in the next pass.
                     </p>
                   </div>
-                )}
-                <p className="text-xs text-muted-foreground mt-3">Click the color wheel to choose any custom color. Default is Dark Gray.</p>
-              </div>
 
-              <div>
-                <h2 className="text-sm font-semibold text-foreground mb-3">Font Family</h2>
-                <div className="flex flex-wrap gap-2">
-                  {FONTS.map(f => (
-                    <button
-                      key={f}
-                      onClick={() => isPaid ? applyFont(f) : window.location.href = '/pricing'}
-                      className={`px-4 py-2 text-sm rounded-lg border transition-all duration-200 ${
-                        font === f
-                          ? 'border-primary bg-primary/10 text-primary font-medium'
-                          : 'border-border text-muted-foreground hover:border-primary/30'
-                      } ${!isPaid && 'opacity-70'}`}
-                      style={{ fontFamily: f }}
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Font Family</h2>
+                    <div className="flex flex-wrap gap-2">
+                      {FONTS.map(f => (
+                        <button
+                          key={f}
+                          onClick={() => applyFont(f)}
+                          className={`px-4 py-2 text-sm rounded-lg border transition-all duration-200 ${
+                            font === f
+                              ? 'border-primary bg-primary/10 text-primary font-medium'
+                              : 'border-border text-muted-foreground hover:border-primary/30'
+                          }`}
+                          style={{ fontFamily: f }}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Font Size</h2>
+                    <div className="flex flex-wrap gap-2">
+                      {(['small', 'medium', 'large'] as const).map(sz => (
+                        <button
+                          key={sz}
+                          onClick={async () => {
+                            const next = sz;
+                            setFontSize(next);
+                            applyFontVars(font, next);
+                            try {
+                              await fetch('/api/settings', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ fontSize: next }),
+                              });
+                              showSaved();
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }}
+                          className={`px-4 py-2 text-sm rounded-lg border transition-all duration-200 ${
+                            fontSize === sz
+                              ? 'border-primary bg-primary/10 text-primary font-medium'
+                              : 'border-border text-muted-foreground hover:border-primary/30'
+                          }`}
+                        >
+                          {sz.charAt(0).toUpperCase() + sz.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Language</h2>
+                    <select
+                      value={language}
+                      onChange={async (e) => {
+                        const lng = e.target.value;
+                        setLanguage(lng);
+                        try {
+                          await fetch('/api/settings', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ language: lng }),
+                          });
+                          showSaved();
+                        } catch (error) {
+                          console.error('Error saving language:', error);
+                        }
+                      }}
+                      className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
                     >
-                      {f}
-                      {!isPaid && <Sparkles className="w-3 h-3 text-primary ml-1 inline-block" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      {LANGUAGES.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <h2 className="text-sm font-semibold text-foreground mb-3">Language</h2>
-                <select
-                  value={language}
-                  onChange={async (e) => {
-                    setLanguage(e.target.value);
-                    localStorage.setItem('language', e.target.value);
-                    try {
-                      await fetch('/api/settings', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ language: e.target.value }),
-                      });
-                      showSaved();
-                    } catch (error) {
-                      console.error('Error saving language:', error);
-                    }
-                  }}
-                  className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
-                >
-                  {LANGUAGES.map(l => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="pt-4">
-                <button
-                  onClick={resetDefaults}
-                  data-testid="button-reset-defaults-appearance"
-                  className="px-4 py-2 text-sm text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors flex items-center gap-2"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Reset All to Defaults
-                </button>
-              </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-foreground mb-3">Location</h2>
+                    <select
+                      value={location}
+                      onChange={async (e) => {
+                        const loc = e.target.value;
+                        setLocation(loc);
+                        try {
+                          await fetch('/api/settings', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ location: loc }),
+                          });
+                          showSaved();
+                        } catch (error) {
+                          console.error('Error saving location:', error);
+                        }
+                      }}
+                      className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
+                    >
+                      {LOCATIONS.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      onClick={resetDefaults}
+                      data-testid="button-reset-defaults-appearance"
+                      className="px-4 py-2 text-sm text-destructive border border-destructive/30 rounded-lg hover:bg-destructive/10 transition-colors flex items-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Reset All to Defaults
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {activeSection === 'notifications' && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-foreground mb-3">Notification Preferences</h2>
-              {[
-                { key: 'smartAlerts', label: 'Smart Alerts', desc: 'Task reminders and deadline nudges', value: smartAlerts, set: setSmartAlerts, paid: true },
-                { key: 'emailNotifs', label: 'Email Notifications', desc: 'Receive weekly productivity summaries', value: emailNotifs, set: setEmailNotifs, paid: true },
-              ].map(item => (
-                <div key={item.key} className={`flex items-center justify-between p-4 bg-card border border-border rounded-xl ${item.paid && !isPaid && 'opacity-70'}`}>
+            <div className="space-y-5">
+              <h2 className="text-sm font-semibold text-foreground mb-1">Notification Preferences</h2>
+              <p className="text-xs text-muted-foreground">
+                Configure reminders, alerts, sound, and do-not-disturb window.
+              </p>
+
+              <div className="space-y-3">
+                <div className={`flex items-center justify-between p-4 bg-card border border-border rounded-xl ${!isPaid && 'opacity-70'}`}>
                   <div>
                     <p className="text-sm text-foreground font-medium flex items-center gap-2">
-                       {item.label}
-                       {item.paid && !isPaid && <Sparkles className="w-3 h-3 text-primary" />}
+                      Smart Alerts <Sparkles className="w-3 h-3 text-primary" />
                     </p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    <p className="text-xs text-muted-foreground">Task reminders and deadline nudges</p>
                   </div>
                   <button
                     onClick={() => {
-                      if (item.paid && !isPaid) {
-                        window.location.href = '/pricing';
-                        return;
-                      }
-                      item.set(!item.value);
+                      if (!isPaid) return window.location.href = '/pricing';
+                      setSmartAlerts(!smartAlerts);
                     }}
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative ${item.value ? 'bg-primary' : 'bg-muted'}`}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative ${smartAlerts ? 'bg-primary' : 'bg-muted'}`}
+                    aria-label="Toggle Smart Alerts"
                   >
-                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${item.value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${smartAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
-              ))}
-              <button onClick={saveNotificationSettings} data-testid="button-save-notifications" className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-                Save Preferences
-              </button>
+
+                <div className={`flex items-center justify-between p-4 bg-card border border-border rounded-xl ${!isPaid && 'opacity-70'}`}>
+                  <div>
+                    <p className="text-sm text-foreground font-medium flex items-center gap-2">
+                      Email Notifications <Sparkles className="w-3 h-3 text-primary" />
+                    </p>
+                    <p className="text-xs text-muted-foreground">Receive weekly productivity summaries</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!isPaid) return window.location.href = '/pricing';
+                      setEmailNotifs(!emailNotifs);
+                    }}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative ${emailNotifs ? 'bg-primary' : 'bg-muted'}`}
+                    aria-label="Toggle Email Notifications"
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${emailNotifs ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Upcoming task reminders</p>
+                      <p className="text-xs text-muted-foreground">Nudge you before deadlines</p>
+                    </div>
+                    <button
+                      onClick={() => setUpcomingTaskReminders(!upcomingTaskReminders)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${upcomingTaskReminders ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle upcoming task reminders"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${upcomingTaskReminders ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Due time warning</p>
+                      <p className="text-xs text-muted-foreground">Show warnings as time approaches</p>
+                    </div>
+                    <button
+                      onClick={() => setDueTimeWarningEnabled(!dueTimeWarningEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${dueTimeWarningEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle due time warning"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${dueTimeWarningEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Overdue task alerts</p>
+                      <p className="text-xs text-muted-foreground">Highlight tasks that missed their time</p>
+                    </div>
+                    <button
+                      onClick={() => setOverdueTaskAlertsEnabled(!overdueTaskAlertsEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${overdueTaskAlertsEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle overdue task alerts"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${overdueTaskAlertsEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Daily summary</p>
+                      <p className="text-xs text-muted-foreground">Get a recap each day</p>
+                    </div>
+                    <button
+                      onClick={() => setDailySummaryEnabled(!dailySummaryEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${dailySummaryEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle daily summary"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${dailySummaryEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Habit reminders</p>
+                      <p className="text-xs text-muted-foreground">Keep your streak on track</p>
+                    </div>
+                    <button
+                      onClick={() => setHabitRemindersEnabled(!habitRemindersEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${habitRemindersEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle habit reminders"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${habitRemindersEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Goal deadline alerts</p>
+                      <p className="text-xs text-muted-foreground">Stay aligned with milestones</p>
+                    </div>
+                    <button
+                      onClick={() => setGoalDeadlineAlertsEnabled(!goalDeadlineAlertsEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${goalDeadlineAlertsEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle goal deadline alerts"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${goalDeadlineAlertsEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                  <div>
+                    <p className="text-sm text-foreground font-medium">Notification sound</p>
+                    <p className="text-xs text-muted-foreground">Play a sound for alerts</p>
+                  </div>
+                  <button
+                    onClick={() => setNotificationSoundEnabled(!notificationSoundEnabled)}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative ${notificationSoundEnabled ? 'bg-primary' : 'bg-muted'}`}
+                    aria-label="Toggle notification sound"
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${notificationSoundEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 bg-card border border-border rounded-xl">
+                    <div>
+                      <p className="text-sm text-foreground font-medium">Do not disturb</p>
+                      <p className="text-xs text-muted-foreground">Silence notifications in a time window</p>
+                    </div>
+                    <button
+                      onClick={() => setDoNotDisturbEnabled(!doNotDisturbEnabled)}
+                      className={`w-11 h-6 rounded-full transition-all duration-200 relative ${doNotDisturbEnabled ? 'bg-primary' : 'bg-muted'}`}
+                      aria-label="Toggle do not disturb"
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${doNotDisturbEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+
+                  {doNotDisturbEnabled && (
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold uppercase text-muted-foreground">Start</label>
+                        <input
+                          type="time"
+                          value={doNotDisturbStart}
+                          onChange={(e) => setDoNotDisturbStart(e.target.value)}
+                          className="mt-1 w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold uppercase text-muted-foreground">End</label>
+                        <input
+                          type="time"
+                          value={doNotDisturbEnd}
+                          onChange={(e) => setDoNotDisturbEnd(e.target.value)}
+                          className="mt-1 w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap pt-2">
+                  <button
+                    onClick={async () => {
+                      setNotificationHistoryLoading(true);
+                      try {
+                        const res = await fetch('/api/settings/notification-history', { credentials: 'include' });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        setNotificationHistory(data.notifications || []);
+                        setNotificationHistoryOpen(true);
+                      } finally {
+                        setNotificationHistoryLoading(false);
+                      }
+                    }}
+                    data-testid="button-view-notification-history"
+                    className="px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+                  >
+                    {notificationHistoryLoading ? 'Loading…' : 'View Notification History'}
+                  </button>
+
+                  <button
+                    onClick={saveNotificationSettings}
+                    data-testid="button-save-notifications"
+                    className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Save Preferences
+                  </button>
+                </div>
+
+                {notificationHistoryOpen && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="w-full max-w-xl bg-background border border-border rounded-2xl shadow-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-foreground">Notification History</h3>
+                        <button
+                          onClick={() => setNotificationHistoryOpen(false)}
+                          className="p-2 rounded-lg hover:bg-muted"
+                          aria-label="Close notification history"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {notificationHistory.length === 0 ? (
+                        <div className="text-sm text-muted-foreground py-6 text-center">No notifications yet</div>
+                      ) : (
+                        <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
+                          {notificationHistory.map((n: any) => (
+                            <div key={n.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                              <p className="text-sm font-medium text-foreground">{n.title}</p>
+                              <p className="text-xs text-muted-foreground">{n.description}</p>
+                              <p className="text-[11px] text-muted-foreground mt-1">
+                                {n.createdAt ? new Date(n.createdAt).toLocaleString() : ''}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

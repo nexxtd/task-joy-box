@@ -291,20 +291,52 @@ export const habits = pgTable('habits', {
 export const userSettings = pgTable('user_settings', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull().unique(),
+
+  // Appearance
   theme: text('theme').default('system'),
   fontFamily: text('font_family').default('Inter'),
+  fontSize: text('font_size').default('medium'), // small | medium | large
+  location: text('location').default('United States'),
   accentColor: text('accent_color').default('#111827'),
   accentHsl: text('accent_hsl').default('220 39% 11%'),
+
+  // Language + notifications
   language: text('language').default('English'),
-  smartAlerts: boolean('smart_alerts').default(true),
-  emailNotifs: boolean('email_notifs').default(true),
+  smartAlerts: boolean('smart_alerts').default(true), // Premium
+  emailNotifs: boolean('email_notifs').default(true),   // Free
+
+  // Upcoming task reminders / warnings (Free)
+  upcomingTaskReminders: boolean('upcoming_task_reminders').default(true),
+  dueTimeWarningEnabled: boolean('due_time_warning_enabled').default(true),
+  overdueTaskAlertsEnabled: boolean('overdue_task_alerts_enabled').default(true),
+  dailySummaryEnabled: boolean('daily_summary_enabled').default(true),
+  habitRemindersEnabled: boolean('habit_reminders_enabled').default(true),
+  goalDeadlineAlertsEnabled: boolean('goal_deadline_alerts_enabled').default(true),
+
+  // Notification sound (Free)
+  notificationSoundEnabled: boolean('notification_sound_enabled').default(true),
+
+  // DND (do not disturb)
+  doNotDisturbEnabled: boolean('do_not_disturb_enabled').default(false),
+  doNotDisturbStart: text('do_not_disturb_start').default('22:00'),
+  doNotDisturbEnd: text('do_not_disturb_end').default('07:00'),
+
   autoSortTasks: boolean('autoSortTasks').default(false),
   energyMorning: text('energy_morning').default('medium'),
   energyAfternoon: text('energy_afternoon').default('high'),
   energyEvening: text('energy_evening').default('low'),
   energyTrackerEnabled: boolean('energy_tracker_enabled').default(true),
+
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const notificationHistory = pgTable('notification_history', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const energyLogs = pgTable('energy_logs', {

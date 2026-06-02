@@ -1,26 +1,25 @@
-# TODO - Task Joy Box fixes
+# TODO — Settings — Full Spec (backend + frontend) + recent Tasks fixes
 
-## Step 1 (now)
-- [ ] Update `src/pages/Tasks.tsx`:
-  - Remove “status” and “due” UI from:
-    - task expanded inline section (expanded details area)
-    - `TaskFullView` modal:
-      - status select
-      - due date/time inputs
-      - due/status display near comments header
-      - due/status entries in Activity list (if present)
+## Done
+- Tasks flow: removed due/status UI and activity entries; hardened expanded subtasks rendering to prevent white screen when subtasks shape is legacy/missing.
 
-## Step 2
-- [ ] Harden expand-button expanded renderer in `src/pages/Tasks.tsx` to prevent blank white screen:
-  - Guard against missing/legacy subtasks fields (e.g., ensure `subtasks` rendering uses safe defaults / fallback mapping)
+## In Progress
+### 1) Appearance (spec-critical, no-flash)
+- [ ] Update DB schema: add `font_size`, `location` (and any other required Appearance fields)
+- [ ] Create Drizzle migration `drizzle/0005_add_settings_full_spec.sql`
+- [ ] Extend `server/routes/settings.ts` GET/PATCH to include new Appearance fields
+- [ ] Update `src/pages/SettingsPage.tsx` Appearance tab to match spec:
+  - [ ] Free: “Customise Your App” single card + Subscribe -> /pricing
+  - [ ] Paid: full accent picker popup (hex, RGB, hue/sat gradient, brightness, opacity, preview swatch with ring)
+  - [ ] Theme: Light/Dark/System apply instantly across app
+  - [ ] Font Family (Inter/Nunito/Outfit/Roboto) instant
+  - [ ] Font Size (Small/Medium/Large) instant
+  - [ ] Language dropdown styled like task filter dropdown
+  - [ ] Location dropdown styled like language dropdown; updates pricing currency
+  - [ ] Reset All to Defaults confirmation dialog
+  - [ ] Remove localStorage-driven accent/theme/font apply to guarantee no flash; apply only after `/api/settings` first load
 
-## Step 3
-- [ ] Replace ONLY the “Create Task” modal subtasks editor in `src/pages/Tasks.tsx`:
-  - Match DeepFocusMode subtasks editor markup/behavior
-  - Keep draft state usage (`newTaskSubtasks`, `newSubtaskText`, `newSubtaskDuration`)
-
-## Step 4
-- [ ] Run build/lint and manually verify flows:
-  - Expand button no longer whitescreens
-  - Tasks UI no longer shows due/status
-  - New Task modal subtasks editor matches Deep Focus UI
+### 2) Notifications, Calendar, Energy Levels, Account, History, Privacy, Shortcuts
+- [ ] Implement remaining backend endpoints + DB tables as needed
+- [ ] Align UI with exact spec and wire persistence
+- [ ] Thorough manual UI + curl endpoint testing
