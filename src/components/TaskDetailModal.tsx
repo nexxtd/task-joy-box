@@ -244,8 +244,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                   <label className="text-[10px] font-bold text-muted-foreground uppercase">Time</label>
                   <input
                     type="time"
-                    value={(task as any).dueTime || ''}
-                    onChange={e => updateTask(task.id, { dueTime: e.target.value || undefined } as any)}
+                    value={task.dueTime || ''}
+                    onChange={e => updateTask(task.id, { dueTime: e.target.value || undefined })}
                     className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
