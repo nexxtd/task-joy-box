@@ -13,9 +13,10 @@ interface BoardColumnProps {
   index: number;
   onTaskClick: (task: Task) => void;
   canCreateTasks?: boolean;
+  onAddClick?: () => void;
 }
 
-const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true }) => {
+const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick }) => {
   const { addTask, deleteColumn, updateColumn } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -436,14 +437,15 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           ) : null}
           <button
             onClick={() => {
+              if (onAddClick) { onAddClick(); return; }
               if (!canCreateTasks) return;
               setIsAdding(true);
             }}
-            disabled={!canCreateTasks}
+            disabled={!onAddClick && !canCreateTasks}
             className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
-            Add New Task
+            Add Task
           </button>
         </div>
       )}

@@ -98,6 +98,9 @@ const SettingsPage: React.FC = () => {
   const [activePanelTicket, setActivePanelTicket] = useState<TicketData | null>(null);
   const [panelMessages, setPanelMessages] = useState<TicketMessage[]>([]);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [ticketTab, setTicketTab] = useState<'open' | 'resolved'>('open');
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [ticketCategory, setTicketCategory] = useState('all');
 
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -107,7 +110,7 @@ const SettingsPage: React.FC = () => {
     { id: 'history', label: 'History', icon: History },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
-    ...(hasTickets ? [{ id: 'tickets', label: 'Open Tickets', icon: MessageSquare }] : []),
+    ...(hasTickets ? [{ id: 'tickets', label: 'Tickets', icon: MessageSquare }] : []),
   ];
 
   const fetchUserTickets = async () => {
@@ -116,7 +119,8 @@ const SettingsPage: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setUserTickets(data);
-        setHasTickets(data.length > 0);
+        // Only ever transition false → true, never hide the nav item once visible
+        if (data.length > 0) setHasTickets(true);
       }
     } catch {}
   };
@@ -1074,64 +1078,113 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeSection === 'tickets' && (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-foreground mb-3">Your Tickets</h2>
-              {userTickets.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tickets to display.</p>
-              ) : (
-                <div className="space-y-2">
-                  {userTickets.filter(t => t.status === 'open').map(ticket => (
+          {activeSection === 'tickets' && (() => {
+            const TICKET_CATEGORIES = ['all', 'support', 'bug', 'suggestion', 'report'];
+            const typeColor = (type: string) =>
+              type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+              type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+              type === 'report' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+
+            const applyFilters = (list: TicketData[]) =>
+              list
+                .filter(t => ticketCategory === 'all' || t.type === ticketCategory)
+                .filter(t => !ticketSearch || t.subject.toLowerCase().includes(ticketSearch.toLowerCase()));
+
+            const openTickets = applyFilters(userTickets.filter(t => t.status === 'open'));
+            const resolvedTickets = applyFilters(userTickets.filter(t => t.status === 'closed'));
+            const displayList = ticketTab === 'open' ? openTickets : resolvedTickets;
+
+            return (
+              <div className="space-y-4">
+                <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
+
+                {/* Tab switcher */}
+                <div className="flex gap-2">
+                  {(['open', 'resolved'] as const).map(tab => (
                     <button
-                      key={ticket.id}
-                      onClick={() => setActivePanelTicket(ticket)}
-                      className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left"
+                      key={tab}
+                      onClick={() => setTicketTab(tab)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        ticketTab === tab
+                          ? 'bg-foreground text-background'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${
-                          ticket.type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                          ticket.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
-                          ticket.type === 'report' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
-                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                        }`}>{ticket.type}</span>
-                        <span className="text-sm font-medium truncate">{ticket.subject}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                        <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
-                      </div>
+                      {tab === 'open' ? 'Open' : 'Resolved'}
+                      <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        ticketTab === tab ? 'bg-background/20' : 'bg-border'
+                      }`}>
+                        {tab === 'open'
+                          ? userTickets.filter(t => t.status === 'open').length
+                          : userTickets.filter(t => t.status === 'closed').length}
+                      </span>
                     </button>
                   ))}
-                  {userTickets.filter(t => t.status === 'closed').length > 0 && (
-                    <>
-                      <p className="text-xs font-semibold text-muted-foreground pt-3 pb-1 uppercase tracking-wider">Resolved</p>
-                      {userTickets.filter(t => t.status === 'closed').map(ticket => (
-                        <button
-                          key={ticket.id}
-                          onClick={() => setActivePanelTicket(ticket)}
-                          className="w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left opacity-70"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${
-                              ticket.type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                              ticket.type === 'bug' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
-                              ticket.type === 'report' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
-                              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                            }`}>{ticket.type}</span>
-                            <span className="text-sm font-medium truncate">{ticket.subject}</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                            <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
-                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
-                          </div>
-                        </button>
-                      ))}
-                    </>
-                  )}
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Search + Category filter */}
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center gap-2 bg-muted/40 border border-border rounded-lg px-3 py-2">
+                    <MessageSquare className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <input
+                      type="text"
+                      value={ticketSearch}
+                      onChange={e => setTicketSearch(e.target.value)}
+                      placeholder="Search tickets…"
+                      className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    />
+                    {ticketSearch && (
+                      <button onClick={() => setTicketSearch('')} className="text-muted-foreground hover:text-foreground">
+                        <XCircle className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    value={ticketCategory}
+                    onChange={e => setTicketCategory(e.target.value)}
+                    className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none cursor-pointer capitalize"
+                  >
+                    {TICKET_CATEGORIES.map(c => (
+                      <option key={c} value={c} className="capitalize">{c === 'all' ? 'All categories' : c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Ticket list */}
+                {userTickets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tickets yet.</p>
+                ) : displayList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No {ticketTab} tickets match your filters.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {displayList.map(ticket => (
+                      <button
+                        key={ticket.id}
+                        onClick={() => setActivePanelTicket(ticket)}
+                        className={`w-full flex items-center justify-between p-4 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left ${ticketTab === 'resolved' ? 'opacity-75' : ''}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${typeColor(ticket.type)}`}>
+                            {ticket.type}
+                          </span>
+                          <span className="text-sm font-medium truncate">{ticket.subject}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                          <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
+                          {ticketTab === 'open' ? (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Resolved</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {activeSection === 'security' && (
             <div className="space-y-4">
