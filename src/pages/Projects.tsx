@@ -5,6 +5,7 @@ import {
   CircleDotDashed,
   Clock3,
   Copy,
+  EyeOff,
   FolderKanban,
   GripVertical,
   LayoutDashboard,
@@ -49,7 +50,7 @@ interface ProjectMember {
   id: number;
   name: string;
   email: string;
-  role: 'owner' | 'member';
+  role: 'owner' | 'member' | 'view' | 'edit' | 'full edit' | 'admin';
 }
 
 interface ProjectMeta {
@@ -119,6 +120,7 @@ const Projects: React.FC = () => {
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (user?.id) {
       try {
@@ -171,6 +173,14 @@ const Projects: React.FC = () => {
     [projects, selectedProjectId],
   );
 
+  // Derive current user's role and edit permissions
+  const currentUserMember = selectedProject?.members.find(m => m.id === user?.id);
+  const currentUserRole: string = selectedProject?.ownerId === user?.id
+    ? 'owner'
+    : currentUserMember?.role || 'view';
+  const canEdit = ['owner', 'edit', 'full edit', 'admin'].includes(currentUserRole);
+  const canManage = currentUserRole === 'owner';
+
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
   const projectTasks = useMemo(
     () => board.tasks.filter(task => task.projectId === selectedProject?.id),
@@ -209,6 +219,7 @@ const Projects: React.FC = () => {
     setChatInput('');
     setChatSending(false);
   };
+
   const totalTasks = projectTasks.length;
   const completedTasks = projectTasks.filter(task => task.completed || task.columnId.toLowerCase().includes('completed')).length;
   const overdueTasks = projectTasks.filter(task => task.dueDate && new Date(task.dueDate) < new Date() && !task.completed).length;
@@ -291,7 +302,8 @@ const Projects: React.FC = () => {
     });
   };
 
-  const activeProjects = sortProjects(projects.filter(project => !project.archived));
+  // Active = not archived AND not completed; they appear in Completed section once marked complete
+  const activeProjects = sortProjects(projects.filter(project => !project.archived && !project.completed));
   const completedProjects = sortProjects(projects.filter(project => project.completed && !project.archived));
   const archivedProjects = sortProjects(projects.filter(project => project.archived));
 
@@ -443,8 +455,7 @@ const Projects: React.FC = () => {
               const reorderedItems = [...items];
               const [moved] = reorderedItems.splice(result.source.index, 1);
               reorderedItems.splice(result.destination.index, 0, moved);
-              
-              const newOrder = [...projectOrder];
+
               const activeIds = reorderedItems.map(p => p.id);
               const otherIds = projectOrder.filter(id => !activeIds.includes(id));
               const finalOrder = [...activeIds, ...otherIds];
@@ -616,32 +627,35 @@ const Projects: React.FC = () => {
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
         <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="h-4 w-4 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
-                <h2 className="text-2xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h2>
-              </div>
-              <p className="text-sm text-muted-foreground max-w-2xl">{selectedProject?.description || 'Describe what this project is about.'}</p>
+          {/* Status badges + view-only notice */}
+          {(selectedProject?.completed || selectedProject?.archived || !canEdit) && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {selectedProject?.completed && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" />Completed
+                </span>
+              )}
+              {selectedProject?.archived && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
+                  <Lock className="h-3.5 w-3.5" />Archived
+                </span>
+              )}
+              {!canEdit && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-600">
+                  <EyeOff className="h-3.5 w-3.5" />View only
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background">
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-              </button>
-              {selectedProject?.completed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" />Completed</span>}
-              {selectedProject?.archived && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600"><Lock className="h-3.5 w-3.5" />Archived</span>}
-            </div>
-          </div>
+          )}
 
           <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Project Description</label>
           <textarea
             value={selectedProject?.description || ''}
-            onChange={e => updateSelectedProject({ description: e.target.value })}
-            readOnly={Boolean(selectedProject?.archived || selectedProject?.completed)}
+            onChange={e => { if (canEdit) updateSelectedProject({ description: e.target.value }); }}
+            readOnly={!canEdit || Boolean(selectedProject?.archived || selectedProject?.completed)}
             rows={4}
             className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75"
-            placeholder="What is this project about?"
+            placeholder={canEdit ? 'What is this project about?' : 'No description'}
           />
 
           <div className="mt-5">
@@ -651,13 +665,13 @@ const Projects: React.FC = () => {
                 <button
                   key={member.id}
                   onClick={() => {
-                    if (selectedProject.ownerId === user?.id) {
+                    if (canManage) {
                       setSelectedMember(member);
                     }
                   }}
                   className={cn(
-                    "group flex items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-all",
-                    selectedProject.ownerId === user?.id ? "hover:border-primary/40 hover:bg-muted/50 cursor-pointer" : ""
+                    'group flex items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-all',
+                    canManage ? 'hover:border-primary/40 hover:bg-muted/50 cursor-pointer' : 'cursor-default'
                   )}
                 >
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background flex-shrink-0">
@@ -709,81 +723,23 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm relative">
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
-            <button
-              onClick={() => setShowMilestonePopup(true)}
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              Add milestone
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => {
+                  setNewMilestoneName('');
+                  setNewMilestoneDate('');
+                  setNewMilestoneDesc('');
+                  setShowMilestonePopup(true);
+                }}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Add milestone
+              </button>
+            )}
           </div>
-
-          {showMilestonePopup && (
-            <div className="absolute inset-x-5 top-12 z-20 bg-card border border-border rounded-2xl p-4 shadow-xl animate-fade-in">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-foreground uppercase tracking-wider">New Milestone</span>
-                <button onClick={() => setShowMilestonePopup(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Name</label>
-                  <input
-                    type="text"
-                    value={newMilestoneName}
-                    onChange={e => setNewMilestoneName(e.target.value)}
-                    placeholder="Milestone name"
-                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Date</label>
-                  <input
-                    type="date"
-                    value={newMilestoneDate}
-                    onChange={e => setNewMilestoneDate(e.target.value)}
-                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Description (optional)</label>
-                  <textarea
-                    value={newMilestoneDesc}
-                    onChange={e => setNewMilestoneDesc(e.target.value)}
-                    placeholder="Describe this milestone..."
-                    rows={2}
-                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none resize-none"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (newMilestoneName.trim() && newMilestoneDate) {
-                        handleAddMilestone(newMilestoneName.trim(), newMilestoneDate, newMilestoneDesc.trim());
-                        setNewMilestoneName('');
-                        setNewMilestoneDate('');
-                        setNewMilestoneDesc('');
-                        setShowMilestonePopup(false);
-                      }
-                    }}
-                    disabled={!newMilestoneName.trim() || !newMilestoneDate}
-                    className="flex-1 bg-primary text-primary-foreground text-xs font-bold py-2 rounded-lg disabled:opacity-50 hover:bg-primary/90"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => setShowMilestonePopup(false)}
-                    className="px-3 py-2 text-xs border border-border text-muted-foreground rounded-lg hover:bg-muted"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {milestones.length > 0 ? (
@@ -791,26 +747,30 @@ const Projects: React.FC = () => {
                 <div key={milestone.id} className="flex items-start justify-between rounded-xl border border-border bg-muted/10 p-3 hover:bg-muted/20 transition-all">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-foreground truncate">{milestone.name}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(milestone.date).toLocaleDateString()}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {new Date(milestone.date + 'T12:00:00').toLocaleDateString()}
+                    </p>
                     {milestone.description && <p className="text-[10px] text-muted-foreground/80 mt-1 break-words">{milestone.description}</p>}
                   </div>
-                  <button
-                    onClick={() => {
-                      const updated = milestones.filter(m => m.id !== milestone.id);
-                      setMilestones(updated);
-                      if (selectedProjectId) {
-                        localStorage.setItem(`milestones_${selectedProjectId}`, JSON.stringify(updated));
-                      }
-                    }}
-                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2"
-                    title="Delete milestone"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => {
+                        const updated = milestones.filter(m => m.id !== milestone.id);
+                        setMilestones(updated);
+                        if (selectedProjectId) {
+                          localStorage.setItem(`milestones_${selectedProjectId}`, JSON.stringify(updated));
+                        }
+                      }}
+                      className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2"
+                      title="Delete milestone"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))
             ) : (
-              <EmptyState title="No milestones yet" description="Start planning checkpoints directly on the home page." />
+              <EmptyState title="No milestones yet" description={canEdit ? 'Add checkpoints to track project progress.' : 'No milestones have been set for this project.'} />
             )}
           </div>
         </div>
@@ -932,10 +892,12 @@ const Projects: React.FC = () => {
             <p className="text-xs text-muted-foreground">{selectedProject?.name} · {chatMessages.length} messages</p>
           </div>
         </div>
-        <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
-          <Share2 className="h-3.5 w-3.5" />
-          Invite
-        </button>
+        {canManage && (
+          <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
+            <Share2 className="h-3.5 w-3.5" />
+            Invite
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
@@ -1089,75 +1051,144 @@ const Projects: React.FC = () => {
         ) : (
           <>
             <header className="border-b border-border/70 bg-background/80 px-5 py-4 backdrop-blur-xl lg:px-8 font-sans">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
-                <h1 className="truncate text-xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h1>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-3">
+                    <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
+                    <h1 className="truncate text-xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h1>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedProject?.description || 'A project workspace for tasks, goals, notes, and team updates.'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{activeCount}</span>
+                    <span>/</span>
+                    <span>{projectLimit} projects</span>
+                    <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  </div>
+                  {canManage && (
+                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">{selectedProject?.description || 'A project workspace for tasks, goals, notes, and team updates.'}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{activeCount}</span>
-                <span>/</span>
-                <span>{projectLimit} projects</span>
-                <Lock className="h-3.5 w-3.5 text-amber-500" />
+
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                {[
+                  { id: 'home', label: 'Home', icon: LayoutDashboard },
+                  { id: 'board', label: 'Board', icon: FolderKanban },
+                  { id: 'list', label: 'List', icon: List },
+                  { id: 'chat', label: 'Chat', icon: Settings2 },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setCurrentTab(tab.id as ProjectTab)}
+                    className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-              <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground">
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-              </button>
-            </div>
-          </div>
+            </header>
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            {[
-              { id: 'home', label: 'Home', icon: LayoutDashboard },
-              { id: 'board', label: 'Board', icon: FolderKanban },
-              { id: 'list', label: 'List', icon: List },
-              { id: 'chat', label: 'Chat', icon: Settings2 },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setCurrentTab(tab.id as ProjectTab)}
-                className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </header>
+            <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
+              {editingProjectId !== null && selectedProject?.id === editingProjectId && (
+                <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Rename project</label>
+                  <div className="flex gap-2">
+                    <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
+                      }
+                      if (e.key === 'Escape') {
+                        setEditingProjectId(null);
+                        setEditingName('');
+                      }
+                    }} className="flex-1 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                    <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background">Save</button>
+                    <button onClick={() => setEditingProjectId(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+                  </div>
+                </div>
+              )}
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
-          {editingProjectId !== null && selectedProject?.id === editingProjectId && (
-            <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Rename project</label>
-              <div className="flex gap-2">
-                <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
-                  }
-                  if (e.key === 'Escape') {
-                    setEditingProjectId(null);
-                    setEditingName('');
-                  }
-                }} className="flex-1 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background">Save</button>
-                <button onClick={() => setEditingProjectId(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {currentTab === 'home' && renderHome()}
-          {currentTab === 'board' && renderBoard()}
-          {currentTab === 'list' && renderList()}
-          {currentTab === 'chat' && renderChat()}
-        </main>
+              {currentTab === 'home' && renderHome()}
+              {currentTab === 'board' && renderBoard()}
+              {currentTab === 'list' && renderList()}
+              {currentTab === 'chat' && renderChat()}
+            </main>
           </>
         )}
       </div>
+
+      {/* Milestone popup - fixed overlay */}
+      {showMilestonePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-base font-bold text-foreground">New Milestone</span>
+              <button onClick={() => setShowMilestonePopup(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={newMilestoneName}
+                  onChange={e => setNewMilestoneName(e.target.value)}
+                  placeholder="Milestone name"
+                  className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Date</label>
+                <input
+                  type="date"
+                  value={newMilestoneDate}
+                  onChange={e => setNewMilestoneDate(e.target.value)}
+                  className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Description (optional)</label>
+                <textarea
+                  value={newMilestoneDesc}
+                  onChange={e => setNewMilestoneDesc(e.target.value)}
+                  placeholder="Describe this milestone…"
+                  rows={2}
+                  className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    if (newMilestoneName.trim() && newMilestoneDate) {
+                      handleAddMilestone(newMilestoneName.trim(), newMilestoneDate, newMilestoneDesc.trim() || undefined);
+                      setShowMilestonePopup(false);
+                    }
+                  }}
+                  disabled={!newMilestoneName.trim() || !newMilestoneDate}
+                  className="flex-1 bg-primary text-primary-foreground text-sm font-bold py-2.5 rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                >
+                  Save Milestone
+                </button>
+                <button
+                  onClick={() => setShowMilestonePopup(false)}
+                  className="px-4 py-2.5 text-sm border border-border text-muted-foreground rounded-xl hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {projectToDelete !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setProjectToDelete(null)}>
@@ -1244,11 +1275,14 @@ const Projects: React.FC = () => {
                   className="w-full bg-muted/40 border border-border rounded-xl p-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                 >
                   <option value="owner">Owner</option>
-                  <option value="view">View</option>
+                  <option value="view">View only</option>
                   <option value="edit">Edit</option>
                   <option value="full edit">Full Edit</option>
                   <option value="admin">Admin</option>
                 </select>
+                <p className="text-[10px] text-muted-foreground ml-1 mt-1">
+                  View only members can read but cannot edit tasks, descriptions, or milestones.
+                </p>
               </div>
             </div>
 
@@ -1353,7 +1387,6 @@ const Projects: React.FC = () => {
         </div>
       )}
 
-      {/* Add Task popup - choose Assign or Create */}
       {addTaskPopupColumnId && selectedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setAddTaskPopupColumnId(null)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
