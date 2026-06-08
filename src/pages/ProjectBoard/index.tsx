@@ -24,6 +24,7 @@ const ProjectBoard = () => {
   const [newTaskPriority, setNewTaskPriority] = useState<'urgent' | 'high' | 'medium' | 'low' | 'none'>('none');
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskSubject, setNewTaskSubject] = useState('');
   const [newTaskColor, setNewTaskColor] = useState('');
   const [newTaskIcon, setNewTaskIcon] = useState('');
@@ -73,6 +74,7 @@ const ProjectBoard = () => {
     setNewTaskDescription('');
     setNewTaskPriority('none');
     setNewTaskDueDate('');
+    setNewTaskDueTime('');
     setNewTaskSubject('');
     setNewTaskColor('');
     setNewTaskIcon('');
@@ -108,6 +110,7 @@ const ProjectBoard = () => {
         priority: newTaskPriority,
         status: newTaskStatus,
         dueDate: newTaskDueDate || undefined,
+        dueTime: newTaskDueTime || undefined,
         subject: newTaskSubject.trim() || undefined,
         color: newTaskColor || undefined,
         icon: newTaskIcon || undefined,
@@ -156,6 +159,7 @@ const ProjectBoard = () => {
     setNewTaskPriority('none');
     setNewTaskStatus('to_do');
     setNewTaskDueDate('');
+    setNewTaskDueTime('');
     setNewTaskSubject('');
     setNewTaskColor('');
     setNewTaskIcon('');
@@ -359,6 +363,8 @@ const ProjectBoard = () => {
                   <label className="text-xs font-semibold uppercase text-gray-500">Due Time</label>
                   <input
                     type="time"
+                    value={newTaskDueTime}
+                    onChange={e => setNewTaskDueTime(e.target.value)}
                     className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -639,6 +645,12 @@ const ProjectBoard = () => {
                   </h4>
                   <input
                     type="time"
+                    value={selectedTask.dueTime || ''}
+                    onChange={e => {
+                      const updatedTask = { ...selectedTask, dueTime: e.target.value || undefined };
+                      setSelectedTask(updatedTask);
+                      updateTask(updatedTask.id, { dueTime: e.target.value || undefined });
+                    }}
                     className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
