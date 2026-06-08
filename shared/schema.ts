@@ -64,6 +64,8 @@ export const tasks = pgTable('tasks', {
   sessionsNeeded: integer('sessions_needed').default(1),
   completed: boolean('completed').default(false),
   completedAt: text('completed_at'),
+  assignedToUserId: integer('assigned_to_user_id'),
+  assignedToUserName: text('assigned_to_user_name'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
   order: integer('order').notNull(),

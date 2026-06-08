@@ -145,6 +145,8 @@ export async function initDatabase() {
     await addColumnIfNotExists('tasks', 'sessions_needed', 'INTEGER DEFAULT 1');
     await addColumnIfNotExists('tasks', 'completed', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('tasks', 'completed_at', 'TEXT');
+    await addColumnIfNotExists('tasks', 'assigned_to_user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
+    await addColumnIfNotExists('tasks', 'assigned_to_user_name', 'TEXT');
 
     // Habits table new columns
     await addColumnIfNotExists('habits', 'daily_time', 'INTEGER');
