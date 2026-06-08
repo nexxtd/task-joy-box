@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye } from 'lucide-react';
+import { X, Calendar, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -30,6 +31,29 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const [uploading, setUploading] = useState(false);
 
   const currentColumn = board.columns.find(c => c.id === task.columnId);
+  const [assignableUsers, setAssignableUsers] = useState<{id: number; name: string; email: string}[]>([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        if (task.projectId) {
+          const res = await fetch('/api/projects', { credentials: 'include' });
+          if (res.ok) {
+            const data = await res.json();
+            const project = (data.projects || []).find((p: any) => p.id === task.projectId);
+            if (project?.members) setAssignableUsers(project.members);
+          }
+        } else {
+          const res = await fetch('/api/boards/assignable-users', { credentials: 'include' });
+          if (res.ok) {
+            const data = await res.json();
+            setAssignableUsers(data.users || []);
+          }
+        }
+      } catch {}
+    };
+    fetchUsers();
+  }, [task.projectId]);
 
   const saveTitle = () => {
     if (title.trim() && title !== task.title) updateTask(task.id, { title: title.trim() });
@@ -273,9 +297,49 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
             </div>
           </div>
 
+          {/* Assignment */}
           <div className="grid grid-cols-2 gap-6 pt-4 border-t border-border/50">
-            {/* Subject */}
             <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <User className="w-3.5 h-3.5" /> Assigned To
+              </h4>
+              <Select
+                value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
+                onValueChange={(val) => {
+                  if (val === 'unassigned') {
+                    updateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
+                  } else {
+                    const user = assignableUsers.find(u => u.id === Number(val));
+                    updateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: user?.name });
+                  }
+                }}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="w-full bg-muted border border-border text-sm">
+                  <SelectValue placeholder="Assign to..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">
+                    <span className="text-muted-foreground">Unassigned</span>
+                  </SelectItem>
+                  {assignableUsers.map(user => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
+                          {user.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <span>{user.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                Subject / Category
+              </h4>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 Subject / Category
               </h4>

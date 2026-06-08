@@ -442,6 +442,16 @@ export type InsertOrganization = any;
 export type UpdateOrganization = any;
 export type InsertOrganizationMember = any;
 export type InsertChatMessage = any;
+export const milestones = pgTable('milestones', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id).notNull(),
+  name: text('name').notNull(),
+  date: text('date').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export type InsertGoal = any;
 export type InsertHabit = any;
 export type UpdateUserSettings = any;

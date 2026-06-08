@@ -77,6 +77,8 @@ export interface Task {
   attachments?: Attachment[];
   comments?: TaskComment[];
   activityLog?: TaskActivity[];
+  assignedToUserId?: number | null;
+  assignedToUserName?: string;
 }
 
 export interface Column {

@@ -27,6 +27,7 @@ import {
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import TicketConversation from '@/components/TicketConversation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AdminStats {
   summary: {
@@ -249,6 +250,9 @@ const AdminDashboard = () => {
   const [userDataPanel, setUserDataPanel] = useState<any | null>(null);
   const [userFullDetails, setUserFullDetails] = useState<any | null>(null);
   const [expandedUsage, setExpandedUsage] = useState<Set<string>>(new Set());
+  const [ticketFilter, setTicketFilter] = useState<string>('all');
+  const [ticketSort, setTicketSort] = useState<string>('newest');
+  const [ticketTypeFilter, setTicketTypeFilter] = useState<string>('all');
 
   const fetchTickets = async () => {
     try {
@@ -889,8 +893,44 @@ const AdminDashboard = () => {
       {activeTab === 'tickets' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Support Tickets</h2>
-            <button onClick={fetchTickets} className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 bg-muted rounded-lg transition-colors">Refresh</button>
+            <h2 className="text-xl font-bold">Support Tickets ({adminTickets.length})</h2>
+            <div className="flex items-center gap-2">
+              <Select value={ticketTypeFilter} onValueChange={setTicketTypeFilter}>
+                <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="bug">Bug</SelectItem>
+                  <SelectItem value="support">Support</SelectItem>
+                  <SelectItem value="suggestion">Suggestion</SelectItem>
+                  <SelectItem value="report">Report</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={ticketFilter} onValueChange={setTicketFilter}>
+                <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={ticketSort} onValueChange={setTicketSort}>
+                <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="unread">Unread First</SelectItem>
+                </SelectContent>
+              </Select>
+              <button onClick={fetchTickets} className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 bg-muted rounded-lg transition-colors">Refresh</button>
+            </div>
           </div>
           {adminTickets.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
@@ -899,7 +939,15 @@ const AdminDashboard = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {adminTickets.filter((t: any) => t.status === 'open').map((ticket: any) => (
+              {adminTickets
+                .filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
+                .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter)
+                .sort((a: any, b: any) => {
+                  if (ticketSort === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                  if (ticketSort === 'unread') return (b.unreadCount || 0) - (a.unreadCount || 0);
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                })
+                .map((ticket: any) => (
                 <button
                   key={ticket.id}
                   onClick={() => setActivePanelTicket(ticket)}
@@ -915,34 +963,21 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                     <span className="text-xs text-muted-foreground hidden sm:block">{ticket.createdAt ? format(new Date(ticket.createdAt), 'MMM d, HH:mm') : ''}</span>
-                    {!ticket.staffReplied && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">New</span>}
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
+                    {!ticket.staffReplied && ticket.status !== 'closed' && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">New</span>}
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      ticket.status === 'open' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                      ticket.status === 'in_progress' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                      ticket.status === 'resolved' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                      'bg-muted text-muted-foreground'
+                    }`}>{ticket.status === 'in_progress' ? 'In Progress' : ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1)}</span>
                   </div>
                 </button>
               ))}
-              {adminTickets.filter((t: any) => t.status === 'closed').length > 0 && (
-                <>
-                  <p className="text-xs font-semibold text-muted-foreground pt-4 pb-1 uppercase tracking-wider">Resolved</p>
-                  {adminTickets.filter((t: any) => t.status === 'closed').map((ticket: any) => (
-                    <button
-                      key={ticket.id}
-                      onClick={() => setActivePanelTicket(ticket)}
-                      className={`w-full flex items-center justify-between p-4 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left opacity-60 ${activePanelTicket?.id === ticket.id ? 'border-primary opacity-100' : 'border-border'}`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{ticket.subject}</p>
-                          <p className="text-xs text-muted-foreground">{ticket.userName}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                        <span className="text-xs text-muted-foreground hidden sm:block">{ticket.closedAt ? format(new Date(ticket.closedAt), 'MMM d') : ''}</span>
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Closed</span>
-                      </div>
-                    </button>
-                  ))}
-                </>
+              {adminTickets.filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
+                .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter).length === 0 && (
+                <div className="text-center py-10 text-muted-foreground">
+                  <p className="text-sm">No tickets match the selected filters.</p>
+                </div>
               )}
             </div>
           )}

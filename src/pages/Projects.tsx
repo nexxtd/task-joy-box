@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Droppable, DropResult, Draggable } from '@hello-pangea/dnd';
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleDotDashed,
   Clock3,
   Copy,
@@ -95,11 +97,12 @@ const Projects: React.FC = () => {
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
 
-  const [milestones, setMilestones] = useState<{ id: string; name: string; date: string; description?: string }[]>([]);
+  const [milestones, setMilestones] = useState<{ id: number; name: string; date: string; description?: string }[]>([]);
   const [showMilestonePopup, setShowMilestonePopup] = useState(false);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
 
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
@@ -108,6 +111,10 @@ const Projects: React.FC = () => {
   const [projectToLeave, setProjectToLeave] = useState<number | null>(null);
 
   const [projectOrder, setProjectOrder] = useState<number[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (!user?.id) return false;
+    try { return localStorage.getItem(`sidebar_collapsed_${user.id}`) === 'true'; } catch { return false; }
+  });
 
   // Board "Add Task" popup state
   const [addTaskPopupColumnId, setAddTaskPopupColumnId] = useState<string | null>(null);
@@ -131,16 +138,13 @@ const Projects: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      try {
-        const saved = localStorage.getItem(`milestones_${selectedProjectId}`);
-        setMilestones(saved ? JSON.parse(saved) : []);
-      } catch {
-        setMilestones([]);
-      }
-    } else {
-      setMilestones([]);
-    }
+    if (!selectedProjectId) { setMilestones([]); return; }
+    setMilestonesLoading(true);
+    fetch(`/api/milestones/${selectedProjectId}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { milestones: [] })
+      .then(d => setMilestones(d.milestones || []))
+      .catch(() => setMilestones([]))
+      .finally(() => setMilestonesLoading(false));
   }, [selectedProjectId]);
 
   const handleAddColumn = () => {
@@ -151,12 +155,20 @@ const Projects: React.FC = () => {
     }
   };
 
-  const handleAddMilestone = (name: string, date: string, description?: string) => {
+  const handleAddMilestone = async (name: string, date: string, description?: string) => {
     if (!selectedProjectId) return;
-    const newM = { id: crypto.randomUUID(), name, date, description };
-    const nextMilestones = [...milestones, newM];
-    setMilestones(nextMilestones);
-    localStorage.setItem(`milestones_${selectedProjectId}`, JSON.stringify(nextMilestones));
+    try {
+      const res = await fetch(`/api/milestones/${selectedProjectId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, date, description }),
+      });
+      const data = await res.json();
+      if (data.milestone) setMilestones(prev => [...prev, data.milestone]);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to create milestone' });
+    }
   };
 
   const planTier = (user?.subscriptionTier === 'pro'
@@ -725,10 +737,11 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
-            {canEdit && (
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
+              {milestonesLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              {canEdit && (
               <button
                 onClick={() => {
                   setNewMilestoneName('');
@@ -756,11 +769,16 @@ const Projects: React.FC = () => {
                   </div>
                   {canEdit && (
                     <button
-                      onClick={() => {
-                        const updated = milestones.filter(m => m.id !== milestone.id);
-                        setMilestones(updated);
-                        if (selectedProjectId) {
-                          localStorage.setItem(`milestones_${selectedProjectId}`, JSON.stringify(updated));
+                      onClick={async () => {
+                        if (!selectedProjectId) return;
+                        try {
+                          await fetch(`/api/milestones/${selectedProjectId}/${milestone.id}`, {
+                            method: 'DELETE',
+                            credentials: 'include',
+                          });
+                          setMilestones(prev => prev.filter(m => m.id !== milestone.id));
+                        } catch {
+                          toast({ title: 'Error', description: 'Failed to delete milestone' });
                         }
                       }}
                       className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2"
@@ -965,83 +983,124 @@ const Projects: React.FC = () => {
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-gradient-to-br from-background via-background to-muted/30 lg:flex-row">
-      <aside className="flex w-full flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
-        <div className="border-b border-border/70 p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <FolderKanban className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
-              <h2 className="text-lg font-semibold text-foreground">Your workspace</h2>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-3 py-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <input type="text" placeholder="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-          </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-            <span>{activeCount}/{projectLimit} projects in use</span>
-            <button className="font-medium text-primary hover:underline" onClick={() => setLimitHint(v => !v)}>Plan limits</button>
-          </div>
-          {limitHint && (
-            <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700">
-              {user?.subscriptionTier ? `Your ${user.subscriptionTier} plan allows up to ${projectLimit} projects.` : `Free plans allow up to ${projectLimit} projects.`}
+      <aside className={cn(
+        'flex flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:border-b-0 lg:border-r transition-all duration-300',
+        sidebarCollapsed ? 'lg:w-16' : 'lg:w-80 w-full'
+      )}>
+        <div className="border-b border-border/70 p-5 flex items-center justify-between">
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary flex-shrink-0">
+                <FolderKanban className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
+                <h2 className="text-lg font-semibold text-foreground truncate">Your workspace</h2>
+              </div>
             </div>
           )}
+          <button
+            onClick={() => {
+              const next = !sidebarCollapsed;
+              setSidebarCollapsed(next);
+              if (user?.id) localStorage.setItem(`sidebar_collapsed_${user.id}`, String(next));
+            }}
+            className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-5">
-            {sidebarBlock('Active Projects', activeProjects)}
-            {sidebarBlock('Completed Projects', completedProjects)}
-            {sidebarBlock('Archived', archivedProjects)}
-          </div>
-        </div>
-
-        <div className="border-t border-border/70 p-4">
-          {addingProject ? (
-            <div className="rounded-2xl border border-border bg-background p-4">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">New project</label>
-              <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="Project name" className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-              <div className="mb-3 flex items-center gap-2">
-                {STORAGE_COLORS.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setNewProjectColor(color)}
-                    className={cn('h-7 w-7 rounded-full border-2 transition-all', newProjectColor === color ? 'border-foreground scale-110' : 'border-transparent')}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Pick ${color}`}
-                  />
-                ))}
+        {!sidebarCollapsed && (
+          <>
+            <div className="px-4 pt-3 pb-1">
+              <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-3 py-2">
+                <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <input type="text" placeholder="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
-              <textarea value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} placeholder="Short description" rows={3} className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-              <div className="flex gap-2">
-                <button onClick={handleAddProject} className="flex-1 rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">Create</button>
-                <button onClick={() => setAddingProject(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{activeCount}/{projectLimit} projects in use</span>
+                <button className="font-medium text-primary hover:underline" onClick={() => setLimitHint(v => !v)}>Plan limits</button>
               </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                if (!canAddProject) {
-                  setLimitHint(true);
-                  return;
-                }
-                setAddingProject(true);
-              }}
-              disabled={!canAddProject}
-              className={cn(
-                'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
-                canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 opacity-70',
+              {limitHint && (
+                <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700">
+                  {user?.subscriptionTier ? `Your ${user.subscriptionTier} plan allows up to ${projectLimit} projects.` : `Free plans allow up to ${projectLimit} projects.`}
+                </div>
               )}
-              title={!canAddProject ? 'You have reached your plan limit' : 'Add Project'}
-            >
-              <Plus className="h-4 w-4" />
-              Add Project
-            </button>
-          )}
-        </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="space-y-5">
+                {sidebarBlock('Active Projects', activeProjects)}
+                {sidebarBlock('Completed Projects', completedProjects)}
+                {sidebarBlock('Archived', archivedProjects)}
+              </div>
+            </div>
+
+            <div className="border-t border-border/70 p-4">
+              {addingProject ? (
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">New project</label>
+                  <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="Project name" className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <div className="mb-3 flex items-center gap-2">
+                    {STORAGE_COLORS.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setNewProjectColor(color)}
+                        className={cn('h-7 w-7 rounded-full border-2 transition-all', newProjectColor === color ? 'border-foreground scale-110' : 'border-transparent')}
+                        style={{ backgroundColor: color }}
+                        aria-label={`Pick ${color}`}
+                      />
+                    ))}
+                  </div>
+                  <textarea value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} placeholder="Short description" rows={3} className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <div className="flex gap-2">
+                    <button onClick={handleAddProject} className="flex-1 rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">Create</button>
+                    <button onClick={() => setAddingProject(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (!canAddProject) {
+                      setLimitHint(true);
+                      return;
+                    }
+                    setAddingProject(true);
+                  }}
+                  disabled={!canAddProject}
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
+                    canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 opacity-70',
+                  )}
+                  title={!canAddProject ? 'You have reached your plan limit' : 'Add Project'}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Project
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {sidebarCollapsed && (
+          <div className="flex-1 flex flex-col items-center gap-1 py-3 px-1">
+            {projects.slice(0, 8).map(p => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedProjectId(p.id)}
+                className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center transition-all',
+                  selectedProjectId === p.id ? 'bg-primary/20 ring-2 ring-primary/40' : 'hover:bg-muted'
+                )}
+                title={p.name}
+              >
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }} />
+              </button>
+            ))}
+          </div>
+        )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -1053,52 +1112,49 @@ const Projects: React.FC = () => {
           </div>
         ) : (
           <>
-            <header className="border-b border-border/70 bg-background/80 px-5 py-3 backdrop-blur-xl lg:px-8 font-sans">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
-                    <h1 className="truncate text-xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h1>
-                    {!canEdit && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        <EyeOff className="h-3 w-3" />
-                        View only
-                      </span>
-                    )}
-                  </div>
-                </div>
+            <header className="border-b border-border/70 bg-background/80 px-5 py-3 backdrop-blur-xl lg:px-8">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{activeCount}</span>
-                    <span>/</span>
-                    <span>{projectLimit} projects</span>
-                    <Lock className="h-3.5 w-3.5 text-amber-500" />
-                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !sidebarCollapsed;
+                      setSidebarCollapsed(next);
+                      if (user?.id) localStorage.setItem(`sidebar_collapsed_${user.id}`, String(next));
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+                  >
+                    <FolderKanban className="h-4 w-4" />
+                  </button>
+                  {!canEdit && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <EyeOff className="h-3 w-3" />
+                      View only
+                    </span>
+                  )}
                   {canManage && (
-                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
+                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
                       <Share2 className="h-3.5 w-3.5" />
                       Share
                     </button>
                   )}
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                {[
-                  { id: 'home', label: 'Home', icon: LayoutDashboard },
-                  { id: 'board', label: 'Board', icon: FolderKanban },
-                  { id: 'list', label: 'List', icon: List },
-                  { id: 'chat', label: 'Chat', icon: Settings2 },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setCurrentTab(tab.id as ProjectTab)}
-                    className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
-                  >
-                    <tab.icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                ))}
+                <div className="flex items-center gap-2">
+                  {[
+                    { id: 'home', label: 'Home', icon: LayoutDashboard },
+                    { id: 'board', label: 'Board', icon: FolderKanban },
+                    { id: 'list', label: 'List', icon: List },
+                    { id: 'chat', label: 'Chat', icon: MessageCircle },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setCurrentTab(tab.id as ProjectTab)}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
+                    >
+                      <tab.icon className="h-3.5 w-3.5" />
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </header>
 

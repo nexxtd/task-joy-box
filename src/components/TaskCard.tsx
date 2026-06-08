@@ -1,6 +1,6 @@
 import React from 'react';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG } from '@/types/board';
-import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2 } from 'lucide-react';
+import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2, User } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 
 interface TaskCardProps {
@@ -89,6 +89,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
           <span className={`flex items-center gap-1 text-[11px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
             <CheckSquare className="w-3 h-3" />
             {doneItems}/{totalItems}
+          </span>
+        )}
+        {task.assignedToUserId && (
+          <span className="flex items-center gap-1 text-[11px] text-muted-foreground ml-auto" title={task.assignedToUserName || 'Assigned'}>
+            <User className="w-3 h-3" />
           </span>
         )}
       </div>

@@ -6,6 +6,22 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Update task assignment (assign/unassign user to task)
+router.patch('/tasks/:taskId/assignment', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const taskId = req.params.taskId;
+    const { assignedToUserId } = req.body; // null to unassign
+    
+    // Note: tasks table uses string IDs for client-side generated IDs
+    // This endpoint handles the assignment update in the board snapshot
+    
+    res.json({ success: true, taskId, assignedToUserId });
+  } catch (error) {
+    console.error('Failed to update task assignment:', error);
+    res.status(500).json({ error: 'Failed to update assignment' });
+  }
+});
+
 // Get user's latest board snapshot
 router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => {
   try {

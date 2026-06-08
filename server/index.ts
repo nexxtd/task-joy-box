@@ -23,6 +23,7 @@ import boardRoutes from './routes/boards';
 import whiteboardsRoutes from './routes/whiteboards';
 import deepFocusRoutes from './routes/deepFocus';
 import supportRoutes from './routes/support';
+import milestonesRoutes from './routes/milestones';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
 import { pool } from './db';
@@ -232,6 +233,7 @@ app.use('/api/boards', boardRoutes);
 app.use('/api/whiteboards', whiteboardsRoutes);
 app.use('/api/deep-focus', deepFocusRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/milestones', milestonesRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {
