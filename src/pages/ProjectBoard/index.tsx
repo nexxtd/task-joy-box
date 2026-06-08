@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Select, DatePicker, TimePicker, Upload, Button, Space, Tag } from 'antd';
-import { PlusOutlined, UploadOutlined, DeleteOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG, TaskStatus, Checklist, Subtask } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
@@ -33,7 +33,6 @@ const ProjectBoard = () => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [showRowUpgradePrompt, setShowRowUpgradePrompt] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
@@ -181,69 +180,12 @@ const ProjectBoard = () => {
   const isOverdue = selectedTask?.dueDate && new Date(selectedTask.dueDate) < new Date();
 
   return (
-    <div className="project-board flex h-screen">
-      {/* Collapsible Sidebar */}
-      <div className={`bg-gray-50 border-r border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'} flex flex-col`}>
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          {!sidebarCollapsed && <h2 className="text-lg font-bold text-gray-900">Project Board</h2>}
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 rounded-lg hover:bg-gray-200 text-gray-700"
-          >
-            {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          </button>
-        </div>
-        
-        {!sidebarCollapsed && (
-          <div className="p-4 space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Project Info</h3>
-              <div className="space-y-2">
-                <div className="text-xs text-gray-600">
-                  <div className="font-medium">Total Tasks</div>
-                  <div>{board.tasks.length}</div>
-                </div>
-                <div className="text-xs text-gray-600">
-                  <div className="font-medium">Active Members</div>
-                  <div>3</div>
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Actions</h3>
-              <div className="space-y-2">
-                <button className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-200 transition-colors">
-                  Share Project
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-200 transition-colors">
-                  Export Data
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-200 transition-colors">
-                  Archive Project
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+    <div className="project-board">
+      <div className="board-header">
+        <h1>Project Board</h1>
       </div>
       
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="board-header p-4 border-b border-gray-200 flex items-center justify-between">
-          {!sidebarCollapsed && <h1 className="text-xl font-bold text-gray-900">Project Board</h1>}
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-              Add Task
-            </button>
-            <button className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-300 transition-colors">
-              Filter
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-4 overflow-x-auto">
-          <div className="board-columns flex gap-4 min-w-max">
+      <div className="board-columns">
         {allColumns.map((column) => {
           const tasksInColumn = board.tasks.filter(task => task.columnId === column.id);
           
@@ -299,34 +241,21 @@ const ProjectBoard = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                       {task.priority !== 'none' && (
                         <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex items-center gap-1`}>
-                          {task.priority === 'urgent' && <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>}
+                          {task.priority === 'urgent' && <AlertTriangleIcon className="w-3 h-3" />}
                           {PRIORITY_CONFIG[task.priority].label}
                         </span>
                       )}
                       {task.dueDate && (
                         <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                          <CalendarIcon className="w-3 h-3" />
                           {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                         </span>
                       )}
-                                      
-                      {/* Subtask indicator */}
-                      {task.subtasks && task.subtasks.length > 0 && (
-                        <span className={`flex items-center gap-1 text-[11px] ${(task.subtasks.filter(st => st.completed).length === task.subtasks.length) ? 'text-green-600' : 'text-gray-500'}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                          {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}
+                      {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (
+                        <span className={`flex items-center gap-1 text-[11px] ${(task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0) === (task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) ? 'text-green-600' : 'text-gray-500'}`}>
+                          <CheckSquareIcon className="w-3 h-3" />
+                          {task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0}/{task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0}
                         </span>
-                      )}
-                                      
-                      {/* Assignment indicator */}
-                      {task.assignedTo && (
-                        <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                          </svg>
-                          <span>{task.assignedTo.name}</span>
-                        </div>
                       )}
                     </div>
                   </div>

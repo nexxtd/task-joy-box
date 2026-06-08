@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
@@ -44,7 +44,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [columnIcon, setColumnIcon] = useState(column.icon || '');
-  const [assignableUsers, setAssignableUsers] = useState<{ id: number; name: string; avatarUrl?: string }[]>([]);
 
   const COLUMN_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
@@ -52,108 +51,67 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   ];
 
   // Separate completed and uncompleted tasks
-  const uncompletedTasks = tasks.filter(task => !task.completed);
-  const completedTasks = tasks.filter(task => task.completed);
+  const uncompletedTasks = tasks.filter(t => !t.completed);
+  const completedTasks = tasks.filter(t => t.completed);
 
-  // Fetch assignable users
-  useEffect(() => {
-    const fetchAssignableUsers = async () => {
-      try {
-        const response = await fetch('/api/boards/assignable-users', {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        const data = await response.json();
-        if (data.users) {
-          setAssignableUsers(data.users);
-        }
-      } catch (error) {
-        console.error('Failed to fetch assignable users:', error);
-      }
-    };
-    
-    fetchAssignableUsers();
-  }, []);
-
-  // Function to update task assignment
-  const updateTaskAssignment = async (taskId: string, userId: number | null) => {
-    // Only allow assignment if user has edit permissions
-    if (!canEdit) return;
-    
-    try {
-      const response = await fetch(`/api/boards/tasks/${taskId}/assignment`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ assignedToUserId: userId })
-      });
-      
-      if (response.ok) {
-        // Update the local task with the assignment
-        const userObj = userId !== null 
-          ? assignableUsers.find(u => u.id === userId) 
-          : null;
-          
-        updateTask(taskId, { 
-          assignedTo: userObj ? { 
-            id: userObj.id, 
-            name: userObj.name, 
-            avatarUrl: userObj.avatarUrl 
-          } : null 
-        });
-      } else {
-        console.error('Failed to update task assignment');
-      }
-    } catch (error) {
-      console.error('Error updating task assignment:', error);
+  const handleAddSubtask = () => {
+    if (newSubtask.trim()) {
+      setSubtasks([...subtasks, newSubtask.trim()]);
+      setNewSubtask('');
     }
   };
 
-  const handleAddTask = async () => {
-    if (!newTitle.trim()) return;
+  const removeSubtask = (index: number) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
 
-    if (isFree && tasks.length >= 10) {
-      setShowRowUpgradePrompt(true);
-      return;
+  const handleAdd = async () => {
+    if (newTitle.trim()) {
+      const taskId = crypto.randomUUID();
+      addTask(column.id, newTitle.trim(), {
+        id: taskId,
+        description: description.trim(),
+        priority,
+        dueDate: dueDate || undefined,
+        subject: subject.trim() || undefined,
+        color: color || undefined,
+        icon: icon || undefined,
+        duration: duration || undefined,
+        subtasks: subtasks.length > 0 ? subtasks.map(s => ({ id: crypto.randomUUID(), text: s, completed: false })) : [],
+        dueTime: dueTime || undefined,
+      });
+
+      // Handle file uploads
+      if (newFiles.length > 0) {
+        for (const file of newFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('taskId', taskId);
+          try {
+            await fetch('/api/attachments/upload', {
+              method: 'POST',
+              body: formData,
+              credentials: 'include'
+            });
+          } catch (err) {
+            console.error('Failed to upload file:', file.name, err);
+          }
+        }
+      }
+      
+      setNewTitle('');
+      setDescription('');
+      setPriority('none');
+      setDueDate('');
+      setDueTime('');
+      setSubject('');
+      setColor('');
+      setIcon('');
+      setDuration(60);
+      setSubtasks([]);
+      setNewFiles([]);
+      setIsAdding(false);
     }
-
-    // Create a new task object
-    const newTask: Omit<Task, 'id'> = {
-      title: newTitle,
-      description,
-      priority,
-      dueDate: dueDate || undefined,
-      dueTime: dueTime || undefined,
-      subject: subject || undefined,
-      color: color || undefined,
-      icon: icon || undefined,
-      duration: duration || undefined,
-      labels: [],
-      checklists: [],
-      subtasks: subtasks.map(text => ({ id: crypto.randomUUID(), text, completed: false })),
-      createdAt: new Date().toISOString(),
-      columnId: column.id,
-      order: tasks.length,
-      assignedTo: null
-    };
-
-    // Add the task via context
-    addTask(newTask, column.id);
-
-    // Reset form
-    setNewTitle('');
-    setDescription('');
-    setPriority('none');
-    setDueDate('');
-    setDueTime('');
-    setSubject('');
-    setColor('');
-    setIcon('');
-    setDuration(60);
-    setSubtasks([]);
-    setNewFiles([]);
-    setIsAdding(false);
   };
 
   const handleToggleComplete = (e: React.MouseEvent, task: Task) => {
@@ -242,6 +200,39 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     </button>
                   </div>
                 )}
+                {showColorPicker && (
+                  <div className="absolute right-0 top-9 bg-popover border border-border rounded-xl shadow-2xl z-50 p-3 min-w-[180px] animate-in fade-in zoom-in-95 duration-200">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Column Color</p>
+                    <div className="flex flex-wrap gap-2">
+                      {COLUMN_COLORS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => { updateColumn(column.id, { color: c }); setShowColorPicker(false); }}
+                          className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${column.color === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {showIconPicker && (
+                  <div className="absolute right-0 top-9 bg-popover border border-border rounded-xl shadow-2xl z-50 p-3 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Column Icon</p>
+                    <div className="flex gap-2">
+                      <input
+                        autoFocus
+                        value={columnIcon}
+                        onChange={e => setColumnIcon(e.target.value)}
+                        placeholder="e.g. 📋 or 🚀"
+                        className="flex-1 bg-muted border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        onClick={() => { updateColumn(column.id, { icon: columnIcon || undefined }); setShowIconPicker(false); }}
+                        className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold"
+                      >Save</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -263,9 +254,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                           onClick={() => onTaskClick(task)} 
                           isDragging={taskSnapshot.isDragging}
                           onToggleComplete={(e) => handleToggleComplete(e, task)}
-                          canEdit={canEdit}  // Pass the canEdit prop to TaskCard
-                          onAssignUser={canEdit ? updateTaskAssignment : undefined}  // Only allow assignment if user can edit
-                          assignableUsers={assignableUsers}
+                          canEdit={canEdit}
                         />
                       </div>
                     )}
@@ -285,9 +274,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                               onClick={() => onTaskClick(task)} 
                               isDragging={taskSnapshot.isDragging}
                               onToggleComplete={(e) => handleToggleComplete(e, task)}
-                              canEdit={canEdit}  // Pass the canEdit prop to TaskCard
-                              onAssignUser={canEdit ? updateTaskAssignment : undefined}  // Only allow assignment if user can edit
-                              assignableUsers={assignableUsers}
+                              canEdit={canEdit}
                             />
                           </div>
                         )}
@@ -301,7 +288,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             )}
           </Droppable>
 
-          {/* Only show add task button if user can edit */}
           {isAdding ? (
             <div className="mt-3 p-4 bg-card border-2 border-primary/20 rounded-2xl shadow-xl animate-in slide-in-from-top-2 duration-300 overflow-hidden">
 
@@ -316,76 +302,202 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 autoFocus
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdd(); }
+                  if (e.key === 'Escape') setIsAdding(false);
+                }}
                 placeholder="What needs to be done?"
-                className="w-full text-sm bg-muted border border-border rounded-xl px-3 py-2 mb-3 focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+                className="w-full bg-muted/30 border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all mb-3 font-medium"
                 rows={2}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleAddTask())}
               />
+              
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Priority</label>
+                  <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
+                    <SelectTrigger className="w-full bg-muted/30 border border-border text-xs">
+                      <SelectValue placeholder="Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
+                  />
+                </div>
 
-              <div className="flex flex-wrap gap-2 mb-3">
-                <select
-                  value={priority}
-                  onChange={e => setPriority(e.target.value as any)}
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="none">Priority</option>
-                  <option value="urgent">Urgent</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Due Time</label>
+                  <input
+                    type="time"
+                    value={dueTime}
+                    onChange={e => setDueTime(e.target.value)}
+                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
+                  />
+                </div>
 
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={e => setDueDate(e.target.value)}
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Subject</label>
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={e => setSubject(e.target.value)}
+                    placeholder="e.g. Maths"
+                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                </div>
 
-                <input
-                  type="time"
-                  value={dueTime}
-                  onChange={e => setDueTime(e.target.value)}
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={480}
+                    step={5}
+                    value={duration}
+                    onChange={e => setDuration(Number(e.target.value))}
+                    className="w-full bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                </div>
 
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={e => setSubject(e.target.value)}
-                  placeholder="Subject"
-                  className="text-xs bg-muted border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary flex-1 min-w-[100px]"
-                />
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Color & Icon</label>
+                  <div className="flex gap-1">
+                    <input
+                      type="color"
+                      value={color}
+                      onChange={e => setColor(e.target.value)}
+                      className="w-8 h-8 rounded bg-muted/30 border border-border p-0.5 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={icon}
+                      onChange={e => setIcon(e.target.value)}
+                      placeholder="Icon name"
+                      className="flex-1 bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setIsAdding(false)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted rounded-lg transition-all"
+              {/* Subtasks Section */}
+              <div className="mb-4 space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Subtasks</label>
+                <div className="space-y-1 mb-2">
+                  {subtasks.map((st, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-muted/20 px-2 py-1 rounded-lg border border-border/50 group">
+                      <span className="flex-1 text-[11px] text-foreground/80">{st}</span>
+                      <button onClick={() => removeSubtask(i)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-1">
+                  <input
+                    value={newSubtask}
+                    onChange={e => setNewSubtask(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
+                    placeholder="Add subtask..."
+                    className="flex-1 bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  />
+                  <button 
+                    onClick={handleAddSubtask}
+                    className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Add more details..."
+                className="w-full bg-muted/30 border border-border rounded-xl p-3 text-xs text-foreground placeholder:text-muted-foreground resize-none mb-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                rows={2}
+              />
+
+              {/* Attachments Section */}
+              <div className="mb-4 space-y-2">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Attachments</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {newFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 bg-primary/5 px-2 py-1 rounded-lg border border-primary/20 text-[9px] font-medium text-primary uppercase">
+                      {f.name}
+                      <button onClick={() => setNewFiles(newFiles.filter((_, idx) => idx !== i))} className="hover:text-destructive">
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <label 
+                  className={`flex items-center gap-2 w-max px-3 py-1.5 border rounded-lg text-[10px] font-bold transition-all ${
+                    isPremium 
+                      ? 'bg-muted/30 border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer'
+                      : 'bg-primary/5 border-primary/20 text-primary opacity-80 cursor-pointer'
+                  }`}
+                  onClick={() => !isPremium && (window.location.href = '/pricing')}
                 >
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddTask}
+                  {isPremium ? <Plus className="w-3 h-3" /> : <Sparkles className="w-3 h-3 fill-current" />}
+                  {isPremium ? 'Add File' : 'Post Files (Premium)'}
+                  {isPremium && (
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={e => {
+                        if (e.target.files) {
+                          setNewFiles([...newFiles, ...Array.from(e.target.files)]);
+                        }
+                      }}
+                    />
+                  )}
+                </label>
+              </div>
+              
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleAdd} 
+                  className="flex-1 bg-primary text-primary-foreground text-sm font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-md shadow-primary/20"
                   disabled={!newTitle.trim()}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold transition-all disabled:opacity-50"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Task
+                  Create Task
+                </button>
+                <button 
+                  onClick={() => setIsAdding(false)} 
+                  className="px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-all"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
-          ) : (
-            canEdit && onAddClick && (  // Only show add button if user can edit and onAddClick is provided
-              <button
-                onClick={onAddClick}
-                className="w-full mt-3 p-3 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary/50 hover:text-primary transition-all flex items-center justify-center gap-2 text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Add Task
-              </button>
-            )
+          ) : null}
+          {canEdit && (
+            <button
+              onClick={() => {
+                if (onAddClick) { onAddClick(); return; }
+                if (!canCreateTasks) return;
+                setIsAdding(true);
+              }}
+              disabled={!onAddClick && !canCreateTasks}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Add Task
+            </button>
           )}
         </div>
       )}

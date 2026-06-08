@@ -69,7 +69,6 @@ export const tasks = pgTable('tasks', {
   order: integer('order').notNull(),
   recurrencePattern: text('recurrence_pattern'),
   nextOccurrence: text('next_occurrence'),
-  assignedToUserId: integer('assigned_to_user_id').references(() => users.id),
 });
 
 export const boardSnapshots = pgTable('board_snapshots', {
