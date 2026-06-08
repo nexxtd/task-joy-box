@@ -565,13 +565,14 @@ const Tasks: React.FC = () => {
       completed: false,
     }));
 
-    // Status + due are intentionally not exposed in this flow anymore.
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
       status: 'to_do',
       priority: newTaskPriority,
       duration: Math.max(0, Number(newTaskDuration) || 0),
+      dueDate: newTaskDueDate || undefined,
+      dueTime: newTaskDueTime || undefined,
       projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
       projectName: newTaskProjectId === '' ? undefined : (projects.find(project => project.id === Number(newTaskProjectId))?.name || undefined),
       subtasks: newTaskSubtasks.map(st => ({
@@ -1378,11 +1379,32 @@ const Tasks: React.FC = () => {
                     ))}
                   </select>
                 </div>
-                <div />
-              </div>
+          </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
+          {/* Due Date and Time Section */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Date</label>
+              <input
+                type="date"
+                value={newTaskDueDate}
+                onChange={e => setNewTaskDueDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Time</label>
+              <input
+                type="time"
+                value={newTaskDueTime}
+                onChange={e => setNewTaskDueTime(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
                 <textarea
                   value={newTaskDescription}
                   onChange={e => setNewTaskDescription(e.target.value)}

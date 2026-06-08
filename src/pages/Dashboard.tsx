@@ -20,6 +20,7 @@ const Dashboard: React.FC = () => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('none');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
+  const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskColumn, setNewTaskColumn] = useState('');
   const [habitStreak, setHabitStreak] = useState(0);
   const [energySettings, setEnergySettings] = useState({
@@ -147,12 +148,14 @@ const Dashboard: React.FC = () => {
       addTask(newTaskColumn, newTaskTitle.trim(), {
         description: newTaskDescription,
         priority: newTaskPriority,
-        dueDate: newTaskDueDate || undefined
+        dueDate: newTaskDueDate || undefined,
+        dueTime: newTaskDueTime || undefined,
       });
       setNewTaskTitle('');
       setNewTaskDescription('');
       setNewTaskPriority('none');
       setNewTaskDueDate('');
+      setNewTaskDueTime('');
       setNewTaskColumn('');
       setShowAddTask(false);
     }
@@ -428,6 +431,15 @@ const Dashboard: React.FC = () => {
                 type="date"
                 value={newTaskDueDate}
                 onChange={e => setNewTaskDueDate(e.target.value)}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Due Time</label>
+              <input
+                type="time"
+                value={newTaskDueTime}
+                onChange={e => setNewTaskDueTime(e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
