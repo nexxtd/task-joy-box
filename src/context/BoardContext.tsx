@@ -234,46 +234,65 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return { ...b, tasks: [...b.tasks, newTask] };
   }, []);
 
-  const addTask = useCallback((columnId: string, title: string, details: Partial<Task> = {}) => {
-    const taskId = details.id || genId();
-    persist(b => {
-      const tasksInCol = b.tasks.filter(t => t.columnId === columnId);
-      const newTask: Task = {
-        id: taskId,
-        title,
-      description: details.description || '',
-      status: details.status || 'to_do',
-      priority: details.priority || 'none',
-        labels: details.labels || [],
-        checklists: details.checklists || [],
-        subtasks: details.subtasks || [],
-        createdAt: new Date().toISOString().split('T')[0],
-        columnId,
-        order: tasksInCol.length,
-        dueDate: details.dueDate,
-        dueTime: details.dueTime,
-        startTime: details.startTime,
-        duration: details.duration,
-        sessionsNeeded: details.sessionsNeeded,
-        subject: details.subject,
-        color: details.color,
-        icon: details.icon,
-        completed: details.completed || false,
-        completedAt: details.completedAt,
-        recurrencePattern: details.recurrencePattern,
-        attachments: details.attachments || [],
-        comments: details.comments || [],
+  const addTask = (taskData: Omit<Task, 'id'>, columnId: string) => {
+    const newTask: Task = {
+      ...taskData,
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      assignedTo: taskData.assignedTo || null, // Ensure assignedTo is included
+      assignedToUserId: taskData.assignedTo ? taskData.assignedTo.id : null // Map to backend field
+    };
+    
+    setBoard(prevBoard => {
+      // Find the correct column to add the task to
+      const targetColumn = prevBoard.columns.find(col => col.id === columnId);
+      if (!targetColumn) return prevBoard; // If column doesn't exist, return unchanged
+      
+      // Update the order of tasks in the column
+      const columnTasks = prevBoard.tasks.filter(t => t.columnId === columnId);
+      const newOrder = columnTasks.length;
+      
+      return {
+        ...prevBoard,
+        tasks: [
+          ...prevBoard.tasks,
+          { ...newTask, order: newOrder, columnId }
+        ]
       };
-      return { ...b, tasks: [...b.tasks, newTask] };
     });
-  }, [persist]);
+  };
 
-  const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t),
-    }));
-  }, [persist]);
+  const updateTask = (taskId: string, updates: Partial<Task>) => {
+    setBoard(prevBoard => {
+      const updatedTasks = prevBoard.tasks.map(task => {
+        if (task.id === taskId) {
+          // Create the updated task with new values
+          let updatedTask = { ...task, ...updates };
+          
+          // Handle the conversion between assignedToUserId (backend) and assignedTo (frontend)
+          if ('assignedTo' in updates) {
+            const assignedTo = updates.assignedTo;
+            if (assignedTo) {
+              updatedTask = {
+                ...updatedTask,
+                assignedToUserId: assignedTo.id,
+                assignedTo: assignedTo
+              };
+            } else {
+              updatedTask = {
+                ...updatedTask,
+                assignedToUserId: null,
+                assignedTo: null
+              };
+            }
+          }
+          
+          return updatedTask;
+        }
+        return task;
+      });
+      return { ...prevBoard, tasks: updatedTasks };
+    });
+  };
 
   const deleteTask = useCallback((taskId: string) => {
     persist(b => ({ ...b, tasks: b.tasks.filter(t => t.id !== taskId) }));

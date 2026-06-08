@@ -287,6 +287,29 @@ router.post('/tickets/:id/messages', async (req: AuthRequest, res: Response) => 
   }
 });
 
+router.patch('/tickets/:id/status', async (req: AuthRequest, res: Response) => {
+  try {
+    const ticketId = parseInt(req.params.id);
+    const { status } = req.body;
+    
+    if (!['open', 'in_progress', 'resolved', 'closed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    
+    const updateData: any = { status, updatedAt: new Date().toISOString() };
+    if (status === 'closed') {
+      updateData.closedAt = new Date().toISOString();
+    }
+    
+    await db.update(supportTickets)
+      .set(updateData)
+      .where(eq(supportTickets.id, ticketId));
+    res.json({ success: true, status });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update ticket status' });
+  }
+});
+
 router.patch('/tickets/:id/close', async (req: AuthRequest, res: Response) => {
   try {
     const ticketId = parseInt(req.params.id);

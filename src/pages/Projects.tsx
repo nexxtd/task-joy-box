@@ -13,6 +13,8 @@ import {
   Loader2,
   Lock,
   MessageCircle,
+  MenuFold,
+  MenuUnfold,
   MoreHorizontal,
   Plus,
   Search,
@@ -35,8 +37,6 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { Task } from '@/types/board';
-
-interface ChatMessage {
   id: string;
   text: string;
   authorName: string;
@@ -121,12 +121,7 @@ const Projects: React.FC = () => {
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (user?.id) {
-      try {
-        const saved = localStorage.getItem(`project_order_${user.id}`);
-        if (saved) setProjectOrder(JSON.parse(saved));
-      } catch {}
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     }
   }, [user?.id]);
 
@@ -178,8 +173,10 @@ const Projects: React.FC = () => {
   const currentUserRole: string = selectedProject?.ownerId === user?.id
     ? 'owner'
     : currentUserMember?.role || 'view';
+  // Only owner, edit, full edit, and admin can edit - 'view' and 'member' are read-only
   const canEdit = ['owner', 'edit', 'full edit', 'admin'].includes(currentUserRole);
   const canManage = currentUserRole === 'owner';
+  const canCreateTasks = canEdit;
 
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
   const projectTasks = useMemo(
@@ -828,11 +825,12 @@ const Projects: React.FC = () => {
                         tasks={tasks}
                         index={index}
                         onTaskClick={setSelectedTask}
-                        canCreateTasks={false}
-                        onAddClick={() => {
+                        canCreateTasks={canCreateTasks}
+                        canEdit={canEdit}
+                        onAddClick={canCreateTasks ? () => {
                           setAddTaskPopupColumnId(column.id);
                           setAssignSearch('');
-                        }}
+                        } : undefined}
                       />
                     );
                   })}
@@ -961,170 +959,147 @@ const Projects: React.FC = () => {
   );
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-gradient-to-br from-background via-background to-muted/30 lg:flex-row">
-      <aside className="flex w-full flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:w-80 lg:border-b-0 lg:border-r">
-        <div className="border-b border-border/70 p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <FolderKanban className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
-              <h2 className="text-lg font-semibold text-foreground">Your workspace</h2>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-3 py-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <input type="text" placeholder="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-          </div>
-          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-            <span>{activeCount}/{projectLimit} projects in use</span>
-            <button className="font-medium text-primary hover:underline" onClick={() => setLimitHint(v => !v)}>Plan limits</button>
-          </div>
-          {limitHint && (
-            <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-700">
-              {user?.subscriptionTier ? `Your ${user.subscriptionTier} plan allows up to ${projectLimit} projects.` : `Free plans allow up to ${projectLimit} projects.`}
-            </div>
-          )}
+    <div className="flex h-screen bg-background">
+      {/* Collapsible Sidebar */}
+      <div className={`border-r border-border bg-card transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-80'} flex flex-col`}>
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          {!sidebarCollapsed && <h1 className="text-lg font-bold text-foreground">Projects</h1>}
+          <button 
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+          >
+            {sidebarCollapsed ? <MenuUnfold className="h-5 w-5" /> : <MenuFold className="h-5 w-5" />}
+          </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-5">
-            {sidebarBlock('Active Projects', activeProjects)}
-            {sidebarBlock('Completed Projects', completedProjects)}
-            {sidebarBlock('Archived', archivedProjects)}
-          </div>
-        </div>
-
-        <div className="border-t border-border/70 p-4">
-          {addingProject ? (
-            <div className="rounded-2xl border border-border bg-background p-4">
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">New project</label>
-              <input value={newProjectName} onChange={e => setNewProjectName(e.target.value)} placeholder="Project name" className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-              <div className="mb-3 flex items-center gap-2">
-                {STORAGE_COLORS.map(color => (
-                  <button
-                    key={color}
-                    onClick={() => setNewProjectColor(color)}
-                    className={cn('h-7 w-7 rounded-full border-2 transition-all', newProjectColor === color ? 'border-foreground scale-110' : 'border-transparent')}
-                    style={{ backgroundColor: color }}
-                    aria-label={`Pick ${color}`}
-                  />
-                ))}
-              </div>
-              <textarea value={newProjectDescription} onChange={e => setNewProjectDescription(e.target.value)} placeholder="Short description" rows={3} className="mb-3 w-full rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-              <div className="flex gap-2">
-                <button onClick={handleAddProject} className="flex-1 rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">Create</button>
-                <button onClick={() => setAddingProject(false)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                if (!canAddProject) {
-                  setLimitHint(true);
-                  return;
-                }
-                setAddingProject(true);
-              }}
-              disabled={!canAddProject}
-              className={cn(
-                'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
-                canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 opacity-70',
-              )}
-              title={!canAddProject ? 'You have reached your plan limit' : 'Add Project'}
-            >
-              <Plus className="h-4 w-4" />
-              Add Project
-            </button>
-          )}
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {!selectedProject ? (
-          <div className="flex flex-1 flex-col items-center justify-center bg-background p-8 text-center">
-            <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm">Collaboration boards, tasks, and notes are available once you enter or create a project.</p>
-          </div>
-        ) : (
-          <>
-            <header className="border-b border-border/70 bg-background/80 px-5 py-4 backdrop-blur-xl lg:px-8 font-sans">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: selectedProject?.color || STORAGE_COLORS[0] }} />
-                    <h1 className="truncate text-xl font-semibold text-foreground">{selectedProject?.name || 'Project'}</h1>
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedProject?.description || 'A project workspace for tasks, goals, notes, and team updates.'}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">{activeCount}</span>
-                    <span>/</span>
-                    <span>{projectLimit} projects</span>
-                    <Lock className="h-3.5 w-3.5 text-amber-500" />
-                  </div>
-                  {canManage && (
-                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                {[
-                  { id: 'home', label: 'Home', icon: LayoutDashboard },
-                  { id: 'board', label: 'Board', icon: FolderKanban },
-                  { id: 'list', label: 'List', icon: List },
-                  { id: 'chat', label: 'Chat', icon: Settings2 },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setCurrentTab(tab.id as ProjectTab)}
-                    className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
+        
+        {!sidebarCollapsed && (
+          <div className="flex-1 overflow-auto p-4">
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Projects</h2>
+                  <button 
+                    onClick={() => setShowCreateProject(true)}
+                    disabled={!canAddProject}
+                    className="text-xs font-semibold text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <tab.icon className="h-4 w-4" />
-                    {tab.label}
+                    New
                   </button>
-                ))}
-              </div>
-            </header>
-
-            <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
-              {editingProjectId !== null && selectedProject?.id === editingProjectId && (
-                <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Rename project</label>
-                  <div className="flex gap-2">
-                    <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
-                      }
-                      if (e.key === 'Escape') {
-                        setEditingProjectId(null);
-                        setEditingName('');
-                      }
-                    }} className="flex-1 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                    <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background">Save</button>
-                    <button onClick={() => setEditingProjectId(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
-                  </div>
                 </div>
-              )}
-
-              {currentTab === 'home' && renderHome()}
-              {currentTab === 'board' && renderBoard()}
-              {currentTab === 'list' && renderList()}
-              {currentTab === 'chat' && renderChat()}
-            </main>
-          </>
+                
+                {renderProjectsSection('Active Projects', activeProjects)}
+                {renderProjectsSection('Completed', completedProjects)}
+                {renderProjectsSection('Archived', archivedProjects)}
+              </div>
+              
+              <div>
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Shared With Me</h2>
+                {renderProjectsSection('', sharedProjects)}
+              </div>
+            </div>
+          </div>
         )}
       </div>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {selectedProject ? (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Project Header */}
+            <div className="border-b border-border bg-card p-4 flex items-center gap-4">
+              {!sidebarCollapsed && (
+                <>
+                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedProject.color }} />
+                  <div>
+                    <h2 className="text-lg font-bold text-foreground">{selectedProject.name}</h2>
+                    <p className="text-xs text-muted-foreground">{selectedProject.description}</p>
+                  </div>
+                </>
+              )}
+              
+              <div className="flex items-center gap-2 ml-auto">
+                {selectedProject.ownerId === user?.id ? (
+                  <button
+                    onClick={() => setShowInviteModal(true)}
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    Share
+                  </button>
+                ) : null}
+                
+                <div className="flex items-center gap-1">
+                  {['home', 'board', 'list', 'chat'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setSelectedTab(tab as ProjectTab)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                        selectedTab === tab
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                
+                {(selectedProject?.completed || selectedProject?.archived || !canEdit) && (
+                  <div className="flex items-center gap-1">
+                    {selectedProject?.completed && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600">
+                        <CheckCircle2 className="h-3 w-3" />Completed
+                      </span>
+                    )}
+                    {selectedProject?.archived && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600">
+                        <Lock className="h-3 w-3" />Archived
+                      </span>
+                    )}
+                    {!canEdit && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-1 text-xs font-medium text-sky-600">
+                        <EyeOff className="h-3 w-3" />View only
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Tab Content */}
+            <div className="flex-1 overflow-auto p-4">
+              {selectedTab === 'home' && renderHome()}
+              {selectedTab === 'board' && renderBoard()}
+              {selectedTab === 'list' && renderList()}
+              {selectedTab === 'chat' && renderChat()}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FolderKanban className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">Select a Project</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Choose a project from the sidebar to get started. You can create, manage, and collaborate on projects here.
+              </p>
+              <button
+                onClick={() => setShowCreateProject(true)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Create Project
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
-      {/* Milestone popup - fixed overlay */}
-      {showMilestonePopup && (
+export default Projects;
+
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
@@ -1490,7 +1465,7 @@ const Projects: React.FC = () => {
         />
       )}
 
-      {currentTask && <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} />}
+      {currentTask && <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} canEdit={canEdit} />}
     </div>
   );
 };

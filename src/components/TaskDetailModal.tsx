@@ -9,7 +9,13 @@ interface TaskDetailModalProps {
   onClose: () => void;
 }
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
+interface TaskDetailModalProps {
+  task: Task;
+  onClose: () => void;
+  canEdit?: boolean;
+}
+
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdit = true }) => {
   const { updateTask, deleteTask, addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem, board } = useBoardContext();
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
@@ -146,12 +152,16 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
         {/* Header */}
         <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-start justify-between z-10">
           <div className="flex-1">
-            <input
-              className="w-full text-lg font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={saveTitle}
-            />
+            {canEdit ? (
+              <input
+                className="w-full text-lg font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={saveTitle}
+              />
+            ) : (
+              <h2 className="text-lg font-semibold text-foreground">{task.title}</h2>
+            )}
             <p className="text-xs text-muted-foreground mt-1">
               in column: <span className="text-foreground font-medium">{currentColumn?.title}</span>
             </p>
@@ -168,9 +178,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5" /> Labels
               </h4>
-              <button onClick={() => setShowLabelPicker(!showLabelPicker)} className="text-xs text-primary hover:underline">
-                {showLabelPicker ? 'Close' : 'Edit'}
-              </button>
+              {canEdit && (
+                <button onClick={() => setShowLabelPicker(!showLabelPicker)} className="text-xs text-primary hover:underline">
+                  {showLabelPicker ? 'Close' : 'Edit'}
+                </button>
+              )}
             </div>
             {task.labels.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -181,7 +193,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                 ))}
               </div>
             )}
-            {showLabelPicker && (
+            {showLabelPicker && canEdit && (
               <div className="grid grid-cols-2 gap-1.5 p-3 bg-muted/50 rounded-lg animate-fade-in">
                 {DEFAULT_LABELS.map(label => {
                   const active = task.labels.find(l => l.id === label.id);
@@ -206,23 +218,29 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 <Flag className="w-3.5 h-3.5" /> Priority
               </h4>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setPriority('none')}
-                  className={`text-xs px-3 py-1.5 rounded-md border transition-all ${task.priority === 'none' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
-                >
-                  None
-                </button>
-                {(Object.entries(PRIORITY_CONFIG) as [Exclude<Priority, 'none'>, typeof PRIORITY_CONFIG[keyof typeof PRIORITY_CONFIG]][]).map(([key, cfg]) => (
+              {canEdit ? (
+                <div className="flex flex-wrap gap-2">
                   <button
-                    key={key}
-                    onClick={() => setPriority(key)}
-                    className={`text-xs px-3 py-1.5 rounded-md border transition-all ${task.priority === key ? `${cfg.className} text-primary-foreground border-transparent` : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
+                    onClick={() => setPriority('none')}
+                    className={`text-xs px-3 py-1.5 rounded-md border transition-all ${task.priority === 'none' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
                   >
-                    {cfg.label}
+                    None
                   </button>
-                ))}
-              </div>
+                  {(Object.entries(PRIORITY_CONFIG) as [Exclude<Priority, 'none'>, typeof PRIORITY_CONFIG[keyof typeof PRIORITY_CONFIG]][]).map(([key, cfg]) => (
+                    <button
+                      key={key}
+                      onClick={() => setPriority(key)}
+                      className={`text-xs px-3 py-1.5 rounded-md border transition-all ${task.priority === key ? `${cfg.className} text-primary-foreground border-transparent` : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30'}`}
+                    >
+                      {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className={`text-xs px-3 py-1.5 rounded-md ${task.priority !== 'none' ? PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG]?.className + ' text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  {task.priority !== 'none' ? PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG]?.label : 'None'}
+                </span>
+              )}
             </div>
 
             {/* Due date */}
@@ -236,8 +254,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                   <input
                     type="date"
                     value={task.dueDate || ''}
-                    onChange={e => updateTask(task.id, { dueDate: e.target.value || undefined })}
-                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    onChange={e => canEdit && updateTask(task.id, { dueDate: e.target.value || undefined })}
+                    disabled={!canEdit}
+                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div className="space-y-1">
@@ -245,8 +264,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
                   <input
                     type="time"
                     value={task.dueTime || ''}
-                    onChange={e => updateTask(task.id, { dueTime: e.target.value || undefined })}
-                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    onChange={e => canEdit && updateTask(task.id, { dueTime: e.target.value || undefined })}
+                    disabled={!canEdit}
+                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -301,8 +321,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
               onChange={e => setDescription(e.target.value)}
               onBlur={saveDescription}
               placeholder="Add a description..."
-              className="w-full bg-muted border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px]"
+              className="w-full bg-muted border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] disabled:opacity-60 disabled:cursor-not-allowed"
               rows={3}
+              disabled={!canEdit}
             />
           </div>
 
@@ -471,15 +492,17 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
           </div>
 
           {/* Delete */}
-<div className="pt-4 border-t border-border flex justify-end">
-  <button
-    onClick={handleDelete}
-    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-  >
-    <Trash2 className="w-3.5 h-3.5" />
-    Delete Task
-  </button>
-</div>
+          {canEdit && (
+            <div className="pt-4 border-t border-border flex justify-end">
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Task
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
