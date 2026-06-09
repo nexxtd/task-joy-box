@@ -168,19 +168,22 @@ const CalendarPage: React.FC = () => {
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  // AI functions - single in-flight request only
+  // AI functions - single in-flight request only + cooldown
   const aiAbortRef = useRef<AbortController | null>(null);
+  const aiRunningRef = useRef(false);
+  const aiCooldownRef = useRef(false);
 
   const runAI = async (mode: 'schedule' | 'plan') => {
     if (!isPro) {
       setAiError('Pro or Premium subscription required');
       return;
     }
-    if (aiLoading) return;
+    if (aiLoading || aiRunningRef.current || aiCooldownRef.current) return;
 
     aiAbortRef.current?.abort();
     const ctrl = new AbortController();
     aiAbortRef.current = ctrl;
+    aiRunningRef.current = true;
 
     setAiMode(mode);
     setAiLoading(true);
@@ -212,8 +215,8 @@ const CalendarPage: React.FC = () => {
       if (res.status === 429) {
         const retryAfter = res.headers.get('Retry-After');
         const msg = retryAfter
-          ? `Rate limited. Try again in ${retryAfter}s`
-          : 'Too many requests. Please wait a moment then try again.';
+          ? `Server is busy. Try again in ${retryAfter}s`
+          : 'Server is busy right now. Wait 15s then try again.';
         throw new Error(msg);
       }
 
@@ -236,7 +239,11 @@ const CalendarPage: React.FC = () => {
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       setAiError(e.message || 'Something went wrong');
+      // 15s cooldown so user can't hammer the button
+      aiCooldownRef.current = true;
+      setTimeout(() => { aiCooldownRef.current = false; }, 15000);
     } finally {
+      aiRunningRef.current = false;
       if (aiAbortRef.current === ctrl) {
         setAiLoading(false);
         aiAbortRef.current = null;
@@ -439,7 +446,13 @@ const CalendarPage: React.FC = () => {
 
             {aiError && (
               <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl shadow-sm">
-                <p className="text-xs font-bold text-destructive">{aiError}</p>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-2 h-2 rounded-full bg-destructive/50 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-destructive">{aiError}</p>
+                    <p className="text-[10px] text-destructive/60 mt-1">Please wait before trying again</p>
+                  </div>
+                </div>
               </div>
             )}
 

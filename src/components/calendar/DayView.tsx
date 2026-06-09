@@ -1,11 +1,11 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { format, isSameDay } from 'date-fns';
 import { CalendarSlot } from '@/types/calendar';
 import { cn } from '@/lib/utils';
 import {
   HOUR_HEIGHT, START_HOUR, END_HOUR,
   timeToMinutes, topForTime, timeForPosition,
-  slotHeight, formatTimeDisplay, generateId,
+  slotHeight, formatTimeDisplay,
 } from '@/utils/calendarUtils';
 
 interface DayViewProps {
@@ -17,17 +17,18 @@ interface DayViewProps {
 }
 
 const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+const DRAG_THRESHOLD = 6;
 
 const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotClick, onSlotDrop }) => {
   const gridRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<{ slotId: string; startY: number; origStart: string; origEnd: string } | null>(null);
-  const [resizing, setResizing] = useState<{ slotId: string; startY: number; origEnd: string } | null>(null);
-  const [dropHighlight, setDropHighlight] = useState<{ y: number; time: string } | null>(null);
-  const [preview, setPreview] = useState<{ start: string; end: string; title: string; color: string } | null>(null);
+  const dragRef = useRef<{ slotId: string; origStart: string; origEnd: string; startY: number; moved: boolean } | null>(null);
+  const resizeRef = useRef<{ slotId: string; origEnd: string; startY: number } | null>(null);
+  const wasDragRef = useRef(false);
+  const [dragGhost, setDragGhost] = useState<{ start: string; end: string; top: number; height: number } | null>(null);
+  const [resizing, setResizing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const now = currentTime;
 
-  // Update current time every minute
   useEffect(() => {
     const id = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(id);
@@ -37,25 +38,25 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
     .filter(s => s.date === format(date, 'yyyy-MM-dd'))
     .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
+  // ── HTML5 drag-drop from sidebar ──
+  const [dropHighlight, setDropHighlight] = useState<{ time: string } | null>(null);
+  const [dropPreview, setDropPreview] = useState<{ start: string; end: string; title: string; color: string } | null>(null);
+
   const handleGridDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     if (!gridRef.current) return;
     const rect = gridRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top + gridRef.current.scrollTop;
     const time = timeForPosition(y, 0);
-    setDropHighlight({ y, time });
-
+    setDropHighlight({ time });
     try {
       const data = JSON.parse(e.dataTransfer.getData('application/x-calendar-item'));
       if (data) {
         const dur = data.duration || 30;
         const endMin = timeToMinutes(time) + dur;
-        const endH = Math.floor(endMin / 60) % 24;
-        const endM = endMin % 60;
-        const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
-        setPreview({
+        setDropPreview({
           start: time,
-          end: endTime,
+          end: `${Math.floor(endMin / 60) % 24}:${(endMin % 60).toString().padStart(2, '0')}`,
           title: data.title || 'New Slot',
           color: data.color || '#4f46e5',
         });
@@ -63,95 +64,118 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
     } catch {}
   };
 
-  const handleGridDragLeave = () => {
-    setDropHighlight(null);
-    setPreview(null);
-  };
+  const handleGridDragLeave = () => { setDropHighlight(null); setDropPreview(null); };
 
   const handleGridDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    setDropHighlight(null);
+    setDropPreview(null);
     if (!gridRef.current) return;
     const rect = gridRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top + gridRef.current.scrollTop;
     const time = timeForPosition(y, 0);
-
     try {
       const raw = e.dataTransfer.getData('application/x-calendar-item');
-      const data = JSON.parse(raw);
-      onSlotDrop(format(date, 'yyyy-MM-dd'), time, data);
+      onSlotDrop(format(date, 'yyyy-MM-dd'), time, JSON.parse(raw));
     } catch {}
-
-    setDropHighlight(null);
-    setPreview(null);
   };
 
+  // ── Internal slot drag ──
   const handleSlotMouseDown = (e: React.MouseEvent, slot: CalendarSlot) => {
     if ((e.target as HTMLElement).dataset.resize) {
       e.preventDefault();
-      setResizing({ slotId: slot.id, startY: e.clientY, origEnd: slot.endTime });
+      e.stopPropagation();
+      resizeRef.current = { slotId: slot.id, origEnd: slot.endTime, startY: e.clientY };
+      setResizing(true);
       return;
     }
-    const el = e.currentTarget as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    setDragging({ slotId: slot.id, startY: e.clientY, origStart: slot.startTime, origEnd: slot.endTime });
+    e.preventDefault();
+    e.stopPropagation();
+    wasDragRef.current = false;
+    const slotEl = e.currentTarget as HTMLElement;
+    slotEl.style.cursor = 'grabbing';
+    dragRef.current = {
+      slotId: slot.id, origStart: slot.startTime, origEnd: slot.endTime,
+      startY: e.clientY, moved: false,
+    };
   };
 
   useEffect(() => {
-    if (!dragging) return;
-    const handleMouseMove = (e: MouseEvent) => {};
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!dragging || !gridRef.current) { setDragging(null); return; }
+    const onMouseMove = (e: MouseEvent) => {
+      if (resizeRef.current) {
+        if (!gridRef.current) return;
+        const rect = gridRef.current.getBoundingClientRect();
+        const y = e.clientY - rect.top + gridRef.current.scrollTop;
+        const newEnd = timeForPosition(y, 0);
+        const slot = slots.find(s => s.id === resizeRef.current!.slotId);
+        if (!slot) return;
+        const minEnd = timeToMinutes(slot.startTime) + 5;
+        const newEndMin = Math.max(minEnd, timeToMinutes(newEnd));
+        onSlotsChange(slots.map(s =>
+          s.id === resizeRef.current!.slotId
+            ? { ...s, endTime: `${Math.floor(newEndMin / 60) % 24}:${(newEndMin % 60).toString().padStart(2, '0')}` }
+            : s
+        ));
+        return;
+      }
+
+      if (!dragRef.current) return;
+      if (Math.abs(e.clientY - dragRef.current.startY) > DRAG_THRESHOLD) {
+        dragRef.current.moved = true;
+        wasDragRef.current = true;
+      }
+      if (!dragRef.current.moved) return;
+      if (!gridRef.current) return;
+
+      const rect = gridRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top + gridRef.current.scrollTop;
+      const time = timeForPosition(y, 0);
+      const dur = timeToMinutes(dragRef.current.origEnd) - timeToMinutes(dragRef.current.origStart);
+      const endMin = timeToMinutes(time) + dur;
+      setDragGhost({
+        start: time,
+        end: `${Math.floor(endMin / 60) % 24}:${(endMin % 60).toString().padStart(2, '0')}`,
+        top: topForTime(time),
+        height: slotHeight(dur),
+      });
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (resizeRef.current) {
+        resizeRef.current = null;
+        setResizing(false);
+        return;
+      }
+
+      const drag = dragRef.current;
+      dragRef.current = null;
+      setDragGhost(null);
+
+      if (!drag?.moved || !gridRef.current) return;
       const rect = gridRef.current.getBoundingClientRect();
       const y = e.clientY - rect.top + gridRef.current.scrollTop;
       const newStart = timeForPosition(y, 0);
-      const dur = timeToMinutes(dragging.origEnd) - timeToMinutes(dragging.origStart);
+      const dur = timeToMinutes(drag.origEnd) - timeToMinutes(drag.origStart);
       const endMin = timeToMinutes(newStart) + dur;
-      const endH = Math.floor(endMin / 60) % 24;
-      const endM = endMin % 60;
-      const newEnd = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
       onSlotsChange(slots.map(s =>
-        s.id === dragging.slotId ? { ...s, startTime: newStart, endTime: newEnd } : s
+        s.id === drag.slotId
+          ? { ...s, startTime: newStart, endTime: `${Math.floor(endMin / 60) % 24}:${(endMin % 60).toString().padStart(2, '0')}` }
+          : s
       ));
-      setDragging(null);
     };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragging, slots, onSlotsChange]);
 
-  useEffect(() => {
-    if (!resizing) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!gridRef.current || !resizing) return;
-      const rect = gridRef.current.getBoundingClientRect();
-      const y = e.clientY - rect.top + gridRef.current.scrollTop;
-      const newEnd = timeForPosition(y, 0);
-      const slot = slots.find(s => s.id === resizing.slotId);
-      if (!slot) return;
-      const minEnd = timeToMinutes(slot.startTime) + 5;
-      const newEndMin = Math.max(minEnd, timeToMinutes(newEnd));
-      const endH = Math.floor(newEndMin / 60) % 24;
-      const endM = newEndMin % 60;
-      onSlotsChange(slots.map(s =>
-        s.id === resizing.slotId ? { ...s, endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}` } : s
-      ));
-    };
-    const handleMouseUp = () => setResizing(null);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [resizing, slots, onSlotsChange]);
+  }, [slots, onSlotsChange]);
 
   const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden select-none">
       <div className="flex-1 overflow-y-auto relative rounded-lg" ref={gridRef}
         onDragOver={handleGridDragOver}
         onDragLeave={handleGridDragLeave}
@@ -165,18 +189,40 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
               </div>
             </div>
           )}
-          {preview && dropHighlight && (
+
+          {dropPreview && dropHighlight && (
             <div
-              className="absolute left-20 right-2 rounded-lg border-2 border-dashed border-primary/50 bg-primary/10 z-10 flex items-center justify-center"
+              className="absolute left-20 right-2 rounded-lg border-2 border-dashed border-primary/50 bg-primary/10 flex items-center justify-center z-10"
               style={{
-                top: `${topForTime(preview.start)}px`,
-                height: `${slotHeight(timeToMinutes(preview.end) - timeToMinutes(preview.start))}px`,
+                top: `${topForTime(dropPreview.start)}px`,
+                height: `${slotHeight(timeToMinutes(dropPreview.end) - timeToMinutes(dropPreview.start))}px`,
               }}
             >
-              <span className="text-[10px] font-bold text-primary bg-background/80 px-2 py-0.5 rounded">
-                {formatTimeDisplay(preview.start)} → {formatTimeDisplay(preview.end)}
+              <span className="text-xs font-bold text-primary bg-background/80 px-2 py-0.5 rounded">
+                {formatTimeDisplay(dropPreview.start)} → {formatTimeDisplay(dropPreview.end)}
               </span>
             </div>
+          )}
+
+          {dragGhost && (
+            <div
+              className="absolute left-20 right-2 z-30 rounded-xl border-2 border-primary shadow-xl bg-primary/15 backdrop-blur-md"
+              style={{ top: `${dragGhost.top}px`, height: `${Math.max(dragGhost.height, 22)}px`, pointerEvents: 'none' }}
+            >
+              <div className="px-3 py-1.5 h-full flex flex-col justify-center gap-0.5">
+                <p className="text-sm font-bold text-primary truncate">
+                  {slots.find(s => s.id === dragRef.current?.slotId)?.title || 'Moving...'}
+                </p>
+                <p className="text-xs font-medium text-primary/80">{formatTimeDisplay(dragGhost.start)}</p>
+              </div>
+            </div>
+          )}
+
+          {resizing && resizeRef.current && (
+            <div
+              className="absolute left-20 right-2 z-30 border-t-2 border-dashed border-primary/50"
+              style={{ top: `${topForTime(slots.find(s => s.id === resizeRef.current!.slotId)?.endTime || '00:00')}px` }}
+            />
           )}
         </div>
 
@@ -202,13 +248,21 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
               const total = group.length;
               const width = Math.max(60, (100 / total) - 2);
               const left = 2 + (si * (100 / total));
+              const isDragging = dragRef.current?.slotId === slot.id && (dragRef.current?.moved ?? false);
 
-                  return (
+              return (
                 <div
                   key={slot.id}
                   onMouseDown={(e) => handleSlotMouseDown(e, slot)}
-                  onClick={() => onSlotClick(slot)}
-                  className="absolute rounded-lg border-2 cursor-pointer overflow-hidden transition-all duration-150 hover:shadow-lg hover:z-30 hover:opacity-90 select-none shadow-sm"
+                  onClick={() => {
+                    if (wasDragRef.current) { wasDragRef.current = false; return; }
+                    onSlotClick(slot);
+                  }}
+                  className={cn(
+                    "absolute rounded-lg border-2 overflow-hidden select-none shadow-sm",
+                    isDragging ? "opacity-20 cursor-grabbing" : "cursor-pointer hover:shadow-lg hover:opacity-90",
+                    "transition-shadow duration-150",
+                  )}
                   style={{
                     top: `${top}px`,
                     height: `${Math.max(height, 22)}px`,
@@ -218,7 +272,7 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
                     borderColor: slot.color,
                     borderLeftWidth: '4px',
                     borderLeftColor: slot.color,
-                    zIndex: 10 + si,
+                    zIndex: isDragging ? 5 : 10 + si,
                   }}
                 >
                   <div className="px-2 py-1 h-full flex flex-col justify-center gap-0.5">

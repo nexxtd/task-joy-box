@@ -152,12 +152,15 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">{task.title}</p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <span className={cn(
-                        "text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider",
-                        PRIORITY_CONFIG[task.priority]?.className || "bg-muted text-muted-foreground"
-                      )}>
-                        {task.priority}
-                      </span>
+                      {task.priority !== 'none' && (
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-md tracking-wide",
+                          PRIORITY_CONFIG[task.priority]?.className || "bg-muted text-muted-foreground",
+                          "text-primary-foreground"
+                        )}>
+                          {PRIORITY_CONFIG[task.priority]?.label || task.priority}
+                        </span>
+                      )}
                       {task.duration && (
                         <span className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
