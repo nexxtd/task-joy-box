@@ -8,11 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface TaskDetailModalProps {
   task: Task;
   onClose: () => void;
-}
-
-interface TaskDetailModalProps {
-  task: Task;
-  onClose: () => void;
   canEdit?: boolean;
 }
 
@@ -303,43 +298,47 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 <User className="w-3.5 h-3.5" /> Assigned To
               </h4>
-              <Select
-                value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
-                onValueChange={(val) => {
-                  if (val === 'unassigned') {
-                    updateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
-                  } else {
-                    const user = assignableUsers.find(u => u.id === Number(val));
-                    updateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: user?.name });
-                  }
-                }}
-                disabled={!canEdit}
-              >
-                <SelectTrigger className="w-full bg-muted border border-border text-sm">
-                  <SelectValue placeholder="Assign to..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">
-                    <span className="text-muted-foreground">Unassigned</span>
-                  </SelectItem>
-                  {assignableUsers.map(user => (
-                    <SelectItem key={user.id} value={String(user.id)}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
-                          {user.name.slice(0, 1).toUpperCase()}
-                        </div>
-                        <span>{user.name}</span>
-                      </div>
+              {(assignableUsers.length > 0 || !task.assignedToUserId) && (
+                <Select
+                  value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
+                  onValueChange={(val) => {
+                    if (val === 'unassigned') {
+                      updateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
+                    } else {
+                      const user = assignableUsers.find(u => u.id === Number(val));
+                      updateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: user?.name });
+                    }
+                  }}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="w-full bg-muted border border-border text-sm">
+                    <SelectValue placeholder="Assign to..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">
+                      <span className="text-muted-foreground">Unassigned</span>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {assignableUsers.map(user => (
+                      <SelectItem key={user.id} value={String(user.id)}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
+                            {user.name.slice(0, 1).toUpperCase()}
+                          </div>
+                          <span>{user.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {(assignableUsers.length === 0 && task.assignedToUserId) && (
+                <div className="text-sm text-muted-foreground bg-muted border border-border rounded-md px-3 py-2">
+                  Loading assignees...
+                </div>
+              )}
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                Subject / Category
-              </h4>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 Subject / Category
               </h4>
@@ -399,14 +398,14 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               </h4>
               <Select
                 disabled={!isPro}
-                value={String(task.recurrencePattern || '')}
-                onValueChange={value => updateTask(task.id, { recurrencePattern: (value || null) as any })}
+                value={task.recurrencePattern || 'none'}
+                onValueChange={value => updateTask(task.id, { recurrencePattern: (value === 'none' ? null : value) as any })}
               >
                 <SelectTrigger className={`w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring ${!isPro && 'opacity-50 cursor-not-allowed'}`}>
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   <SelectItem value="daily">Daily</SelectItem>
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
