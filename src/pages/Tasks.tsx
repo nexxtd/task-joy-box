@@ -32,6 +32,7 @@ import {
   Draggable,
   DropResult,
 } from '@hello-pangea/dnd';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -408,11 +409,55 @@ const Tasks: React.FC = () => {
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || sortByDueDate) return;
-    const items = [...filtered.active];
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    setOrderedActiveIds(items.map(t => t.id));
-    items.forEach((task, idx) => updateTask(task.id, { order: idx }));
+    if (result.source.droppableId !== result.destination.droppableId) return;
+
+    const droppableId = result.source.droppableId;
+    let sectionTasks: Task[];
+
+    if (droppableId === 'my-tasks') {
+      sectionTasks = myTasksGroup;
+    } else if (droppableId.startsWith('col-')) {
+      const columnId = droppableId.slice(4);
+      const colGroup = projectTaskGroups
+        .flatMap(pg => pg.columnGroups)
+        .find(cg => cg.column.id === columnId);
+      if (!colGroup) return;
+      sectionTasks = colGroup.tasks;
+    } else if (droppableId.startsWith('uncat-')) {
+      const projectId = Number(droppableId.slice(6));
+      const pg = projectTaskGroups.find(p => p.project.id === projectId);
+      if (!pg) return;
+      sectionTasks = pg.uncategorized;
+    } else {
+      return;
+    }
+
+    const sectionTaskIds = sectionTasks.map(t => t.id);
+    const ids = [...sectionTaskIds];
+    const [removed] = ids.splice(result.source.index, 1);
+    ids.splice(result.destination.index, 0, removed);
+
+    ids.forEach((id, idx) => updateTask(id, { order: idx }));
+
+    const base = orderedActiveIds.length > 0
+      ? [...orderedActiveIds]
+      : filtered.active.map(t => t.id);
+
+    const sectionIdSet = new Set(sectionTaskIds);
+    const resultIds: string[] = [];
+    let inserted = false;
+    for (const id of base) {
+      if (sectionIdSet.has(id)) {
+        if (!inserted) {
+          resultIds.push(...ids);
+          inserted = true;
+        }
+      } else {
+        resultIds.push(id);
+      }
+    }
+
+    setOrderedActiveIds(resultIds);
   };
 
   const runTaskAnalysis = useCallback((type: AnalysisTab) => {
@@ -744,14 +789,11 @@ const Tasks: React.FC = () => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
   };
 
-  const renderTaskRow = (task: Task) => {
+  const renderTaskRow = (task: Task, dragHandleProps?: any, isDragging?: boolean) => {
     const isExpanded = expandedTaskIds.includes(task.id);
     const subtaskCount = task.subtasks?.length || 0;
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-    const status = getTaskStatus(task);
-    const statusCfg = STATUS_CONFIG[status];
-    const dueWarning = getDueTimeWarning(task);
     const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
     return (
@@ -771,10 +813,17 @@ const Tasks: React.FC = () => {
             ? selectedDeleteTaskIds.includes(task.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
               : 'border-border hover:bg-muted/20'
-            : 'border-border hover:border-border/80 hover:shadow-sm'
+            : isDragging
+              ? 'border-primary/40 shadow-lg rotate-[2deg]'
+              : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-3 py-3">
+        <div className="flex items-center gap-1 px-3 py-3">
+          {dragHandleProps && (
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
           {isDeleteMode ? (
             <input
               type="checkbox"
@@ -856,10 +905,15 @@ const Tasks: React.FC = () => {
                 </div>
               )}
               {quickEditField === 'project' && (
-                <select value={quickEditProjectId} onChange={e => setQuickEditProjectId(e.target.value ? Number(e.target.value) : '')} onBlur={() => applyQuickEdit(task)} className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                  <option value="">My Tasks</option>
-                  {projects.map(project => (<option key={project.id} value={project.id}>{project.name}</option>))}
-                </select>
+                <Select value={String(quickEditProjectId || '')} onValueChange={val => setQuickEditProjectId(val ? Number(val) : '')}>
+                  <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
+                    <SelectValue placeholder="My Tasks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">My Tasks</SelectItem>
+                    {projects.map(project => (<SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
               )}
               <button onClick={() => applyQuickEdit(task)} className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
               <button onClick={closeQuickEdit} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
@@ -1155,6 +1209,7 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative">
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">
@@ -1177,9 +1232,22 @@ const Tasks: React.FC = () => {
                 <span className="text-[10px] text-muted-foreground/50 ml-1">({myTasksGroup.length})</span>
               </button>
               {!myTasksCollapsed && (
-                <div className="space-y-1.5">
-                  {myTasksGroup.map(task => renderTaskRow(task))}
-                </div>
+                <Droppable droppableId="my-tasks">
+                  {(dropProvided, snapshot) => (
+                    <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
+                      {myTasksGroup.map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                          {(taskProvided, taskSnapshot) => (
+                            <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                              {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {dropProvided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
               )}
             </div>
           )}
@@ -1221,17 +1289,43 @@ const Tasks: React.FC = () => {
                             <span className="text-[10px] text-muted-foreground/40 ml-1">({colTasks.length})</span>
                           </button>
                           {!isColumnCollapsed && (
-                            <div className="pl-3 space-y-1.5">
-                              {colTasks.map(task => renderTaskRow(task))}
-                            </div>
+                            <Droppable droppableId={"col-" + column.id}>
+                              {(dropProvided, snapshot) => (
+                                <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
+                                  {colTasks.map((task, index) => (
+                                    <Draggable key={task.id} draggableId={task.id} index={index}>
+                                      {(taskProvided, taskSnapshot) => (
+                                        <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                          {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                        </div>
+                                      )}
+                                    </Draggable>
+                                  ))}
+                                  {dropProvided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           )}
                         </div>
                       );
                     })}
                     {uncategorized.length > 0 && (
-                      <div className="pl-3 space-y-1.5">
-                        {uncategorized.map(task => renderTaskRow(task))}
-                      </div>
+                      <Droppable droppableId={"uncat-" + project.id}>
+                        {(dropProvided, snapshot) => (
+                          <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
+                            {uncategorized.map((task, index) => (
+                              <Draggable key={task.id} draggableId={task.id} index={index}>
+                                {(taskProvided, taskSnapshot) => (
+                                  <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                    {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {dropProvided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
                     )}
                   </div>
                 )}
@@ -1305,6 +1399,7 @@ const Tasks: React.FC = () => {
             </div>
           )}
         </div>
+        </DragDropContext>
 
         {/* Floating AI Task button */}
         <button
@@ -1344,17 +1439,18 @@ const Tasks: React.FC = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
-                  <select
-                    value={newTaskPriority}
-                    onChange={e => setNewTaskPriority(e.target.value as Priority)}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  >
-                    <option value="urgent">Urgent</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                    <option value="none">None</option>
-                  </select>
+                  <Select value={newTaskPriority} onValueChange={v => setNewTaskPriority(v as Priority)}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
@@ -1368,16 +1464,17 @@ const Tasks: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-                  <select
-                    value={newTaskProjectId}
-                    onChange={e => setNewTaskProjectId(e.target.value ? Number(e.target.value) : '')}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  >
-                    <option value="">My Tasks</option>
-                    {projects.map(project => (
-                      <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                  </select>
+                  <Select value={String(newTaskProjectId || '')} onValueChange={v => setNewTaskProjectId(v ? Number(v) : '')}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">My Tasks</SelectItem>
+                      {projects.map(project => (
+                        <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
           </div>
 
@@ -2086,17 +2183,18 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
-            <select
-              value={task.priority}
-              onChange={e => onUpdateTask(task.id, { priority: e.target.value as Priority })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            >
-              <option value="urgent">Urgent</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-              <option value="none">None</option>
-            </select>
+            <Select value={task.priority} onValueChange={v => onUpdateTask(task.id, { priority: v as Priority })}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
@@ -2110,19 +2208,20 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-            <select
-              value={task.projectId || ''}
-              onChange={e => onUpdateTask(task.id, {
-                projectId: e.target.value ? Number(e.target.value) : null,
-                projectName: e.target.value ? (projects.find(project => project.id === Number(e.target.value))?.name || undefined) : undefined,
-              })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            >
-              <option value="">My Tasks</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>{project.name}</option>
-              ))}
-            </select>
+            <Select value={String(task.projectId || '')} onValueChange={v => onUpdateTask(task.id, {
+                projectId: v ? Number(v) : null,
+                projectName: v ? (projects.find(p => p.id === Number(v))?.name || undefined) : undefined,
+              })}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">My Tasks</SelectItem>
+                {projects.map(project => (
+                  <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

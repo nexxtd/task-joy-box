@@ -450,6 +450,7 @@ export const milestones = pgTable('milestones', {
   name: text('name').notNull(),
   date: text('date').notNull(),
   description: text('description'),
+  completed: boolean('completed').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });

@@ -9,6 +9,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface NoteTag {
   id: number;
@@ -476,15 +477,16 @@ const Notes: React.FC = () => {
           </div>
 
           <div className="relative">
-            <select
-              value={sortMode}
-              onChange={e => setSortMode(e.target.value as typeof sortMode)}
-              className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              <option value="created">Date created</option>
-              <option value="modified">Date modified</option>
-              <option value="alphabetical">Alphabetical</option>
-            </select>
+            <Select value={sortMode} onValueChange={(value) => setSortMode(value as typeof sortMode)}>
+              <SelectTrigger className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 h-9">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="created">Date created</SelectItem>
+                <SelectItem value="modified">Date modified</SelectItem>
+                <SelectItem value="alphabetical">Alphabetical</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

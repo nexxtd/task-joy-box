@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Copy, Plus, Crown, Loader2, MessageCircle, Building2, Sparkles, ArrowRight, Users2, Home, CreditCard, DollarSign, Info } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface TeamMember {
   id: string;
@@ -692,25 +693,21 @@ const Collaboration: React.FC = () => {
                             {String(user?.id) === String(workspace.ownerId) && (
                               <div className="mt-3 pt-3 border-t border-border">
                                 <label className="text-xs text-muted-foreground block mb-1">Add member to team:</label>
-                                <select 
-                                  className="w-full text-xs bg-background border border-border rounded p-1.5"
-                                  onChange={(e) => {
-                                    if (e.target.value) {
-                                      handleAddUserToTeam(team.id, e.target.value);
-                                      e.target.value = ''; // Reset selection
+                                <Select onValueChange={(value) => handleAddUserToTeam(team.id, value)}>
+                                  <SelectTrigger className="w-full text-xs bg-background border border-border rounded p-1.5 h-9">
+                                    <SelectValue placeholder="Select a member" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {members
+                                      .filter(m => !team.members.some(tm => tm.id === m.id))
+                                      .map(member => (
+                                        <SelectItem key={member.id} value={member.id}>
+                                          {member.name}
+                                        </SelectItem>
+                                      ))
                                     }
-                                  }}
-                                >
-                                  <option value="">Select a member</option>
-                                  {members
-                                    .filter(m => !team.members.some(tm => tm.id === m.id))
-                                    .map(member => (
-                                      <option key={member.id} value={member.id}>
-                                        {member.name}
-                                      </option>
-                                    ))
-                                  }
-                                </select>
+                                  </SelectContent>
+                                </Select>
                               </div>
                             )}
                           </div>

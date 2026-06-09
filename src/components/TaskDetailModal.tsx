@@ -397,17 +397,21 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 <Repeat className="w-3.5 h-3.5" /> Recurrence {!isPro && <Sparkles className="w-2.5 h-2.5 text-primary" />}
               </h4>
-              <select
+              <Select
                 disabled={!isPro}
-                value={task.recurrencePattern || ''}
-                onChange={e => updateTask(task.id, { recurrencePattern: (e.target.value as any) || null })}
-                className={`w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring ${!isPro && 'opacity-50 cursor-not-allowed'}`}
+                value={String(task.recurrencePattern || '')}
+                onValueChange={value => updateTask(task.id, { recurrencePattern: (value || null) as any })}
               >
-                <option value="">None</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
+                <SelectTrigger className={`w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring ${!isPro && 'opacity-50 cursor-not-allowed'}`}>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Attachments */}

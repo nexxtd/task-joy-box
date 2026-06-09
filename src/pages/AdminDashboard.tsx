@@ -578,13 +578,14 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex items-center gap-4">
                         {setting.type === 'select' ? (
-                          <select 
-                            className="bg-background border border-white/10 rounded-xl px-4 py-2 font-medium"
-                            value={dbSetting?.value || 'pro'}
-                            onChange={(e) => handleUpdateSetting(setting.key, e.target.value)}
-                          >
-                            {setting.options?.map(opt => <option key={opt} value={opt}>{opt.toUpperCase()}</option>)}
-                          </select>
+                          <Select value={dbSetting?.value || 'pro'} onValueChange={(value) => handleUpdateSetting(setting.key, value)}>
+                            <SelectTrigger className="bg-background border border-white/10 rounded-xl px-4 py-2 font-medium h-9">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {setting.options?.map(opt => <SelectItem key={opt} value={opt}>{opt.toUpperCase()}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <div className="flex items-center gap-2">
                             <span className="text-muted-foreground">$</span>
@@ -656,15 +657,16 @@ const AdminDashboard = () => {
                         </span>
                       </td>
                       <td className="p-4 text-right pr-8">
-                        <select 
-                          className="bg-background border border-white/10 rounded-lg px-2 py-1 text-xs font-bold"
-                          value={u.tier}
-                          onChange={(e) => handleUpdateUserTier(u.id, e.target.value)}
-                        >
-                          <option value="free">FREE</option>
-                          <option value="pro">PRO</option>
-                          <option value="premium">PREMIUM</option>
-                        </select>
+                        <Select value={u.tier} onValueChange={(value) => handleUpdateUserTier(u.id, value)}>
+                          <SelectTrigger className="bg-background border border-white/10 rounded-lg px-2 py-1 text-xs font-bold h-9">
+                            <SelectValue placeholder="Select tier" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="free">FREE</SelectItem>
+                            <SelectItem value="pro">PRO</SelectItem>
+                            <SelectItem value="premium">PREMIUM</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </td>
                     </tr>
                   ))}
@@ -795,14 +797,15 @@ const AdminDashboard = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">Discount Type</label>
-                  <select 
-                    className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer"
-                    value={newCoupon.discountType}
-                    onChange={e => setNewCoupon({...newCoupon, discountType: e.target.value as any})}
-                  >
-                    <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount ($)</option>
-                  </select>
+                  <Select value={newCoupon.discountType} onValueChange={(value) => setNewCoupon({...newCoupon, discountType: value as any})}>
+                    <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer h-9">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage (%)</SelectItem>
+                      <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">

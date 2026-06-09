@@ -12,6 +12,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
 import EnergyAnalytics from '@/components/EnergyAnalytics';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -726,29 +727,33 @@ const SettingsPage: React.FC = () => {
 
               <div>
                 <h2 className="text-sm font-semibold text-foreground mb-3">Language</h2>
-                <select
+                <Select
                   value={language}
-                  onChange={async (e) => {
-                    setLanguage(e.target.value);
-                    localStorage.setItem('language', e.target.value);
+                  onValueChange={async (newLanguage) => {
+                    setLanguage(newLanguage);
+                    localStorage.setItem('language', newLanguage);
                     try {
                       await fetch('/api/settings', {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ language: e.target.value }),
+                        body: JSON.stringify({ language: newLanguage }),
                       });
                       showSaved();
                     } catch (error) {
                       console.error('Error saving language:', error);
                     }
                   }}
-                  className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
                 >
-                  {LANGUAGES.map(l => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer h-10">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map(l => (
+                      <SelectItem key={l} value={l}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               
               <div className="pt-4">
@@ -1140,15 +1145,16 @@ const SettingsPage: React.FC = () => {
                       </button>
                     )}
                   </div>
-                  <select
-                    value={ticketCategory}
-                    onChange={e => setTicketCategory(e.target.value)}
-                    className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none cursor-pointer capitalize"
-                  >
-                    {TICKET_CATEGORIES.map(c => (
-                      <option key={c} value={c} className="capitalize">{c === 'all' ? 'All categories' : c}</option>
-                    ))}
-                  </select>
+                  <Select value={ticketCategory} onValueChange={setTicketCategory}>
+                    <SelectTrigger className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs text-foreground outline-none cursor-pointer capitalize h-9">
+                      <SelectValue placeholder="Filter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TICKET_CATEGORIES.map(c => (
+                        <SelectItem key={c} value={c} className="capitalize">{c === 'all' ? 'All categories' : c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Ticket list */}

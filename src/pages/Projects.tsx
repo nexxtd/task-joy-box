@@ -37,6 +37,8 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { Task } from '@/types/board';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CircleToggle } from '@/components/ToggleComponents';
 
 interface ChatMessage {
   id: string;
@@ -97,8 +99,9 @@ const Projects: React.FC = () => {
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
 
-  const [milestones, setMilestones] = useState<{ id: number; name: string; date: string; description?: string }[]>([]);
+  const [milestones, setMilestones] = useState<{ id: number; name: string; date: string; description?: string; completed?: boolean }[]>([]);
   const [showMilestonePopup, setShowMilestonePopup] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<number | null>(null);
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
@@ -168,6 +171,38 @@ const Projects: React.FC = () => {
       if (data.milestone) setMilestones(prev => [...prev, data.milestone]);
     } catch {
       toast({ title: 'Error', description: 'Failed to create milestone' });
+    }
+  };
+
+  const handleToggleMilestone = async (milestone: { id: number; completed?: boolean }) => {
+    if (!selectedProjectId) return;
+    const next = !milestone.completed;
+    setMilestones(prev => prev.map(m => m.id === milestone.id ? { ...m, completed: next } : m));
+    try {
+      await fetch(`/api/milestones/${selectedProjectId}/${milestone.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ completed: next }),
+      });
+    } catch {
+      setMilestones(prev => prev.map(m => m.id === milestone.id ? { ...m, completed: !next } : m));
+      toast({ title: 'Error', description: 'Failed to update milestone' });
+    }
+  };
+
+  const handleUpdateMilestone = async (id: number, name: string, date: string, description?: string) => {
+    if (!selectedProjectId) return;
+    setMilestones(prev => prev.map(m => m.id === id ? { ...m, name, date, description } : m));
+    try {
+      await fetch(`/api/milestones/${selectedProjectId}/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, date, description: description || null }),
+      });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update milestone' });
     }
   };
 
@@ -727,7 +762,7 @@ const Projects: React.FC = () => {
               <Users className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="h-3 rounded-full bg-muted overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-primary to-sky-500 transition-all" style={{ width: `${progressPct}%` }} />
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progressPct}%` }} />
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
               {completedTasks} completed, {Math.max(0, totalTasks - completedTasks)} remaining
@@ -759,33 +794,57 @@ const Projects: React.FC = () => {
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {milestones.length > 0 ? (
               milestones.map(milestone => (
-                <div key={milestone.id} className="flex items-start justify-between rounded-xl border border-border bg-muted/10 p-3 hover:bg-muted/20 transition-all">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-foreground truncate">{milestone.name}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      {new Date(milestone.date + 'T12:00:00').toLocaleDateString()}
-                    </p>
-                    {milestone.description && <p className="text-[10px] text-muted-foreground/80 mt-1 break-words">{milestone.description}</p>}
+                <div key={milestone.id} className={`flex items-start justify-between rounded-xl border p-3 transition-all ${milestone.completed ? 'border-label-green/20 bg-label-green/5' : 'border-border bg-muted/10 hover:bg-muted/20'}`}>
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    <div onClick={e => e.stopPropagation()} className="mt-0.5">
+                      <CircleToggle
+                        completed={!!milestone.completed}
+                        onClick={() => handleToggleMilestone(milestone)}
+                        size="sm"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-semibold truncate ${milestone.completed ? 'text-muted-foreground/60 line-through' : 'text-foreground'}`}>{milestone.name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {new Date(milestone.date + 'T12:00:00').toLocaleDateString()}
+                      </p>
+                      {milestone.description && <p className={`text-[10px] mt-1 break-words ${milestone.completed ? 'text-muted-foreground/50' : 'text-muted-foreground/80'}`}>{milestone.description}</p>}
+                    </div>
                   </div>
                   {canEdit && (
-                    <button
-                      onClick={async () => {
-                        if (!selectedProjectId) return;
-                        try {
-                          await fetch(`/api/milestones/${selectedProjectId}/${milestone.id}`, {
-                            method: 'DELETE',
-                            credentials: 'include',
-                          });
-                          setMilestones(prev => prev.filter(m => m.id !== milestone.id));
-                        } catch {
-                          toast({ title: 'Error', description: 'Failed to delete milestone' });
-                        }
-                      }}
-                      className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2"
-                      title="Delete milestone"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          setEditingMilestoneId(milestone.id);
+                          setNewMilestoneName(milestone.name);
+                          setNewMilestoneDate(milestone.date);
+                          setNewMilestoneDesc(milestone.description || '');
+                          setShowMilestonePopup(true);
+                        }}
+                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                        title="Edit milestone"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!selectedProjectId) return;
+                          try {
+                            await fetch(`/api/milestones/${selectedProjectId}/${milestone.id}`, {
+                              method: 'DELETE',
+                              credentials: 'include',
+                            });
+                            setMilestones(prev => prev.filter(m => m.id !== milestone.id));
+                          } catch {
+                            toast({ title: 'Error', description: 'Failed to delete milestone' });
+                          }
+                        }}
+                        className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete milestone"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
               ))
@@ -1131,14 +1190,6 @@ const Projects: React.FC = () => {
                       View only
                     </span>
                   )}
-                  {canManage && (
-                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
-                      <Share2 className="h-3.5 w-3.5" />
-                      Share
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
                   {[
                     { id: 'home', label: 'Home', icon: LayoutDashboard },
                     { id: 'board', label: 'Board', icon: FolderKanban },
@@ -1154,6 +1205,14 @@ const Projects: React.FC = () => {
                       {tab.label}
                     </button>
                   ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  {canManage && (
+                    <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
+                      <Share2 className="h-3.5 w-3.5" />
+                      Share
+                    </button>
+                  )}
                 </div>
               </div>
             </header>
@@ -1189,12 +1248,12 @@ const Projects: React.FC = () => {
 
       {/* Milestone popup - fixed overlay */}
       {showMilestonePopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { setShowMilestonePopup(false); setEditingMilestoneId(null); }}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
-              <span className="text-base font-bold text-foreground">New Milestone</span>
-              <button onClick={() => setShowMilestonePopup(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+              <span className="text-base font-bold text-foreground">{editingMilestoneId ? 'Edit Milestone' : 'New Milestone'}</span>
+              <button onClick={() => { setShowMilestonePopup(false); setEditingMilestoneId(null); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1233,17 +1292,22 @@ const Projects: React.FC = () => {
                 <button
                   onClick={() => {
                     if (newMilestoneName.trim() && newMilestoneDate) {
-                      handleAddMilestone(newMilestoneName.trim(), newMilestoneDate, newMilestoneDesc.trim() || undefined);
+                      if (editingMilestoneId) {
+                        handleUpdateMilestone(editingMilestoneId, newMilestoneName.trim(), newMilestoneDate, newMilestoneDesc.trim() || undefined);
+                      } else {
+                        handleAddMilestone(newMilestoneName.trim(), newMilestoneDate, newMilestoneDesc.trim() || undefined);
+                      }
                       setShowMilestonePopup(false);
+                      setEditingMilestoneId(null);
                     }
                   }}
                   disabled={!newMilestoneName.trim() || !newMilestoneDate}
                   className="flex-1 bg-primary text-primary-foreground text-sm font-bold py-2.5 rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-colors"
                 >
-                  Save Milestone
+                  {editingMilestoneId ? 'Update Milestone' : 'Save Milestone'}
                 </button>
                 <button
-                  onClick={() => setShowMilestonePopup(false)}
+                  onClick={() => { setShowMilestonePopup(false); setEditingMilestoneId(null); }}
                   className="px-4 py-2.5 text-sm border border-border text-muted-foreground rounded-xl hover:bg-muted transition-colors"
                 >
                   Cancel
@@ -1314,10 +1378,9 @@ const Projects: React.FC = () => {
 
               <div className="w-full text-left space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Permission Level</label>
-                <select
+                <Select
                   value={selectedMember.role}
-                  onChange={async (e) => {
-                    const newRole = e.target.value;
+                  onValueChange={async (newRole) => {
                     try {
                       const response = await fetch(`/api/projects/${selectedProject.id}/members/${selectedMember.id}`, {
                         method: 'PATCH',
@@ -1336,14 +1399,18 @@ const Projects: React.FC = () => {
                     }
                   }}
                   disabled={selectedMember.id === selectedProject.ownerId}
-                  className="w-full bg-muted/40 border border-border rounded-xl p-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
                 >
-                  <option value="owner">Owner</option>
-                  <option value="view">View only</option>
-                  <option value="edit">Edit</option>
-                  <option value="full edit">Full Edit</option>
-                  <option value="admin">Admin</option>
-                </select>
+                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl p-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer h-10">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="owner">Owner</SelectItem>
+                    <SelectItem value="view">View only</SelectItem>
+                    <SelectItem value="edit">Edit</SelectItem>
+                    <SelectItem value="full edit">Full Edit</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
                 <p className="text-[10px] text-muted-foreground ml-1 mt-1">
                   View only members can read but cannot edit tasks, descriptions, or milestones.
                 </p>

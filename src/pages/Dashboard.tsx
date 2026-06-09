@@ -9,6 +9,7 @@ import {
   TrendingUp, Cloud, Bot, Calendar, Zap, X
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const Dashboard: React.FC = () => {
   const { board, addTask } = useBoardContext();
@@ -394,16 +395,16 @@ const Dashboard: React.FC = () => {
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Column</label>
-              <select
-                value={newTaskColumn}
-                onChange={e => setNewTaskColumn(e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="">Select a column...</option>
-                {board.columns.map(col => (
-                  <option key={col.id} value={col.id}>{col.title}</option>
-                ))}
-              </select>
+              <Select value={newTaskColumn} onValueChange={setNewTaskColumn}>
+                <SelectTrigger className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-10">
+                  <SelectValue placeholder="Select a column..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {board.columns.map(col => (
+                    <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Priority</label>

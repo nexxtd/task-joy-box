@@ -44,6 +44,34 @@ router.post('/:projectId', requireAuth, async (req: AuthRequest, res: Response) 
   }
 });
 
+router.patch('/:projectId/:milestoneId', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const milestoneId = parseInt(req.params.milestoneId, 10);
+    const membership = await db.select().from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Not a member' });
+
+    const { name, date, description, completed } = req.body;
+    const updates: Record<string, any> = {};
+    if (name !== undefined) updates.name = name;
+    if (date !== undefined) updates.date = date;
+    if (description !== undefined) updates.description = description;
+    if (completed !== undefined) updates.completed = completed;
+
+    const [milestone] = await db.update(milestones)
+      .set(updates)
+      .where(and(eq(milestones.id, milestoneId), eq(milestones.projectId, projectId)))
+      .returning();
+
+    if (!milestone) return res.status(404).json({ error: 'Milestone not found' });
+    res.json({ milestone });
+  } catch (error) {
+    console.error('Update milestone error:', error);
+    res.status(500).json({ error: 'Failed to update milestone' });
+  }
+});
+
 router.delete('/:projectId/:milestoneId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);

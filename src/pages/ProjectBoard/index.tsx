@@ -7,6 +7,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { Select as RadixSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ProjectBoard = () => {
   const { board, addTask, updateTask, deleteTask, addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
@@ -320,31 +321,33 @@ const ProjectBoard = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold uppercase text-gray-500">Status</label>
-                  <select
-                    value={newTaskStatus}
-                    onChange={e => setNewTaskStatus(e.target.value as TaskStatus)}
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="to_do">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="review">Review</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                  <RadixSelect value={newTaskStatus} onValueChange={(value) => setNewTaskStatus(value as TaskStatus)}>
+                    <SelectTrigger className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="to_do">To Do</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="review">Review</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </RadixSelect>
                 </div>
                 
                 <div>
                   <label className="text-xs font-semibold uppercase text-gray-500">Priority</label>
-                  <select
-                    value={newTaskPriority}
-                    onChange={e => setNewTaskPriority(e.target.value as any)}
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="none">None</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
+                  <RadixSelect value={newTaskPriority} onValueChange={(value) => setNewTaskPriority(value as any)}>
+                    <SelectTrigger className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </RadixSelect>
                 </div>
               </div>
               
@@ -564,10 +567,8 @@ const ProjectBoard = () => {
                   <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     Status
                   </h4>
-                  <select
-                    value={selectedTask.status || 'to_do'}
-                    onChange={e => {
-                      const newStatus = e.target.value as TaskStatus;
+                  <RadixSelect value={selectedTask.status || 'to_do'} onValueChange={(value) => {
+                      const newStatus = value as TaskStatus;
                       const updatedTask = { ...selectedTask, status: newStatus };
                       
                       // If moving to a default column, update the columnId accordingly
@@ -578,14 +579,17 @@ const ProjectBoard = () => {
                       
                       setSelectedTask(updatedTask);
                       updateTask(updatedTask.id, { status: newStatus, columnId: newColumnId });
-                    }}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="to_do">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="review">Review</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                    }}>
+                    <SelectTrigger className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="to_do">To Do</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="review">Review</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </RadixSelect>
                 </div>
 
                 {/* Priority */}

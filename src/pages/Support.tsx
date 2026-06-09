@@ -6,6 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { FAQS, RESOURCES } from '@/data/supportContent';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type View = 'main' | 'faqs' | 'resources' | 'submit';
 
@@ -214,16 +215,17 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-2">Type</label>
-                <select
-                  value={type}
-                  onChange={e => setType(e.target.value)}
-                  className="w-full bg-background border border-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                >
-                  <option value="suggestion">Suggestion</option>
-                  <option value="bug">Bug</option>
-                  <option value="report">Report</option>
-                  <option value="support">Support</option>
-                </select>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="w-full bg-background border border-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all h-9">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="suggestion">Suggestion</SelectItem>
+                    <SelectItem value="bug">Bug</SelectItem>
+                    <SelectItem value="report">Report</SelectItem>
+                    <SelectItem value="support">Support</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground mb-2">Subject</label>

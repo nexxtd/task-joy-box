@@ -3,6 +3,7 @@ import { Flame, Plus, Check, RotateCcw, TrendingUp, Calendar, Zap, Sparkles } fr
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { CircleToggle } from '@/components/ToggleComponents';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Habit {
   id: number;
@@ -210,15 +211,16 @@ const Habits: React.FC = () => {
                   onChange={e => setNewHabit(prev => ({ ...prev, title: e.target.value }))}
                   className="bg-muted px-4 py-3 rounded-xl border border-border focus:ring-2 focus:ring-primary/20 outline-none font-medium"
                 />
-                <select
-                  value={newHabit.category}
-                  onChange={e => setNewHabit(prev => ({ ...prev, category: e.target.value }))}
-                  className="bg-muted px-4 py-3 rounded-xl border border-border outline-none font-medium"
-                >
-                  {Object.keys(CATEGORY_COLORS).map(cat => (
-                    <option key={cat}>{cat}</option>
-                  ))}
-                </select>
+                <Select value={newHabit.category} onValueChange={(value) => setNewHabit(prev => ({ ...prev, category: value }))}>
+                  <SelectTrigger className="bg-muted px-4 py-3 rounded-xl border border-border outline-none font-medium h-9">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(CATEGORY_COLORS).map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
              </div>
              <div className="flex justify-end gap-3">
                 <button onClick={() => setAdding(false)} className="px-4 py-2 text-sm font-bold text-muted-foreground">Cancel</button>

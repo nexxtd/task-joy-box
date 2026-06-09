@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { CircleToggle } from '@/components/ToggleComponents';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface SubGoal {
   id: string;
@@ -214,15 +215,16 @@ const Goals: React.FC = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Category</label>
-                  <select
-                    value={newGoal.category}
-                    onChange={e => setNewGoal(g => ({ ...g, category: e.target.value }))}
-                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
-                  >
-                    {GOAL_CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <Select value={newGoal.category} onValueChange={(value) => setNewGoal(g => ({ ...g, category: value }))}>
+                    <SelectTrigger className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer h-9">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GOAL_CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -248,13 +250,14 @@ const Goals: React.FC = () => {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Deadline</label>
-                    <select
-                      value={newGoal.timeframe}
-                      onChange={e => setNewGoal(g => ({ ...g, timeframe: e.target.value }))}
-                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                    >
-                      {Object.entries(TIMEFRAME_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
+                    <Select value={newGoal.timeframe} onValueChange={(value) => setNewGoal(g => ({ ...g, timeframe: value }))}>
+                      <SelectTrigger className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all h-9">
+                        <SelectValue placeholder="Select timeframe" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(TIMEFRAME_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

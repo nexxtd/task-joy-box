@@ -14,6 +14,7 @@ import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // This component is extracted from the "Create Task" modal flow inside src/pages/Tasks.tsx.
 // It intentionally focuses only on the create-task overlay (not the full Tasks page).
@@ -355,17 +356,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
-              <select
-                value={newTaskPriority}
-                onChange={e => setNewTaskPriority(e.target.value as Priority)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              >
-                <option value="urgent">Urgent</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="none">None</option>
-              </select>
+              <Select value={newTaskPriority} onValueChange={value => setNewTaskPriority(value as Priority)}>
+                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -381,19 +383,23 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
             <div>
               <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-              <select
-                value={newTaskProjectId}
-                onChange={e => setNewTaskProjectId(e.target.value ? Number(e.target.value) : '')}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              <Select
+                value={String(newTaskProjectId)}
+                onValueChange={value => setNewTaskProjectId(value ? Number(value) : '')}
                 disabled={defaultProjectId !== undefined && defaultProjectId !== null}
               >
-                <option value="">My Tasks</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">My Tasks</SelectItem>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={String(project.id)}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div />
