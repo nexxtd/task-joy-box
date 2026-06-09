@@ -7,10 +7,12 @@ import {
   ArrowUp,
   BarChart3,
   Brain,
+  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  Clock3,
   GripVertical,
   FolderKanban,
   Paperclip,
@@ -2228,7 +2230,58 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
         </div>
 
-        {/* due/status removed from Task view */}
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> Start
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={task.startDate || ''}
+                  onChange={e => onUpdateTask(task.id, { startDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={task.startTime || ''}
+                  onChange={e => onUpdateTask(task.id, { startTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> End
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={task.dueDate || ''}
+                  onChange={e => onUpdateTask(task.id, { dueDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={task.dueTime || ''}
+                  onChange={e => onUpdateTask(task.id, { dueTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div>
           <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>

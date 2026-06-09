@@ -1,452 +1,257 @@
-import React, { useState, useCallback } from 'react';
-import { format, addMinutes, isSameDay, startOfDay, endOfDay } from 'date-fns';
-import { Clock, Plus, Coffee, Brain, Target, Edit3, Trash2, Play, Pause } from 'lucide-react';
-import { TimeBlock, CalendarPreferences, CalendarDay } from '@/types/calendar';
-import { Task } from '@/types/board';
-import { useBoardContext } from '@/context/BoardContext';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { format, isSameDay } from 'date-fns';
+import { CalendarSlot } from '@/types/calendar';
 import { cn } from '@/lib/utils';
-import { minutesToTime, timeToMinutes, calculateDuration } from '@/utils/calendarUtils';
+import {
+  HOUR_HEIGHT, START_HOUR, END_HOUR,
+  timeToMinutes, topForTime, timeForPosition,
+  slotHeight, formatTimeDisplay, generateId,
+} from '@/utils/calendarUtils';
 
 interface DayViewProps {
   date: Date;
-  tasks: Task[];
-  onTaskClick: (task: Task) => void;
-  preferences: CalendarPreferences;
-  onTimeBlockUpdate?: (timeBlock: TimeBlock) => void;
-  onTimeBlockDelete?: (timeBlockId: string) => void;
+  slots: CalendarSlot[];
+  onSlotsChange: (slots: CalendarSlot[]) => void;
+  onSlotClick: (slot: CalendarSlot) => void;
+  onSlotDrop: (date: string, startTime: string, dragData: any) => void;
 }
 
-const DayView: React.FC<DayViewProps> = ({
-  date,
-  tasks,
-  onTaskClick,
-  preferences,
-  onTimeBlockUpdate,
-  onTimeBlockDelete,
-}) => {
-  const { updateTask, addTask } = useBoardContext();
-  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
-  const [draggedBlock, setDraggedBlock] = useState<TimeBlock | null>(null);
-  const [selectedBlock, setSelectedBlock] = useState<TimeBlock | null>(null);
-  const [isAddingBlock, setIsAddingBlock] = useState(false);
-  const [newBlockStartTime, setNewBlockStartTime] = useState<string>('');
-  const [currentTime, setCurrentTime] = useState(new Date());
+const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 
-  // Update current time every minute
-  React.useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
+const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotClick, onSlotDrop }) => {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<{ slotId: string; startY: number; origStart: string; origEnd: string } | null>(null);
+  const [resizing, setResizing] = useState<{ slotId: string; startY: number; origEnd: string } | null>(null);
+  const [dropHighlight, setDropHighlight] = useState<{ y: number; time: string } | null>(null);
+  const [preview, setPreview] = useState<{ start: string; end: string; title: string; color: string } | null>(null);
+  const now = new Date();
 
-  // Generate time blocks from tasks
-  React.useEffect(() => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const blocks: TimeBlock[] = [];
+  const daySlots = slots
+    .filter(s => s.date === format(date, 'yyyy-MM-dd'))
+    .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
 
-    // Convert tasks to time blocks
-    tasks.forEach(task => {
-      if (task.dueDate === dateStr) {
-        const startTime = task.startTime || preferences.workDayStart;
-        const duration = task.duration || 60;
-        const endTime = minutesToTime(timeToMinutes(startTime) + duration);
+  const handleGridDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!gridRef.current) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top + gridRef.current.scrollTop;
+    const time = timeForPosition(y, 0);
+    setDropHighlight({ y, time });
 
-        blocks.push({
-          id: `task-${task.id}`,
-          taskId: task.id,
-          title: task.title,
-          type: 'task',
-          startTime,
-          endTime,
-          date: dateStr,
-          color: task.color,
-          completed: false,
-          priority: task.priority,
-          description: task.description,
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/x-calendar-item'));
+      if (data) {
+        const dur = data.duration || 30;
+        const endMin = timeToMinutes(time) + dur;
+        const endH = Math.floor(endMin / 60) % 24;
+        const endM = endMin % 60;
+        const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+        setPreview({
+          start: time,
+          end: endTime,
+          title: data.title || 'New Slot',
+          color: data.color || '#4f46e5',
         });
       }
-    });
-
-    // Add breaks (auto-scheduled)
-    if (preferences.autoScheduleBreaks) {
-      const workStart = timeToMinutes(preferences.workDayStart);
-      const workEnd = timeToMinutes(preferences.workDayEnd);
-      
-      // Add lunch break
-      blocks.push({
-        id: `break-lunch-${dateStr}`,
-        title: 'Lunch Break',
-        type: 'break',
-        startTime: '12:00',
-        endTime: '12:30',
-        date: dateStr,
-        isBreak: true,
-        breakType: 'lunch',
-        autoScheduled: true,
-      });
-
-      // Add short breaks every 90 minutes
-      let lastBreakTime = workStart;
-      blocks.forEach(block => {
-        if (block.type === 'task') {
-          const blockStart = timeToMinutes(block.startTime);
-          const blockEnd = timeToMinutes(block.endTime);
-          
-          if (blockStart - lastBreakTime >= preferences.breakFrequency) {
-            const breakStart = minutesToTime(blockStart - 5);
-            blocks.push({
-              id: `break-${Date.now()}-${Math.random()}`,
-              title: 'Short Break',
-              type: 'break',
-              startTime: breakStart,
-              endTime: minutesToTime(timeToMinutes(breakStart) + preferences.breakDuration.short),
-              date: dateStr,
-              isBreak: true,
-              breakType: 'short',
-              autoScheduled: true,
-            });
-            lastBreakTime = blockStart;
-          }
-        }
-      });
-    }
-
-    setTimeBlocks(blocks.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime)));
-  }, [tasks, date, preferences]);
-
-  const handleDragStart = (block: TimeBlock) => {
-    setDraggedBlock(block);
+    } catch {}
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleGridDragLeave = () => {
+    setDropHighlight(null);
+    setPreview(null);
+  };
+
+  const handleGridDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    if (!gridRef.current) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top + gridRef.current.scrollTop;
+    const time = timeForPosition(y, 0);
+
+    try {
+      const raw = e.dataTransfer.getData('application/x-calendar-item');
+      const data = JSON.parse(raw);
+      onSlotDrop(format(date, 'yyyy-MM-dd'), time, data);
+    } catch {}
+
+    setDropHighlight(null);
+    setPreview(null);
   };
 
-  const handleDrop = (e: React.DragEvent, targetTime: string) => {
-    e.preventDefault();
-    if (!draggedBlock) return;
+  const handleSlotMouseDown = (e: React.MouseEvent, slot: CalendarSlot) => {
+    if ((e.target as HTMLElement).dataset.resize) {
+      e.preventDefault();
+      setResizing({ slotId: slot.id, startY: e.clientY, origEnd: slot.endTime });
+      return;
+    }
+    const el = e.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    setDragging({ slotId: slot.id, startY: e.clientY, origStart: slot.startTime, origEnd: slot.endTime });
+  };
 
-    const duration = calculateDuration(draggedBlock.startTime, draggedBlock.endTime);
-    const newEndTime = minutesToTime(timeToMinutes(targetTime) + duration);
-
-    const updatedBlock = {
-      ...draggedBlock,
-      startTime: targetTime,
-      endTime: newEndTime,
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMouseMove = (e: MouseEvent) => {};
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!dragging || !gridRef.current) { setDragging(null); return; }
+      const rect = gridRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top + gridRef.current.scrollTop;
+      const newStart = timeForPosition(y, 0);
+      const dur = timeToMinutes(dragging.origEnd) - timeToMinutes(dragging.origStart);
+      const endMin = timeToMinutes(newStart) + dur;
+      const endH = Math.floor(endMin / 60) % 24;
+      const endM = endMin % 60;
+      const newEnd = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+      onSlotsChange(slots.map(s =>
+        s.id === dragging.slotId ? { ...s, startTime: newStart, endTime: newEnd } : s
+      ));
+      setDragging(null);
     };
-
-    setTimeBlocks(prev => 
-      prev.map(block => block.id === draggedBlock.id ? updatedBlock : block)
-        .sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime))
-    );
-
-    // Update task if it's a task block
-    if (draggedBlock.taskId) {
-      updateTask(draggedBlock.taskId, {
-        startTime: targetTime,
-        duration,
-      });
-    }
-
-    setDraggedBlock(null);
-  };
-
-  const handleBlockClick = (block: TimeBlock) => {
-    setSelectedBlock(block);
-  };
-
-  const handleAddBlock = (startTime: string) => {
-    setNewBlockStartTime(startTime);
-    setIsAddingBlock(true);
-  };
-
-  const handleCreateBlock = (type: 'task' | 'break' | 'focus') => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const newBlock: TimeBlock = {
-      id: `block-${Date.now()}-${Math.random()}`,
-      title: type === 'task' ? 'New Task' : type === 'break' ? 'Break' : 'Focus Time',
-      type,
-      startTime: newBlockStartTime,
-      endTime: minutesToTime(timeToMinutes(newBlockStartTime) + (type === 'break' ? 15 : 60)),
-      date: dateStr,
-      isBreak: type === 'break',
-      autoScheduled: false,
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
+  }, [dragging, slots, onSlotsChange]);
 
-    setTimeBlocks(prev => [...prev, newBlock].sort((a, b) => 
-      timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
-    ));
-
-    if (type === 'task') {
-      addTask('todo', newBlock.title, {
-        dueDate: dateStr,
-        startTime: newBlockStartTime,
-        duration: calculateDuration(newBlock.startTime, newBlock.endTime),
-      });
-    }
-
-    setIsAddingBlock(false);
-    setNewBlockStartTime('');
-  };
-
-  const handleDeleteBlock = (blockId: string) => {
-    setTimeBlocks(prev => prev.filter(block => block.id !== blockId));
-    if (onTimeBlockDelete) {
-      onTimeBlockDelete(blockId);
-    }
-  };
-
-  const getBlockIcon = (type: TimeBlock['type']) => {
-    switch (type) {
-      case 'task': return <Target className="w-4 h-4" />;
-      case 'break': return <Coffee className="w-4 h-4" />;
-      case 'focus': return <Brain className="w-4 h-4" />;
-      case 'meeting': return <Clock className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
-  };
-
-  const getBlockColor = (block: TimeBlock) => {
-    if (block.type === 'break') {
-      return block.breakType === 'lunch' 
-        ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 text-orange-700 shadow-sm' 
-        : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 text-green-700 shadow-sm';
-    }
-    if (block.type === 'focus') {
-      return 'bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 text-purple-700 shadow-sm';
-    }
-    if (block.type === 'meeting') {
-      return 'bg-gradient-to-r from-blue-50 to-sky-50 border-blue-200 text-blue-700 shadow-sm';
-    }
-    
-    // Task colors based on priority
-    const priorityColors = {
-      urgent: 'bg-gradient-to-r from-red-50 to-rose-50 border-red-200 text-red-700 shadow-sm',
-      high: 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 text-orange-700 shadow-sm',
-      medium: 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-200 text-yellow-700 shadow-sm',
-      low: 'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200 text-slate-600 shadow-sm',
-      none: 'bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 text-gray-600 shadow-sm',
+  useEffect(() => {
+    if (!resizing) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!gridRef.current || !resizing) return;
+      const rect = gridRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top + gridRef.current.scrollTop;
+      const newEnd = timeForPosition(y, 0);
+      const slot = slots.find(s => s.id === resizing.slotId);
+      if (!slot) return;
+      const minEnd = timeToMinutes(slot.startTime) + 5;
+      const newEndMin = Math.max(minEnd, timeToMinutes(newEnd));
+      const endH = Math.floor(newEndMin / 60) % 24;
+      const endM = newEndMin % 60;
+      onSlotsChange(slots.map(s =>
+        s.id === resizing.slotId ? { ...s, endTime: `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}` } : s
+      ));
     };
-    
-    return priorityColors[block.priority || 'none'];
-  };
+    const handleMouseUp = () => setResizing(null);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, slots, onSlotsChange]);
 
-  // Generate time slots
-  const workStart = timeToMinutes(preferences.workDayStart);
-  const workEnd = timeToMinutes(preferences.workDayEnd);
-  const timeSlots = [];
-  for (let time = workStart; time <= workEnd; time += 30) {
-    timeSlots.push(minutesToTime(time));
-  }
-
-  const currentMinutes = timeToMinutes(format(currentTime, 'HH:mm'));
-  const isCurrentTimeSlot = (slotTime: string) => {
-    const slotMinutes = timeToMinutes(slotTime);
-    return currentMinutes >= slotMinutes && currentMinutes < slotMinutes + 30;
-  };
+  const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-gradient-to-r from-background to-muted/20">
-        <div>
-          <h2 className="text-xl font-bold text-foreground tracking-tight">
-            {format(date, 'EEEE, MMMM d, yyyy')}
-          </h2>
-          <p className="text-xs text-muted-foreground font-medium mt-1 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              {format(currentTime, 'h:mm a')}
-            </span>
-            <span className="text-border">•</span>
-            <span>{timeBlocks.filter(b => b.type === 'task').length} tasks</span>
-            <span className="text-border">•</span>
-            <span>{timeBlocks.filter(b => b.type === 'break').length} breaks</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleAddBlock(preferences.workDayStart)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95 text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            Add Block
-          </button>
-        </div>
-      </div>
-
-      {/* Time Grid */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="relative">
-          {/* Current Time Line */}
-          {isSameDay(date, currentTime) && (
+    <div className="flex flex-col h-full bg-background overflow-hidden">
+      <div className="flex-1 overflow-y-auto relative" ref={gridRef}
+        onDragOver={handleGridDragOver}
+        onDragLeave={handleGridDragLeave}
+        onDrop={handleGridDrop}
+      >
+        <div className="absolute inset-0 pointer-events-none z-20">
+          {isSameDay(date, now) && (
+            <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${currentTop}px` }}>
+              <div className="h-0.5 bg-red-500 relative">
+                <div className="absolute -left-1 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md" />
+              </div>
+            </div>
+          )}
+          {preview && dropHighlight && (
             <div
-              className="absolute left-0 right-0 z-20"
+              className="absolute left-20 right-2 rounded-lg border-2 border-dashed border-primary/50 bg-primary/10 z-10 flex items-center justify-center"
               style={{
-                top: `${((currentMinutes - workStart) / (workEnd - workStart)) * 100}%`,
+                top: `${topForTime(preview.start)}px`,
+                height: `${slotHeight(timeToMinutes(preview.end) - timeToMinutes(preview.start))}px`,
               }}
             >
-              <div className="absolute inset-x-0 h-px bg-gradient-to-r from-red-500 via-red-400 to-transparent" />
-              <div className="absolute -left-1 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md shadow-red-500/30 ring-2 ring-white" />
-              <span className="absolute -top-5 left-4 text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full shadow-sm">
-                {format(currentTime, 'h:mm a')}
+              <span className="text-[10px] font-bold text-primary bg-background/80 px-2 py-0.5 rounded">
+                {formatTimeDisplay(preview.start)} → {formatTimeDisplay(preview.end)}
               </span>
             </div>
           )}
+        </div>
 
-          {/* Time Slots */}
-          {timeSlots.map((slotTime, index) => {
-            const slotBlocks = timeBlocks.filter(block => 
-              timeToMinutes(block.startTime) <= timeToMinutes(slotTime) && 
-              timeToMinutes(block.endTime) > timeToMinutes(slotTime)
-            );
-
-            return (
-              <div
-                key={slotTime}
-                className={cn(
-                  'relative flex border-b border-border/40 min-h-[70px] transition-colors duration-200',
-                  isCurrentTimeSlot(slotTime) && 'bg-gradient-to-r from-red-50/30 to-transparent'
-                )}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, slotTime)}
-              >
-                {/* Time Label */}
-                <div className={cn(
-                  'w-20 py-3 px-3 text-sm font-semibold border-r border-border/40 flex flex-col justify-center',
-                  isCurrentTimeSlot(slotTime) ? 'text-red-500' : 'text-muted-foreground/70'
-                )}>
-                  {slotTime}
-                  {isCurrentTimeSlot(slotTime) && (
-                    <span className="text-[10px] font-bold text-red-400">NOW</span>
-                  )}
-                </div>
-
-                {/* Time Blocks */}
-                <div className="flex-1 relative p-1">
-                  {slotBlocks.map(block => {
-                    const duration = calculateDuration(block.startTime, block.endTime);
-                    const height = (duration / 30) * 70; // 70px per 30 minutes
-                    
-                    return (
-                      <div
-                        key={block.id}
-                        draggable={block.type !== 'break' || !block.autoScheduled}
-                        onDragStart={() => handleDragStart(block)}
-                        onClick={() => handleBlockClick(block)}
-                        className={cn(
-                          'absolute left-2 right-2 rounded-xl border p-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.01]',
-                          getBlockColor(block),
-                          draggedBlock?.id === block.id && 'opacity-50 scale-95'
-                        )}
-                        style={{
-                          top: '6px',
-                          height: `${height - 12}px`,
-                          zIndex: block.type === 'break' ? 1 : 2,
-                        }}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1 rounded-lg bg-white/50">
-                              {getBlockIcon(block.type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm truncate">
-                                {block.title}
-                              </div>
-                              <div className="text-xs opacity-70 font-medium">
-                                {block.startTime} - {block.endTime} ({duration}min)
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            {block.type === 'task' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const task = tasks.find(t => t.id === block.taskId);
-                                  if (task) onTaskClick(task);
-                                }}
-                                className="p-1.5 hover:bg-white/30 rounded-lg transition-colors"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            {!block.autoScheduled && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteBlock(block.id);
-                                }}
-                                className="p-1.5 hover:bg-white/30 rounded-lg transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Empty slot indicator */}
-                  {slotBlocks.length === 0 && (
-                    <div
-                      className="absolute inset-3 border-2 border-dashed border-border/40 rounded-xl flex items-center justify-center opacity-0 hover:opacity-100 transition-all duration-200 cursor-pointer hover:border-primary/40 hover:bg-primary/5"
-                      onClick={() => handleAddBlock(slotTime)}
-                    >
-                      <Plus className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                </div>
+        <div className="relative min-h-full">
+          {HOURS.map(hour => (
+            <div key={hour} className="flex border-b border-border/30">
+              <div className="w-20 flex-shrink-0 text-right pr-3 pt-0 relative" style={{ height: `${HOUR_HEIGHT}px` }}>
+                <span className="text-[10px] font-bold text-muted-foreground -mt-2 absolute right-3 top-0">
+                  {hour === 0 ? '' : format(new Date().setHours(hour, 0, 0, 0), 'ha')}
+                </span>
               </div>
-            );
-          })}
+              <div className="flex-1 relative border-l border-border/30" style={{ height: `${HOUR_HEIGHT}px` }}>
+                {hour % 1 === 0 && (
+                  <div className="absolute inset-0 border-b border-border/20" style={{ top: '50%' }} />
+                )}
+              </div>
+            </div>
+          ))}
+
+          {computeOverlaps(daySlots).map((group, gi) =>
+            group.map((slot, si) => {
+              const top = topForTime(slot.startTime);
+              const dur = timeToMinutes(slot.endTime) - timeToMinutes(slot.startTime);
+              const height = slotHeight(dur);
+              const total = group.length;
+              const width = Math.max(60, (100 / total) - 2);
+              const left = 2 + (si * (100 / total));
+
+              return (
+                <div
+                  key={slot.id}
+                  onMouseDown={(e) => handleSlotMouseDown(e, slot)}
+                  onClick={() => onSlotClick(slot)}
+                  className="absolute rounded-lg border cursor-pointer overflow-hidden transition-all hover:z-30 hover:opacity-90 select-none"
+                  style={{
+                    top: `${top}px`,
+                    height: `${Math.max(height, 18)}px`,
+                    left: `${left}%`,
+                    width: `${width}%`,
+                    backgroundColor: slot.color + '22',
+                    borderColor: slot.color,
+                    borderLeftWidth: '3px',
+                    borderLeftColor: slot.color,
+                    zIndex: 10 + si,
+                  }}
+                >
+                  <div className="px-1.5 py-0.5 h-full flex flex-col justify-center">
+                    <p className="text-[10px] font-bold text-foreground leading-tight truncate">{slot.title}</p>
+                    {height > 30 && (
+                      <p className="text-[8px] text-muted-foreground leading-tight">
+                        {formatTimeDisplay(slot.startTime)} – {formatTimeDisplay(slot.endTime)}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    data-resize
+                    className="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize hover:bg-foreground/10"
+                  />
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
-
-      {/* Add Block Modal */}
-      {isAddingBlock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-card rounded-2xl p-6 max-w-md w-full shadow-2xl border border-border/50">
-            <h3 className="text-lg font-bold mb-1">Add Time Block</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              Starting at <span className="font-semibold text-foreground">{newBlockStartTime}</span>
-            </p>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                onClick={() => handleCreateBlock('task')}
-                className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all duration-200 hover:scale-105 hover:shadow-lg border border-blue-200"
-              >
-                <Target className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-xs font-semibold">Task</div>
-              </button>
-              <button
-                onClick={() => handleCreateBlock('break')}
-                className="p-4 bg-gradient-to-br from-green-50 to-green-100 text-green-700 rounded-xl hover:from-green-100 hover:to-green-200 transition-all duration-200 hover:scale-105 hover:shadow-lg border border-green-200"
-              >
-                <Coffee className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-xs font-semibold">Break</div>
-              </button>
-              <button
-                onClick={() => handleCreateBlock('focus')}
-                className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 text-purple-700 rounded-xl hover:from-purple-100 hover:to-purple-200 transition-all duration-200 hover:scale-105 hover:shadow-lg border border-purple-200"
-              >
-                <Brain className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-xs font-semibold">Focus</div>
-              </button>
-            </div>
-            <button
-              onClick={() => setIsAddingBlock(false)}
-              className="w-full mt-6 p-3 bg-muted text-muted-foreground rounded-xl hover:bg-muted/80 transition-all duration-200 font-medium"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
+
+function computeOverlaps(slots: CalendarSlot[]): CalendarSlot[][] {
+  const groups: CalendarSlot[][] = [];
+  let i = 0;
+  while (i < slots.length) {
+    const group: CalendarSlot[] = [slots[i]];
+    let j = i + 1;
+    while (j < slots.length && timeToMinutes(slots[j].startTime) < timeToMinutes(slots[i].endTime)) {
+      group.push(slots[j]);
+      j++;
+    }
+    groups.push(group);
+    i = j;
+  }
+  return groups;
+}
 
 export default DayView;
