@@ -461,7 +461,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   }, [stopSound]);
 
   const handleHelpClick = () => {
-    window.location.hash = '#/support';
+    stopSound();
+    document.dispatchEvent(new CustomEvent('closeDeepFocus'));
+    setTimeout(() => {
+      window.location.hash = '#/support';
+    }, 50);
   };
 
   return (
@@ -505,10 +509,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       >
         <button
           onClick={handleHelpClick}
-          className="absolute bottom-4 left-4 p-2 rounded-full transition-colors z-10 text-muted-foreground hover:text-foreground hover:bg-muted"
+          className="absolute bottom-4 left-4 p-2.5 rounded-full transition-all z-10 text-muted-foreground hover:text-foreground hover:bg-muted/80 bg-muted/40 border border-border/50"
           aria-label="Help"
         >
-          <LifeBuoy className="w-5 h-5" />
+          <LifeBuoy className="w-4 h-4" />
         </button>
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">

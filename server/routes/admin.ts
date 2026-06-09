@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
-import { users, workspaces, transactions, coupons, systemSettings, tasks, goals, boards, habits, notes, noteTags, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages } from '../../shared/schema';
+import { users, workspaces, transactions, coupons, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, noteTags, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages } from '../../shared/schema';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
@@ -56,7 +56,7 @@ router.get('/stats', async (req: AuthRequest, res: Response) => {
 // Coupon Management
 router.get('/coupons', async (req: AuthRequest, res: Response) => {
   try {
-    const allCoupons = await db.select().from(coupons).orderBy(desc(coupons.createdAt));
+    const allCoupons = await db.select().from(coupons).orderBy(coupons.sortOrder, desc(coupons.createdAt));
     res.json(allCoupons);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch coupons' });
@@ -65,7 +65,7 @@ router.get('/coupons', async (req: AuthRequest, res: Response) => {
 
 router.post('/coupons', async (req: AuthRequest, res: Response) => {
   try {
-    const { code, discountType, discountValue, maxUses, restrictedToEmail, expiresAt } = req.body;
+    const { code, discountType, discountValue, maxUses, restrictedToEmail, restrictedToPlan, startDate, expiresAt, oneTimePerUser } = req.body;
     
     const [newCoupon] = await db.insert(coupons).values({
       code: code.toUpperCase(),
@@ -73,7 +73,10 @@ router.post('/coupons', async (req: AuthRequest, res: Response) => {
       discountValue,
       maxUses: maxUses || null,
       restrictedToEmail: restrictedToEmail || null,
+      restrictedToPlan: restrictedToPlan || null,
+      startDate: startDate || null,
       expiresAt: expiresAt || null,
+      oneTimePerUser: oneTimePerUser || false,
       active: true
     }).returning();
     
@@ -90,6 +93,49 @@ router.delete('/coupons/:id', async (req: AuthRequest, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete coupon' });
+  }
+});
+
+router.patch('/coupons/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { code, discountType, discountValue, maxUses, restrictedToEmail, restrictedToPlan, startDate, expiresAt, oneTimePerUser, active } = req.body;
+    const couponId = parseInt(req.params.id);
+    
+    await db.update(coupons).set({
+      code: code?.toUpperCase(),
+      discountType,
+      discountValue,
+      maxUses: maxUses || null,
+      restrictedToEmail: restrictedToEmail || null,
+      restrictedToPlan: restrictedToPlan || null,
+      startDate: startDate || null,
+      expiresAt: expiresAt || null,
+      oneTimePerUser: oneTimePerUser || false,
+      active: active !== undefined ? active : undefined,
+    }).where(eq(coupons.id, couponId));
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update coupon:', error);
+    res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+router.patch('/coupons/reorder', async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ error: 'orderedIds must be an array' });
+    }
+    
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(coupons).set({ sortOrder: i }).where(eq(coupons.id, orderedIds[i]));
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to reorder coupons:', error);
+    res.status(500).json({ error: 'Failed to reorder coupons' });
   }
 });
 

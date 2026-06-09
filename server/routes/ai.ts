@@ -666,7 +666,7 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const completion = await client.chat.completions.create({
       messages: [{
-        role: 'system', content: `You are Joy, a helpful productivity assistant for a task management app called Task Joy Box.
+        role: 'system', content: `You are Planora, a helpful productivity assistant for a task management app called My Planner.
 
 When the user asks to CREATE a task, DELETE a task, MOVE a task, UPDATE a task priority, or perform other board actions, you MUST respond with a JSON action object AND a friendly message.
 

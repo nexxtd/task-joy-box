@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { users, organizations, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { users, organizations, coupons, couponRedemptions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
+import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import * as paypalSdk from 'paypal-rest-sdk';
 import { encrypt, decrypt } from '../lib/encryption';
@@ -77,13 +77,66 @@ router.get('/pricing', (_req: Request, res: Response) => {
   res.json(PRICING_TIERS);
 });
 
+// Validate a coupon code
+router.post('/validate-coupon', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code, plan } = req.body;
+    if (!code) return res.status(400).json({ error: 'Coupon code is required' });
+
+    const [coupon] = await db.select().from(coupons).where(eq(coupons.code, code.toUpperCase())).limit(1);
+    if (!coupon) return res.status(404).json({ error: 'This coupon does not exist' });
+    if (!coupon.active) return res.status(400).json({ error: 'This coupon is no longer active' });
+
+    const now = new Date().toISOString();
+    if (coupon.startDate && coupon.startDate > now) {
+      return res.status(400).json({ error: 'This coupon has not started yet' });
+    }
+    if (coupon.expiresAt && coupon.expiresAt < now) {
+      return res.status(400).json({ error: 'This coupon has expired' });
+    }
+    if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
+      return res.status(400).json({ error: 'This coupon has reached its usage limit' });
+    }
+    if (coupon.restrictedToEmail) {
+      const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+      if (!user || user.email !== coupon.restrictedToEmail) {
+        return res.status(400).json({ error: 'This coupon is not valid for your account' });
+      }
+    }
+    if (coupon.restrictedToPlan && plan && coupon.restrictedToPlan !== plan) {
+      return res.status(400).json({ error: `This coupon is only valid for the ${coupon.restrictedToPlan} plan` });
+    }
+    if (coupon.oneTimePerUser) {
+      const [existing] = await db.select().from(couponRedemptions)
+        .where(and(eq(couponRedemptions.couponId, coupon.id), eq(couponRedemptions.userId, req.userId!)))
+        .limit(1);
+      if (existing) {
+        return res.status(400).json({ error: 'You have already used this coupon' });
+      }
+    }
+
+    const discount = coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`;
+    res.json({
+      valid: true,
+      code: coupon.code,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      discountLabel: `${coupon.code} — ${discount}`,
+    });
+  } catch (error) {
+    console.error('Coupon validation error:', error);
+    res.status(500).json({ error: 'Failed to validate coupon' });
+  }
+});
+
 // Create PayPal checkout (only payment method)
 router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const tier = req.body?.tier as SubscriptionTier;
     const planType = req.body?.planType || 'personal';
+    const couponCode = req.body?.couponCode || null;
 
-    console.log('Payment request received:', { tier, planType, userId: req.userId });
+    console.log('Payment request received:', { tier, planType, userId: req.userId, couponCode });
 
     if (!tier || !['premium', 'pro'].includes(tier)) {
       console.log('Invalid tier validation failed:', { tier, planType, body: req.body });
@@ -107,25 +160,46 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
       adjustedPrice = tier === 'premium' ? 9.99 : 14.99;
     }
 
+    // Apply coupon discount
+    let couponId: number | null = null;
+    if (couponCode) {
+      const [coupon] = await db.select().from(coupons).where(eq(coupons.code, couponCode.toUpperCase())).limit(1);
+      if (coupon && coupon.active) {
+        const now = new Date().toISOString();
+        const isValid = (!coupon.startDate || coupon.startDate <= now) &&
+          (!coupon.expiresAt || coupon.expiresAt >= now) &&
+          (coupon.maxUses === null || coupon.usedCount < coupon.maxUses);
+
+        if (isValid) {
+          if (coupon.discountType === 'percentage') {
+            adjustedPrice = adjustedPrice * (1 - coupon.discountValue / 100);
+          } else {
+            adjustedPrice = Math.max(0, adjustedPrice - coupon.discountValue);
+          }
+          couponId = coupon.id;
+        }
+      }
+    }
+
     const paymentData = {
       intent: 'sale',
       payer: { payment_method: 'paypal' },
       redirect_urls: {
-        return_url: `${appBaseUrl}/api/payment/execute-payment`,
+        return_url: `${appBaseUrl}/api/payment/execute-payment${couponId ? `?couponId=${couponId}` : ''}`,
         cancel_url: `${appBaseUrl}/pricing?subscription=cancelled`,
       },
       transactions: [{
         item_list: {
           items: [{
             name: `${selectedTier.name} ${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan`,
-            sku: `${planType}_${tier}`,
+            sku: `${planType}_${tier}${couponId ? `_coupon${couponId}` : ''}`,
             price: adjustedPrice.toFixed(2),
             currency: 'USD',
             quantity: 1,
           }]
         },
         amount: { currency: 'USD', total: adjustedPrice.toFixed(2) },
-        description: `Task-Joy subscription — ${selectedTier.name} ${planType} plan`,
+        description: `My Planner subscription — ${selectedTier.name} ${planType} plan`,
       }]
     };
 
@@ -234,7 +308,7 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Response) => {
   if (!paypalConfigured) return res.status(503).json({ error: 'PayPal is not configured' });
 
-  const { paymentId, PayerID } = req.query;
+  const { paymentId, PayerID, couponId } = req.query;
   if (!paymentId || !PayerID) return res.status(400).json({ error: 'Missing payment parameters' });
 
   paypal.payment.execute(paymentId as string, { payer_id: PayerID as string }, async (error: any, payment: any) => {
@@ -254,6 +328,29 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
           subscriptionEndsAt: null,
         } as UpdateUser)
         .where(eq(users.id, req.userId!));
+
+      // Track coupon redemption
+      if (couponId) {
+        const parsedCouponId = parseInt(couponId as string);
+        await db.insert(couponRedemptions).values({
+          couponId: parsedCouponId,
+          userId: req.userId!,
+        });
+
+        // Increment used count
+        const [coupon] = await db.select().from(coupons).where(eq(coupons.id, parsedCouponId)).limit(1);
+        if (coupon) {
+          const newUsedCount = coupon.usedCount + 1;
+          const updateData: any = { usedCount: newUsedCount };
+
+          // Auto-deactivate if usage limit reached
+          if (coupon.maxUses !== null && newUsedCount >= coupon.maxUses) {
+            updateData.active = false;
+          }
+
+          await db.update(coupons).set(updateData).where(eq(coupons.id, parsedCouponId));
+        }
+      }
 
       res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
     } catch (dbError) {

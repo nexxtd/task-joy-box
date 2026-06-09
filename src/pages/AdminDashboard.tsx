@@ -47,8 +47,12 @@ interface Coupon {
   maxUses: number | null;
   usedCount: number;
   restrictedToEmail: string | null;
+  restrictedToPlan: string | null;
+  startDate: string | null;
   expiresAt: string | null;
+  oneTimePerUser: boolean;
   active: boolean;
+  sortOrder: number;
   createdAt: string;
 }
 
@@ -78,8 +82,19 @@ const AdminDashboard = () => {
     discountValue: 0,
     maxUses: '',
     restrictedToEmail: '',
-    expiresAt: ''
+    restrictedToPlan: 'all',
+    startDate: '',
+    expiresAt: '',
+    oneTimePerUser: false
   });
+
+  // Coupon tab state
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponFilter, setCouponFilter] = useState<'all' | 'active' | 'expired'>('all');
+  const [couponSort, setCouponSort] = useState<'date' | 'expiry' | 'redemptions'>('date');
+  const [expandedCouponId, setExpandedCouponId] = useState<number | null>(null);
+  const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
+  const [draggedCouponId, setDraggedCouponId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -139,14 +154,18 @@ const AdminDashboard = () => {
         body: JSON.stringify({
           ...newCoupon,
           discountValue: Number(newCoupon.discountValue),
-          maxUses: newCoupon.maxUses ? Number(newCoupon.maxUses) : null
+          maxUses: newCoupon.maxUses ? Number(newCoupon.maxUses) : null,
+          restrictedToPlan: newCoupon.restrictedToPlan === 'all' ? null : newCoupon.restrictedToPlan,
+          restrictedToEmail: newCoupon.restrictedToEmail || null,
+          startDate: newCoupon.startDate || null,
+          expiresAt: newCoupon.expiresAt || null,
         })
       });
 
       if (res.ok) {
         toast({ title: 'Success', description: 'Coupon created successfully' });
         setIsAddingCoupon(false);
-        setNewCoupon({ code: '', discountType: 'percentage', discountValue: 0, maxUses: '', restrictedToEmail: '', expiresAt: '' });
+        setNewCoupon({ code: '', discountType: 'percentage', discountValue: 0, maxUses: '', restrictedToEmail: '', restrictedToPlan: 'all', startDate: '', expiresAt: '', oneTimePerUser: false });
         fetchData();
       } else {
         const errorData = await res.json();
@@ -186,6 +205,58 @@ const AdminDashboard = () => {
         description: 'Failed to delete coupon', 
         variant: 'destructive' 
       });
+    }
+  };
+
+  const handleUpdateCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCoupon) return;
+    try {
+      const res = await fetch(`/api/admin/coupons/${editingCoupon.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: editingCoupon.code,
+          discountType: editingCoupon.discountType,
+          discountValue: Number(editingCoupon.discountValue),
+          maxUses: editingCoupon.maxUses || null,
+          restrictedToEmail: editingCoupon.restrictedToEmail || null,
+          restrictedToPlan: editingCoupon.restrictedToPlan || null,
+          startDate: editingCoupon.startDate || null,
+          expiresAt: editingCoupon.expiresAt || null,
+          oneTimePerUser: editingCoupon.oneTimePerUser,
+          active: editingCoupon.active,
+        })
+      });
+      if (res.ok) {
+        toast({ title: 'Success', description: 'Coupon updated' });
+        setEditingCoupon(null);
+        fetchData();
+      } else {
+        const errorData = await res.json();
+        toast({ title: 'Error', description: errorData.error || 'Failed to update', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
+    }
+  };
+
+  const handleReorderCoupon = async (dragId: number, hoverId: number) => {
+    const items = [...coupons];
+    const dragIdx = items.findIndex(c => c.id === dragId);
+    const hoverIdx = items.findIndex(c => c.id === hoverId);
+    if (dragIdx === -1 || hoverIdx === -1) return;
+    const [moved] = items.splice(dragIdx, 1);
+    items.splice(hoverIdx, 0, moved);
+    setCoupons(items);
+    try {
+      await fetch('/api/admin/coupons/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderedIds: items.map(c => c.id) }),
+      });
+    } catch {
+      fetchData();
     }
   };
 
@@ -484,8 +555,8 @@ const AdminDashboard = () => {
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center bg-primary/5 p-6 rounded-3xl border border-primary/10">
               <div>
-                <h2 className="text-2xl font-bold italic">Promotions & Discounts</h2>
-                <p className="text-muted-foreground">Create and manage active coupon codes for your users.</p>
+                <h2 className="text-2xl font-black">Promotions & Discounts</h2>
+                <p className="text-sm text-muted-foreground">Create and manage active coupon codes for your users.</p>
               </div>
               <button 
                 onClick={() => setIsAddingCoupon(true)}
@@ -496,57 +567,146 @@ const AdminDashboard = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {coupons.map(coupon => (
-                <div key={coupon.id} className="glass rounded-3xl p-6 border-white/10 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => handleDeleteCoupon(coupon.id)}
-                      className="p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="bg-primary/20 p-2 rounded-xl">
-                      <Ticket className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black italic tracking-tighter">{coupon.code}</h3>
-                      <p className="text-xs text-muted-foreground uppercase font-bold letter-spacing-widest">
-                        {coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`}
-                      </p>
-                    </div>
-                  </div>
+            {/* Filter bar */}
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                placeholder="Search coupons..."
+                value={couponSearch}
+                onChange={e => setCouponSearch(e.target.value)}
+                className="flex-1 min-w-[200px] bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+              />
+              <div className="flex items-center bg-muted rounded-xl p-1">
+                {(['all', 'active', 'expired'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setCouponFilter(f)}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg capitalize transition-all ${
+                      couponFilter === f ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <Select value={couponSort} onValueChange={(v) => setCouponSort(v as any)}>
+                <SelectTrigger className="w-[160px] bg-background border border-input text-xs h-10">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="date">Date Created</SelectItem>
+                  <SelectItem value="expiry">Expiry Date</SelectItem>
+                  <SelectItem value="redemptions">Redemptions</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground italic">Redemptions</span>
-                      <span className="font-bold">{coupon.usedCount} / {coupon.maxUses || '∞'}</span>
-                    </div>
-                    {coupon.restrictedToEmail && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground italic">Restricted to</span>
-                        <span className="font-bold text-xs">{coupon.restrictedToEmail}</span>
+            {/* Coupon list */}
+            <div className="space-y-2">
+              {coupons
+                .filter(c => {
+                  if (couponSearch && !c.code.toLowerCase().includes(couponSearch.toLowerCase())) return false;
+                  if (couponFilter === 'active' && !c.active) return false;
+                  if (couponFilter === 'expired' && c.active) return false;
+                  return true;
+                })
+                .sort((a, b) => {
+                  if (couponSort === 'expiry') {
+                    if (!a.expiresAt && !b.expiresAt) return 0;
+                    if (!a.expiresAt) return 1;
+                    if (!b.expiresAt) return -1;
+                    return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
+                  }
+                  if (couponSort === 'redemptions') return b.usedCount - a.usedCount;
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                })
+                .map(coupon => {
+                  const isExpired = (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) || (!coupon.active);
+                  const isExpanded = expandedCouponId === coupon.id;
+                  return (
+                    <div key={coupon.id}>
+                      <div
+                        draggable
+                        onDragStart={() => setDraggedCouponId(coupon.id)}
+                        onDragOver={(e) => { e.preventDefault(); if (draggedCouponId && draggedCouponId !== coupon.id) handleReorderCoupon(draggedCouponId, coupon.id); }}
+                        onDragEnd={() => setDraggedCouponId(null)}
+                        className={`flex items-center gap-3 p-4 bg-card border rounded-xl transition-all group ${
+                          isExpanded ? 'border-primary shadow-md' : 'border-border hover:border-primary/30'
+                        } ${draggedCouponId === coupon.id ? 'opacity-50' : ''}`}
+                      >
+                        <div className="w-6 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                          <svg className="w-4 h-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                            <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                            <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                          </svg>
+                        </div>
+                        <span className="font-black text-sm tracking-wider">{coupon.code}</span>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-muted">
+                          {coupon.usedCount} / {coupon.maxUses || '∞'}
+                        </span>
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          isExpired ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'
+                        }`}>
+                          {isExpired ? 'Expired' : 'Active'}
+                        </span>
+                        <div className="flex-1" />
+                        <button
+                          onClick={() => setEditingCoupon(coupon)}
+                          className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setExpandedCouponId(isExpanded ? null : coupon.id)}
+                          className="p-1.5 hover:bg-muted rounded-lg transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
                       </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground italic">Expires</span>
-                      <span className="font-bold">{coupon.expiresAt ? format(new Date(coupon.expiresAt), 'MMM dd, yyyy') : 'Never'}</span>
+                      {isExpanded && (
+                        <div className="ml-12 p-4 bg-muted/30 border border-border rounded-b-xl -mt-1 mb-2 animate-in fade-in duration-200">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground text-xs">Start Date</span>
+                              <p className="font-bold">{coupon.startDate ? format(new Date(coupon.startDate), 'MMM dd, yyyy') : 'No start date'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">Expiry Date</span>
+                              <p className="font-bold">{coupon.expiresAt ? format(new Date(coupon.expiresAt), 'MMM dd, yyyy') : 'Never'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">Discount</span>
+                              <p className="font-bold">{coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">Usage Limit</span>
+                              <p className="font-bold">{coupon.maxUses || 'Unlimited'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">One Time Per User</span>
+                              <p className="font-bold">{coupon.oneTimePerUser ? 'Yes' : 'No'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">Restricted to Plan</span>
+                              <p className="font-bold">{coupon.restrictedToPlan || 'All Plans'}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground text-xs">Restricted to Email</span>
+                              <p className="font-bold">{coupon.restrictedToEmail || 'Public'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-
-                  <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                      coupon.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                    }`}>
-                      {coupon.active ? 'Active' : 'Disabled'}
-                    </span>
-                    <button className="text-primary text-xs font-bold hover:underline">Edit Details</button>
-                  </div>
+                  );
+                })}
+              {coupons.length === 0 && (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Ticket className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No coupons yet. Create your first coupon to get started.</p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
@@ -762,7 +922,7 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <form 
             onSubmit={handleCreateCoupon}
-            className="bg-card w-full max-w-lg rounded-2xl p-6 border border-border shadow-2xl animate-in zoom-in-95 duration-200"
+            className="bg-card w-full max-w-lg rounded-2xl p-6 border border-border shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -779,9 +939,8 @@ const AdminDashboard = () => {
             </div>
             
             <div className="space-y-5">
-              {/* Coupon Code */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Coupon Code</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Code</label>
                 <input 
                   required
                   type="text" 
@@ -792,62 +951,74 @@ const AdminDashboard = () => {
                 />
                 <p className="text-xs text-muted-foreground mt-1">Code will be converted to uppercase</p>
               </div>
-              
-              {/* Discount Type & Value */}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">Discount Type</label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Discount type</label>
                   <Select value={newCoupon.discountType} onValueChange={(value) => setNewCoupon({...newCoupon, discountType: value as any})}>
-                    <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer h-9">
+                    <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      <SelectItem value="fixed">Fixed Amount ($)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">
-                    {newCoupon.discountType === 'percentage' ? 'Discount %' : 'Amount ($)'}
-                  </label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Discount %</label>
                   <div className="relative">
-                    {newCoupon.discountType === 'fixed' && (
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                    )}
                     <input 
                       required
                       type="number" 
-                      min="0"
-                      max={newCoupon.discountType === 'percentage' ? '100' : undefined}
-                      placeholder={newCoupon.discountType === 'percentage' ? '20' : '10'}
-                      className={`w-full bg-background border border-input rounded-lg ${newCoupon.discountType === 'fixed' ? 'pl-8' : 'pl-4'} pr-4 py-3 font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`}
+                      min="1"
+                      max="100"
+                      placeholder="20"
+                      className="w-full bg-background border border-input rounded-lg pl-4 pr-8 py-3 font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                       value={newCoupon.discountValue || ''}
                       onChange={e => setNewCoupon({...newCoupon, discountValue: Number(e.target.value)})}
                     />
-                    {newCoupon.discountType === 'percentage' && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
-                    )}
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
                   </div>
                 </div>
               </div>
 
-              {/* Max Uses & Expiry */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Usage limit</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  placeholder="Leave empty for unlimited"
+                  className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  value={newCoupon.maxUses}
+                  onChange={e => setNewCoupon({...newCoupon, maxUses: e.target.value})}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Leave empty for unlimited</p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">One time use per user</label>
+                <button
+                  type="button"
+                  onClick={() => setNewCoupon({...newCoupon, oneTimePerUser: !newCoupon.oneTimePerUser})}
+                  className={`w-10 h-6 rounded-full transition-colors relative ${newCoupon.oneTimePerUser ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${newCoupon.oneTimePerUser ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">Usage Limit</label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Start date</label>
                   <input 
-                    type="number" 
-                    min="1"
-                    placeholder="Unlimited"
-                    className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                    value={newCoupon.maxUses}
-                    onChange={e => setNewCoupon({...newCoupon, maxUses: e.target.value})}
+                    type="date" 
+                    className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer"
+                    value={newCoupon.startDate}
+                    onChange={e => setNewCoupon({...newCoupon, startDate: e.target.value})}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Leave empty for unlimited</p>
+                  <p className="text-xs text-muted-foreground mt-1">Optional start date</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">Expiry Date</label>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Expiry date</label>
                   <input 
                     type="date" 
                     className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer"
@@ -858,19 +1029,37 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              {/* Restricted Email */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  Restrict to Email <span className="text-muted-foreground font-normal">(Optional)</span>
-                </label>
+                <label className="text-sm font-medium text-foreground mb-2 block">Restrict to plan</label>
+                <Select value={newCoupon.restrictedToPlan} onValueChange={(value) => setNewCoupon({...newCoupon, restrictedToPlan: value})}>
+                  <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
+                    <SelectValue placeholder="Select plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plans</SelectItem>
+                    <SelectItem value="Free">Free</SelectItem>
+                    <SelectItem value="Premium">Premium</SelectItem>
+                    <SelectItem value="Pro">Pro</SelectItem>
+                    <SelectItem value="Premium Family">Premium Family</SelectItem>
+                    <SelectItem value="Pro Family">Pro Family</SelectItem>
+                    <SelectItem value="School Premium">School Premium</SelectItem>
+                    <SelectItem value="School Pro">School Pro</SelectItem>
+                    <SelectItem value="Business Premium">Business Premium</SelectItem>
+                    <SelectItem value="Business Pro">Business Pro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Restrict to email</label>
                 <input 
                   type="email" 
-                  placeholder="Only this user can redeem"
+                  placeholder="Only this user can redeem. Leave empty for public use"
                   className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                   value={newCoupon.restrictedToEmail}
                   onChange={e => setNewCoupon({...newCoupon, restrictedToEmail: e.target.value})}
                 />
-                <p className="text-xs text-muted-foreground mt-1">Leave empty for public use</p>
+                <p className="text-xs text-muted-foreground mt-1">Only this user can redeem. Leave empty for public use</p>
               </div>
             </div>
 
@@ -887,6 +1076,162 @@ const AdminDashboard = () => {
                 className="flex-1 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
               >
                 Create Coupon
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Coupon Modal */}
+      {editingCoupon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <form 
+            onSubmit={handleUpdateCoupon}
+            className="bg-card w-full max-w-lg rounded-2xl p-6 border border-border shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-foreground">Edit Coupon</h3>
+              <button 
+                type="button" 
+                onClick={() => setEditingCoupon(null)} 
+                className="p-2 hover:bg-muted rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            
+            <div className="space-y-5">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Code</label>
+                <input 
+                  required
+                  type="text" 
+                  className="w-full bg-background border border-input rounded-lg px-4 py-3 font-mono text-lg font-semibold uppercase tracking-wider focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  value={editingCoupon.code}
+                  onChange={e => setEditingCoupon({...editingCoupon, code: e.target.value.toUpperCase()})}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Discount type</label>
+                  <Select value={editingCoupon.discountType} onValueChange={(value) => setEditingCoupon({...editingCoupon, discountType: value as any})}>
+                    <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Discount %</label>
+                  <div className="relative">
+                    <input 
+                      required
+                      type="number" 
+                      min="1"
+                      max="100"
+                      className="w-full bg-background border border-input rounded-lg pl-4 pr-8 py-3 font-semibold focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                      value={editingCoupon.discountValue}
+                      onChange={e => setEditingCoupon({...editingCoupon, discountValue: Number(e.target.value)})}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Usage limit</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  placeholder="Unlimited"
+                  className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  value={editingCoupon.maxUses || ''}
+                  onChange={e => setEditingCoupon({...editingCoupon, maxUses: e.target.value ? Number(e.target.value) : null})}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Leave empty for unlimited</p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">One time use per user</label>
+                <button
+                  type="button"
+                  onClick={() => setEditingCoupon({...editingCoupon, oneTimePerUser: !editingCoupon.oneTimePerUser})}
+                  className={`w-10 h-6 rounded-full transition-colors relative ${editingCoupon.oneTimePerUser ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${editingCoupon.oneTimePerUser ? 'left-5' : 'left-1'}`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Start date</label>
+                  <input 
+                    type="date" 
+                    className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer"
+                    value={editingCoupon.startDate || ''}
+                    onChange={e => setEditingCoupon({...editingCoupon, startDate: e.target.value || null})}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Expiry date</label>
+                  <input 
+                    type="date" 
+                    className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all cursor-pointer"
+                    value={editingCoupon.expiresAt || ''}
+                    onChange={e => setEditingCoupon({...editingCoupon, expiresAt: e.target.value || null})}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Restrict to plan</label>
+                <Select value={editingCoupon.restrictedToPlan || 'all'} onValueChange={(value) => setEditingCoupon({...editingCoupon, restrictedToPlan: value === 'all' ? null : value})}>
+                  <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plans</SelectItem>
+                    <SelectItem value="Free">Free</SelectItem>
+                    <SelectItem value="Premium">Premium</SelectItem>
+                    <SelectItem value="Pro">Pro</SelectItem>
+                    <SelectItem value="Premium Family">Premium Family</SelectItem>
+                    <SelectItem value="Pro Family">Pro Family</SelectItem>
+                    <SelectItem value="School Premium">School Premium</SelectItem>
+                    <SelectItem value="School Pro">School Pro</SelectItem>
+                    <SelectItem value="Business Premium">Business Premium</SelectItem>
+                    <SelectItem value="Business Pro">Business Pro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Restrict to email</label>
+                <input 
+                  type="email" 
+                  placeholder="Leave empty for public use"
+                  className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  value={editingCoupon.restrictedToEmail || ''}
+                  onChange={e => setEditingCoupon({...editingCoupon, restrictedToEmail: e.target.value || null})}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button 
+                type="button"
+                onClick={() => setEditingCoupon(null)}
+                className="flex-1 px-4 py-3 bg-muted text-foreground font-medium rounded-xl hover:bg-muted/80 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                className="flex-1 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+              >
+                Save
               </button>
             </div>
           </form>

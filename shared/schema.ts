@@ -336,8 +336,19 @@ export const coupons = pgTable('coupons', {
   maxUses: integer('max_uses'),
   usedCount: integer('used_count').default(0).notNull(),
   restrictedToEmail: text('restricted_to_email'),
+  restrictedToPlan: text('restricted_to_plan'),
+  startDate: text('start_date'),
   expiresAt: text('expires_at'),
+  oneTimePerUser: boolean('one_time_per_user').default(false).notNull(),
   active: boolean('active').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const couponRedemptions = pgTable('coupon_redemptions', {
+  id: serial('id').primaryKey(),
+  couponId: integer('coupon_id').references(() => coupons.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 

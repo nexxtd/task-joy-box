@@ -42,7 +42,7 @@ export const FAQS = [
   {
     id: 'ai-assistant',
     question: 'How do I use the AI assistant?',
-    answer: 'Open the AI Chat page from the sidebar (the sparkles icon). Type a message and press Send or hit Enter. Planora can create new tasks directly on your board, update existing tasks, suggest priorities and schedules, and answer questions about your workload. You can also ask it to generate a daily plan or analyse your productivity patterns.',
+    answer: 'Open the AI Chat page from the sidebar (the sparkles icon). Type a message and press Send or hit Enter. My Planner can create new tasks directly on your board, update existing tasks, suggest priorities and schedules, and answer questions about your workload. You can also ask it to generate a daily plan or analyse your productivity patterns.',
   },
   {
     id: 'track-habit',
@@ -90,8 +90,8 @@ export const RESOURCES: ResourceCategory[] = [
     guides: [
       {
         id: 'gs-welcome',
-        title: 'Welcome to Planora',
-        content: 'Planora is your all-in-one productivity platform. It combines tasks, calendar, goals, habits, notes, and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and goals sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial at any time from the Dashboard.',
+        title: 'Welcome to My Planner',
+        content: 'My Planner is your all-in-one productivity platform. It combines tasks, calendar, goals, habits, notes, and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and goals sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial at any time from the Dashboard.',
       },
       {
         id: 'gs-profile',
@@ -106,7 +106,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'gs-navigate',
         title: 'Navigating the app',
-        content: 'The left sidebar is the main navigation. Each icon represents a section:\n\n• Dashboard — your daily overview and energy summary\n• Tasks — your personal Kanban board\n• Projects — shared project boards for collaboration\n• Calendar — schedule view of all tasks with due dates\n• Goals — long-term objectives with progress tracking\n• Habits — daily habit tracker and streak counter\n• Notes — free-form notes with tags\n• Whiteboard — visual planning canvas\n• AI Chat — your Planora AI assistant\n• Insights — productivity analytics\n• Support — FAQs, resources, and help tickets\n• Settings — preferences and account management',
+        content: 'The left sidebar is the main navigation. Each icon represents a section:\n\n• Dashboard — your daily overview and energy summary\n• Tasks — your personal Kanban board\n• Projects — shared project boards for collaboration\n• Calendar — schedule view of all tasks with due dates\n• Goals — long-term objectives with progress tracking\n• Habits — daily habit tracker and streak counter\n• Notes — free-form notes with tags\n• Whiteboard — visual planning canvas\n• AI Chat — your My Planner AI assistant\n• Insights — productivity analytics\n• Support — FAQs, resources, and help tickets\n• Settings — preferences and account management',
       },
     ],
   },
@@ -117,7 +117,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'tasks-managing',
         title: 'Creating and managing tasks',
-        content: 'Tasks are the core of Planora. Each task lives in a column on a board. The default columns are To Do, In Progress, and Done — but you can rename, recolour, and add as many columns as you need.\n\nTo create a task: click "+ Add task" in any column, fill in the title, and optionally set priority, due date, and description. Press Save or hit Enter.\n\nTo move a task: drag it to another column, or open the task and change the column from the dropdown.\n\nTo complete a task: drag it to your Done column, or open the task and tick the Completed checkbox. Completed tasks show a strikethrough and are dimmed.',
+        content: 'Tasks are the core of My Planner. Each task lives in a column on a board. The default columns are To Do, In Progress, and Done — but you can rename, recolour, and add as many columns as you need.\n\nTo create a task: click "+ Add task" in any column, fill in the title, and optionally set priority, due date, and description. Press Save or hit Enter.\n\nTo move a task: drag it to another column, or open the task and change the column from the dropdown.\n\nTo complete a task: drag it to your Done column, or open the task and tick the Completed checkbox. Completed tasks show a strikethrough and are dimmed.',
       },
       {
         id: 'tasks-subtasks',
@@ -179,7 +179,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'cal-google',
         title: 'Connecting Google Calendar',
-        content: 'You can connect your Google Calendar to sync events both ways. Go to Settings > Calendar and click "Connect Google Calendar". You will be redirected to Google to authorise the connection.\n\nOnce connected, you can sync your Planora tasks to Google Calendar (tasks with due dates appear as Google events) and import Google Calendar events into Planora as tasks.\n\nTo disconnect, return to Settings > Calendar and click Disconnect.',
+        content: 'You can connect your Google Calendar to sync events both ways. Go to Settings > Calendar and click "Connect Google Calendar". You will be redirected to Google to authorise the connection.\n\nOnce connected, you can sync your My Planner tasks to Google Calendar (tasks with due dates appear as Google events) and import Google Calendar events into My Planner as tasks.\n\nTo disconnect, return to Settings > Calendar and click Disconnect.',
       },
       {
         id: 'cal-smart',
@@ -279,7 +279,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'ai-chat',
         title: 'Using the AI assistant',
-        content: 'The Planora AI assistant is available on the AI Chat page. Type any request in the chat input and press Send.\n\nExamples of what you can ask:\n• "Create a task to review the Q3 report by Friday, high priority"\n• "What are my most urgent tasks this week?"\n• "Move the design review task to In Progress"\n• "Generate a study plan for learning React in 30 days"\n\nThe AI remembers the context of your conversation within the session and can reference your existing tasks and goals.',
+        content: 'The My Planner AI assistant is available on the AI Chat page. Type any request in the chat input and press Send.\n\nExamples of what you can ask:\n• "Create a task to review the Q3 report by Friday, high priority"\n• "What are my most urgent tasks this week?"\n• "Move the design review task to In Progress"\n• "Generate a study plan for learning React in 30 days"\n\nThe AI remembers the context of your conversation within the session and can reference your existing tasks and goals.',
       },
       {
         id: 'ai-task-builder',
