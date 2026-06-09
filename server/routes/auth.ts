@@ -36,7 +36,7 @@ function issueToken(res: Response, userId: number, email: string) {
 }
 
 function sanitize(str: string): string {
-  return str.trim().slice(0, 500);
+  return str.trim().replace(/<[^>]*>/g, '').slice(0, 500);
 }
 
 router.post('/signup', async (req: Request, res: Response) => {
@@ -99,11 +99,8 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    console.error('Login error details:', {
-      message: e.message,
-      stack: e.stack
-    });
-    res.status(500).json({ error: 'Server error', details: e.message });
+    console.error('Login error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -155,20 +152,15 @@ router.post('/google', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    console.error('Google authentication error details:', {
-      message: e.message,
-      stack: e.stack,
-      body: req.body ? 'present' : 'missing'
-    });
+    console.error('Google authentication error');
     
-    // Check for common Google API errors
     if (e.message?.includes('invalid_grant') || e.message?.includes('idpiframe_initialization_failed')) {
       return res.status(500).json({ 
-        error: 'Google authentication failed. This may be due to an unregistered domain or invalid credentials. Check Google Cloud Console for authorized origins.' 
+        error: 'Google authentication failed. Check Google Cloud Console for authorized origins.' 
       });
     }
     
-    res.status(500).json({ error: 'Google authentication failed', details: e.message });
+    res.status(500).json({ error: 'Google authentication failed' });
   }
 });
 

@@ -36,7 +36,12 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
       return res.json({ board: null });
     }
 
-    res.json({ board: JSON.parse(snapshot.snapshot) });
+    try {
+      res.json({ board: JSON.parse(snapshot.snapshot) });
+    } catch {
+      console.error('Failed to parse board snapshot');
+      res.json({ board: null });
+    }
   } catch (error) {
     console.error('Failed to fetch board snapshot:', error);
     res.status(500).json({ error: 'Failed to fetch board snapshot' });

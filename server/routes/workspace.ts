@@ -311,7 +311,10 @@ router.post('/invite', requireAuth, async (req: AuthRequest, res: Response) => {
         role: 'member',
       } as InsertWorkspaceMember);
 
-      return res.json({ message: 'Member invited successfully', user: targetUser[0] });
+      return res.json({ 
+        message: 'Member invited successfully', 
+        user: { id: targetUser[0].id, name: targetUser[0].name, email: targetUser[0].email }
+      });
     }
 
     // For non-existing users, store a pending invitation

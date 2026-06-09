@@ -78,7 +78,7 @@ async function extractJsonFromResponse(text: string) {
 }
 
 function sanitize(str: string): string {
-  return str.trim().slice(0, 2000);
+  return str.trim().replace(/<[^>]*>/g, '').slice(0, 2000);
 }
 
 function parsePositiveInt(value: unknown): number | null {
@@ -399,12 +399,12 @@ Only respond with valid JSON, no markdown.`;
       const data = await extractJsonFromResponse(responseText);
       res.json(data);
     } catch (parseError) {
-      console.error('Failed to parse response for suggest-schedule:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      console.error('Failed to parse response for suggest-schedule');
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
-    console.error('AI request failed for suggest-schedule:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    console.error('AI request failed for suggest-schedule');
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -470,11 +470,11 @@ Only respond with valid JSON, no markdown.`;
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for analyze-tasks:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('AI request failed for analyze-tasks:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -539,11 +539,11 @@ Only respond with valid JSON, no markdown.`;
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for generate-subtasks:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('AI request failed for generate-subtasks:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -614,11 +614,11 @@ Only respond with valid JSON, no markdown.`;
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for daily-plan:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('AI request failed for daily-plan:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -713,19 +713,25 @@ IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep respo
 
     const responseText = completion.choices[0].message?.content || '';
 
-    // Save the conversation to database
+    let cleanedResponse = responseText;
+    try {
+      const parsed = JSON.parse(responseText);
+      if (parsed && typeof parsed === 'object' && parsed.message) {
+        cleanedResponse = parsed.message;
+      }
+    } catch { /* not JSON, use as-is */ }
+
     try {
       await db.insert(aiRequests).values({
         userId: req.userId!,
         prompt: safeMessage,
-        response: responseText,
+        response: cleanedResponse,
       });
     } catch (saveError) {
       console.error('Failed to save AI conversation:', saveError);
-      // Don't fail the request if saving fails
     }
 
-    res.json({ response: responseText });
+    res.json({ response: cleanedResponse });
   } catch (e: any) {
     console.error('AI chat error:', e);
     const status = e?.status || e?.error?.status || 500;
@@ -773,8 +779,7 @@ IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep respo
 
     res.status(500).json({
       error: 'AI chat request failed',
-      details: `AI service error (${status}): ${errorMessage}`,
-      hint: errorMessage.includes('API_KEY') ? 'Please check your OPENROUTER_API_KEY in .env file' : undefined
+      details: 'The AI service encountered an error. Please try again.',
     });
   }
 });
@@ -794,7 +799,7 @@ router.get('/chat-history', requireAuth, async (req: AuthRequest, res: Response)
       })
       .from(aiRequests)
       .where(eq(aiRequests.userId, req.userId!))
-      .orderBy(desc(aiRequests.createdAt))
+      .orderBy(aiRequests.createdAt)
       .limit(limit)
       .offset(offset);
 
@@ -913,11 +918,11 @@ Respond with a detailed JSON object like:
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for pro weekly schedule:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('Pro weekly schedule AI request failed:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -1008,11 +1013,11 @@ Respond with a JSON object like:
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for dynamic reschedule:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('Dynamic reschedule AI request failed:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -1142,11 +1147,11 @@ Only respond with valid JSON, no markdown.`;
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for insights analysis:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response.' });
     }
   } catch (e) {
     console.error('Insights analysis AI request failed:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 
@@ -1240,11 +1245,11 @@ Respond with a JSON object like:
       res.json(data);
     } catch (parseError) {
       console.error('Failed to parse response for task bundling:', parseError);
-      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.', details: parseError instanceof Error ? parseError.message : String(parseError) });
+      return res.status(500).json({ error: 'Failed to parse AI response. Please try again.' });
     }
   } catch (e) {
     console.error('Task bundling AI request failed:', e);
-    res.status(500).json({ error: 'AI request failed', details: e instanceof Error ? e.message : 'Unknown error' });
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 

@@ -64,7 +64,18 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const goalId = parseInt(req.params.id);
-    const updates = { ...req.body };
+    const allowedFields = ['title', 'description', 'target', 'unit', 'color', 'progress', 'timeframe', 'subGoals'];
+    const updates: Record<string, any> = {};
+    
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
 
     if (updates.title !== undefined) updates.title = encrypt(updates.title) ?? updates.title;
     if (updates.description !== undefined) updates.description = encrypt(updates.description) ?? updates.description;

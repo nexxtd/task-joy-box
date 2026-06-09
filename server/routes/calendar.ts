@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Router, Response } from 'express';
 import { google } from 'googleapis';
+import crypto from 'crypto';
 import { db } from '../db';
 import { googleCalendarTokens } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
@@ -9,25 +10,36 @@ import { encrypt, decrypt } from '../lib/encryption';
 
 const router = Router();
 
-const GOOGLE_CLIENT_ID = '920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
+const OAUTH_STATE_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 
 function getRedirectUri(req: AuthRequest): string {
   const host = req.get('host') || process.env.HOST || 'localhost:3001';
   const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
-  
-  // Handle various tunnel domains
-  if (host.endsWith('.trycloudflare.com') || host.endsWith('.workers.dev')) {
-    // For tunnel domains, use the detected protocol and host
-    return `${proto}://${host}/api/calendar/callback`;
-  }
-  
   return `${proto}://${host}/api/calendar/callback`;
 }
 
 function createOAuth2Client(redirectUri: string) {
   return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
+}
+
+function signState(data: object): string {
+  const payload = JSON.stringify(data);
+  const signature = crypto.createHmac('sha256', OAUTH_STATE_SECRET).update(payload).digest('hex');
+  return Buffer.from(JSON.stringify({ payload: data, signature })).toString('base64url');
+}
+
+function verifyState(signedState: string): any {
+  try {
+    const { payload, signature } = JSON.parse(Buffer.from(signedState, 'base64url').toString());
+    const expected = crypto.createHmac('sha256', OAUTH_STATE_SECRET).update(JSON.stringify(payload)).digest('hex');
+    if (signature !== expected) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
@@ -38,11 +50,11 @@ router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
   const redirectUri = getRedirectUri(req);
   const oauth2Client = createOAuth2Client(redirectUri);
 
-  const state = Buffer.from(JSON.stringify({
+  const state = signState({
     userId: req.userId,
     redirectUri,
     ts: Date.now(),
-  })).toString('base64url');
+  });
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
@@ -62,7 +74,10 @@ router.get('/callback', async (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
+    const stateData = verifyState(state as string);
+    if (!stateData) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/settings?calendarError=invalid_state`);
+    }
     const { userId, redirectUri } = stateData;
 
     if (!userId || Date.now() - stateData.ts > 10 * 60 * 1000) {
@@ -200,7 +215,7 @@ router.post('/sync-to-google', requireAuth, async (req: AuthRequest, res: Respon
             description: task.description || '',
             start: { date },
             end: { date },
-            source: { title: 'TaskJoyBox', url: 'https://nurse-pack-scholar-leon.trycloudflare.com' },
+            source: { title: 'TaskJoyBox', url: process.env.FRONTEND_URL || 'https://task-joy-box.onrender.com' },
           },
         });
         synced++;

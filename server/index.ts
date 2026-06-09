@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
@@ -45,8 +46,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Use the RENDER_EXTERNAL_URL if available, otherwise default to a standard URL
 const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || 'https://task-joy-box.onrender.com';
 const frontendUrl = process.env.FRONTEND_URL || renderExternalUrl || 'http://localhost:5173';
-const sessionSecret = process.env.SESSION_SECRET || 'fallback_secret_for_dev_only';
-const jwtSecret = process.env.JWT_SECRET || 'fallback_secret_for_dev_only';
+const sessionSecret = process.env.SESSION_SECRET;
+const jwtSecret = process.env.JWT_SECRET;
 const crossSiteCookies = process.env.CROSS_SITE_COOKIES === 'true';
 
 // Additional allowed origins for ngrok and development
@@ -61,7 +62,6 @@ if (isProduction) {
     throw new Error(`Missing required environment variables for production: ${missingVars.join(', ')}`);
   }
 } else {
-  // Log warnings in development if using fallback secrets
   if (!process.env.SESSION_SECRET) {
     console.warn('WARNING: Using fallback session secret. Set SESSION_SECRET in production.');
   }
@@ -73,6 +73,11 @@ if (isProduction) {
 // Database initialization via Drizzle ORM pushing migrations is recommended for Postgres
 
 app.set('trust proxy', 1);
+
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -90,6 +95,15 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again later.' },
+});
+
 app.use(globalLimiter);
 
 const allowedOrigins = new Set<string>();
@@ -134,44 +148,20 @@ if (!isProduction) {
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
-      // Allow non-browser requests (like mobile apps or direct API calls)
       return callback(null, true);
     }
     
-    // Allow all localhost for development
     if (!isProduction && /^http:\/\/localhost:\d+$/.test(origin)) {
       return callback(null, true);
     }
     
-    // Allow all 127.0.0.1 addresses for development
     if (!isProduction && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
-      return callback(null, true);
-    }
-    
-    // Allow all origins ending with .trycloudflare.com (Cloudflare tunnels)
-    if (/\.trycloudflare\.com$/.test(origin)) {
-      return callback(null, true);
-    }
-    
-    // Allow all origins ending with .workers\.dev (Cloudflare pages)
-    if (/\.workers\.dev$/.test(origin)) {
-      return callback(null, true);
-    }
-    
-    // Allow Render's default domain pattern
-    if (origin.includes('onrender.com')) {
-      return callback(null, true);
-    }
-
-    // Allow all Replit dev domains
-    if (/\.replit\.dev$/.test(origin) || /\.riker\.replit\.dev$/.test(origin) || /\.replit\.app$/.test(origin)) {
       return callback(null, true);
     }
     
     if (allowedOrigins.has(origin)) {
       return callback(null, true);
     }
-    console.error(`CORS error: Origin ${origin} not allowed. Allowed origins:`, [...allowedOrigins]);
     return callback(new Error('CORS origin not allowed'));
   },
   credentials: true,
@@ -181,41 +171,52 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
-// Serve uploads folder if it exists
+// Serve uploads folder with auth check
 if (fs.existsSync(path.join(process.cwd(), 'uploads'))) {
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  app.use('/uploads', (req, res, next) => {
+    const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    try {
+      const jwt = require('jsonwebtoken');
+      jwt.verify(token, process.env.JWT_SECRET || '');
+      next();
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  }, express.static(path.join(process.cwd(), 'uploads')));
 }
 
 // Session configuration - we'll keep this for potential use with other parts of the app
 // But the main auth is now handled with JWT tokens
 app.use(session({
   store: sessionStore,
-  secret: sessionSecret || 'fallback_secret_for_dev_only',
+  secret: sessionSecret || 'dev-only-fallback',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction, // Only true in production, otherwise false for local/dev
-    httpOnly: true, // Prevent XSS attacks
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    sameSite: crossSiteCookies ? 'none' : 'lax', // Use 'none' for cross-site requests if enabled
+    secure: isProduction,
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: crossSiteCookies ? 'none' : 'lax',
   },
-  name: 'sessionId', // Custom session cookie name
+  name: 'sessionId',
 }));
 
-// Middleware to log requests and potential issues
+// Middleware to log errors only
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   const originalSend = res.send;
   res.send = function(body: any) {
-    if (res.statusCode >= 400) {
-      console.error(`${new Date().toISOString()} - ${req.method} ${req.path} - Status: ${res.statusCode}`, body);
+    if (res.statusCode >= 500) {
+      console.error(`${new Date().toISOString()} - ${req.method} ${req.path} - Status: ${res.statusCode}`);
     }
     return originalSend.call(this, body);
   };
   next();
 });
 
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/organizations', organizationsRoutes);  // Add organizations routes
@@ -237,37 +238,17 @@ app.use('/api/milestones', milestonesRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {
-    // Test database connection
     const dbTest = await pool.query('SELECT NOW()');
-    
-    // Check environment variables
-    const envStatus = {
-      DATABASE_URL: !!process.env.DATABASE_URL,
-      JWT_SECRET: !!process.env.JWT_SECRET,
-      SESSION_SECRET: !!process.env.SESSION_SECRET,
-      NODE_ENV: process.env.NODE_ENV,
-      PORT: process.env.PORT
-    };
-    
     res.json({ 
       ok: true, 
       database: 'connected',
       dbTime: dbTest.rows[0].now,
-      environment: envStatus
     });
   } catch (error: any) {
     console.error('Health check failed:', error);
     res.status(500).json({ 
       ok: false, 
-      error: error.message,
       database: 'failed',
-      environment: {
-        DATABASE_URL: !!process.env.DATABASE_URL,
-        JWT_SECRET: !!process.env.JWT_SECRET,
-        SESSION_SECRET: !!process.env.SESSION_SECRET,
-        NODE_ENV: process.env.NODE_ENV,
-        PORT: process.env.PORT
-      }
     });
   }
 });

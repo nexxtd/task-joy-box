@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
-import { taskAttachments, tasks } from '../../shared/schema';
+import { taskAttachments, tasks, boards, columns } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import multer from 'multer';
@@ -9,7 +9,15 @@ import fs from 'fs';
 
 const router = Router();
 
-// Configure multer for file storage
+const ALLOWED_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'application/pdf',
+  'text/plain', 'text/csv',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/zip', 'application/x-zip-compressed',
+];
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads');
@@ -20,16 +28,34 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
+    cb(null, uniqueSuffix + ext);
   },
 });
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not allowed'));
+    }
+  },
 });
 
-// Upload an attachment
+async function verifyTaskOwnership(taskId: number, userId: number): Promise<boolean> {
+  const task = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  if (!task) return false;
+  const board = await db.query.boards.findFirst({ where: eq(boards.id, task.boardId) });
+  return board?.userId === userId;
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+}
+
 router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res: any) => {
   try {
     const taskId = parseInt(req.params.taskId);
@@ -37,20 +63,13 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Verify task ownership/access
-    // Assuming personal tasks for now, linked to user via board/workspace
-    // Simplified: Check if task exists
-    const task = await db.query.tasks.findFirst({
-      where: eq(tasks.id, taskId),
-    });
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+    if (!await verifyTaskOwnership(taskId, req.userId!)) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     const [attachment] = await db.insert(taskAttachments).values({
       taskId,
-      fileName: req.file.originalname,
+      fileName: sanitizeFilename(req.file.originalname),
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       fileUrl: `/uploads/${req.file.filename}`,
@@ -58,27 +77,30 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
 
     res.json(attachment);
   } catch (error) {
-    console.error('Error uploading attachment:', error);
+    console.error('Error uploading attachment');
     res.status(500).json({ error: 'Failed to upload attachment' });
   }
 });
 
-// Get attachments for a task
-router.get('/:taskId', requireAuth, async (req, res) => {
+router.get('/:taskId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const taskId = parseInt(req.params.taskId);
+
+    if (!await verifyTaskOwnership(taskId, req.userId!)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const attachments = await db.query.taskAttachments.findMany({
       where: eq(taskAttachments.taskId, taskId),
     });
     res.json(attachments);
   } catch (error) {
-    console.error('Error fetching attachments:', error);
+    console.error('Error fetching attachments');
     res.status(500).json({ error: 'Failed to fetch attachments' });
   }
 });
 
-// Delete an attachment
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const attachment = await db.query.taskAttachments.findFirst({
@@ -89,7 +111,10 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Delete file from disk
+    if (!await verifyTaskOwnership(attachment.taskId, req.userId!)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
     const filePath = path.join(process.cwd(), attachment.fileUrl);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -98,12 +123,11 @@ router.delete('/:id', requireAuth, async (req, res) => {
     await db.delete(taskAttachments).where(eq(taskAttachments.id, id));
     res.json({ success: true });
   } catch (error) {
-    console.error('Error deleting attachment:', error);
+    console.error('Error deleting attachment');
     res.status(500).json({ error: 'Failed to delete attachment' });
   }
 });
 
-// View/download an attachment file
 router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -115,35 +139,27 @@ router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => 
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Verify the user has access to this task
-    const task = await db.query.tasks.findFirst({
-      where: eq(tasks.id, attachment.taskId),
-    });
-
-    if (!task) {
-      return res.status(404).json({ error: 'Task not found' });
+    if (!await verifyTaskOwnership(attachment.taskId, req.userId!)) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Check file exists
     const filePath = path.join(process.cwd(), attachment.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found on disk' });
     }
 
-    // Set content type and disposition
     const mimeType = attachment.fileType || 'application/octet-stream';
     res.setHeader('Content-Type', mimeType);
 
-    // For images and PDFs, display inline; for others, force download
+    const safeFileName = sanitizeFilename(attachment.fileName);
     const inlineTypes = ['image/', 'application/pdf', 'text/'];
     const isInline = inlineTypes.some(t => mimeType.startsWith(t));
-    res.setHeader('Content-Disposition', `${isInline ? 'inline' : 'attachment'}; filename="${attachment.fileName}"`);
+    res.setHeader('Content-Disposition', `${isInline ? 'inline' : 'attachment'}; filename="${safeFileName}"`);
 
-    // Stream the file
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   } catch (error) {
-    console.error('Error serving attachment:', error);
+    console.error('Error serving attachment');
     res.status(500).json({ error: 'Failed to serve attachment' });
   }
 });
