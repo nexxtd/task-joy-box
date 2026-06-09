@@ -484,7 +484,7 @@ const Pricing: React.FC = () => {
               {/* Step 2: Seats (team) or Account */}
               {checkoutStep === 2 && (
                 <div className="animate-in fade-in duration-200">
-                  {isTeamPlan && activeTab !== 'personal' ? (
+                  {isTeamPlan ? (
                     <>
                       <h3 className="text-xl font-black mb-2">Number of seats</h3>
                       <p className="text-sm text-muted-foreground mb-6">How many users need access?</p>
@@ -562,7 +562,7 @@ const Pricing: React.FC = () => {
                     </div>
                   )}
                   <div className="flex gap-3">
-                    <button onClick={() => setCheckoutStep(isTeamPlan && activeTab !== 'personal' ? 2 : 2)} className="flex-1 py-3 bg-muted text-foreground font-bold rounded-xl flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" />Back</button>
+                    <button onClick={() => setCheckoutStep(isTeamPlan ? 2 : 2)} className="flex-1 py-3 bg-muted text-foreground font-bold rounded-xl flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" />Back</button>
                     <button onClick={() => setCheckoutStep(4)} className="flex-[2] py-3 bg-primary text-primary-foreground rounded-xl font-black shadow-lg shadow-primary/20 active:scale-95 transition-all">Continue</button>
                   </div>
                 </div>
@@ -577,7 +577,7 @@ const Pricing: React.FC = () => {
                   <div className="bg-muted/50 rounded-xl p-4 mb-4 space-y-2">
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Plan</span><span className="font-bold">{selectedPlan.name}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Billing</span><span className="font-bold">{billingPeriod === 'monthly' ? 'Monthly' : 'Yearly'}</span></div>
-                    {isTeamPlan && activeTab !== 'personal' && <div className="flex justify-between text-sm"><span className="text-muted-foreground">Seats</span><span className="font-bold">{seats}</span></div>}
+                    {isTeamPlan && <div className="flex justify-between text-sm"><span className="text-muted-foreground">Seats</span><span className="font-bold">{seats}</span></div>}
                     <div className="flex justify-between text-sm"><span className="text-muted-foreground">Payment</span><span className="font-bold capitalize">{paymentMethod === 'paypal' ? 'PayPal' : 'Card'}</span></div>
                   </div>
 
@@ -612,7 +612,7 @@ const Pricing: React.FC = () => {
                   <div className="bg-muted/50 rounded-xl p-4 mb-6">
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-muted-foreground">{selectedPlan.name}</span>
-                      <span className="font-bold">{convertPrice(selectedPlan.price * (isTeamPlan && activeTab !== 'personal' ? seats : 1))}</span>
+                      <span className="font-bold">{convertPrice(selectedPlan.price * (isTeamPlan ? seats : 1))}</span>
                     </div>
                     {appliedCoupon && (
                       <div className="flex justify-between text-sm mb-1 text-emerald-600">
@@ -626,7 +626,7 @@ const Pricing: React.FC = () => {
                     )}
                     <div className="border-t border-border mt-2 pt-2 flex justify-between">
                       <span className="font-black">Total</span>
-                      <span className="font-black text-lg">{convertPrice(getDiscountedPrice() * (isTeamPlan && activeTab !== 'personal' ? seats : 1))}</span>
+                      <span className="font-black text-lg">{convertPrice(getDiscountedPrice() * (isTeamPlan ? seats : 1))}</span>
                     </div>
                   </div>
 
