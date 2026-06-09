@@ -1,7 +1,7 @@
 import { format, addMinutes, differenceInMinutes } from 'date-fns';
 import { CalendarSlot } from '@/types/calendar';
 
-export const HOUR_HEIGHT = 64;
+export const HOUR_HEIGHT = 72;
 export const START_HOUR = 0;
 export const END_HOUR = 24;
 

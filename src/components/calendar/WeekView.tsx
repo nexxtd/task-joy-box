@@ -23,7 +23,13 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
   const [resizing, setResizing] = useState<{ slotId: string; origEnd: string; date: string; startY: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ date: string; time: string } | null>(null);
   const [preview, setPreview] = useState<{ date: string; start: string; end: string; title: string; color: string } | null>(null);
-  const now = new Date();
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const now = currentTime;
+
+  useEffect(() => {
+    const id = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -112,27 +118,32 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
   const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-b from-background to-muted/5">
       {/* Day headers */}
-      <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border bg-muted/20 flex-shrink-0">
-        <div className="p-2" />
+      <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border/60 bg-gradient-to-r from-muted/30 via-background/80 to-muted/30 flex-shrink-0 backdrop-blur-sm">
+        <div className="p-2 border-r border-border/20" />
         {weekDays.map((day, i) => (
           <div key={i} className={cn(
-            "p-2 text-center border-l border-border",
-            isToday(day) && "bg-primary/5"
+            "p-3 text-center border-r border-border/20 relative",
+            isToday(day) && "bg-gradient-to-b from-primary/[0.04] to-transparent"
           )}>
             <p className={cn(
-              "text-[10px] font-bold uppercase tracking-wider",
-              isToday(day) ? "text-primary" : "text-muted-foreground"
+              "text-[10px] font-bold uppercase tracking-[0.1em] transition-colors",
+              isToday(day) ? "text-primary" : "text-muted-foreground/70"
             )}>
               {format(day, 'EEE')}
             </p>
             <p className={cn(
-              "text-sm font-bold mt-0.5",
-              isToday(day) && "bg-primary text-primary-foreground w-8 h-8 rounded-full mx-auto flex items-center justify-center"
+              "text-sm font-bold mt-1 transition-all",
+              isToday(day)
+                ? "bg-primary text-primary-foreground w-8 h-8 rounded-full mx-auto flex items-center justify-center shadow-md shadow-primary/30 ring-2 ring-primary/20"
+                : "text-foreground/80"
             )}>
               {format(day, 'd')}
             </p>
+            {isToday(day) && (
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full" />
+            )}
           </div>
         ))}
       </div>
@@ -141,17 +152,17 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
       <div className="flex-1 overflow-y-auto relative" ref={gridRef}>
         {isToday(selectedDate) && (
           <div className="absolute left-[70px] right-0 z-20 pointer-events-none" style={{ top: `${currentTop}px` }}>
-            <div className="h-0.5 bg-red-500 relative ml-2">
-              <div className="absolute -left-1 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md" />
+            <div className="h-[3px] bg-gradient-to-r from-red-500 via-red-500/80 to-transparent relative shadow-lg shadow-red-500/40 ml-2">
+              <div className="absolute -left-[5px] -top-[5px] w-[13px] h-[13px] bg-red-500 rounded-full shadow-[0_0_12px_rgba(239,68,68,0.6)]" />
             </div>
           </div>
         )}
 
         <div className="relative min-h-full">
           {HOURS.map(hour => (
-            <div key={hour} className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border/30">
-              <div className="relative" style={{ height: `${HOUR_HEIGHT}px` }}>
-                <span className="absolute -top-2 right-2 text-[10px] font-bold text-muted-foreground">
+            <div key={hour} className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border/20">
+              <div className="relative flex items-start justify-end" style={{ height: `${HOUR_HEIGHT}px` }}>
+                <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-muted-foreground/70 select-none">
                   {hour === 0 ? '' : format(new Date().setHours(hour, 0, 0, 0), 'ha')}
                 </span>
               </div>
@@ -162,8 +173,8 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
                   <div
                     key={di}
                     className={cn(
-                      "border-l border-border/30 relative transition-colors",
-                      isToday(day) && "bg-primary/[0.02]",
+                      "border-l border-border/20 relative transition-colors group/col",
+                      isToday(day) && "bg-primary/[0.015]",
                       isDropTarget && "bg-primary/10"
                     )}
                     style={{ height: `${HOUR_HEIGHT}px` }}
@@ -171,21 +182,24 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
                     onDragLeave={handleColumnDragLeave}
                     onDrop={(e) => handleColumnDrop(e, day)}
                   >
-                    {hour % 1 === 0 && <div className="absolute inset-0 border-b border-border/20" style={{ top: '50%' }} />}
+                    <div className="absolute inset-0 border-b border-border/10" style={{ top: '50%' }} />
+                    {isDropTarget && (
+                      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+                    )}
+                    <div className="opacity-0 group-hover/col:opacity-100 absolute inset-0 bg-gradient-to-b from-primary/[0.01] to-transparent pointer-events-none transition-opacity duration-200" />
 
                     {/* Preview */}
                     {preview && preview.date === dateStr && timeToMinutes(preview.start) >= timeToMinutes(`${hour.toString().padStart(2, '0')}:00`) &&
                       timeToMinutes(preview.start) < timeToMinutes(`${hour.toString().padStart(2, '0')}:00`) + 60 && (
                       <div
-                        className="absolute left-1 right-1 rounded border-2 border-dashed border-primary/50 bg-primary/10 z-10 flex items-center justify-center"
+                        className="absolute left-1 right-1 z-10 rounded-lg border-2 border-primary/50 bg-primary/15 backdrop-blur-sm shadow-lg flex flex-col justify-center px-2"
                         style={{
                           top: `${topForTime(preview.start) - topForTime(`${hour.toString().padStart(2, '0')}:00`)}px`,
                           height: `${slotHeight(timeToMinutes(preview.end) - timeToMinutes(preview.start))}px`,
                         }}
                       >
-                        <span className="text-[8px] font-bold text-primary bg-background/80 px-1 rounded">
-                          {formatTimeDisplay(preview.start)}
-                        </span>
+                        <p className="text-xs font-bold text-primary truncate leading-snug">{preview.title}</p>
+                        <p className="text-[10px] font-medium text-primary/70">{formatTimeDisplay(preview.start)}</p>
                       </div>
                     )}
                   </div>
@@ -214,24 +228,24 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
                   <div
                     key={slot.id}
                     onClick={() => onSlotClick(slot)}
-                    className="absolute rounded-lg border cursor-pointer overflow-hidden transition-all hover:z-30 select-none"
+                    className="absolute rounded-lg border-2 cursor-pointer overflow-hidden transition-all duration-150 hover:shadow-lg hover:z-30 hover:opacity-90 select-none shadow-sm"
                     style={{
                       top: `${top}px`,
-                      height: `${Math.max(height, 18)}px`,
+                      height: `${Math.max(height, 22)}px`,
                       left: `calc(${gridLeft}px + ${colIndex} * ${colWidth} + ${left}% + 4px)`,
                       width: `calc(${colWidth} * ${width / 100} - 8px)`,
-                      backgroundColor: slot.color + '22',
+                      backgroundColor: slot.color + '18',
                       borderColor: slot.color,
-                      borderLeftWidth: '3px',
+                      borderLeftWidth: '4px',
                       borderLeftColor: slot.color,
                       zIndex: 10 + si,
                     }}
                   >
-                    <div className="px-1 py-0.5 h-full flex flex-col justify-center">
-                      <p className="text-[9px] font-bold text-foreground leading-tight truncate">{slot.title}</p>
-                      {height > 28 && (
-                        <p className="text-[7px] text-muted-foreground leading-tight">
-                          {formatTimeDisplay(slot.startTime)}
+                    <div className="px-2 py-1 h-full flex flex-col justify-center gap-0.5">
+                      <p className="text-xs font-bold text-foreground leading-snug truncate">{slot.title}</p>
+                      {height > 34 && (
+                        <p className="text-[10px] font-semibold text-muted-foreground leading-tight">
+                          {formatTimeDisplay(slot.startTime)} – {formatTimeDisplay(slot.endTime)}
                         </p>
                       )}
                     </div>
@@ -242,7 +256,7 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
                         e.stopPropagation();
                         setResizing({ slotId: slot.id, origEnd: slot.endTime, date: slot.date, startY: e.clientY });
                       }}
-                      className="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize hover:bg-foreground/10"
+                      className="absolute bottom-0 left-0 right-0 h-3 cursor-s-resize hover:bg-foreground/10 rounded-b-lg"
                     />
                   </div>
                 );

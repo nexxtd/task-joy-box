@@ -24,7 +24,14 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
   const [resizing, setResizing] = useState<{ slotId: string; startY: number; origEnd: string } | null>(null);
   const [dropHighlight, setDropHighlight] = useState<{ y: number; time: string } | null>(null);
   const [preview, setPreview] = useState<{ start: string; end: string; title: string; color: string } | null>(null);
-  const now = new Date();
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const now = currentTime;
+
+  // Update current time every minute
+  useEffect(() => {
+    const id = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const daySlots = slots
     .filter(s => s.date === format(date, 'yyyy-MM-dd'))
@@ -144,17 +151,17 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
   const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
-      <div className="flex-1 overflow-y-auto relative" ref={gridRef}
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex-1 overflow-y-auto relative rounded-lg" ref={gridRef}
         onDragOver={handleGridDragOver}
         onDragLeave={handleGridDragLeave}
         onDrop={handleGridDrop}
       >
         <div className="absolute inset-0 pointer-events-none z-20">
           {isSameDay(date, now) && (
-            <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${currentTop}px` }}>
-              <div className="h-0.5 bg-red-500 relative">
-                <div className="absolute -left-1 -top-1.5 w-3 h-3 bg-red-500 rounded-full shadow-md" />
+            <div className="absolute left-[80px] right-0 z-20 pointer-events-none" style={{ top: `${currentTop}px` }}>
+              <div className="h-[3px] bg-gradient-to-r from-red-500 via-red-500/80 to-transparent relative shadow-lg shadow-red-500/40">
+                <div className="absolute -left-[5px] -top-[5px] w-[13px] h-[13px] bg-red-500 rounded-full shadow-[0_0_12px_rgba(239,68,68,0.6)]" />
               </div>
             </div>
           )}
@@ -175,16 +182,14 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
 
         <div className="relative min-h-full">
           {HOURS.map(hour => (
-            <div key={hour} className="flex border-b border-border/30">
-              <div className="w-20 flex-shrink-0 text-right pr-3 pt-0 relative" style={{ height: `${HOUR_HEIGHT}px` }}>
-                <span className="text-[10px] font-bold text-muted-foreground -mt-2 absolute right-3 top-0">
+            <div key={hour} className="flex border-b border-border/20">
+              <div className="w-20 flex-shrink-0 relative flex items-start justify-end" style={{ height: `${HOUR_HEIGHT}px` }}>
+                <span className="text-[11px] font-semibold text-muted-foreground/70 -mt-2.5 pr-4 select-none">
                   {hour === 0 ? '' : format(new Date().setHours(hour, 0, 0, 0), 'ha')}
                 </span>
               </div>
-              <div className="flex-1 relative border-l border-border/30" style={{ height: `${HOUR_HEIGHT}px` }}>
-                {hour % 1 === 0 && (
-                  <div className="absolute inset-0 border-b border-border/20" style={{ top: '50%' }} />
-                )}
+              <div className="flex-1 relative border-l border-border/20" style={{ height: `${HOUR_HEIGHT}px` }}>
+                <div className="absolute inset-0 border-b border-border/10" style={{ top: '50%' }} />
               </div>
             </div>
           ))}
@@ -198,35 +203,35 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
               const width = Math.max(60, (100 / total) - 2);
               const left = 2 + (si * (100 / total));
 
-              return (
+                  return (
                 <div
                   key={slot.id}
                   onMouseDown={(e) => handleSlotMouseDown(e, slot)}
                   onClick={() => onSlotClick(slot)}
-                  className="absolute rounded-lg border cursor-pointer overflow-hidden transition-all hover:z-30 hover:opacity-90 select-none"
+                  className="absolute rounded-lg border-2 cursor-pointer overflow-hidden transition-all duration-150 hover:shadow-lg hover:z-30 hover:opacity-90 select-none shadow-sm"
                   style={{
                     top: `${top}px`,
-                    height: `${Math.max(height, 18)}px`,
+                    height: `${Math.max(height, 22)}px`,
                     left: `${left}%`,
                     width: `${width}%`,
-                    backgroundColor: slot.color + '22',
+                    backgroundColor: slot.color + '18',
                     borderColor: slot.color,
-                    borderLeftWidth: '3px',
+                    borderLeftWidth: '4px',
                     borderLeftColor: slot.color,
                     zIndex: 10 + si,
                   }}
                 >
-                  <div className="px-1.5 py-0.5 h-full flex flex-col justify-center">
-                    <p className="text-[10px] font-bold text-foreground leading-tight truncate">{slot.title}</p>
-                    {height > 30 && (
-                      <p className="text-[8px] text-muted-foreground leading-tight">
+                  <div className="px-2 py-1 h-full flex flex-col justify-center gap-0.5">
+                    <p className="text-xs font-bold text-foreground leading-snug truncate">{slot.title}</p>
+                    {height > 34 && (
+                      <p className="text-[10px] font-semibold text-muted-foreground leading-tight">
                         {formatTimeDisplay(slot.startTime)} – {formatTimeDisplay(slot.endTime)}
                       </p>
                     )}
                   </div>
                   <div
                     data-resize
-                    className="absolute bottom-0 left-0 right-0 h-2 cursor-s-resize hover:bg-foreground/10"
+                    className="absolute bottom-0 left-0 right-0 h-3 cursor-s-resize hover:bg-foreground/10 rounded-b-lg"
                   />
                 </div>
               );

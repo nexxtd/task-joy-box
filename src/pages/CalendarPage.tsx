@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import TaskDetailModal from '@/components/TaskDetailModal';
@@ -168,12 +168,20 @@ const CalendarPage: React.FC = () => {
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  // AI functions
+  // AI functions - single in-flight request only
+  const aiAbortRef = useRef<AbortController | null>(null);
+
   const runAI = async (mode: 'schedule' | 'plan') => {
     if (!isPro) {
       setAiError('Pro or Premium subscription required');
       return;
     }
+    if (aiLoading) return;
+
+    aiAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    aiAbortRef.current = ctrl;
+
     setAiMode(mode);
     setAiLoading(true);
     setAiError('');
@@ -188,38 +196,51 @@ const CalendarPage: React.FC = () => {
         dueDate: t.dueDate,
       }));
 
-      let prompt = 'You are a productivity assistant. Respond with valid JSON only, no markdown. ';
-      if (mode === 'schedule') {
-        prompt += `Create an optimized schedule for ${format(selectedDate, 'yyyy-MM-dd')} using these tasks: ${JSON.stringify(tasks)}. `;
-        prompt += `Prioritize: overdue items, urgent deadlines, high priority tasks, habits, then lower priority. `;
-        prompt += `Avoid overlaps. Space demanding work realistically. `;
-        prompt += `Return JSON: { "schedule": [{ "time": "09:00", "task": "Task name", "reason": "Why placed here", "duration": 60 }], "tips": ["Tip"] }`;
-      } else {
-        prompt += `Create a daily plan for ${format(selectedDate, 'yyyy-MM-dd')} with these tasks: ${JSON.stringify(tasks)}. `;
-        prompt += `Focus on today only. Include breaks. `;
-        prompt += `Return JSON: { "plan": [{ "time": "09:00", "task": "Task name", "reason": "Why", "duration": 60 }], "overview": "Brief summary" }`;
-      }
+      const endpoint = mode === 'schedule' ? '/api/ai/suggest-schedule' : '/api/ai/daily-plan';
+      const body = mode === 'schedule'
+        ? { tasks, energyLevels: {} }
+        : { tasks, date: format(selectedDate, 'yyyy-MM-dd') };
 
-      const res = await fetch('https://text.pollinations.ai/', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: prompt }],
-          jsonMode: true,
-        }),
+        credentials: 'include',
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
       });
 
-      if (!res.ok) throw new Error('AI request failed');
-      const text = await res.text();
-      let clean = text.trim();
-      if (clean.startsWith('```json')) clean = clean.substring(7);
-      if (clean.startsWith('```')) clean = clean.substring(3);
-      if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
-      setAiResult(JSON.parse(clean.trim()));
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After');
+        const msg = retryAfter
+          ? `Rate limited. Try again in ${retryAfter}s`
+          : 'Too many requests. Please wait a moment then try again.';
+        throw new Error(msg);
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Request failed (${res.status})`);
+      }
+
+      const data = await res.json();
+
+      if (data.plan) {
+        setAiResult(data);
+      } else if (data.schedule) {
+        setAiResult(data);
+      } else if (data.insight || data.tips) {
+        setAiResult(data);
+      } else {
+        throw new Error('Unexpected AI response format');
+      }
     } catch (e: any) {
-      setAiError(e.message || 'AI request failed');
+      if (e.name === 'AbortError') return;
+      setAiError(e.message || 'Something went wrong');
     } finally {
-      setAiLoading(false);
+      if (aiAbortRef.current === ctrl) {
+        setAiLoading(false);
+        aiAbortRef.current = null;
+      }
     }
   };
 
@@ -248,31 +269,38 @@ const CalendarPage: React.FC = () => {
   };
 
   return (
-    <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-background">
+    <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">
       {/* Left Sidebar */}
       <CalendarSidebar onTaskClick={setSelectedTask} />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-background relative">
+      <div className="flex-1 flex flex-col min-w-0 bg-background/80 backdrop-blur-sm relative">
         {/* Top Navigation Bar */}
-        <header className="px-6 py-3 flex items-center justify-between border-b border-border bg-background/95 backdrop-blur-md sticky top-0 z-20 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-foreground">{headerTitle()}</h1>
-            <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg border border-border">
-              <button onClick={goPrev} className="p-1.5 hover:bg-background rounded-md transition-all">
-                <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+        <header className="px-6 py-3 flex items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col">
+              <h1 className="text-lg font-bold text-foreground tracking-tight">{headerTitle()}</h1>
+              {viewMode === 'day' && (
+                <span className="text-[10px] font-medium text-muted-foreground -mt-0.5">
+                  {format(selectedDate, 'yyyy')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5 bg-card p-0.5 rounded-xl border border-border/60 shadow-sm">
+              <button onClick={goPrev} className="p-1.5 hover:bg-muted rounded-lg transition-all text-muted-foreground hover:text-foreground">
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={goToday} className="px-2.5 py-1 text-[11px] font-bold text-foreground hover:bg-background rounded-md transition-all">
+              <button onClick={goToday} className="px-3 py-1 text-xs font-bold text-foreground hover:bg-muted rounded-lg transition-all">
                 Today
               </button>
-              <button onClick={goNext} className="p-1.5 hover:bg-background rounded-md transition-all">
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              <button onClick={goNext} className="p-1.5 hover:bg-muted rounded-lg transition-all text-muted-foreground hover:text-foreground">
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center p-0.5 bg-muted/50 rounded-lg border border-border">
+            <div className="flex items-center p-0.5 bg-card rounded-xl border border-border/60 shadow-sm">
               {[
                 { id: 'day' as ViewMode, icon: Sun, label: 'Day' },
                 { id: 'week' as ViewMode, icon: Clock, label: 'Week' },
@@ -282,10 +310,10 @@ const CalendarPage: React.FC = () => {
                   key={v.id}
                   onClick={() => setViewMode(v.id)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-md transition-all",
+                    "flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200",
                     viewMode === v.id
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
                   <v.icon className="w-3.5 h-3.5" />
@@ -297,11 +325,11 @@ const CalendarPage: React.FC = () => {
         </header>
 
         {/* Fixed Event and Break Buttons */}
-        <div className="px-6 py-2 flex gap-2 border-b border-border bg-muted/10 flex-shrink-0">
+        <div className="px-6 py-2.5 flex items-center gap-2.5 border-b border-border/40 bg-gradient-to-r from-primary/[0.02] via-transparent to-primary/[0.02] flex-shrink-0">
           <div
             draggable
             onDragStart={(e) => handleFixedDragStart(e, 'fixed-event')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-full text-[11px] font-bold text-purple-600 cursor-grab active:cursor-grabbing hover:bg-purple-500/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500/15 to-purple-600/10 border border-purple-500/30 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 cursor-grab active:cursor-grabbing hover:from-purple-500/25 hover:to-purple-600/20 hover:shadow-md hover:shadow-purple-500/10 active:scale-95 transition-all duration-200 select-none"
           >
             <CalendarIcon className="w-3.5 h-3.5" />
             Fixed Event
@@ -309,12 +337,12 @@ const CalendarPage: React.FC = () => {
           <div
             draggable
             onDragStart={(e) => handleFixedDragStart(e, 'break')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/30 rounded-full text-[11px] font-bold text-cyan-600 cursor-grab active:cursor-grabbing hover:bg-cyan-500/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500/15 to-teal-500/10 border border-cyan-500/30 rounded-xl text-xs font-bold text-cyan-600 dark:text-cyan-400 cursor-grab active:cursor-grabbing hover:from-cyan-500/25 hover:to-teal-500/20 hover:shadow-md hover:shadow-cyan-500/10 active:scale-95 transition-all duration-200 select-none"
           >
             <Coffee className="w-3.5 h-3.5" />
             Break
           </div>
-          <span className="text-[10px] text-muted-foreground self-center ml-1">Drag onto calendar</span>
+          <span className="text-[10px] text-muted-foreground/60 self-center ml-auto tracking-wide">Drag onto calendar grid</span>
         </div>
 
         {/* Calendar Grid */}
@@ -352,22 +380,29 @@ const CalendarPage: React.FC = () => {
         <button
           onClick={() => setAiPanelOpen(true)}
           className={cn(
-            "absolute bottom-8 right-8 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl",
-            "flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300 z-30",
-            "before:absolute before:inset-0 before:rounded-full before:animate-ping before:bg-primary/30"
+            "absolute bottom-8 right-8 w-14 h-14 rounded-full",
+            "flex items-center justify-center z-30 group",
+            "bg-gradient-to-br from-primary via-primary to-primary/80",
+            "text-primary-foreground shadow-2xl shadow-primary/30",
+            "hover:scale-110 hover:shadow-3xl hover:shadow-primary/40",
+            "active:scale-95 transition-all duration-300",
+            "before:absolute before:inset-0 before:rounded-full before:animate-ping before:bg-primary/40",
+            "after:absolute after:inset-[-2px] after:rounded-full after:bg-gradient-to-br after:from-primary/20 after:via-transparent after:to-transparent after:opacity-0 after:group-hover:opacity-100 after:transition-opacity after:duration-500"
           )}
         >
-          <Sparkles className="w-6 h-6" />
+          <Sparkles className="w-6 h-6 relative z-10" />
         </button>
       </div>
 
       {/* AI Side Panel */}
       {aiPanelOpen && (
-        <div className="w-96 border-l border-border bg-card flex flex-col overflow-hidden shadow-[-10px_0_30px_rgba(0,0,0,0.05)] z-40">
-          <header className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold text-foreground">AI Productivity Assistant</span>
+        <div className="w-[28rem] border-l border-border/60 bg-gradient-to-b from-card to-background flex flex-col overflow-hidden shadow-[-8px_0_40px_rgba(0,0,0,0.06)] z-40 animate-in slide-in-from-right duration-300">
+          <header className="flex items-center justify-between px-5 py-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.02] to-transparent">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
+                <Sparkles className="w-4 h-4 text-primary" />
+              </div>
+              <span className="text-sm font-bold text-foreground">AI Assistant</span>
             </div>
             <button onClick={() => setAiPanelOpen(false)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all">
               <X className="w-4 h-4" />
@@ -391,14 +426,19 @@ const CalendarPage: React.FC = () => {
             </div>
 
             {aiLoading && (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <div className="w-10 h-10 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
-                <span className="text-sm font-medium text-muted-foreground">Analysing your schedule...</span>
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="relative">
+                  <div className="w-12 h-12 border-[3px] border-primary/10 border-t-primary rounded-full animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-primary/40" />
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-muted-foreground tracking-tight animate-pulse">Analysing your schedule...</span>
               </div>
             )}
 
             {aiError && (
-              <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl">
+              <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl shadow-sm">
                 <p className="text-xs font-bold text-destructive">{aiError}</p>
               </div>
             )}
@@ -407,31 +447,43 @@ const CalendarPage: React.FC = () => {
               <div className="space-y-4">
                 {(aiResult.schedule || aiResult.plan) && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      {aiMode === 'schedule' ? 'Suggested Schedule' : 'Daily Plan'}
-                    </p>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="h-px flex-1 bg-gradient-to-r from-primary/20 to-transparent" />
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">
+                        {aiMode === 'schedule' ? 'Suggested Schedule' : 'Daily Plan'}
+                      </span>
+                      <div className="h-px flex-1 bg-gradient-to-l from-primary/20 to-transparent" />
+                    </div>
                     {(aiResult.schedule || aiResult.plan).map((item: any, i: number) => (
-                      <div key={i} className="p-3 bg-muted/40 rounded-xl border border-border">
-                        <span className="text-[10px] font-bold text-primary">{item.time}</span>
-                        <p className="text-sm font-bold text-foreground mt-0.5">{item.task}</p>
-                        {item.reason && <p className="text-[11px] text-muted-foreground mt-1">{item.reason}</p>}
+                      <div key={i} className="p-4 bg-card/80 backdrop-blur-sm rounded-xl border border-border/60 shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-200">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 text-[10px] font-bold text-primary">
+                            {item.time}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {item.duration ? `${item.duration}min` : ''}
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold text-foreground">{item.task}</p>
+                        {item.reason && <p className="text-[11px] text-muted-foreground/70 mt-1.5 leading-relaxed">{item.reason}</p>}
                       </div>
                     ))}
                   </div>
                 )}
 
                 {aiResult.overview && (
-                  <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
-                    <p className="text-sm font-medium">{aiResult.overview}</p>
+                  <div className="p-4 bg-gradient-to-br from-primary/5 to-primary/[0.02] rounded-xl border border-primary/10">
+                    <p className="text-sm font-medium text-foreground/80 leading-relaxed">{aiResult.overview}</p>
                   </div>
                 )}
 
                 {aiResult.tips && (
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase">Tips</p>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.15em]">Tips</p>
                     {aiResult.tips.map((tip: string, i: number) => (
-                      <p key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                        <span className="text-primary mt-0.5">•</span> {tip}
+                      <p key={i} className="text-xs text-muted-foreground/80 flex items-start gap-2.5 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary/40 mt-1.5 flex-shrink-0" />
+                        {tip}
                       </p>
                     ))}
                   </div>
@@ -441,9 +493,16 @@ const CalendarPage: React.FC = () => {
                   <button
                     onClick={applySmartSchedule}
                     disabled={smartScheduleApplied}
-                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50"
+                    className="w-full py-3 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground rounded-xl font-bold text-sm hover:shadow-lg hover:shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {smartScheduleApplied ? '✓ Applied!' : aiMode === 'schedule' ? 'Apply Smart Schedule' : 'Apply Daily Plan'}
+                    {smartScheduleApplied ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-green-400 flex items-center justify-center text-[8px]">✓</span>
+                        Applied!
+                      </span>
+                    ) : (
+                      aiMode === 'schedule' ? 'Apply Smart Schedule' : 'Apply Daily Plan'
+                    )}
                   </button>
                 )}
               </div>
@@ -451,9 +510,11 @@ const CalendarPage: React.FC = () => {
 
             {!aiLoading && !aiResult && !aiError && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <Sparkles className="w-10 h-10 text-muted-foreground/30 mb-4" />
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-primary/5 to-primary/[0.02] border border-primary/10 mb-5">
+                  <Sparkles className="w-8 h-8 text-primary/40" />
+                </div>
                 <p className="text-sm font-bold text-foreground mb-1">AI Productivity Assistant</p>
-                <p className="text-xs text-muted-foreground">Choose Smart Schedule or Daily Plan above</p>
+                <p className="text-xs text-muted-foreground/70 max-w-[200px] mx-auto">Choose Smart Schedule or Daily Plan above</p>
               </div>
             )}
           </div>
@@ -492,14 +553,17 @@ function AIActionCard({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 p-4 rounded-xl bg-muted/30 border border-border hover:border-primary/20 hover:bg-background hover:shadow-sm transition-all text-left group"
+      className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-card via-card to-muted/50 border border-border/60 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-200 text-left group"
     >
-      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
-        <Icon className="w-4 h-4 text-primary" />
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:from-primary/25 group-hover:to-primary/10 transition-all duration-200 ring-1 ring-primary/10">
+        <Icon className="w-4.5 h-4.5 text-primary" />
       </div>
-      <div>
-        <p className="text-sm font-bold text-foreground">{title}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">{desc}</p>
+      <div className="flex-1">
+        <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{title}</p>
+        <p className="text-[11px] text-muted-foreground/70 mt-0.5 leading-snug">{desc}</p>
+      </div>
+      <div className="w-6 h-6 rounded-full bg-muted/50 flex items-center justify-center group-hover:bg-primary/10 group-hover:translate-x-0.5 transition-all">
+        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary" />
       </div>
     </button>
   );
