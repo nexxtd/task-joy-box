@@ -76,7 +76,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.3",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -87,6 +87,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "embla-carousel-react": "^8.6.0",
+    "esbuild": "^0.28.0",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.11",
@@ -125,7 +126,7 @@
     "typescript": "^5.9.3",
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
-    "vite": "^5.4.10",
+    "vite": "^6.4.3",
     "vitest": "^4.1.8"
   },
   "devDependencies": {
