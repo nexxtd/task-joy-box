@@ -29,19 +29,23 @@ if (!process.env.OPENROUTER_API_KEY) {
 }
 
 function getOpenRouter(): OpenAI | null {
+  if (openRouter) return openRouter;
   if (!process.env.OPENROUTER_API_KEY) {
     return null;
   }
   try {
-    return new OpenAI({
+    openRouter = new OpenAI({
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: process.env.OPENROUTER_API_KEY,
     });
+    return openRouter;
   } catch (e) {
     console.error('Failed to initialize OpenRouter:', e);
     return null;
   }
 }
+
+const AI_MODEL = process.env.AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 // Helper function to create cache key based on request parameters
 function createCacheKey(input: string, model: string): string {
@@ -150,7 +154,7 @@ function delay(ms: number): Promise<void> {
 // Add AI request function with retry and caching
 async function generateContentWithRetry(prompt: string, retries = 1, useFallback = true) {
   // Create cache key for this request
-  const cacheKey = createCacheKey(prompt, 'nvidia/nemotron-3-super-120b-a12b:free');
+  const cacheKey = createCacheKey(prompt, AI_MODEL);
   const cached = requestCache.get(cacheKey);
 
   // Return cached response if available and not expired
@@ -168,7 +172,7 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
     try {
       const completion = await client.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        model: 'nvidia/nemotron-3-super-120b-a12b:free',
+        model: AI_MODEL,
         temperature: 0.7,
         max_tokens: 500,
       });
@@ -689,7 +693,7 @@ Current tasks: ${JSON.stringify(userData.tasks.slice(0, 15))}
 IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep responses concise and friendly.` }, {
         role: 'user', content: safeMessage
       }],
-      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+      model: AI_MODEL,
       temperature: 0.6,
       max_tokens: 400,
     });
@@ -711,10 +715,10 @@ IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep respo
     res.json({ response: responseText });
   } catch (e: any) {
     console.error('AI chat error:', e);
-    const errorMessage = e?.message || 'Unknown error';
+    const status = e?.status || e?.error?.status || 500;
+    const errorMessage = e?.message || e?.error?.message || 'Unknown error';
 
-    // Specifically handle rate limit errors
-    if (e.status === 429) {
+    if (status === 429) {
       return res.status(429).json({
         error: 'Rate limit exceeded',
         details: 'Too many requests to the AI service. Please try again later.',
@@ -722,9 +726,41 @@ IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep respo
       });
     }
 
+    if (status === 401) {
+      return res.status(500).json({
+        error: 'AI chat request failed',
+        details: 'Invalid or expired API key. Please check your OPENROUTER_API_KEY in the .env file.',
+        hint: 'Get a new key at https://openrouter.ai/keys'
+      });
+    }
+
+    if (status === 403) {
+      return res.status(500).json({
+        error: 'AI chat request failed',
+        details: 'Access denied by the AI service provider.',
+        hint: 'Your API key may not have access to the requested model.'
+      });
+    }
+
+    if (status === 404) {
+      return res.status(500).json({
+        error: 'AI chat request failed',
+        details: `AI model "${AI_MODEL}" is not available. Try a different model.`,
+        hint: 'Check https://openrouter.ai/models for available models'
+      });
+    }
+
+    if (status === 503) {
+      return res.status(503).json({
+        error: 'AI service temporarily unavailable',
+        details: 'The AI service provider is currently unavailable. Please try again later.',
+        hint: 'If this persists, check https://openrouter.ai/status'
+      });
+    }
+
     res.status(500).json({
       error: 'AI chat request failed',
-      details: errorMessage,
+      details: `AI service error (${status}): ${errorMessage}`,
       hint: errorMessage.includes('API_KEY') ? 'Please check your OPENROUTER_API_KEY in .env file' : undefined
     });
   }
@@ -852,7 +888,7 @@ Respond with a detailed JSON object like:
 
     const completion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'nvidia/nemotron-3-super-120b-a12b:free', // Using the free NVIDIA Nemotron 3 Super model
+      model: AI_MODEL,
       temperature: 0.6,
       max_tokens: 1500,
     });
@@ -947,7 +983,7 @@ Respond with a JSON object like:
 
     const completion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'nvidia/nemotron-3-super-120b-a12b:free', // Using the free NVIDIA Nemotron 3 Super model
+      model: AI_MODEL,
       temperature: 0.6,
       max_tokens: 1200,
     });
@@ -1081,7 +1117,7 @@ Only respond with valid JSON, no markdown.`;
 
     const completion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+      model: AI_MODEL,
       temperature: 0.5,
       max_tokens: 1200,
     });
@@ -1179,7 +1215,7 @@ Respond with a JSON object like:
 
     const completion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
-      model: 'nvidia/nemotron-3-super-120b-a12b:free',
+      model: AI_MODEL,
       temperature: 0.6,
       max_tokens: 800,
     });

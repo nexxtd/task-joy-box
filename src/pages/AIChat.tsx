@@ -104,7 +104,9 @@ const AIChat: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok) {
-        pushEntry({ type: 'result-error', title: 'AI service error', body: data.error || 'Failed to get AI response.' });
+        const errBody = data.details || data.error || 'Failed to get AI response.';
+        const errHint = data.hint ? `\n\nTip: ${data.hint}` : '';
+        pushEntry({ type: 'result-error', title: 'AI service error', body: errBody + errHint });
         return;
       }
 
