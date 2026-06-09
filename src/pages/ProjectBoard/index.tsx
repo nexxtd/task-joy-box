@@ -256,12 +256,25 @@ const ProjectBoard = () => {
                           {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                         </span>
                       )}
-                      {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (
-                        <span className={`flex items-center gap-1 text-[11px] ${(task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0) === (task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) ? 'text-green-600' : 'text-gray-500'}`}>
-                          <CheckSquareIcon className="w-3 h-3" />
-                          {task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0}/{task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0}
-                        </span>
-                      )}
+                      {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (() => {
+                        const clTotal = task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0;
+                        const clDone = task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0;
+                        return (
+                          <span className={`flex items-center gap-1 text-[11px] ${clDone === clTotal ? 'text-green-600' : 'text-gray-500'}`}>
+                            <CheckSquareIcon className="w-3 h-3" />
+                            {clDone}/{clTotal} checklist
+                          </span>
+                        );
+                      })()}
+                      {((task.subtasks || []).length > 0) && (() => {
+                        const stTotal = (task.subtasks || []).length;
+                        const stDone = (task.subtasks || []).filter(s => s.completed).length;
+                        return (
+                          <span className={`flex items-center gap-1 text-[11px] ${stDone === stTotal ? 'text-green-600' : 'text-gray-500'}`}>
+                            {stDone}/{stTotal} sub task
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -625,38 +638,39 @@ const ProjectBoard = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
-                {/* Due date */}
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    <CalendarIcon className="w-3.5 h-3.5" /> Due Date
-                  </h4>
-                  <input
-                    type="date"
-                    value={selectedTask.dueDate || ''}
-                    onChange={e => {
-                      const updatedTask = { ...selectedTask, dueDate: e.target.value || undefined };
-                      setSelectedTask(updatedTask);
-                      updateTask(updatedTask.id, { dueDate: e.target.value || undefined });
-                    }}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                    Due Time
-                  </h4>
-                  <input
-                    type="time"
-                    value={selectedTask.dueTime || ''}
-                    onChange={e => {
-                      const updatedTask = { ...selectedTask, dueTime: e.target.value || undefined };
-                      setSelectedTask(updatedTask);
-                      updateTask(updatedTask.id, { dueTime: e.target.value || undefined });
-                    }}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <CalendarIcon className="w-3.5 h-3.5" /> Date & Time
+                </h4>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <CalendarIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="date"
+                      value={selectedTask.dueDate || ''}
+                      onChange={e => {
+                        const updatedTask = { ...selectedTask, dueDate: e.target.value || undefined };
+                        setSelectedTask(updatedTask);
+                        updateTask(updatedTask.id, { dueDate: e.target.value || undefined });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                    />
+                  </div>
+                  <div className="relative w-[130px]">
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <input
+                      type="time"
+                      value={selectedTask.dueTime || ''}
+                      onChange={e => {
+                        const updatedTask = { ...selectedTask, dueTime: e.target.value || undefined };
+                        setSelectedTask(updatedTask);
+                        updateTask(updatedTask.id, { dueTime: e.target.value || undefined });
+                      }}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                    />
+                  </div>
                 </div>
               </div>
 

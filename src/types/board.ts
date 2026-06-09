@@ -58,6 +58,7 @@ export interface Task {
   subtasks: Subtask[];
   dueDate?: string;
   dueTime?: string;
+  startDate?: string;
   startTime?: string;
   duration?: number;
   sessionsNeeded?: number;

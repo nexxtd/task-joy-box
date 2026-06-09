@@ -854,14 +854,17 @@ const Tasks: React.FC = () => {
             )}
             {checklistTotal > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {checklistDone}/{checklistTotal} items
+                {checklistDone}/{checklistTotal} checklist
               </span>
             )}
-            {subtaskCount > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {subtaskCount} sub-task{subtaskCount === 1 ? '' : 's'}
-              </span>
-            )}
+            {subtaskCount > 0 && (() => {
+              const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+              return (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {subtaskDone}/{subtaskCount} sub task
+                </span>
+              );
+            })()}
             {taskTags.map(label => (
               <span
                 key={label.id}

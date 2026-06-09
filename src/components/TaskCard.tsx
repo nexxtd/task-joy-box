@@ -15,6 +15,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
   const { open: openDeepFocus } = useDeepFocus();
   const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
   const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
+  const subtaskTotal = (task.subtasks || []).length;
+  const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
 
   const handleDeepFocusClick = (e: React.MouseEvent) => {
@@ -88,7 +90,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
         {totalItems > 0 && (
           <span className={`flex items-center gap-1 text-[11px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
             <CheckSquare className="w-3 h-3" />
-            {doneItems}/{totalItems}
+            {doneItems}/{totalItems} checklist
+          </span>
+        )}
+        {subtaskTotal > 0 && (
+          <span className={`flex items-center gap-1 text-[11px] ${subtaskDone === subtaskTotal ? 'text-label-green' : 'text-muted-foreground'}`}>
+            {subtaskDone}/{subtaskTotal} sub task
           </span>
         )}
         {task.assignedToUserId && (

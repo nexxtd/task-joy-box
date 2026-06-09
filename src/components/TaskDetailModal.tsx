@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -262,30 +262,62 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               )}
             </div>
 
-            {/* Due date */}
+            {/* Start */}
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                <Calendar className="w-3.5 h-3.5" /> Due
+                <Calendar className="w-3.5 h-3.5" /> Start
               </h4>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Date</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="date"
+                    value={task.startDate || ''}
+                    onChange={e => canEdit && updateTask(task.id, { startDate: e.target.value || undefined })}
+                    disabled={!canEdit}
+                    className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:var(--color-scheme)]"
+                  />
+                </div>
+                <div className="relative w-[130px]">
+                  <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="time"
+                    value={task.startTime || ''}
+                    onChange={e => canEdit && updateTask(task.id, { startTime: e.target.value || undefined })}
+                    disabled={!canEdit}
+                    className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:var(--color-scheme)]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* End - moved to own row */}
+          <div className="grid grid-cols-2 gap-6">
+            <div />
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <Calendar className="w-3.5 h-3.5" /> End
+              </h4>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <input
                     type="date"
                     value={task.dueDate || ''}
                     onChange={e => canEdit && updateTask(task.id, { dueDate: e.target.value || undefined })}
                     disabled={!canEdit}
-                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:var(--color-scheme)]"
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Time</label>
+                <div className="relative w-[130px]">
+                  <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                   <input
                     type="time"
                     value={task.dueTime || ''}
                     onChange={e => canEdit && updateTask(task.id, { dueTime: e.target.value || undefined })}
                     disabled={!canEdit}
-                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed [color-scheme:var(--color-scheme)]"
                   />
                 </div>
               </div>

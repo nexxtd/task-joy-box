@@ -71,9 +71,18 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                           {totalItems > 0 && (
                             <span className={`flex items-center gap-1 text-[11px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
                               <CheckSquare className="w-3 h-3" />
-                              {doneItems}/{totalItems}
+                              {doneItems}/{totalItems} checklist
                             </span>
                           )}
+                          {((task.subtasks || []).length > 0) && (() => {
+                            const stTotal = (task.subtasks || []).length;
+                            const stDone = (task.subtasks || []).filter(s => s.completed).length;
+                            return (
+                              <span className={`flex items-center gap-1 text-[11px] ${stDone === stTotal ? 'text-label-green' : 'text-muted-foreground'}`}>
+                                {stDone}/{stTotal} sub task
+                              </span>
+                            );
+                          })()}
                           {task.dueDate && (
                             <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
                               <Calendar className="w-3 h-3" />
