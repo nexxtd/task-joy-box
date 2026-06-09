@@ -384,15 +384,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <div>
               <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
               <Select
-                value={String(newTaskProjectId)}
-                onValueChange={value => setNewTaskProjectId(value ? Number(value) : '')}
+                value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)}
+                onValueChange={value => setNewTaskProjectId(value === 'my-tasks' ? '' : Number(value))}
                 disabled={defaultProjectId !== undefined && defaultProjectId !== null}
               >
                 <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">My Tasks</SelectItem>
+                  <SelectItem value="my-tasks">My Tasks</SelectItem>
                   {projects.map(project => (
                     <SelectItem key={project.id} value={String(project.id)}>
                       {project.name}

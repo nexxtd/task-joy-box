@@ -905,12 +905,12 @@ const Tasks: React.FC = () => {
                 </div>
               )}
               {quickEditField === 'project' && (
-                <Select value={String(quickEditProjectId || '')} onValueChange={val => setQuickEditProjectId(val ? Number(val) : '')}>
+                <Select value={quickEditProjectId === '' ? 'my-tasks' : String(quickEditProjectId)} onValueChange={val => setQuickEditProjectId(val === 'my-tasks' ? '' : Number(val))}>
                   <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
                     <SelectValue placeholder="My Tasks" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">My Tasks</SelectItem>
+                    <SelectItem value="my-tasks">My Tasks</SelectItem>
                     {projects.map(project => (<SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
@@ -1464,12 +1464,12 @@ const Tasks: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-                  <Select value={String(newTaskProjectId || '')} onValueChange={v => setNewTaskProjectId(v ? Number(v) : '')}>
+                  <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v))}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">My Tasks</SelectItem>
+                      <SelectItem value="my-tasks">My Tasks</SelectItem>
                       {projects.map(project => (
                         <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
                       ))}
@@ -2208,15 +2208,15 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-            <Select value={String(task.projectId || '')} onValueChange={v => onUpdateTask(task.id, {
-                projectId: v ? Number(v) : null,
-                projectName: v ? (projects.find(p => p.id === Number(v))?.name || undefined) : undefined,
+            <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => onUpdateTask(task.id, {
+                projectId: v === 'my-tasks' ? null : Number(v),
+                projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
               })}>
               <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                 <SelectValue placeholder="Select project" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">My Tasks</SelectItem>
+                <SelectItem value="my-tasks">My Tasks</SelectItem>
                 {projects.map(project => (
                   <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
                 ))}
