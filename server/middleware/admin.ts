@@ -12,8 +12,10 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   }
   
   const adminEmails = adminEmailsEnv.split(',').map(e => e.trim().toLowerCase());
+  console.log('Admin check:', { userEmail: req.userEmail, configuredAdmins: adminEmails });
   
   if (!req.userEmail || !adminEmails.includes(req.userEmail.toLowerCase())) {
+    console.log('Admin access denied for:', req.userEmail);
     return res.status(403).json({ error: 'Access denied: Admin privileges required' });
   }
   

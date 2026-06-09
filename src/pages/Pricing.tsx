@@ -218,7 +218,7 @@ const Pricing: React.FC = () => {
     }
   };
 
-  const isTeamPlan = activeTab !== 'personal';
+  const isTeamPlan = activeTab === 'family' || activeTab === 'business' || activeTab === 'school';
   const totalSteps = 5;
 
   return (
@@ -238,7 +238,7 @@ const Pricing: React.FC = () => {
       <div className="p-8 max-w-7xl mx-auto">
         <div className="flex flex-col items-center mb-12">
           <div className="flex items-center bg-muted rounded-2xl p-1 mb-6 shadow-inner border border-border/50">
-            {(['personal', 'business', 'school'] as const).map(tab => (
+            {(['personal', 'family', 'business', 'school'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -246,7 +246,7 @@ const Pricing: React.FC = () => {
                   activeTab === tab ? 'bg-card text-foreground shadow-xl border border-border/50' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {tab === 'personal' ? 'Personal' : tab === 'business' ? 'Business' : 'School'}
+                {tab === 'personal' ? 'Personal' : tab === 'family' ? 'Family' : tab === 'business' ? 'Business' : 'School'}
               </button>
             ))}
           </div>
@@ -323,72 +323,73 @@ const Pricing: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'business' && (
-          <div className="space-y-10">
-            {/* Family */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Users className="w-5 h-5 text-primary" /></div>
-                <h2 className="text-xl font-black">Family</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {familyPlans.map((plan, i) => {
-                  const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                  return (
-                    <div key={i} className={`bg-card border-2 rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl ${plan.popular ? 'border-primary shadow-lg' : 'border-border hover:border-primary/30'}`}>
-                      {plan.popular && <div className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-block mb-4">Popular</div>}
-                      <h3 className="text-xl font-black mb-1">{plan.name}</h3>
-                      <p className="text-3xl font-black mb-4">{convertPrice(price)}<span className="text-sm text-muted-foreground font-normal">/mo</span></p>
-                      <ul className="space-y-2 mb-6">
-                        {plan.features.map((f, fi) => (
-                          <li key={fi} className="flex items-start gap-2 text-sm text-muted-foreground font-bold">
-                            <Check className="w-3 h-3 text-primary mt-1 flex-shrink-0" />{f}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        onClick={() => openCheckout(plan.name, plan.tier, 'family', price)}
-                        className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10 active:scale-95 transition-all"
-                      >
-                        Get {plan.name}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+        {activeTab === 'family' && (
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Users className="w-5 h-5 text-primary" /></div>
+              <h2 className="text-xl font-black">Family</h2>
             </div>
-            {/* Business */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-primary" /></div>
-                <h2 className="text-xl font-black">Business / Team</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {businessPlans.map((plan, i) => {
-                  const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-                  return (
-                    <div key={i} className={`bg-card border-2 rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl ${plan.popular ? 'border-primary shadow-lg' : 'border-border hover:border-primary/30'}`}>
-                      {plan.popular && <div className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-block mb-4">Popular</div>}
-                      <h3 className="text-xl font-black mb-1">{plan.name}</h3>
-                      <p className="text-3xl font-black mb-1">{convertPrice(price)}<span className="text-sm text-muted-foreground font-normal">/seat/mo</span></p>
-                      <p className="text-xs text-muted-foreground mb-4">Total: {convertPrice(price * seats)}/mo for {seats} seat{seats > 1 ? 's' : ''}</p>
-                      <ul className="space-y-2 mb-6">
-                        {plan.features.map((f, fi) => (
-                          <li key={fi} className="flex items-start gap-2 text-sm text-muted-foreground font-bold">
-                            <Check className="w-3 h-3 text-primary mt-1 flex-shrink-0" />{f}
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        onClick={() => openCheckout(plan.name, plan.tier, 'business', price)}
-                        className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10 active:scale-95 transition-all"
-                      >
-                        Get {plan.name}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+            <p className="text-sm text-muted-foreground mb-8 max-w-lg">Share with your family members. Everyone gets their own account under one plan.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {familyPlans.map((plan, i) => {
+                const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                return (
+                  <div key={i} className={`bg-card border-2 rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl ${plan.popular ? 'border-primary shadow-lg' : 'border-border hover:border-primary/30'}`}>
+                    {plan.popular && <div className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-block mb-4">Popular</div>}
+                    <h3 className="text-xl font-black mb-1">{plan.name}</h3>
+                    <p className="text-3xl font-black mb-4">{convertPrice(price)}<span className="text-sm text-muted-foreground font-normal">/mo</span></p>
+                    <ul className="space-y-2 mb-6">
+                      {plan.features.map((f, fi) => (
+                        <li key={fi} className="flex items-start gap-2 text-sm text-muted-foreground font-bold">
+                          <Check className="w-3 h-3 text-primary mt-1 flex-shrink-0" />{f}
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => openCheckout(plan.name, plan.tier, 'family', price)}
+                      className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10 active:scale-95 transition-all"
+                    >
+                      Get {plan.name}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'business' && (
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-primary" /></div>
+              <h2 className="text-xl font-black">Business / Team</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-8 max-w-lg">Simple per-seat pricing. Each user gets their own account — admins manage seats.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {businessPlans.map((plan, i) => {
+                const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+                return (
+                  <div key={i} className={`bg-card border-2 rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl ${plan.popular ? 'border-primary shadow-lg' : 'border-border hover:border-primary/30'}`}>
+                    {plan.popular && <div className="bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full inline-block mb-4">Popular</div>}
+                    <h3 className="text-xl font-black mb-1">{plan.name}</h3>
+                    <p className="text-3xl font-black mb-1">{convertPrice(price)}<span className="text-sm text-muted-foreground font-normal">/seat/mo</span></p>
+                    <p className="text-xs text-muted-foreground mb-4">Total: {convertPrice(price * seats)}/mo for {seats} seat{seats > 1 ? 's' : ''}</p>
+                    <ul className="space-y-2 mb-6">
+                      {plan.features.map((f, fi) => (
+                        <li key={fi} className="flex items-start gap-2 text-sm text-muted-foreground font-bold">
+                          <Check className="w-3 h-3 text-primary mt-1 flex-shrink-0" />{f}
+                        </li>
+                      ))}
+                    </ul>
+                    <button
+                      onClick={() => openCheckout(plan.name, plan.tier, 'business', price)}
+                      className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-primary/10 active:scale-95 transition-all"
+                    >
+                      Get {plan.name}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
