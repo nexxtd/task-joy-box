@@ -346,6 +346,25 @@ export async function initDatabase() {
     `);
     console.log('Milestones table verified');
 
+    // --- COUPON NEW COLUMNS ---
+    await addColumnIfNotExists('coupons', 'restricted_to_plan', 'TEXT');
+    await addColumnIfNotExists('coupons', 'start_date', 'TEXT');
+    await addColumnIfNotExists('coupons', 'one_time_per_user', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('coupons', 'sort_order', 'INTEGER DEFAULT 0');
+
+    // --- COUPON REDEMPTIONS TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS coupon_redemptions (
+        id SERIAL PRIMARY KEY,
+        coupon_id INTEGER NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS coupon_redemptions_coupon_id_idx ON coupon_redemptions(coupon_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS coupon_redemptions_user_id_idx ON coupon_redemptions(user_id);`);
+    console.log('Coupon redemptions table verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails
