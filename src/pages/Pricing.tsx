@@ -23,7 +23,7 @@ const detectCurrency = (): string => {
 const Pricing: React.FC = () => {
   const { user } = useAuth();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
-  const [activeTab, setActiveTab] = useState<'personal' | 'business' | 'school'>('personal');
+  const [activeTab, setActiveTab] = useState<string>('personal');
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [currency, setCurrency] = useState('USD');
 
@@ -219,7 +219,7 @@ const Pricing: React.FC = () => {
   };
 
   const isTeamPlan = activeTab !== 'personal';
-  const totalSteps = isTeamPlan ? (activeTab === 'personal' ? 5 : 5) : 5;
+  const totalSteps = 5;
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
