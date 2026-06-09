@@ -45,7 +45,7 @@ function getOpenRouter(): OpenAI | null {
   }
 }
 
-const AI_MODEL = process.env.AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const AI_MODEL = process.env.AI_MODEL || 'openrouter/free';
 
 // Helper function to create cache key based on request parameters
 function createCacheKey(input: string, model: string): string {
@@ -177,7 +177,9 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
         max_tokens: 500,
       });
 
-      const responseText = completion.choices[0].message?.content || '';
+      console.log('OpenRouter response:', JSON.stringify({ choices: completion.choices?.length, model: completion.model, id: completion.id }));
+
+      const responseText = completion.choices?.[0]?.message?.content || '';
 
       // Cache the response
       requestCache.set(cacheKey, {
@@ -698,6 +700,17 @@ IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep respo
       max_tokens: 400,
     });
 
+    console.log('OpenRouter chat response:', JSON.stringify({ choices: completion.choices?.length, model: completion.model, id: completion.id }));
+
+    if (!completion.choices || completion.choices.length === 0) {
+      console.error('Empty choices in response. Full response:', JSON.stringify(completion));
+      return res.status(500).json({
+        error: 'AI returned empty response',
+        details: `Model "${AI_MODEL}" returned no choices. The model may not exist or is not available.`,
+        hint: 'Check https://openrouter.ai/models for available models'
+      });
+    }
+
     const responseText = completion.choices[0].message?.content || '';
 
     // Save the conversation to database
@@ -893,7 +906,7 @@ Respond with a detailed JSON object like:
       max_tokens: 1500,
     });
 
-    const responseText = completion.choices[0].message?.content || '';
+    const responseText = completion.choices?.[0]?.message?.content || '';
 
     try {
       const data = await extractJsonFromResponse(responseText);
@@ -988,7 +1001,7 @@ Respond with a JSON object like:
       max_tokens: 1200,
     });
 
-    const responseText = completion.choices[0].message?.content || '';
+    const responseText = completion.choices?.[0]?.message?.content || '';
 
     try {
       const data = await extractJsonFromResponse(responseText);
@@ -1122,7 +1135,7 @@ Only respond with valid JSON, no markdown.`;
       max_tokens: 1200,
     });
 
-    const responseText = completion.choices[0].message?.content || '';
+    const responseText = completion.choices?.[0]?.message?.content || '';
 
     try {
       const data = await extractJsonFromResponse(responseText);
@@ -1220,7 +1233,7 @@ Respond with a JSON object like:
       max_tokens: 800,
     });
 
-    const responseText = completion.choices[0].message?.content || '';
+    const responseText = completion.choices?.[0]?.message?.content || '';
 
     try {
       const data = await extractJsonFromResponse(responseText);
