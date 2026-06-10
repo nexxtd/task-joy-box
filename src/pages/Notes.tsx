@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  CheckCircle2,
   Loader2,
   Pin,
   Plus,
@@ -9,6 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface NoteTag {
@@ -38,49 +40,33 @@ const NOTE_COLORS = [
 ];
 
 const TAG_COLORS = [
-  '#ef4444',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#3b82f6',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
 ];
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ');
-
 const randomFrom = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)] || items[0];
 
 const DeleteConfirmDialog: React.FC<{
+  count: number;
   onConfirm: () => void;
   onCancel: () => void;
-}> = ({ onConfirm, onCancel }) => (
+}> = ({ count, onConfirm, onCancel }) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onCancel} />
-    <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
-          <Trash2 className="h-5 w-5 text-destructive" />
+    <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-6 w-full max-w-sm animate-fade-in">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+          <Trash2 className="w-5 h-5 text-destructive" />
         </div>
         <div>
-          <h3 className="text-sm font-bold text-foreground">Delete this note?</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">This action cannot be undone.</p>
+          <h3 className="text-sm font-bold text-foreground">Delete {count} note{count === 1 ? '' : 's'}?</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">This action cannot be undone.</p>
         </div>
       </div>
       <div className="flex justify-end gap-2">
-        <button
-          onClick={onCancel}
-          className="rounded-lg px-4 py-2 text-sm text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          className="rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground transition-all hover:bg-destructive/90"
-        >
-          Delete
-        </button>
+        <button onClick={onCancel} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all">Cancel</button>
+        <button onClick={onConfirm} className="px-4 py-2 text-sm font-bold bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-all">Delete {count} note{count === 1 ? '' : 's'}</button>
       </div>
     </div>
   </div>
@@ -98,20 +84,16 @@ const Notes: React.FC = () => {
   const [openNoteId, setOpenNoteId] = useState<number | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
-  const [deleteNoteId, setDeleteNoteId] = useState<number | null>(null);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState<number[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [singleDeleteId, setSingleDeleteId] = useState<number | null>(null);
   const [tagPopupNoteId, setTagPopupNoteId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(randomFrom(TAG_COLORS));
 
-  const activeNote = useMemo(
-    () => notes.find(note => note.id === openNoteId) || null,
-    [notes, openNoteId],
-  );
-
-  const tagPopupNote = useMemo(
-    () => notes.find(note => note.id === tagPopupNoteId) || null,
-    [notes, tagPopupNoteId],
-  );
+  const activeNote = useMemo(() => notes.find(n => n.id === openNoteId) || null, [notes, openNoteId]);
+  const tagPopupNote = useMemo(() => notes.find(n => n.id === tagPopupNoteId) || null, [notes, tagPopupNoteId]);
 
   const fetchNotes = async () => {
     try {
@@ -119,7 +101,7 @@ const Notes: React.FC = () => {
       const res = await fetch('/api/notes', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch notes');
       const data = await res.json();
-      const loadedNotes: Note[] = (data.notes || []).map((note: any) => ({
+      setNotes((data.notes || []).map((note: any) => ({
         id: note.id,
         title: note.title || '',
         content: note.content || '',
@@ -128,27 +110,17 @@ const Notes: React.FC = () => {
         createdAt: note.createdAt || new Date().toISOString(),
         updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
         tags: Array.isArray(note.tags) ? note.tags : [],
-      }));
-      const loadedTags: NoteTag[] = (data.tags || []).map((tag: any) => ({
-        id: tag.id,
-        name: tag.name,
-        color: tag.color,
-      }));
-      setNotes(loadedNotes);
-      setTags(loadedTags);
+      })));
+      setTags((data.tags || []).map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color })));
       setError(null);
-    } catch (err) {
+    } catch {
       setError('Failed to load notes');
-      console.error('Error fetching notes:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchNotes();
-  }, []);
-
+  useEffect(() => { fetchNotes(); }, []);
   useEffect(() => {
     if (!activeNote) return;
     setDraftTitle(activeNote.title);
@@ -156,150 +128,96 @@ const Notes: React.FC = () => {
   }, [activeNote?.id]);
 
   const applyNoteUpdate = async (id: number, updates: Partial<Note>) => {
-    setNotes(prev => prev.map(note => (note.id === id ? { ...note, ...updates } : note)));
+    setNotes(prev => prev.map(n => (n.id === id ? { ...n, ...updates } : n)));
     try {
       const res = await fetch(`/api/notes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify(updates),
       });
       if (!res.ok) throw new Error('Failed to update note');
       const data = await res.json();
-      if (data?.id) {
-        setNotes(prev => prev.map(note => (note.id === data.id ? { ...note, ...data } : note)));
-      }
-    } catch (err) {
-      console.error('Error updating note:', err);
-      fetchNotes();
-    }
+      if (data?.id) setNotes(prev => prev.map(n => (n.id === data.id ? { ...n, ...data } : n)));
+    } catch { fetchNotes(); }
   };
 
   const createNote = async () => {
     try {
       setCreating(true);
       const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          title: '',
-          content: '',
-          color: randomFrom(NOTE_COLORS),
-          pinned: false,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ title: '', content: '', color: randomFrom(NOTE_COLORS), pinned: false }),
       });
       if (!res.ok) throw new Error('Failed to create note');
       const created = await res.json();
       const next: Note = {
-        id: created.id,
-        title: created.title || '',
-        content: created.content || '',
-        color: created.color || NOTE_COLORS[0],
-        pinned: Boolean(created.pinned),
+        id: created.id, title: created.title || '', content: created.content || '',
+        color: created.color || NOTE_COLORS[0], pinned: Boolean(created.pinned),
         createdAt: created.createdAt || new Date().toISOString(),
         updatedAt: created.updatedAt || created.createdAt || new Date().toISOString(),
         tags: Array.isArray(created.tags) ? created.tags : [],
       };
       setNotes(prev => [next, ...prev]);
       setOpenNoteId(next.id);
-    } catch (err) {
-      console.error('Error creating note:', err);
-      alert('Failed to save note. Please try again.');
-    } finally {
-      setCreating(false);
-    }
+    } catch { alert('Failed to save note. Please try again.'); }
+    finally { setCreating(false); }
   };
 
   const deleteNote = async (id: number) => {
     try {
-      const res = await fetch(`/api/notes/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
+      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error('Failed to delete note');
-      setNotes(prev => prev.filter(note => note.id !== id));
+      setNotes(prev => prev.filter(n => n.id !== id));
       if (openNoteId === id) setOpenNoteId(null);
       if (tagPopupNoteId === id) setTagPopupNoteId(null);
-    } catch (err) {
-      console.error('Error deleting note:', err);
-      alert('Failed to delete note. Please try again.');
-    }
+    } catch { alert('Failed to delete note. Please try again.'); }
   };
 
-  const togglePin = (note: Note) => {
-    applyNoteUpdate(note.id, { pinned: !note.pinned });
-  };
+  const togglePin = (note: Note) => applyNoteUpdate(note.id, { pinned: !note.pinned });
 
-  const toggleTagFilter = (tagId: number) => {
+  const toggleTagFilter = (tagId: number) =>
     setSelectedTagIds(prev => (prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]));
-  };
 
   const toggleTagOnNote = async (noteId: number, tagId: number) => {
     try {
-      const res = await fetch(`/api/notes/${noteId}/tags/${tagId}/toggle`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const res = await fetch(`/api/notes/${noteId}/tags/${tagId}/toggle`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error('Failed to toggle tag');
       const data = await res.json();
       if (data?.note?.id) {
-        const nextNote = data.note as Note;
-        setNotes(prev => prev.map(note => (note.id === nextNote.id ? { ...note, ...nextNote } : note)));
+        const next = data.note as Note;
+        setNotes(prev => prev.map(n => (n.id === next.id ? { ...n, ...next } : n)));
       }
-    } catch (err) {
-      console.error('Error toggling note tag:', err);
-    }
+    } catch {}
   };
 
   const addTagToNote = async () => {
     if (!tagPopupNote || !normalize(newTagName)) return;
     try {
       const res = await fetch(`/api/notes/${tagPopupNote.id}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: normalize(newTagName),
-          color: newTagColor,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ name: normalize(newTagName), color: newTagColor }),
       });
       if (!res.ok) throw new Error('Failed to create tag');
       const data = await res.json();
       if (data?.note?.id) {
-        const nextNote = data.note as Note;
-        setNotes(prev => prev.map(note => (note.id === nextNote.id ? { ...note, ...nextNote } : note)));
+        const next = data.note as Note;
+        setNotes(prev => prev.map(n => (n.id === next.id ? { ...n, ...next } : n)));
       }
       if (data?.tag) {
         const nextTag = data.tag as NoteTag;
-        setTags(prev => {
-          if (prev.some(tag => tag.id === nextTag.id)) return prev;
-          return [...prev, nextTag].sort((a, b) => a.name.localeCompare(b.name));
-        });
+        setTags(prev => prev.some(t => t.id === nextTag.id) ? prev : [...prev, nextTag].sort((a, b) => a.name.localeCompare(b.name)));
       }
       setNewTagName('');
       setNewTagColor(randomFrom(TAG_COLORS));
-    } catch (err) {
-      console.error('Error creating tag:', err);
-    }
+    } catch {}
   };
 
   const deleteTagEverywhere = async (tagId: number) => {
     try {
-      const res = await fetch(`/api/notes/tags/${tagId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Failed to delete tag');
-      setTags(prev => prev.filter(tag => tag.id !== tagId));
-      setNotes(prev => prev.map(note => ({
-        ...note,
-        tags: note.tags.filter(tag => tag.id !== tagId),
-      })));
+      await fetch(`/api/notes/tags/${tagId}`, { method: 'DELETE', credentials: 'include' });
+      setTags(prev => prev.filter(t => t.id !== tagId));
+      setNotes(prev => prev.map(n => ({ ...n, tags: n.tags.filter(t => t.id !== tagId) })));
       setSelectedTagIds(prev => prev.filter(id => id !== tagId));
-    } catch (err) {
-      console.error('Error deleting note tag:', err);
-    }
+    } catch {}
   };
 
   const saveDrafts = async () => {
@@ -313,13 +231,9 @@ const Notes: React.FC = () => {
 
   const filteredNotes = useMemo(() => {
     const term = search.toLowerCase().trim();
-    return notes.filter(note => {
-      const matchesSearch = term.length === 0
-        ? true
-        : note.title.toLowerCase().includes(term) || note.content.toLowerCase().includes(term);
-      const matchesTags = selectedTagIds.length === 0
-        ? true
-        : selectedTagIds.every(tagId => note.tags.some(tag => tag.id === tagId));
+    return notes.filter(n => {
+      const matchesSearch = !term || n.title.toLowerCase().includes(term) || n.content.toLowerCase().includes(term);
+      const matchesTags = selectedTagIds.length === 0 || selectedTagIds.every(id => n.tags.some(t => t.id === id));
       return matchesSearch && matchesTags;
     });
   }, [notes, search, selectedTagIds]);
@@ -327,128 +241,174 @@ const Notes: React.FC = () => {
   const sortedNotes = useMemo(() => {
     const compare = (a: Note, b: Note) => {
       if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
-      const aValue = sortMode === 'created' ? a.createdAt : a.updatedAt;
-      const bValue = sortMode === 'created' ? b.createdAt : b.updatedAt;
-      return new Date(bValue).getTime() - new Date(aValue).getTime();
+      const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
+      const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
+      return new Date(bVal).getTime() - new Date(aVal).getTime();
     };
-
-    const pinned = filteredNotes.filter(note => note.pinned).sort(compare);
-    const unpinned = filteredNotes.filter(note => !note.pinned).sort(compare);
+    const pinned = filteredNotes.filter(n => n.pinned).sort(compare);
+    const unpinned = filteredNotes.filter(n => !n.pinned).sort(compare);
     return { pinned, unpinned };
   }, [filteredNotes, sortMode]);
 
-  const renderNoteCard = (note: Note) => {
-    const preview = note.content
-      .split('\n')
-      .slice(0, 3)
-      .join('\n')
-      .trim();
+  const matchingCount = filteredNotes.length;
 
+  const handleBulkDelete = () => {
+    if (selectedDeleteIds.length === 0) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    for (const id of selectedDeleteIds) await deleteNote(id);
+    setSelectedDeleteIds([]);
+    setIsDeleteMode(false);
+    setDeleteConfirmOpen(false);
+  };
+
+  const confirmSingleDelete = async () => {
+    if (singleDeleteId !== null) await deleteNote(singleDeleteId);
+    setSingleDeleteId(null);
+  };
+
+  const renderNoteRow = (note: Note) => {
+    const preview = note.content.split('\n').slice(0, 2).join(' ').trim();
     return (
       <div
         key={note.id}
-        onClick={() => setOpenNoteId(note.id)}
-        className="group flex min-h-[220px] cursor-pointer flex-col rounded-2xl border border-border/70 p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
-        style={{ backgroundColor: note.color }}
+        className={cn(
+          'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
+          isDeleteMode
+            ? selectedDeleteIds.includes(note.id)
+              ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+              : 'border-border hover:bg-muted/20'
+            : 'border-border hover:border-border/80 hover:shadow-sm'
+        )}
+        onClick={() => {
+          if (isDeleteMode) {
+            setSelectedDeleteIds(prev => prev.includes(note.id) ? prev.filter(id => id !== note.id) : [...prev, note.id]);
+          } else {
+            setOpenNoteId(note.id);
+          }
+        }}
       >
-        <div className="flex items-start justify-between gap-2">
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              togglePin(note);
-            }}
-            className={`rounded-lg p-1 transition-all ${note.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-            title={note.pinned ? 'Unpin note' : 'Pin note'}
-          >
-            <Pin className={`h-4 w-4 ${note.pinned ? 'fill-current' : ''}`} />
-          </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              setDeleteNoteId(note.id);
-            }}
-            className="rounded-lg p-1 text-muted-foreground opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
-            title="Delete note"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
+        <div className="flex items-center gap-1 px-3 py-3">
+          {isDeleteMode ? (
+            <input
+              type="checkbox"
+              checked={selectedDeleteIds.includes(note.id)}
+              onChange={() => {}}
+              onClick={e => e.stopPropagation()}
+              className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+            />
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); togglePin(note); }}
+              className={`p-1.5 rounded-md flex-shrink-0 transition-all ${note.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+              title={note.pinned ? 'Unpin note' : 'Pin note'}
+            >
+              <Pin className={`w-3.5 h-3.5 ${note.pinned ? 'fill-current' : ''}`} />
+            </button>
+          )}
 
-        <div className="mt-2 flex-1">
-          <h2 className="text-base font-bold text-foreground">{note.title || 'Untitled note'}</h2>
-          <p
-            className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground"
-            style={{
-              display: '-webkit-box',
-              WebkitBoxOrient: 'vertical',
-              WebkitLineClamp: 5,
-              overflow: 'hidden',
-            }}
-          >
-            {preview || 'Start writing your note...'}
-          </p>
-        </div>
-
-        <div className="mt-4 flex items-end justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap gap-1.5">
-              {note.tags.map(tag => (
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-left text-foreground truncate">
+                {note.title || 'Untitled note'}
+              </span>
+              {note.tags.slice(0, 3).map(tag => (
                 <span
                   key={tag.id}
-                  className="rounded-full px-2 py-1 text-[10px] font-semibold text-white"
+                  className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white"
                   style={{ backgroundColor: tag.color }}
                 >
                   {tag.name}
                 </span>
               ))}
+              {note.tags.length > 3 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{note.tags.length - 3}
+                </span>
+              )}
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              Edited {new Date(note.updatedAt || note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </p>
+            {preview && (
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">{preview}</p>
+            )}
           </div>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              setTagPopupNoteId(note.id);
-            }}
-            className="rounded-lg border border-border/70 bg-background/60 p-2 text-muted-foreground transition-all hover:text-foreground"
-            title="Edit tags"
-          >
-            <Tag className="h-4 w-4" />
-          </button>
+
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[10px] text-muted-foreground">
+              {new Date(note.updatedAt || note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+            {!isDeleteMode && (
+              <>
+                <button
+                  onClick={e => { e.stopPropagation(); setTagPopupNoteId(note.id); }}
+                  className="p-1.5 rounded-md text-muted-foreground/30 hover:text-muted-foreground hover:bg-muted transition-all"
+                  title="Edit tags"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setSingleDeleteId(note.id); }}
+                  className="p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                  title="Delete note"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <h1 className="text-xl font-bold text-foreground">Notes</h1>
-        <button
-          onClick={createNote}
-          disabled={creating}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-60"
-        >
-          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          New Note
-        </button>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
+        <div>
+          <h1 className="text-lg font-bold text-foreground">Notes</h1>
+          <p className="text-xs text-muted-foreground">{matchingCount} notes matching filters</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (isDeleteMode) { setIsDeleteMode(false); setSelectedDeleteIds([]); }
+              else { setIsDeleteMode(true); setSelectedDeleteIds([]); }
+            }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border transition-all ${
+              isDeleteMode
+                ? 'bg-destructive/15 border-destructive/30 text-destructive'
+                : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <Trash2 className="w-4 h-4" />
+            {isDeleteMode ? 'Exit Delete' : 'Delete'}
+          </button>
+          <button
+            onClick={createNote}
+            disabled={creating}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all disabled:opacity-60"
+          >
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            New Note
+          </button>
+        </div>
       </header>
 
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="px-6 py-4 border-b border-border bg-card/10">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search notes..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-border bg-muted/50 py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 min-w-0">
             {tags.map(tag => {
               const active = selectedTagIds.includes(tag.id);
               return (
@@ -461,7 +421,7 @@ const Notes: React.FC = () => {
                       : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                   }`}
                 >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
                   {tag.name}
                 </button>
               );
@@ -469,16 +429,16 @@ const Notes: React.FC = () => {
             {selectedTagIds.length > 0 && (
               <button
                 onClick={() => setSelectedTagIds([])}
-                className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
+                className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50"
               >
                 Clear tags
               </button>
             )}
           </div>
 
-          <div className="relative">
-            <Select value={sortMode} onValueChange={(value) => setSortMode(value as typeof sortMode)}>
-              <SelectTrigger className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 h-9">
+          <div className="ml-auto">
+            <Select value={sortMode} onValueChange={v => setSortMode(v as typeof sortMode)}>
+              <SelectTrigger className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground h-9">
                 <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
@@ -491,62 +451,94 @@ const Notes: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-6 py-6">
-        {loading ? (
-          <div className="py-16 text-center">
-            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading notes...</p>
-          </div>
-        ) : error ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-            <button onClick={fetchNotes} className="mt-2 text-sm text-primary hover:underline">
-              Try again
-            </button>
-          </div>
-        ) : sortedNotes.pinned.length === 0 && sortedNotes.unpinned.length === 0 ? (
-          <div className="py-16 text-center">
-            <StickyNote className="mx-auto mb-3 h-12 w-12 text-muted-foreground/60" />
-            <p className="text-sm text-muted-foreground">No notes yet. Create one to get started.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {sortedNotes.pinned.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Pin className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Pinned</h2>
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-5xl mx-auto space-y-2 pb-24">
+          {loading ? (
+            <div className="text-center py-16">
+              <Loader2 className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-muted-foreground mt-3">Loading notes...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-16">
+              <p className="text-sm text-destructive">{error}</p>
+              <button onClick={fetchNotes} className="mt-2 text-sm text-primary hover:underline">Try again</button>
+            </div>
+          ) : sortedNotes.pinned.length === 0 && sortedNotes.unpinned.length === 0 ? (
+            <div className="text-center py-16">
+              <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-sm text-muted-foreground">No notes found</p>
+            </div>
+          ) : (
+            <>
+              {sortedNotes.pinned.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
+                    <Pin className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pinned</span>
+                    <span className="text-[10px] text-muted-foreground/50">({sortedNotes.pinned.length})</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {sortedNotes.pinned.map(renderNoteRow)}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {sortedNotes.pinned.map(renderNoteCard)}
-                </div>
-              </section>
-            )}
+              )}
 
-            {sortedNotes.unpinned.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <StickyNote className="h-4 w-4 text-muted-foreground" />
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Notes</h2>
+              {sortedNotes.unpinned.length > 0 && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
+                    <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">All Notes</span>
+                    <span className="text-[10px] text-muted-foreground/50">({sortedNotes.unpinned.length})</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {sortedNotes.unpinned.map(renderNoteRow)}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {sortedNotes.unpinned.map(renderNoteCard)}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      {deleteNoteId && (
-        <DeleteConfirmDialog
-          onConfirm={() => {
-            const noteId = deleteNoteId;
-            setDeleteNoteId(null);
-            deleteNote(noteId);
-          }}
-          onCancel={() => setDeleteNoteId(null)}
-        />
+      {isDeleteMode && (
+        <div className="sticky bottom-0 left-0 right-0 z-30 p-4 bg-background/80 backdrop-blur-md border-t border-border flex justify-center animate-fade-in">
+          <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center text-destructive flex-shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <span className="text-sm font-bold text-foreground">
+                {selectedDeleteIds.length === 0
+                  ? 'Select notes to delete'
+                  : `${selectedDeleteIds.length} note${selectedDeleteIds.length === 1 ? '' : 's'} selected`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setSelectedDeleteIds([]); setIsDeleteMode(false); }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg hover:bg-muted text-muted-foreground transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={selectedDeleteIds.length === 0}
+                onClick={handleBulkDelete}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-destructive text-destructive-foreground rounded-lg disabled:opacity-40 hover:bg-destructive/95 transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete selected — {selectedDeleteIds.length} note{selectedDeleteIds.length === 1 ? '' : 's'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmOpen && (
+        <DeleteConfirmDialog count={selectedDeleteIds.length} onConfirm={confirmBulkDelete} onCancel={() => setDeleteConfirmOpen(false)} />
+      )}
+
+      {singleDeleteId !== null && (
+        <DeleteConfirmDialog count={1} onConfirm={confirmSingleDelete} onCancel={() => setSingleDeleteId(null)} />
       )}
 
       {tagPopupNote && (
@@ -565,22 +557,15 @@ const Notes: React.FC = () => {
 
             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
               {tags.map(tag => {
-                const active = tagPopupNote.tags.some(item => item.id === tag.id);
+                const active = tagPopupNote.tags.some(t => t.id === tag.id);
                 return (
                   <div key={tag.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                    <button
-                      onClick={() => toggleTagOnNote(tagPopupNote.id, tag.id)}
-                      className="flex flex-1 items-center gap-2 text-left"
-                    >
+                    <button onClick={() => toggleTagOnNote(tagPopupNote.id, tag.id)} className="flex flex-1 items-center gap-2 text-left">
                       <span className={`h-3 w-3 rounded-full ${active ? 'ring-2 ring-offset-2 ring-offset-background' : ''}`} style={{ backgroundColor: tag.color }} />
                       <span className="text-sm text-foreground">{tag.name}</span>
                       {active && <span className="ml-auto text-[10px] font-semibold text-primary">Selected</span>}
                     </button>
-                    <button
-                      onClick={() => deleteTagEverywhere(tag.id)}
-                      className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      title="Delete tag everywhere"
-                    >
+                    <button onClick={() => deleteTagEverywhere(tag.id)} className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete tag everywhere">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -590,25 +575,10 @@ const Notes: React.FC = () => {
 
             <div className="mt-4 border-t border-border pt-4">
               <div className="flex gap-2">
-                <input
-                  value={newTagName}
-                  onChange={e => setNewTagName(e.target.value)}
-                  placeholder="Create tag"
-                  className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={() => setNewTagColor(randomFrom(TAG_COLORS))}
-                  className="w-12 rounded-xl border border-border"
-                  style={{ backgroundColor: newTagColor }}
-                  title="Random color"
-                />
-                <button
-                  onClick={addTagToNote}
-                  disabled={!normalize(newTagName)}
-                  className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  Add
-                </button>
+                <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
+                  className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <button onClick={() => setNewTagColor(randomFrom(TAG_COLORS))} className="w-12 rounded-xl border border-border" style={{ backgroundColor: newTagColor }} title="Random color" />
+                <button onClick={addTagToNote} disabled={!normalize(newTagName)} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add</button>
               </div>
             </div>
           </div>
@@ -617,82 +587,41 @@ const Notes: React.FC = () => {
 
       {activeNote && (
         <div className="fixed inset-0 z-[50] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            onClick={async () => {
-              await saveDrafts();
-              setOpenNoteId(null);
-            }}
-          />
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} />
           <div className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
               <div className="flex-1">
-                <input
-                  value={draftTitle}
-                  onChange={e => setDraftTitle(e.target.value)}
-                  onBlur={saveDrafts}
-                  placeholder="Untitled note"
-                  className="w-full bg-transparent text-2xl font-semibold text-foreground outline-none"
-                />
+                <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} onBlur={saveDrafts} placeholder="Untitled note"
+                  className="w-full bg-transparent text-2xl font-semibold text-foreground outline-none" />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Last edited {new Date(activeNote.updatedAt || activeNote.createdAt).toLocaleString()}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => togglePin(activeNote)}
-                  className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                  title={activeNote.pinned ? 'Unpin note' : 'Pin note'}
-                >
+                <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
                   <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
                 </button>
-                <button
-                  onClick={() => setDeleteNoteId(activeNote.id)}
-                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                  title="Delete note"
-                >
+                <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
                   <Trash2 className="h-4 w-4" />
                 </button>
-                <button
-                  onClick={async () => {
-                    await saveDrafts();
-                    setOpenNoteId(null);
-                  }}
-                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
+                <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             <div className="grid gap-4 p-5">
-              <textarea
-                value={draftContent}
-                onChange={e => setDraftContent(e.target.value)}
-                onBlur={saveDrafts}
-                placeholder="Write your note..."
-                rows={10}
-                className="min-h-[280px] w-full resize-y rounded-2xl border border-border bg-muted/20 p-4 text-sm leading-6 text-foreground outline-none focus:ring-2 focus:ring-primary/20"
-              />
+              <textarea value={draftContent} onChange={e => setDraftContent(e.target.value)} onBlur={saveDrafts} placeholder="Write your note..." rows={10}
+                className="min-h-[280px] w-full resize-y rounded-2xl border border-border bg-muted/20 p-4 text-sm leading-6 text-foreground outline-none focus:ring-2 focus:ring-primary/20" />
 
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
                 <div className="flex flex-wrap gap-1.5">
                   {activeNote.tags.map(tag => (
-                    <span
-                      key={tag.id}
-                      className="rounded-full px-2 py-1 text-[10px] font-semibold text-white"
-                      style={{ backgroundColor: tag.color }}
-                    >
-                      {tag.name}
-                    </span>
+                    <span key={tag.id} className="rounded-full px-2 py-1 text-[10px] font-semibold text-white" style={{ backgroundColor: tag.color }}>{tag.name}</span>
                   ))}
                 </div>
-                <button
-                  onClick={() => setTagPopupNoteId(activeNote.id)}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground transition-all hover:text-foreground"
-                >
-                  <Tag className="h-4 w-4" />
-                  Tags
+                <button onClick={() => setTagPopupNoteId(activeNote.id)} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground transition-all hover:text-foreground">
+                  <Tag className="h-4 w-4" /> Tags
                 </button>
               </div>
             </div>
