@@ -71,6 +71,11 @@ const DeleteConfirmDialog: React.FC<{
 );
 
 const Habits: React.FC = () => {
+  const toggleHabitTagFilter = (tagId: number) => {
+    setSelectedHabitTagIds(prev =>
+      prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
+    );
+  };
   const [habits, setHabits] = useState<Habit[]>([]);
   const [adding, setAdding] = useState(false);
   const [newHabit, setNewHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
@@ -90,6 +95,7 @@ const Habits: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [habitTags, setHabitTags] = useState<HabitTag[]>([]);
   const [tagPopupHabitId, setTagPopupHabitId] = useState<number | null>(null);
+  const [selectedHabitTagIds, setSelectedHabitTagIds] = useState<number[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -266,9 +272,10 @@ const Habits: React.FC = () => {
     return habits.filter(habit => {
       const matchesSearch = !term || habit.title.toLowerCase().includes(term);
       const matchesCategory = categoryFilter === 'all' || habit.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      const matchesTags = selectedHabitTagIds.length === 0 || selectedHabitTagIds.every(id => habit.tags?.some(t => t.id === id));
+      return matchesSearch && matchesCategory && matchesTags;
     });
-  }, [habits, search, categoryFilter]);
+  }, [habits, search, categoryFilter, selectedHabitTagIds]);
 
   const completedToday = useMemo(() => filteredHabits.filter(h => h.completedDays.includes(today)), [filteredHabits, today]);
   const notCompletedToday = useMemo(() => filteredHabits.filter(h => !h.completedDays.includes(today)), [filteredHabits, today]);
@@ -461,6 +468,37 @@ const Habits: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {habitTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 min-w-0">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground self-center" />
+              {habitTags.map(tag => {
+                const active = selectedHabitTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleHabitTagFilter(tag.id)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-all ${
+                      active
+                        ? 'border-foreground/20 text-foreground shadow-sm'
+                        : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </button>
+                );
+              })}
+              {selectedHabitTagIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedHabitTagIds([])}
+                  className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
