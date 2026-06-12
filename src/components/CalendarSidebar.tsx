@@ -48,7 +48,8 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
       const res = await fetch('/api/goals', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setGoals(data.map((g: any) => ({
+        const goalsList = data.goals || data;
+        setGoals(goalsList.map((g: any) => ({
           id: g.id,
           title: g.title,
           progress: g.progress || 0,
@@ -72,7 +73,8 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
       const res = await fetch('/api/habits', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setHabits(data.map((h: any) => ({
+        const habitsList = data.habits || data;
+        setHabits(habitsList.map((h: any) => ({
           id: h.id,
           title: h.title,
           streak: h.streak || 0,

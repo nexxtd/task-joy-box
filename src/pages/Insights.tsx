@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import {
   CheckSquare, TrendingUp, AlertTriangle, Clock, BarChart3,
   Sparkles, Bot, Loader2, X, RefreshCw, Lock,
-  Flame, Sun, Moon, Sunrise, Sunset, ChevronRight,
-  Trophy, Target, Zap
+  Flame, Sun, Sunrise, Sunset, ChevronRight,
+  Target, Zap
 } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
-import { Task } from '@/types/board';
 
 type TimeRange = 'day' | 'week' | 'month';
 
@@ -235,7 +233,7 @@ const Insights: React.FC = () => {
       const avgHours = Math.round(avgDays * 24);
       return { days: 0, hours: avgHours, display: `${avgHours}h`, isHours: true };
     }
-    return { days: Math.round(avgDays), hours: 0, display: `${Math.round(avgDays)} days`, isHours: false };
+    return { days: Math.round(avgDays), hours: 0, display: `${Math.round(avgDays)} day${Math.round(avgDays) !== 1 ? 's' : ''}`, isHours: false };
   }, [tasks, doneColIds]);
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -344,23 +342,29 @@ const Insights: React.FC = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem('ta_insights_streak');
+    let currentStreak = 0;
+    let currentWeekly = 85;
+    let currentLongest = 0;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        setStreakDays(parsed.current || 0);
-        setWeeklyRate(parsed.weekly || 0);
-        setLongestStreak(parsed.longest || 0);
+        currentStreak = parsed.current || 0;
+        currentWeekly = parsed.weekly || 85;
+        currentLongest = parsed.longest || 0;
+        setStreakDays(currentStreak);
+        setWeeklyRate(currentWeekly);
+        setLongestStreak(currentLongest);
       } catch { /* ignore */ }
     }
 
     const today = new Date().toISOString().split('T')[0];
     const lastDate = localStorage.getItem('ta_insights_last_date');
     if (lastDate !== today && completed > 0) {
-      const newStreak = lastDate && new Date(lastDate).getTime() === new Date(today).getTime() - 86400000 ? streakDays + 1 : 1;
-      const newLongest = Math.max(newStreak, longestStreak || 0);
+      const newStreak = lastDate && new Date(lastDate).getTime() === new Date(today).getTime() - 86400000 ? currentStreak + 1 : 1;
+      const newLongest = Math.max(newStreak, currentLongest || 0);
       setStreakDays(newStreak);
       setLongestStreak(newLongest);
-      localStorage.setItem('ta_insights_streak', JSON.stringify({ current: newStreak, weekly: weeklyRate || 85, longest: newLongest }));
+      localStorage.setItem('ta_insights_streak', JSON.stringify({ current: newStreak, weekly: currentWeekly, longest: newLongest }));
       localStorage.setItem('ta_insights_last_date', today);
     }
   }, [completed]);
@@ -491,8 +495,7 @@ const Insights: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 bg-muted/30 rounded-lg">
               <p className="text-3xl font-bold text-green-500">{streakDays}</p>
-              <p className="text-xs text-green-600 font-medium">day streak</p>
-              <p className="text-xs text-muted-foreground mt-1">Keep it going!</p>
+              <p className="text-xs text-muted-foreground">Keep it going!</p>
             </div>
             <div className="p-4 bg-muted/30 rounded-lg">
               <p className="text-3xl font-bold text-primary">{weeklyRate || 85}%</p>
@@ -614,7 +617,7 @@ const Insights: React.FC = () => {
             <Clock className="w-5 h-5 text-primary" />
             <div>
               <p className="text-2xl font-bold text-foreground">{avgTimeToComplete.display}</p>
-              <p className="text-xs text-muted-foreground mt-1">days on average{avgTimeToComplete.isHours ? ' (less than a day)' : ''}</p>
+              <p className="text-xs text-muted-foreground mt-1">{avgTimeToComplete.isHours ? 'hours on average' : 'days on average'}</p>
             </div>
           </div>
         ) : (
@@ -623,7 +626,7 @@ const Insights: React.FC = () => {
               <Clock className="w-5 h-5 text-primary" />
               <div>
                 <p className="text-2xl font-bold text-foreground">—</p>
-                <p className="text-xs text-muted-foreground mt-1">days on average</p>
+                <p className="text-xs text-muted-foreground mt-1">{avgTimeToComplete.isHours ? 'hours on average' : 'days on average'}</p>
               </div>
             </div>
           </PremiumBlur>
