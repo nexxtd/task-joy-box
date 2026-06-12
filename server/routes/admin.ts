@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
-import { users, workspaces, transactions, coupons, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, noteTags, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages } from '../../shared/schema';
+import { users, workspaces, transactions, coupons, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages } from '../../shared/schema';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
@@ -387,7 +387,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
     const goalRows = await db.select().from(goals).where(eq(goals.userId, userId));
     const habitRows = await db.select().from(habits).where(eq(habits.userId, userId));
     const noteRows = await db.select().from(notes).where(eq(notes.userId, userId));
-    const noteTagRows = await db.select().from(noteTags).where(eq(noteTags.userId, userId));
+    const noteTagRows = await db.select().from(tags).where(eq(tags.userId, userId));
     const focusRows = await db.select().from(deepFocusSessions).where(eq(deepFocusSessions.userId, userId));
     const whiteboardRows = await db.select().from(whiteboards).where(eq(whiteboards.userId, userId));
     const aiRows = await db.select().from(aiRequests).where(eq(aiRequests.userId, userId));
