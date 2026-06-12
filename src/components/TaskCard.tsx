@@ -2,6 +2,7 @@ import React from 'react';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG } from '@/types/board';
 import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2, User } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { useBoardContext } from '@/context/BoardContext';
 
 interface TaskCardProps {
   task: Task;
@@ -13,6 +14,7 @@ interface TaskCardProps {
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggleComplete, canEdit = true }) => {
   const { open: openDeepFocus } = useDeepFocus();
+  const { board } = useBoardContext();
   const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
   const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
   const subtaskTotal = (task.subtasks || []).length;
@@ -98,6 +100,16 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
             {subtaskDone}/{subtaskTotal} sub task
           </span>
         )}
+        {task.projectId && (() => {
+          const col = board.columns.find(c => c.id === task.columnId);
+          if (!col) return null;
+          return (
+            <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-border/60 text-muted-foreground ml-auto">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
+              {col.title}
+            </span>
+          );
+        })()}
         {task.assignedToUserId && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground ml-auto" title={task.assignedToUserName || 'Assigned'}>
             <User className="w-3 h-3" />

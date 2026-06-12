@@ -84,6 +84,14 @@ const getTaskStatus = (task: Task): TaskStatus => {
 const getStatusLabel = (status: TaskStatus) =>
   STATUS_OPTIONS.find(o => o.value === status)?.label || 'To Do';
 
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
 const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
   const started = new Date(completedAt);
@@ -139,6 +147,8 @@ interface AIGeneratedTask {
   title: string;
   description: string;
   priority: Priority;
+  startDate: string | null;
+  startTime: string | null;
   dueDate: string | null;
   dueTime: string | null;
   duration: number | null;
@@ -250,6 +260,8 @@ const Tasks: React.FC = () => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
+  const [newTaskStartDate, setNewTaskStartDate] = useState('');
+  const [newTaskStartTime, setNewTaskStartTime] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
@@ -587,6 +599,8 @@ const Tasks: React.FC = () => {
     setNewTaskDescription('');
     setNewTaskPriority('medium');
     setNewTaskStatus('to_do');
+    setNewTaskStartDate('');
+    setNewTaskStartTime('');
     setNewTaskDueDate('');
     setNewTaskDueTime('');
     setNewTaskDuration(60);
@@ -612,12 +626,18 @@ const Tasks: React.FC = () => {
       completed: false,
     }));
 
+    const attachmentUrls = newFiles.length > 0
+      ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
+      : [];
+
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
       status: 'to_do',
       priority: newTaskPriority,
       duration: Math.max(0, Number(newTaskDuration) || 0),
+      startDate: newTaskStartDate || undefined,
+      startTime: newTaskStartTime || undefined,
       dueDate: newTaskDueDate || undefined,
       dueTime: newTaskDueTime || undefined,
       projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
@@ -631,13 +651,13 @@ const Tasks: React.FC = () => {
       checklists: checklistItems.length
         ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
         : [],
-      attachments: newFiles.map(file => ({
+      attachments: newFiles.map((file, i) => ({
         id: crypto.randomUUID(),
         taskId,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        fileUrl: URL.createObjectURL(file),
+        fileUrl: attachmentUrls[i],
         createdAt: new Date().toISOString(),
       })),
       completed: false,
@@ -689,6 +709,8 @@ const Tasks: React.FC = () => {
       setNewTaskDescription(data.description || '');
       setNewTaskPriority((data.priority as Priority) || 'medium');
       setNewTaskStatus((data.status as TaskStatus) || 'to_do');
+      setNewTaskStartDate(data.startDate || '');
+      setNewTaskStartTime(data.startTime || '');
       setNewTaskDueDate(data.dueDate || '');
       setNewTaskDueTime(data.dueTime || '');
       setNewTaskDuration(data.duration || 60);
@@ -854,6 +876,21 @@ const Tasks: React.FC = () => {
                 {taskDurFmt}
               </button>
             )}
+            {task.dueDate && (() => {
+              const warning = getDueTimeWarning(task);
+              return (
+                <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  warning === 'overdue'
+                    ? 'bg-destructive/10 text-destructive'
+                    : warning === 'imminent' || warning === 'soon'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'bg-muted text-muted-foreground'
+                }`}>
+                  <Calendar className="w-2.5 h-2.5" />
+                  {formatDate(task.dueDate)}{task.dueTime ? ` ${task.dueTime}` : ''}
+                </span>
+              );
+            })()}
             {checklistTotal > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                 {checklistDone}/{checklistTotal} checklist
@@ -880,6 +917,16 @@ const Tasks: React.FC = () => {
                 +{task.labels.length - taskTags.length}
               </span>
             )}
+            {task.projectId && (() => {
+              const col = board.columns.find(c => c.id === task.columnId);
+              if (!col) return null;
+              return (
+                <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-border/60 text-muted-foreground flex-shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
+                  {col.title}
+                </span>
+              );
+            })()}
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1483,6 +1530,28 @@ const Tasks: React.FC = () => {
                 </div>
           </div>
 
+          {/* Start Date and Time Section */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Date</label>
+              <input
+                type="date"
+                value={newTaskStartDate}
+                onChange={e => setNewTaskStartDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Time</label>
+              <input
+                type="time"
+                value={newTaskStartTime}
+                onChange={e => setNewTaskStartTime(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
           {/* Due Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
@@ -1965,7 +2034,7 @@ const Tasks: React.FC = () => {
 
 interface TaskFullViewProps {
   task: Task;
-  boardColumns: Array<{ id: string; title: string; color: string }>;
+  boardColumns: Array<{ id: string; title: string; color: string; order: number; projectId?: number | null }>;
   projects: ProjectMeta[];
   allTags: Label[];
   onClose: () => void;
@@ -2121,13 +2190,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           if (res.ok) {
             uploaded.push(await res.json());
           } else {
-            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: URL.createObjectURL(file), createdAt: new Date().toISOString() });
+            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
           }
         } catch {
-          uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: URL.createObjectURL(file), createdAt: new Date().toISOString() });
+          uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
         }
       } else {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: URL.createObjectURL(file), createdAt: new Date().toISOString() });
+        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
       }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
@@ -2213,20 +2282,37 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-            <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => onUpdateTask(task.id, {
-                projectId: v === 'my-tasks' ? null : Number(v),
-                projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
-              })}>
-              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                <SelectValue placeholder="Select project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="my-tasks">My Tasks</SelectItem>
-                {projects.map(project => (
-                  <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => onUpdateTask(task.id, {
+                  projectId: v === 'my-tasks' ? null : Number(v),
+                  projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
+                })}>
+                <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="my-tasks">My Tasks</SelectItem>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {task.projectId && (
+                <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
+                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                    <SelectValue placeholder="Column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {boardColumns
+                      .filter(col => col.projectId === task.projectId)
+                      .sort((a, b) => a.order - b.order)
+                      .map(col => (
+                        <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         </div>
 

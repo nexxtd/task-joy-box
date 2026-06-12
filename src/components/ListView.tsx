@@ -94,6 +94,16 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                               {PRIORITY_CONFIG[task.priority].label}
                             </span>
                           )}
+                          {task.projectId && (() => {
+                            const col = board.columns.find(c => c.id === task.columnId);
+                            if (!col) return null;
+                            return (
+                              <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-border/60 text-muted-foreground">
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
+                                {col.title}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     );

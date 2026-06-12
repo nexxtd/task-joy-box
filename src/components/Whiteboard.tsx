@@ -765,15 +765,22 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     e.target.value = '';
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
     // If uploading to a specific item, update that item
     if (uploadingItemId.current) {
       setItems(prev => prev.map(item => {
         if (item.id === uploadingItemId.current) {
-          return { ...item, fileUrl: URL.createObjectURL(file), title: file.name };
+          return { ...item, fileUrl: dataUrl, title: file.name };
         }
         return item;
       }));
@@ -784,7 +791,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
       // Otherwise create a new file item (legacy behavior)
       const rect = canvasRef.current!.getBoundingClientRect();
       const pos = tempItemPos ?? { x: (rect.width / 2 - 90) / zoom, y: (rect.height / 2 - 60) / zoom };
-      setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: URL.createObjectURL(file), connections: [] }]);
+      setItems(prev => [...prev, { id: `item-${Date.now()}`, type: 'file', ...pos, width: 180, height: 120, title: file.name, fileUrl: dataUrl, connections: [] }]);
       setTempItemPos(null);
       addToHistory();
       saveWhiteboard();

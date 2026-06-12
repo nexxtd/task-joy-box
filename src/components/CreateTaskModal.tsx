@@ -45,6 +45,8 @@ type AIGeneratedTask = {
   title: string;
   description: string;
   priority: Priority;
+  startDate: string | null;
+  startTime: string | null;
   dueDate: string | null;
   dueTime: string | null;
   duration: number | null;
@@ -59,6 +61,14 @@ const randomTagColor = (): LabelColor =>
   TAG_COLOR_OPTIONS[Math.floor(Math.random() * TAG_COLOR_OPTIONS.length)] || 'blue';
 
 const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 const PremiumGate: React.FC<{
   title: string;
@@ -104,6 +114,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
+  const [newTaskStartDate, setNewTaskStartDate] = useState('');
+  const [newTaskStartTime, setNewTaskStartTime] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskDueTime, setNewTaskDueTime] = useState('');
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
@@ -142,6 +154,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setNewTaskDescription('');
     setNewTaskPriority('medium');
     setNewTaskStatus('to_do');
+    setNewTaskStartDate('');
+    setNewTaskStartTime('');
     setNewTaskDueDate('');
     setNewTaskDueTime('');
     setNewTaskDuration(60);
@@ -222,12 +236,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       completed: false,
     }));
 
+    const attachmentUrls = newFiles.length > 0
+      ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
+      : [];
+
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
       status: 'to_do',
       priority: newTaskPriority,
       duration: Math.max(0, Number(newTaskDuration) || 0),
+      startDate: newTaskStartDate || undefined,
+      startTime: newTaskStartTime || undefined,
       dueDate: newTaskDueDate || undefined,
       dueTime: newTaskDueTime || undefined,
       projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
@@ -245,13 +265,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         checklistItems.length
           ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
           : [],
-      attachments: newFiles.map(file => ({
+      attachments: newFiles.map((file, i) => ({
         id: crypto.randomUUID(),
         taskId,
         fileName: file.name,
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
-        fileUrl: URL.createObjectURL(file),
+        fileUrl: attachmentUrls[i],
         createdAt: new Date().toISOString(),
       })),
       completed: false,
@@ -286,6 +306,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       setNewTaskDescription(data.description || '');
       setNewTaskPriority((data.priority as Priority) || 'medium');
       setNewTaskStatus((data.status as TaskStatus) || 'to_do');
+      setNewTaskStartDate(data.startDate || '');
+      setNewTaskStartTime(data.startTime || '');
       setNewTaskDueDate(data.dueDate || '');
       setNewTaskDueTime(data.dueTime || '');
       setNewTaskDuration(data.duration || 60);
@@ -403,6 +425,28 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
 
             <div />
+          </div>
+
+          {/* Start Date and Time Section */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Date</label>
+              <input
+                type="date"
+                value={newTaskStartDate}
+                onChange={e => setNewTaskStartDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Time</label>
+              <input
+                type="time"
+                value={newTaskStartTime}
+                onChange={e => setNewTaskStartTime(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
           </div>
 
           {/* Due Date and Time Section */}

@@ -252,6 +252,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         order: tasksInCol.length,
         dueDate: details.dueDate,
         dueTime: details.dueTime,
+        startDate: details.startDate,
         startTime: details.startTime,
         duration: details.duration,
         sessionsNeeded: details.sessionsNeeded,

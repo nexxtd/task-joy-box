@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, Tag, Activity, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface HabitTag {
+  id: number;
+  name: string;
+  color: string;
+}
 
 interface Habit {
   id: number;
@@ -11,6 +17,22 @@ interface Habit {
   completedDays: string[];
   color: string;
   category: string;
+  projectId?: number | null;
+  columnId?: number | null;
+  tags: HabitTag[];
+}
+
+interface Project {
+  id: number;
+  name: string;
+  color: string;
+}
+
+interface ActivityLog {
+  id: number;
+  action: string;
+  details?: string;
+  createdAt: string;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -21,6 +43,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_OPTIONS = ['Health', 'Personal', 'Work', 'Learning'];
+const TAG_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
 
 const DeleteConfirmDialog: React.FC<{
   count: number;
@@ -50,7 +73,7 @@ const DeleteConfirmDialog: React.FC<{
 const Habits: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [adding, setAdding] = useState(false);
-  const [newHabit, setNewHabit] = useState({ title: '', category: 'Personal' });
+  const [newHabit, setNewHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +84,17 @@ const Habits: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteId, setSingleDeleteId] = useState<number | null>(null);
   const [completedOpen, setCompletedOpen] = useState(true);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [editHabit, setEditHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
+  
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [habitTags, setHabitTags] = useState<HabitTag[]>([]);
+  const [tagPopupHabitId, setTagPopupHabitId] = useState<number | null>(null);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#3b82f6');
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [showActivity, setShowActivity] = useState(false);
+  const [activityHabitId, setActivityHabitId] = useState<number | null>(null);
 
   const getTodayUTC = () => {
     const now = new Date();
@@ -68,7 +102,14 @@ const Habits: React.FC = () => {
   };
   const today = getTodayUTC();
 
-  useEffect(() => { fetchHabits(); }, []);
+  useEffect(() => { fetchHabits(); fetchProjects(); }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects', { credentials: 'include' });
+      if (res.ok) { const data = await res.json(); setProjects(data); }
+    } catch {}
+  };
 
   const fetchHabits = async () => {
     try {
@@ -76,13 +117,19 @@ const Habits: React.FC = () => {
       const res = await fetch('/api/habits', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch habits');
       const data = await res.json();
-      setHabits(data.map((h: any) => ({
+      const habitsList = data.habits || data;
+      const tagsList = data.tags || [];
+      setHabitTags(tagsList);
+      setHabits(habitsList.map((h: any) => ({
         id: h.id,
         title: h.title,
         streak: h.streak || 0,
         completedDays: h.completedDays || [],
         color: h.color || 'primary',
         category: h.category || 'Personal',
+        projectId: h.projectId,
+        columnId: h.columnId,
+        tags: h.tags || [],
       })));
     } catch (err) {
       setError('Failed to load habits');
@@ -122,19 +169,20 @@ const Habits: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ title: newHabit.title, category: newHabit.category, color: 'primary' }),
+        body: JSON.stringify({
+          title: newHabit.title, category: newHabit.category, color: 'primary',
+          projectId: newHabit.projectId ? Number(newHabit.projectId) : null,
+          columnId: newHabit.columnId ? Number(newHabit.columnId) : null,
+        }),
       });
       if (!res.ok) throw new Error('Failed to create habit');
       const created = await res.json();
       setHabits(prev => [...prev, {
-        id: created.id,
-        title: created.title,
-        streak: 0,
-        completedDays: [],
-        category: created.category || 'Personal',
-        color: created.color || 'primary',
+        id: created.id, title: created.title, streak: 0, completedDays: [],
+        category: created.category || 'Personal', color: created.color || 'primary',
+        projectId: created.projectId, columnId: created.columnId, tags: [],
       }]);
-      setNewHabit({ title: '', category: 'Personal' });
+      setNewHabit({ title: '', category: 'Personal', projectId: '', columnId: '' });
       setAdding(false);
     } catch {
       alert('Failed to save habit. Please try again.');
@@ -149,6 +197,68 @@ const Habits: React.FC = () => {
     } catch {
       alert('Failed to delete habit. Please try again.');
     }
+  };
+
+  const updateHabit = async () => {
+    if (!editingHabit || !editHabit.title.trim()) return;
+    const prev = editingHabit;
+    setHabits(prev_ => prev_.map(h => h.id === editingHabit.id ? { ...h, title: editHabit.title, category: editHabit.category, projectId: editHabit.projectId ? Number(editHabit.projectId) : null, columnId: editHabit.columnId ? Number(editHabit.columnId) : null } : h));
+    setEditingHabit(null);
+    try {
+      const res = await fetch(`/api/habits/${editingHabit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: editHabit.title, category: editHabit.category,
+          projectId: editHabit.projectId ? Number(editHabit.projectId) : null,
+          columnId: editHabit.columnId ? Number(editHabit.columnId) : null,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to update habit');
+      fetchHabits();
+    } catch {
+      setHabits(p => p.map(h => h.id === prev.id ? prev : h));
+      fetchHabits();
+    }
+  };
+
+  const openEditHabit = (habit: Habit) => {
+    setEditingHabit(habit);
+    setEditHabit({ title: habit.title, category: habit.category, projectId: habit.projectId ? String(habit.projectId) : '', columnId: habit.columnId ? String(habit.columnId) : '' });
+  };
+
+  // --- TAG FUNCTIONS ---
+  const addTagToHabit = async (habitId: number) => {
+    if (!newTagName.trim()) return;
+    try {
+      const res = await fetch(`/api/habits/${habitId}/tags`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
+      });
+      if (res.ok) { setNewTagName(''); fetchHabits(); }
+    } catch {}
+  };
+
+  const toggleTagOnHabit = async (habitId: number, tagId: number) => {
+    try {
+      await fetch(`/api/habits/${habitId}/tags/${tagId}/toggle`, { method: 'POST', credentials: 'include' });
+      fetchHabits();
+    } catch {}
+  };
+
+  const deleteHabitTag = async (tagId: number) => {
+    try {
+      await fetch(`/api/habits/tags/${tagId}`, { method: 'DELETE', credentials: 'include' });
+      fetchHabits();
+    } catch {}
+  };
+
+  const fetchActivity = async (habitId: number) => {
+    try {
+      const res = await fetch(`/api/habits/${habitId}/activity`, { credentials: 'include' });
+      if (res.ok) { const data = await res.json(); setActivityLogs(data); setActivityHabitId(habitId); setShowActivity(true); }
+    } catch {}
   };
 
   const filteredHabits = useMemo(() => {
@@ -200,6 +310,8 @@ const Habits: React.FC = () => {
             setSelectedDeleteIds(prev =>
               prev.includes(habit.id) ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
             );
+          } else {
+            openEditHabit(habit);
           }
         }}
       >
@@ -227,9 +339,24 @@ const Habits: React.FC = () => {
             <span className={cn('text-sm font-medium text-left truncate', isCompleted ? 'line-through text-muted-foreground' : 'text-foreground')}>
               {habit.title}
             </span>
+            {habit.tags?.map(tag => (
+              <span key={tag.id} className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white" style={{ backgroundColor: tag.color }}>
+                {tag.name}
+              </span>
+            ))}
             <span className={cn('text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full flex-shrink-0', CATEGORY_COLORS[habit.category])}>
               {habit.category}
             </span>
+            {habit.projectId && (() => {
+              const p = projects.find(pr => pr.id === habit.projectId);
+              if (!p) return null;
+              return (
+                <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border/60 text-muted-foreground flex-shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                  {p.name}
+                </span>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
@@ -438,6 +565,20 @@ const Habits: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
+                <Select value={newHabit.projectId || 'none'} onValueChange={v => setNewHabit(prev => ({ ...prev, projectId: v === 'none' ? '' : v }))}>
+                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                    <SelectValue placeholder="My Tasks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">My Tasks</SelectItem>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
               <button onClick={() => setAdding(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
@@ -448,6 +589,123 @@ const Habits: React.FC = () => {
               >
                 Save
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingHabit && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setEditingHabit(null)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Edit Habit</h2>
+              <button onClick={() => setEditingHabit(null)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Habit title</label>
+                <input
+                  autoFocus
+                  placeholder="e.g. Drink 2L Water, Workout, Code..."
+                  value={editHabit.title}
+                  onChange={e => setEditHabit(prev => ({ ...prev, title: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') updateHabit(); if (e.key === 'Escape') setEditingHabit(null); }}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Category</label>
+                  <Select value={editHabit.category} onValueChange={v => setEditHabit(prev => ({ ...prev, category: v }))}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORY_OPTIONS.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
+                  <Select value={editHabit.projectId || 'none'} onValueChange={v => setEditHabit(prev => ({ ...prev, projectId: v === 'none' ? '' : v }))}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="My Tasks" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">My Tasks</SelectItem>
+                      {projects.map(p => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tags Section */}
+              <div className="border-t border-border pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold text-foreground">Tags</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {editingHabit.tags.map(tag => (
+                    <span key={tag.id} className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full text-white" style={{ backgroundColor: tag.color }}>
+                      {tag.name}
+                      <button onClick={() => toggleTagOnHabit(editingHabit.id, tag.id)} className="hover:opacity-70"><X className="w-3 h-3" /></button>
+                    </span>
+                  ))}
+                </div>
+                <button onClick={() => setTagPopupHabitId(editingHabit.id)} className="text-xs text-primary hover:underline">+ Add tag</button>
+              </div>
+
+              {/* Activity Section */}
+              <div className="border-t border-border pt-4">
+                <button onClick={() => { if (activityHabitId === editingHabit.id && showActivity) { setShowActivity(false); } else { fetchActivity(editingHabit.id); } }} className="flex items-center gap-2 w-full">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">Activity</span>
+                  <ChevronRight className={cn('w-3 h-3 text-muted-foreground ml-auto transition-transform', showActivity && activityHabitId === editingHabit.id && 'rotate-90')} />
+                </button>
+                {showActivity && activityHabitId === editingHabit.id && (
+                  <div className="mt-2 space-y-1">
+                    {activityLogs.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No activity yet</p>
+                    ) : activityLogs.map(log => (
+                      <div key={log.id} className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+                        <span className="capitalize font-medium">{log.action}</span>
+                        <span className="ml-2">{new Date(log.createdAt).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex justify-between">
+              <button
+                onClick={() => { if (editingHabit) { setSingleDeleteId(editingHabit.id); setEditingHabit(null); } }}
+                className="px-4 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+              >
+                Delete habit
+              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setEditingHabit(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  onClick={updateHabit}
+                  disabled={!editHabit.title.trim()}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -492,6 +750,42 @@ const Habits: React.FC = () => {
 
       {singleDeleteId !== null && (
         <DeleteConfirmDialog count={1} onConfirm={confirmSingleDelete} onCancel={() => setSingleDeleteId(null)} />
+      )}
+
+      {tagPopupHabitId && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setTagPopupHabitId(null)} />
+          <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground">Tags</h3>
+              <button onClick={() => setTagPopupHabitId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+              {habitTags.map(tag => {
+                const habit = habits.find(h => h.id === tagPopupHabitId);
+                const active = habit?.tags.some(t => t.id === tag.id);
+                return (
+                  <div key={tag.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                    <button onClick={() => toggleTagOnHabit(tagPopupHabitId!, tag.id)} className="flex flex-1 items-center gap-2 text-left">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                      <span className="text-sm text-foreground">{tag.name}</span>
+                      {active && <span className="ml-auto text-[10px] font-semibold text-primary">Selected</span>}
+                    </button>
+                    <button onClick={() => deleteHabitTag(tag.id)} className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="border-t border-border pt-4">
+              <div className="flex gap-2">
+                <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
+                  className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <button onClick={() => setNewTagColor(TAG_COLORS[(TAG_COLORS.indexOf(newTagColor) + 1) % TAG_COLORS.length])} className="w-10 rounded-xl border border-border" style={{ backgroundColor: newTagColor }} />
+                <button onClick={() => addTagToHabit(tagPopupHabitId!)} disabled={!newTagName.trim()} className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

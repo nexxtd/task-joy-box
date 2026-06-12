@@ -365,6 +365,83 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS coupon_redemptions_user_id_idx ON coupon_redemptions(user_id);`);
     console.log('Coupon redemptions table verified');
 
+    // --- PROJECT/COLUMN COLUMNS FOR NOTES, GOALS, HABITS ---
+    await addColumnIfNotExists('notes', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL');
+    await addColumnIfNotExists('notes', 'column_id', 'INTEGER');
+    await addColumnIfNotExists('goals', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL');
+    await addColumnIfNotExists('goals', 'column_id', 'INTEGER');
+    await addColumnIfNotExists('habits', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL');
+    await addColumnIfNotExists('habits', 'column_id', 'INTEGER');
+    console.log('Project/column columns added to notes, goals, habits');
+
+    // --- HABIT TAG TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS habit_tags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS habit_tag_assignments (
+        id SERIAL PRIMARY KEY,
+        habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES habit_tags(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(habit_id, tag_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS habit_tags_user_id_idx ON habit_tags(user_id);`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS habit_tags_user_name_idx ON habit_tags(user_id, lower(name));`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS habit_tag_assignments_habit_id_idx ON habit_tag_assignments(habit_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS habit_tag_assignments_tag_id_idx ON habit_tag_assignments(tag_id);`);
+    console.log('Habit tag tables verified');
+
+    // --- GOAL TAG TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS goal_tags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS goal_tag_assignments (
+        id SERIAL PRIMARY KEY,
+        goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES goal_tags(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(goal_id, tag_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS goal_tags_user_id_idx ON goal_tags(user_id);`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS goal_tags_user_name_idx ON goal_tags(user_id, lower(name));`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS goal_tag_assignments_goal_id_idx ON goal_tag_assignments(goal_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS goal_tag_assignments_tag_id_idx ON goal_tag_assignments(tag_id);`);
+    console.log('Goal tag tables verified');
+
+    // --- ACTIVITY LOG TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS activity_logs_user_id_idx ON activity_logs(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS activity_logs_entity_idx ON activity_logs(entity_type, entity_id);`);
+    console.log('Activity logs table verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails

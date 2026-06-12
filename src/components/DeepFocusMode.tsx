@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, AlertTriangle, Volume2, VolumeX, CheckCircle2, LifeBuoy, Trash2 } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, LifeBuoy, Trash2 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 
@@ -190,8 +190,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [todayStats, setTodayStats] = useState<TodayStats>({ sessions: 0, minutes: 0 });
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState('');
+  const [newSubtaskDuration, setNewSubtaskDuration] = useState('10');
   const [newChecklistText, setNewChecklistText] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -396,7 +399,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       subtasks: [...(selectedTask.subtasks || []), newSub],
     });
     setNewSubtaskText('');
-    setNewSubtaskDuration('');
+    setNewSubtaskDuration('10');
   }, [newSubtaskDuration, newSubtaskText, selectedTask, updateTask]);
 
   const taskChecklists = selectedTask?.checklists ?? [];
@@ -415,6 +418,31 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     if (!selectedTask) return;
     updateTask(selectedTask.id, {
       subtasks: selectedTask.subtasks.filter(s => s.id !== id),
+    });
+  }, [selectedTask, updateTask]);
+
+  const saveSubtaskEdit = useCallback((id: string) => {
+    if (!selectedTask) return;
+    updateTask(selectedTask.id, {
+      subtasks: selectedTask.subtasks.map(s =>
+        s.id === id ? { ...s, text: editingSubtaskText, durationMinutes: editingSubtaskDuration } : s
+      ),
+    });
+    setEditingSubtaskId(null);
+  }, [editingSubtaskDuration, editingSubtaskText, selectedTask, updateTask]);
+
+  const startEditing = useCallback((sub: Subtask) => {
+    setEditingSubtaskId(sub.id);
+    setEditingSubtaskText(sub.text);
+    setEditingSubtaskDuration(sub.durationMinutes || 0);
+  }, []);
+
+  const updateSubtaskDuration = useCallback((id: string, durationMinutes: number) => {
+    if (!selectedTask) return;
+    updateTask(selectedTask.id, {
+      subtasks: selectedTask.subtasks.map(s =>
+        s.id === id ? { ...s, durationMinutes } : s
+      ),
     });
   }, [selectedTask, updateTask]);
 
@@ -444,12 +472,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const taskSubtasks = selectedTask?.subtasks ?? [];
   const subtaskTotalMins = taskSubtasks.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
   const taskDurMins = selectedTask?.duration ?? 0;
-  const durationMismatch = taskDurMins > 0 && subtaskTotalMins > 0 && subtaskTotalMins !== taskDurMins;
-  const completedSubtasks = taskSubtasks.filter(s => s.completed).length;
-  const remainingMins = Math.max(0, taskDurMins - subtaskTotalMins);
-  const subtaskCompletionLabel = taskDurMins > 0
-    ? `${remainingMins} mins left${remainingMins === 0 ? ' ✓' : ''}`
-    : `${completedSubtasks} / ${taskSubtasks.length} completed`;
+  const remainingMins = taskDurMins - subtaskTotalMins;
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
   const r = 88;
   const circ = 2 * Math.PI * r;
@@ -631,48 +654,84 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Subtasks</span>
-                <div className="flex items-center gap-2">
-                  {durationMismatch && (
-                    <span className="flex items-center gap-1 text-[10px] text-orange-500 font-medium">
-                      <AlertTriangle className="w-3 h-3" />
-                      Sub-task time does not match task duration
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">{subtaskCompletionLabel}</span>
-                </div>
+                {taskDurMins > 0 && (
+                  <span
+                    className={`text-[11px] font-medium ${
+                      remainingMins > 0
+                        ? 'text-muted-foreground'
+                        : remainingMins < 0
+                          ? 'text-orange-500'
+                          : 'text-label-green'
+                    }`}
+                  >
+                    {remainingMins > 0
+                      ? `${remainingMins} mins left`
+                      : remainingMins < 0
+                        ? `Over by ${Math.abs(remainingMins)} mins`
+                        : '0 mins left ✓'}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
                 {taskSubtasks.map(sub => (
-                  <div key={sub.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30 group">
+                  <div key={sub.id} className="grid grid-cols-[auto_1fr_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
                     <button
                       onClick={() => toggleSubtask(sub.id)}
-                      className={`w-4.5 h-4.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
                         sub.completed
                           ? 'bg-green-500 border-green-500'
                           : 'border-muted-foreground/40 hover:border-green-400'
                       }`}
-                      style={{ width: 18, height: 18 }}
                     >
-                      {sub.completed && (
-                        <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 text-white" fill="none">
-                          <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+                      {sub.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
                     </button>
-                    <span className={`flex-1 text-sm ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                      {sub.text}
-                    </span>
-                    {(sub.durationMinutes ?? 0) > 0 && (
-                      <span className="text-xs flex-shrink-0 text-muted-foreground mr-1">{sub.durationMinutes} min</span>
+                    {editingSubtaskId === sub.id ? (
+                      <>
+                        <input
+                          autoFocus
+                          value={editingSubtaskText}
+                          onChange={e => setEditingSubtaskText(e.target.value)}
+                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={editingSubtaskDuration}
+                            onChange={e => setEditingSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                            className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                          />
+                          <button onClick={() => saveSubtaskEdit(sub.id)} className="text-xs text-primary font-bold">
+                            Save
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          onClick={() => startEditing(sub)}
+                          className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                        >
+                          {sub.text}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={sub.durationMinutes || 0}
+                            onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
+                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                          <span className="text-[10px] text-muted-foreground">min</span>
+                          <button
+                            onClick={() => deleteSubtask(sub.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
                     )}
-                    <button
-                      onClick={() => deleteSubtask(sub.id)}
-                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                      title="Delete subtask"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))}
                 {taskSubtasks.length === 0 && (
@@ -680,7 +739,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div className="flex gap-2">
+              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
                 <input
                   type="text"
                   value={newSubtaskText}
@@ -691,22 +750,23 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       addSubtask();
                     }
                   }}
-                  placeholder="Add sub-task..."
-                  className="flex-1 px-3 py-1.5 bg-muted/50 border border-border text-foreground rounded-lg text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="New sub-task"
+                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                 />
                 <input
                   type="number"
+                  min={0}
                   value={newSubtaskDuration}
                   onChange={e => setNewSubtaskDuration(e.target.value)}
                   placeholder="min"
-                  className="w-16 px-2 py-1.5 bg-muted/50 border border-border text-foreground rounded-lg text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30 text-center"
+                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
                 />
                 <button
                   onClick={addSubtask}
                   disabled={!newSubtaskText.trim()}
-                  className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-all"
+                  className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg"
                 >
-                  <Plus className="w-4 h-4" />
+                  Add
                 </button>
               </div>
 

@@ -60,6 +60,8 @@ export const tasks = pgTable('tasks', {
   priority: text('priority').default('none'),
   dueDate: text('due_date'),
   dueTime: text('due_time'),
+  startDate: text('start_date'),
+  startTime: text('start_time'),
   duration: integer('duration'),
   sessionsNeeded: integer('sessions_needed').default(1),
   completed: boolean('completed').default(false),
@@ -216,6 +218,8 @@ export const notes = pgTable('notes', {
   content: text('content').notNull(),
   color: text('color').notNull(),
   pinned: boolean('pinned').default(false).notNull(),
+  projectId: integer('project_id').references(() => projects.id),
+  columnId: integer('column_id'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -272,7 +276,25 @@ export const goals = pgTable('goals', {
   subGoals: text('sub_goals').default('[]'),
   completed: boolean('completed').default(false),
   completedAt: text('completed_at'),
+  projectId: integer('project_id').references(() => projects.id),
+  columnId: integer('column_id'),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const goalTags = pgTable('goal_tags', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const goalTagAssignments = pgTable('goal_tag_assignments', {
+  id: serial('id').primaryKey(),
+  goalId: integer('goal_id').references(() => goals.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => goalTags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const habits = pgTable('habits', {
@@ -286,8 +308,36 @@ export const habits = pgTable('habits', {
   dailyTime: integer('daily_time'), // minutes per day required
   durationDays: integer('duration_days'), // e.g. 30, 60, 90 days
   displayOrder: integer('display_order').default(0),
+  projectId: integer('project_id').references(() => projects.id),
+  columnId: integer('column_id'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const habitTags = pgTable('habit_tags', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  color: text('color').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const habitTagAssignments = pgTable('habit_tag_assignments', {
+  id: serial('id').primaryKey(),
+  habitId: integer('habit_id').references(() => habits.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => habitTags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const activityLogs = pgTable('activity_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  entityType: text('entity_type').notNull(), // 'habit', 'note', 'goal', 'task'
+  entityId: integer('entity_id').notNull(),
+  action: text('action').notNull(), // 'created', 'updated', 'completed', 'deleted'
+  details: text('details'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const userSettings = pgTable('user_settings', {

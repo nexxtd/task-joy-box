@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { notes, noteTags, noteTagAssignments } from '../../shared/schema';
+import { notes, noteTags, noteTagAssignments, activityLogs } from '../../shared/schema';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption';
 
@@ -19,6 +19,10 @@ const NOTE_TAG_COLORS = [
 ];
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+async function logActivity(userId: number, entityType: string, entityId: number, action: string, details?: string) {
+  await db.insert(activityLogs).values({ userId, entityType, entityId, action, details: details || null });
+}
 
 async function loadNotesPayload(userId: number) {
   const [userNotes, userTags, assignments] = await Promise.all([
@@ -66,14 +70,18 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, content, color, pinned } = req.body;
+    const { title, content, color, pinned, projectId, columnId } = req.body;
     const [newNote] = await db.insert(notes).values({
       userId: req.userId!,
       title: encrypt(title || '') ?? '',
       content: encrypt(content || '') ?? '',
       color: color || 'hsl(var(--card))',
       pinned: Boolean(pinned),
+      projectId: projectId || null,
+      columnId: columnId || null,
     }).returning();
+
+    await logActivity(req.userId!, 'note', newNote.id, 'created');
 
     const payload = await loadNotesPayload(req.userId!);
     const created = payload.notes.find(note => note.id === newNote.id);
@@ -92,7 +100,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const noteId = parseInt(req.params.id);
-    const allowedFields = ['title', 'content', 'color', 'pinned'];
+    const allowedFields = ['title', 'content', 'color', 'pinned', 'projectId', 'columnId'];
     const updates: Record<string, any> = {};
     
     for (const field of allowedFields) {
@@ -107,18 +115,18 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 
     if (updates.title !== undefined) updates.title = encrypt(updates.title) ?? updates.title;
     if (updates.content !== undefined) updates.content = encrypt(updates.content) ?? updates.content;
+    updates.updatedAt = new Date().toISOString();
 
     const [updatedNote] = await db.update(notes)
-      .set({
-        ...updates,
-        updatedAt: new Date().toISOString(),
-      })
+      .set(updates)
       .where(and(eq(notes.id, noteId), eq(notes.userId, req.userId!)))
       .returning();
 
     if (!updatedNote) {
       return res.status(404).json({ error: 'Note not found' });
     }
+
+    await logActivity(req.userId!, 'note', noteId, 'updated');
 
     const payload = await loadNotesPayload(req.userId!);
     const hydrated = payload.notes.find(note => note.id === updatedNote.id) || {
@@ -252,6 +260,20 @@ router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Respons
   } catch (error) {
     console.error('Error deleting note tag:', error);
     res.status(500).json({ error: 'Failed to delete tag' });
+  }
+});
+
+// --- ACTIVITY ROUTE ---
+router.get('/:id/activity', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const entityId = parseInt(req.params.id);
+    const logs = await db.select().from(activityLogs)
+      .where(and(eq(activityLogs.userId, req.userId!), eq(activityLogs.entityType, 'note'), eq(activityLogs.entityId, entityId)))
+      .orderBy(desc(activityLogs.createdAt));
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching activity:', error);
+    res.status(500).json({ error: 'Failed to fetch activity' });
   }
 });
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronDown,
+  FolderKanban,
   Loader2,
   Pin,
   Plus,
@@ -9,6 +11,8 @@ import {
   Tag,
   Trash2,
   X,
+  Activity,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,9 +29,24 @@ interface Note {
   content: string;
   color: string;
   pinned: boolean;
+  projectId?: number | null;
+  columnId?: number | null;
   createdAt: string;
   updatedAt: string;
   tags: NoteTag[];
+}
+
+interface Project {
+  id: number;
+  name: string;
+  color: string;
+}
+
+interface ActivityLog {
+  id: number;
+  action: string;
+  details?: string;
+  createdAt: string;
 }
 
 const NOTE_COLORS = [
@@ -46,6 +65,7 @@ const TAG_COLORS = [
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ');
 const randomFrom = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)] || items[0];
+const PIN_FILTERS = ['all', 'pinned', 'unpinned'] as const;
 
 const DeleteConfirmDialog: React.FC<{
   count: number;
@@ -84,6 +104,8 @@ const Notes: React.FC = () => {
   const [openNoteId, setOpenNoteId] = useState<number | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
+  const [draftProjectId, setDraftProjectId] = useState<string>('');
+  const [draftColumnId, setDraftColumnId] = useState<string>('');
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<number[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -91,6 +113,25 @@ const Notes: React.FC = () => {
   const [tagPopupNoteId, setTagPopupNoteId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(randomFrom(TAG_COLORS));
+
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [showActivity, setShowActivity] = useState(false);
+  const [editingTitleNoteId, setEditingTitleNoteId] = useState<number | null>(null);
+  const [editingTitleText, setEditingTitleText] = useState('');
+  const [editingContentNoteId, setEditingContentNoteId] = useState<number | null>(null);
+  const [editingContentText, setEditingContentText] = useState('');
+  const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
+  const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createContent, setCreateContent] = useState('');
+  const [createColor, setCreateColor] = useState(randomFrom(NOTE_COLORS));
+  const [createProjectId, setCreateProjectId] = useState<string>('');
+  const [createSelectedTagIds, setCreateSelectedTagIds] = useState<number[]>([]);
+  const [createNewTagName, setCreateNewTagName] = useState('');
+  const [createNewTagColor, setCreateNewTagColor] = useState(randomFrom(TAG_COLORS));
 
   const activeNote = useMemo(() => notes.find(n => n.id === openNoteId) || null, [notes, openNoteId]);
   const tagPopupNote = useMemo(() => notes.find(n => n.id === tagPopupNoteId) || null, [notes, tagPopupNoteId]);
@@ -107,6 +148,8 @@ const Notes: React.FC = () => {
         content: note.content || '',
         color: note.color || NOTE_COLORS[0],
         pinned: Boolean(note.pinned),
+        projectId: note.projectId,
+        columnId: note.columnId,
         createdAt: note.createdAt || new Date().toISOString(),
         updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
         tags: Array.isArray(note.tags) ? note.tags : [],
@@ -120,12 +163,22 @@ const Notes: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchNotes(); }, []);
+  useEffect(() => { fetchNotes(); fetchProjects(); }, []);
   useEffect(() => {
     if (!activeNote) return;
     setDraftTitle(activeNote.title);
     setDraftContent(activeNote.content);
+    setDraftProjectId(activeNote.projectId ? String(activeNote.projectId) : '');
+    setDraftColumnId(activeNote.columnId ? String(activeNote.columnId) : '');
+    fetchNoteActivity(activeNote.id);
   }, [activeNote?.id]);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects', { credentials: 'include' });
+      if (res.ok) { const data = await res.json(); setProjects(data); }
+    } catch {}
+  };
 
   const applyNoteUpdate = async (id: number, updates: Partial<Note>) => {
     setNotes(prev => prev.map(n => (n.id === id ? { ...n, ...updates } : n)));
@@ -140,23 +193,51 @@ const Notes: React.FC = () => {
     } catch { fetchNotes(); }
   };
 
-  const createNote = async () => {
+  const openCreateModal = () => {
+    setCreateTitle('');
+    setCreateContent('');
+    setCreateColor(randomFrom(NOTE_COLORS));
+    setCreateProjectId('');
+    setCreateSelectedTagIds([]);
+    setCreateNewTagName('');
+    setCreateNewTagColor(randomFrom(TAG_COLORS));
+    setShowCreateModal(true);
+  };
+
+  const handleCreateNote = async () => {
     try {
       setCreating(true);
       const res = await fetch('/api/notes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ title: '', content: '', color: randomFrom(NOTE_COLORS), pinned: false }),
+        body: JSON.stringify({ title: createTitle, content: createContent, color: createColor, pinned: false, projectId: createProjectId || null }),
       });
       if (!res.ok) throw new Error('Failed to create note');
       const created = await res.json();
       const next: Note = {
         id: created.id, title: created.title || '', content: created.content || '',
         color: created.color || NOTE_COLORS[0], pinned: Boolean(created.pinned),
+        projectId: created.projectId,
         createdAt: created.createdAt || new Date().toISOString(),
         updatedAt: created.updatedAt || created.createdAt || new Date().toISOString(),
         tags: Array.isArray(created.tags) ? created.tags : [],
       };
       setNotes(prev => [next, ...prev]);
+      setShowCreateModal(false);
+      for (const tagId of createSelectedTagIds) {
+        try { await fetch(`/api/notes/${next.id}/tags/${tagId}/toggle`, { method: 'POST', credentials: 'include' }); } catch {}
+      }
+      const tagRes = await fetch('/api/notes', { credentials: 'include' });
+      if (tagRes.ok) {
+        const data = await tagRes.json();
+        setNotes((data.notes || []).map((note: any) => ({
+          id: note.id, title: note.title || '', content: note.content || '',
+          color: note.color || NOTE_COLORS[0], pinned: Boolean(note.pinned),
+          projectId: note.projectId, columnId: note.columnId,
+          createdAt: note.createdAt || new Date().toISOString(),
+          updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
+          tags: Array.isArray(note.tags) ? note.tags : [],
+        })));
+      }
       setOpenNoteId(next.id);
     } catch { alert('Failed to save note. Please try again.'); }
     finally { setCreating(false); }
@@ -224,9 +305,18 @@ const Notes: React.FC = () => {
     if (!activeNote) return;
     const nextTitle = draftTitle.trim();
     const nextContent = draftContent;
-    if (nextTitle !== activeNote.title || nextContent !== activeNote.content) {
-      await applyNoteUpdate(activeNote.id, { title: nextTitle, content: nextContent });
+    const nextProjectId = draftProjectId ? Number(draftProjectId) : null;
+    const nextColumnId = draftColumnId ? Number(draftColumnId) : null;
+    if (nextTitle !== activeNote.title || nextContent !== activeNote.content || nextProjectId !== activeNote.projectId || nextColumnId !== activeNote.columnId) {
+      await applyNoteUpdate(activeNote.id, { title: nextTitle, content: nextContent, projectId: nextProjectId, columnId: nextColumnId });
     }
+  };
+
+  const fetchNoteActivity = async (noteId: number) => {
+    try {
+      const res = await fetch(`/api/notes/${noteId}/activity`, { credentials: 'include' });
+      if (res.ok) { const data = await res.json(); setActivityLogs(data); setShowActivity(true); }
+    } catch {}
   };
 
   const filteredNotes = useMemo(() => {
@@ -234,9 +324,11 @@ const Notes: React.FC = () => {
     return notes.filter(n => {
       const matchesSearch = !term || n.title.toLowerCase().includes(term) || n.content.toLowerCase().includes(term);
       const matchesTags = selectedTagIds.length === 0 || selectedTagIds.every(id => n.tags.some(t => t.id === id));
-      return matchesSearch && matchesTags;
+      const matchesPin = pinFilter === 'all' || (pinFilter === 'pinned' ? n.pinned : !n.pinned);
+      const matchesProject = projectFilterId === 'all' || n.projectId === projectFilterId;
+      return matchesSearch && matchesTags && matchesPin && matchesProject;
     });
-  }, [notes, search, selectedTagIds]);
+  }, [notes, search, selectedTagIds, pinFilter, projectFilterId]);
 
   const sortedNotes = useMemo(() => {
     const compare = (a: Note, b: Note) => {
@@ -311,9 +403,29 @@ const Notes: React.FC = () => {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-left text-foreground truncate">
-                {note.title || 'Untitled note'}
-              </span>
+              {editingTitleNoteId === note.id ? (
+                <input
+                  autoFocus
+                  value={editingTitleText}
+                  onChange={e => setEditingTitleText(e.target.value)}
+                  onBlur={async () => {
+                    if (editingTitleText !== (note.title || '')) {
+                      await applyNoteUpdate(note.id, { title: editingTitleText });
+                    }
+                    setEditingTitleNoteId(null);
+                  }}
+                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  onClick={e => e.stopPropagation()}
+                  className="text-sm font-medium text-foreground bg-muted/40 border border-border rounded px-2 py-0.5 w-full"
+                />
+              ) : (
+                <span
+                  onClick={e => { e.stopPropagation(); setEditingTitleNoteId(note.id); setEditingTitleText(note.title || ''); }}
+                  className="text-sm font-medium text-left text-foreground truncate cursor-text hover:bg-muted/30 rounded px-1 -mx-1"
+                >
+                  {note.title || 'Untitled note'}
+                </span>
+              )}
               {note.tags.slice(0, 3).map(tag => (
                 <span
                   key={tag.id}
@@ -328,9 +440,41 @@ const Notes: React.FC = () => {
                   +{note.tags.length - 3}
                 </span>
               )}
+              {note.projectId && (() => {
+                const p = projects.find(pr => pr.id === note.projectId);
+                if (!p) return null;
+                return (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border/60 text-muted-foreground flex-shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                    {p.name}
+                  </span>
+                );
+              })()}
             </div>
-            {preview && (
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{preview}</p>
+            {editingContentNoteId === note.id ? (
+              <input
+                autoFocus
+                value={editingContentText}
+                onChange={e => setEditingContentText(e.target.value)}
+                onBlur={async () => {
+                  if (editingContentText !== (note.content || '')) {
+                    await applyNoteUpdate(note.id, { content: editingContentText });
+                  }
+                  setEditingContentNoteId(null);
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                onClick={e => e.stopPropagation()}
+                className="text-xs text-muted-foreground bg-muted/40 border border-border rounded px-2 py-0.5 w-full mt-0.5"
+              />
+            ) : (
+              preview ? (
+                <p
+                  onClick={e => { e.stopPropagation(); setEditingContentNoteId(note.id); setEditingContentText(note.content || ''); }}
+                  className="text-xs text-muted-foreground mt-0.5 truncate cursor-text hover:bg-muted/30 rounded px-1 -mx-1"
+                >
+                  {preview}
+                </p>
+              ) : null
             )}
           </div>
 
@@ -385,11 +529,10 @@ const Notes: React.FC = () => {
             {isDeleteMode ? 'Exit Delete' : 'Delete'}
           </button>
           <button
-            onClick={createNote}
-            disabled={creating}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all disabled:opacity-60"
+            onClick={openCreateModal}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
           >
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            <Plus className="w-4 h-4" />
             New Note
           </button>
         </div>
@@ -433,6 +576,68 @@ const Notes: React.FC = () => {
               >
                 Clear tags
               </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border">
+            {PIN_FILTERS.map(filter => (
+              <button
+                key={filter}
+                onClick={() => setPinFilter(filter)}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
+                  pinFilter === filter
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setProjectDropdownOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                projectFilterId !== 'all'
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>
+                {projectFilterId === 'all'
+                  ? 'Project Filter'
+                  : `Project: ${projects.find(p => p.id === projectFilterId)?.name || 'Selected'}`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </button>
+            {projectDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setProjectDropdownOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-lg z-30 p-2">
+                  <button
+                    onClick={() => { setProjectFilterId('all'); setProjectDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted"
+                  >
+                    All projects
+                  </button>
+                  <div className="space-y-1 max-h-52 overflow-y-auto">
+                    {projects.map(project => (
+                      <button
+                        key={project.id}
+                        onClick={() => { setProjectFilterId(project.id); setProjectDropdownOpen(false); }}
+                        className={`w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted flex items-center gap-2 ${
+                          projectFilterId === project.id ? 'bg-primary/10 text-primary' : ''
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                        <span className="flex-1 truncate">{project.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -499,6 +704,82 @@ const Notes: React.FC = () => {
           )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setShowCreateModal(false)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Create Note</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Title</label>
+                <input autoFocus value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="Note title"
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Content</label>
+                <textarea value={createContent} onChange={e => setCreateContent(e.target.value)} placeholder="Write your note..." rows={6}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Color</label>
+                <div className="flex gap-2">
+                  {NOTE_COLORS.map(color => (
+                    <button key={color} onClick={() => setCreateColor(color)}
+                      className={`w-8 h-8 rounded-full border-2 transition-all ${createColor === color ? 'border-foreground scale-110' : 'border-border'}`}
+                      style={{ backgroundColor: color }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Project</label>
+                <Select value={createProjectId || 'none'} onValueChange={v => setCreateProjectId(v === 'none' ? '' : v)}>
+                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                    <SelectValue placeholder="My Tasks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">My Tasks</SelectItem>
+                    {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Tags</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {tags.map(tag => {
+                    const active = createSelectedTagIds.includes(tag.id);
+                    return (
+                      <button key={tag.id} onClick={() => setCreateSelectedTagIds(prev => prev.includes(tag.id) ? prev.filter(id => id !== tag.id) : [...prev, tag.id])}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
+                        <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <input value={createNewTagName} onChange={e => setCreateNewTagName(e.target.value)} placeholder="New tag name"
+                    className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm" />
+                  <button onClick={() => setCreateNewTagColor(randomFrom(TAG_COLORS))} className="w-10 rounded-xl border border-border" style={{ backgroundColor: createNewTagColor }} title="Random color" />
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={handleCreateNote} disabled={creating || !createTitle.trim()}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isDeleteMode && (
         <div className="sticky bottom-0 left-0 right-0 z-30 p-4 bg-background/80 backdrop-blur-md border-t border-border flex justify-center animate-fade-in">
@@ -614,15 +895,52 @@ const Notes: React.FC = () => {
               <textarea value={draftContent} onChange={e => setDraftContent(e.target.value)} onBlur={saveDrafts} placeholder="Write your note..." rows={10}
                 className="min-h-[280px] w-full resize-y rounded-2xl border border-border bg-muted/20 p-4 text-sm leading-6 text-foreground outline-none focus:ring-2 focus:ring-primary/20" />
 
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {activeNote.tags.map(tag => (
-                    <span key={tag.id} className="rounded-full px-2 py-1 text-[10px] font-semibold text-white" style={{ backgroundColor: tag.color }}>{tag.name}</span>
-                  ))}
+              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">Tags</label>
+                <div className="flex flex-wrap gap-2">
+                  {tags.map(tag => {
+                    const active = activeNote.tags.some(t => t.id === tag.id);
+                    return (
+                      <button key={tag.id} onClick={() => toggleTagOnNote(activeNote.id, tag.id)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
+                        <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </button>
+                    );
+                  })}
                 </div>
-                <button onClick={() => setTagPopupNoteId(activeNote.id)} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm text-muted-foreground transition-all hover:text-foreground">
-                  <Tag className="h-4 w-4" /> Tags
-                </button>
+              </div>
+
+              {/* Project Selector */}
+              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Project</label>
+                <Select value={draftProjectId || 'none'} onValueChange={v => { setDraftProjectId(v === 'none' ? '' : v); saveDrafts(); }}>
+                  <SelectTrigger className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm h-9">
+                    <SelectValue placeholder="My Tasks" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">My Tasks</SelectItem>
+                    {projects.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Activity Section */}
+              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                <div className="flex items-center gap-2 w-full mb-2">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold text-foreground">Activity</span>
+                </div>
+                {activityLogs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No activity yet</p>
+                ) : activityLogs.map(log => (
+                  <div key={log.id} className="text-xs text-muted-foreground bg-background rounded-lg px-3 py-2 mt-1">
+                    <span className="capitalize font-medium">{log.action}</span>
+                    <span className="ml-2">{new Date(log.createdAt).toLocaleString()}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
