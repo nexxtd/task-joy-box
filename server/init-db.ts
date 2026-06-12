@@ -266,9 +266,9 @@ export async function initDatabase() {
     `);
     console.log('Project tables verified');
 
-    // --- NOTE TAG TABLES ---
+    // --- UNIFIED TAGS TABLE (shared across notes, goals, habits, tasks) ---
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS note_tags (
+      CREATE TABLE IF NOT EXISTS tags (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
@@ -277,21 +277,63 @@ export async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS tags_user_id_idx ON tags(user_id);`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS tags_user_name_idx ON tags(user_id, lower(name));`);
 
+    // One-time migration: copy old note_tags, goal_tags, habit_tags into unified tags table
+    for (const oldTable of ['note_tags', 'goal_tags', 'habit_tags']) {
+      await pool.query(`
+        INSERT INTO tags (user_id, name, color, created_at, updated_at)
+        SELECT nt.user_id, nt.name, nt.color, nt.created_at, nt.updated_at
+        FROM ${oldTable} nt
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tags t WHERE t.user_id = nt.user_id AND lower(t.name) = lower(nt.name)
+        );
+      `);
+    }
+
+    // Update junction table FK constraints to point to tags.id
+    // (old tables' tag_id pointed to note_tags/goal_tags/habit_tags — we migrate IDs)
+    for (const { juncTable, oldTagTable } of [
+      { juncTable: 'note_tag_assignments', oldTagTable: 'note_tags' },
+      { juncTable: 'goal_tag_assignments', oldTagTable: 'goal_tags' },
+      { juncTable: 'habit_tag_assignments', oldTagTable: 'habit_tags' },
+    ]) {
+      await pool.query(`
+        UPDATE ${juncTable} nta
+        SET tag_id = t.id
+        FROM ${oldTagTable} nt
+        INNER JOIN tags t ON t.user_id = nt.user_id AND lower(t.name) = lower(nt.name)
+        WHERE nta.tag_id = nt.id;
+      `);
+    }
+
+    // Create junction tables if not exist (for features that may not have them yet)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS note_tag_assignments (
         id SERIAL PRIMARY KEY,
         note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-        tag_id INTEGER NOT NULL REFERENCES note_tags(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         UNIQUE(note_id, tag_id)
       );
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS note_tags_user_id_idx ON note_tags(user_id);`);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS note_tags_user_name_idx ON note_tags(user_id, lower(name));`);
     await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_note_id_idx ON note_tag_assignments(note_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS note_tag_assignments_tag_id_idx ON note_tag_assignments(tag_id);`);
-    console.log('Note tag tables verified');
+
+    // Task tag assignments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS task_tag_assignments (
+        id SERIAL PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(task_id, tag_id)
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS task_tag_assignments_task_id_idx ON task_tag_assignments(task_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS task_tag_assignments_tag_id_idx ON task_tag_assignments(tag_id);`);
+    console.log('Unified tags tables verified');
 
     // --- SUPPORT TICKETS TABLES ---
     await pool.query(`
@@ -374,57 +416,31 @@ export async function initDatabase() {
     await addColumnIfNotExists('habits', 'column_id', 'INTEGER');
     console.log('Project/column columns added to notes, goals, habits');
 
-    // --- HABIT TAG TABLES ---
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS habit_tags (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        color TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-      );
-    `);
+    // --- JUNCTION TABLES (habit + goal assignments reference unified tags) ---
     await pool.query(`
       CREATE TABLE IF NOT EXISTS habit_tag_assignments (
         id SERIAL PRIMARY KEY,
         habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
-        tag_id INTEGER NOT NULL REFERENCES habit_tags(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         UNIQUE(habit_id, tag_id)
       );
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS habit_tags_user_id_idx ON habit_tags(user_id);`);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS habit_tags_user_name_idx ON habit_tags(user_id, lower(name));`);
     await pool.query(`CREATE INDEX IF NOT EXISTS habit_tag_assignments_habit_id_idx ON habit_tag_assignments(habit_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS habit_tag_assignments_tag_id_idx ON habit_tag_assignments(tag_id);`);
-    console.log('Habit tag tables verified');
 
-    // --- GOAL TAG TABLES ---
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS goal_tags (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        color TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-      );
-    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS goal_tag_assignments (
         id SERIAL PRIMARY KEY,
         goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
-        tag_id INTEGER NOT NULL REFERENCES goal_tags(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         UNIQUE(goal_id, tag_id)
       );
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS goal_tags_user_id_idx ON goal_tags(user_id);`);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS goal_tags_user_name_idx ON goal_tags(user_id, lower(name));`);
     await pool.query(`CREATE INDEX IF NOT EXISTS goal_tag_assignments_goal_id_idx ON goal_tag_assignments(goal_id);`);
     await pool.query(`CREATE INDEX IF NOT EXISTS goal_tag_assignments_tag_id_idx ON goal_tag_assignments(tag_id);`);
-    console.log('Goal tag tables verified');
+    console.log('Junction tables (habit + goal) verified');
 
     // --- ACTIVITY LOG TABLE ---
     await pool.query(`

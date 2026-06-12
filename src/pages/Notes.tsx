@@ -176,7 +176,7 @@ const Notes: React.FC = () => {
   const fetchProjects = async () => {
     try {
       const res = await fetch('/api/projects', { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setProjects(data); }
+      if (res.ok) { const data = await res.json(); setProjects(data.projects || data); }
     } catch {}
   };
 

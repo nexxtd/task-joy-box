@@ -95,7 +95,7 @@ const Goals: React.FC = () => {
   const fetchProjects = async () => {
     try {
       const res = await fetch('/api/projects', { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setProjects(data); }
+      if (res.ok) { const data = await res.json(); setProjects(data.projects || data); }
     } catch {}
   };
 
@@ -349,6 +349,7 @@ const Goals: React.FC = () => {
         <div className="flex items-center gap-1 px-3 py-3">
           <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
+            {goal.tags?.length > 0 && <Tag className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
             {goal.tags?.map(tag => (
               <span key={tag.id} className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white" style={{ backgroundColor: tag.color }}>
                 {tag.name}
@@ -602,6 +603,7 @@ const Goals: React.FC = () => {
                             </div>
                             <div className="flex-1 min-w-0 flex items-center gap-1.5">
                               <span className="text-sm font-medium text-foreground line-through truncate">{goal.title}</span>
+                              {goal.tags?.length > 0 && <Tag className="w-3 h-3 text-muted-foreground flex-shrink-0 opacity-70" />}
                               {goal.tags?.map(tag => (
                                 <span key={tag.id} className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white opacity-70" style={{ backgroundColor: tag.color }}>
                                   {tag.name}

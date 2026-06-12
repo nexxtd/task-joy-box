@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { goals, goalTags, goalTagAssignments, activityLogs, type InsertGoal } from '../../shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { goals, tags, goalTagAssignments, activityLogs, type InsertGoal } from '../../shared/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption';
 
 const router = Router();
@@ -11,7 +11,7 @@ const TAG_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5
 
 async function loadGoalsWithTags(userId: number) {
   const userGoals = await db.select().from(goals).where(eq(goals.userId, userId)).orderBy(desc(goals.updatedAt));
-  const allTags = await db.select().from(goalTags).where(eq(goalTags.userId, userId));
+  const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
   const allAssignments = await db.select().from(goalTagAssignments);
 
   const tagsByGoal = new Map<number, typeof allTags>();
@@ -121,11 +121,11 @@ router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) =>
 
     let useTagId = tagId;
     if (!useTagId) {
-      const existing = await db.select().from(goalTags)
-        .where(and(eq(goalTags.userId, req.userId!), eq(goalTags.name, name.trim().toLowerCase())));
+      const existing = await db.select().from(tags)
+        .where(and(eq(tags.userId, req.userId!), eq(tags.name, name.trim().toLowerCase())));
       if (existing.length > 0) { useTagId = existing[0].id; }
       else {
-        const [newTag] = await db.insert(goalTags).values({
+        const [newTag] = await db.insert(tags).values({
           userId: req.userId!, name: name.trim(), color: color || TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)],
         }).returning();
         useTagId = newTag.id;
@@ -138,7 +138,7 @@ router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) =>
       await db.insert(goalTagAssignments).values({ goalId, tagId: useTagId });
     }
 
-    const tag = await db.select().from(goalTags).where(eq(goalTags.id, useTagId));
+    const tag = await db.select().from(tags).where(eq(tags.id, useTagId));
     res.json({ tag: tag[0] });
   } catch (error) {
     console.error('Error adding tag to goal:', error);
@@ -163,8 +163,7 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 
     const allAssignments = await db.select().from(goalTagAssignments).where(eq(goalTagAssignments.goalId, goalId));
     const tagIds = allAssignments.map(a => a.tagId);
-    const allTags = tagIds.length > 0 ? await db.select().from(goalTags) : [];
-    const assignedTags = allTags.filter(t => tagIds.includes(t.id));
+    const assignedTags = tagIds.length > 0 ? await db.select().from(tags).where(sql`${tags.id} = ANY(${tagIds})`) : [];
 
     res.json({ tags: assignedTags });
   } catch (error) {
@@ -177,7 +176,7 @@ router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Respons
   try {
     const tagId = parseInt(req.params.tagId);
     await db.delete(goalTagAssignments).where(eq(goalTagAssignments.tagId, tagId));
-    await db.delete(goalTags).where(and(eq(goalTags.id, tagId), eq(goalTags.userId, req.userId!)));
+    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
     res.json({ message: 'Tag deleted' });
   } catch (error) {
     console.error('Error deleting goal tag:', error);

@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { notes, noteTags, noteTagAssignments, activityLogs } from '../../shared/schema';
-import { eq, and, desc, asc } from 'drizzle-orm';
+import { notes, tags, noteTagAssignments, activityLogs } from '../../shared/schema';
+import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption';
 
 const router = Router();
@@ -27,7 +27,7 @@ async function logActivity(userId: number, entityType: string, entityId: number,
 async function loadNotesPayload(userId: number) {
   const [userNotes, userTags, assignments] = await Promise.all([
     db.select().from(notes).where(eq(notes.userId, userId)).orderBy(desc(notes.pinned), desc(notes.updatedAt), desc(notes.createdAt)),
-    db.select().from(noteTags).where(eq(noteTags.userId, userId)).orderBy(asc(noteTags.name)),
+    db.select().from(tags).where(eq(tags.userId, userId)).orderBy(asc(tags.name)),
     db.select({
       noteId: noteTagAssignments.noteId,
       tagId: noteTagAssignments.tagId,
@@ -171,18 +171,18 @@ router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) =>
     let tag = null as null | { id: number; name: string; color: string };
 
     if (tagId) {
-      const existing = await db.select().from(noteTags).where(and(eq(noteTags.id, tagId), eq(noteTags.userId, req.userId!))).limit(1);
+      const existing = await db.select().from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!))).limit(1);
       if (existing.length === 0) return res.status(404).json({ error: 'Tag not found' });
       tag = existing[0];
     } else {
       const normalized = normalizeName(name || '');
       if (!normalized) return res.status(400).json({ error: 'Tag name is required' });
-      const existingAll = await db.select().from(noteTags).where(eq(noteTags.userId, req.userId!));
+      const existingAll = await db.select().from(tags).where(eq(tags.userId, req.userId!));
       const existing = existingAll.find(item => item.name.trim().toLowerCase() === normalized.toLowerCase());
       if (existing) {
         tag = existing;
       } else {
-        const [created] = await db.insert(noteTags).values({
+        const [created] = await db.insert(tags).values({
           userId: req.userId!,
           name: normalized,
           color: color || NOTE_TAG_COLORS[Math.floor(Math.random() * NOTE_TAG_COLORS.length)],
@@ -222,7 +222,7 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
     const note = await db.select().from(notes).where(and(eq(notes.id, noteId), eq(notes.userId, req.userId!))).limit(1);
     if (note.length === 0) return res.status(404).json({ error: 'Note not found' });
 
-    const tag = await db.select().from(noteTags).where(and(eq(noteTags.id, tagId), eq(noteTags.userId, req.userId!))).limit(1);
+    const tag = await db.select().from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!))).limit(1);
     if (tag.length === 0) return res.status(404).json({ error: 'Tag not found' });
 
     const existingAssignment = await db.select()
@@ -248,8 +248,8 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const tagId = parseInt(req.params.tagId);
-    const result = await db.delete(noteTags)
-      .where(and(eq(noteTags.id, tagId), eq(noteTags.userId, req.userId!)))
+    const result = await db.delete(tags)
+      .where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)))
       .returning();
 
     if (result.length === 0) {

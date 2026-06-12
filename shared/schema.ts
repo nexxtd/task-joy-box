@@ -224,7 +224,8 @@ export const notes = pgTable('notes', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
-export const noteTags = pgTable('note_tags', {
+// Shared tags table — unified across notes, goals, habits, tasks
+export const tags = pgTable('tags', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
   name: text('name').notNull(),
@@ -236,7 +237,7 @@ export const noteTags = pgTable('note_tags', {
 export const noteTagAssignments = pgTable('note_tag_assignments', {
   id: serial('id').primaryKey(),
   noteId: integer('note_id').references(() => notes.id, { onDelete: 'cascade' }).notNull(),
-  tagId: integer('tag_id').references(() => noteTags.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => tags.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -281,19 +282,10 @@ export const goals = pgTable('goals', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
-export const goalTags = pgTable('goal_tags', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-  name: text('name').notNull(),
-  color: text('color').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
 export const goalTagAssignments = pgTable('goal_tag_assignments', {
   id: serial('id').primaryKey(),
   goalId: integer('goal_id').references(() => goals.id, { onDelete: 'cascade' }).notNull(),
-  tagId: integer('tag_id').references(() => goalTags.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => tags.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -314,19 +306,17 @@ export const habits = pgTable('habits', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
-export const habitTags = pgTable('habit_tags', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull(),
-  name: text('name').notNull(),
-  color: text('color').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
 export const habitTagAssignments = pgTable('habit_tag_assignments', {
   id: serial('id').primaryKey(),
   habitId: integer('habit_id').references(() => habits.id, { onDelete: 'cascade' }).notNull(),
-  tagId: integer('tag_id').references(() => habitTags.id, { onDelete: 'cascade' }).notNull(),
+  tagId: integer('tag_id').references(() => tags.id, { onDelete: 'cascade' }).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const taskTagAssignments = pgTable('task_tag_assignments', {
+  id: serial('id').primaryKey(),
+  taskId: text('task_id').notNull(),
+  tagId: integer('tag_id').references(() => tags.id, { onDelete: 'cascade' }).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 

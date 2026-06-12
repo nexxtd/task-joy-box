@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { habits, habitTags, habitTagAssignments, activityLogs, type InsertHabit } from '../../shared/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { habits, tags, habitTagAssignments, activityLogs, type InsertHabit } from '../../shared/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 const router = Router();
 
@@ -36,7 +36,7 @@ function calculateStreak(completedDays: string[]): number {
 
 async function loadHabitsWithTags(userId: number) {
   const userHabits = await db.select().from(habits).where(eq(habits.userId, userId)).orderBy(desc(habits.updatedAt));
-  const allTags = await db.select().from(habitTags).where(eq(habitTags.userId, userId));
+  const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
   const allAssignments = await db.select().from(habitTagAssignments);
 
   const tagMap = new Map(allAssignments.map(a => [a.habitId, a.tagId]));
@@ -138,11 +138,11 @@ router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) =>
 
     let useTagId = tagId;
     if (!useTagId) {
-      const existing = await db.select().from(habitTags)
-        .where(and(eq(habitTags.userId, req.userId!), eq(habitTags.name, name.trim().toLowerCase())));
+      const existing = await db.select().from(tags)
+        .where(and(eq(tags.userId, req.userId!), eq(tags.name, name.trim().toLowerCase())));
       if (existing.length > 0) { useTagId = existing[0].id; }
       else {
-        const [newTag] = await db.insert(habitTags).values({
+        const [newTag] = await db.insert(tags).values({
           userId: req.userId!, name: name.trim(), color: color || TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)],
         }).returning();
         useTagId = newTag.id;
@@ -155,7 +155,7 @@ router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) =>
       await db.insert(habitTagAssignments).values({ habitId, tagId: useTagId });
     }
 
-    const tag = await db.select().from(habitTags).where(eq(habitTags.id, useTagId));
+    const tag = await db.select().from(tags).where(eq(tags.id, useTagId));
     res.json({ tag: tag[0] });
   } catch (error) {
     console.error('Error adding tag to habit:', error);
@@ -180,10 +180,7 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 
     const allAssignments = await db.select().from(habitTagAssignments).where(eq(habitTagAssignments.habitId, habitId));
     const tagIds = allAssignments.map(a => a.tagId);
-    const tags = tagIds.length > 0 ? await db.select().from(habitTags).where(eq(habitTags.id, tagIds[0])) : [];
-    // Fetch all assigned tags
-    const allTags = tagIds.length > 0 ? await db.select().from(habitTags) : [];
-    const assignedTags = allTags.filter(t => tagIds.includes(t.id));
+    const assignedTags = tagIds.length > 0 ? await db.select().from(tags).where(sql`${tags.id} = ANY(${tagIds})`) : [];
 
     res.json({ tags: assignedTags });
   } catch (error) {
@@ -196,7 +193,7 @@ router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Respons
   try {
     const tagId = parseInt(req.params.tagId);
     await db.delete(habitTagAssignments).where(eq(habitTagAssignments.tagId, tagId));
-    await db.delete(habitTags).where(and(eq(habitTags.id, tagId), eq(habitTags.userId, req.userId!)));
+    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
     res.json({ message: 'Tag deleted' });
   } catch (error) {
     console.error('Error deleting habit tag:', error);
