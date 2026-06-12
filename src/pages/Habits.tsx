@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, Tag, Activity, ChevronRight } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, Tag, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -88,7 +88,7 @@ const Habits: React.FC = () => {
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<number[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteId, setSingleDeleteId] = useState<number | null>(null);
-  const [completedOpen, setCompletedOpen] = useState(true);
+
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [editHabit, setEditHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
   
@@ -99,8 +99,9 @@ const Habits: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [showActivity, setShowActivity] = useState(false);
-  const [activityHabitId, setActivityHabitId] = useState<number | null>(null);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
+  const [myHabitsCollapsed, setMyHabitsCollapsed] = useState(false);
+  const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
 
   const getTodayUTC = () => {
     const now = new Date();
@@ -232,6 +233,7 @@ const Habits: React.FC = () => {
   const openEditHabit = (habit: Habit) => {
     setEditingHabit(habit);
     setEditHabit({ title: habit.title, category: habit.category, projectId: habit.projectId ? String(habit.projectId) : '', columnId: habit.columnId ? String(habit.columnId) : '' });
+    fetchActivity(habit.id);
   };
 
   // --- TAG FUNCTIONS ---
@@ -263,7 +265,7 @@ const Habits: React.FC = () => {
   const fetchActivity = async (habitId: number) => {
     try {
       const res = await fetch(`/api/habits/${habitId}/activity`, { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setActivityLogs(data); setActivityHabitId(habitId); setShowActivity(true); }
+      if (res.ok) { const data = await res.json(); setActivityLogs(data); }
     } catch {}
   };
 
@@ -277,8 +279,14 @@ const Habits: React.FC = () => {
     });
   }, [habits, search, categoryFilter, selectedHabitTagIds]);
 
-  const completedToday = useMemo(() => filteredHabits.filter(h => h.completedDays.includes(today)), [filteredHabits, today]);
-  const notCompletedToday = useMemo(() => filteredHabits.filter(h => !h.completedDays.includes(today)), [filteredHabits, today]);
+  const myHabitsGroup = useMemo(() => filteredHabits.filter(h => !h.projectId), [filteredHabits]);
+  const projectHabitGroups = useMemo(() => {
+    return projects.map(project => {
+      const habitItems = filteredHabits.filter(h => h.projectId === project.id);
+      if (habitItems.length === 0) return null;
+      return { project, habits: habitItems };
+    }).filter(Boolean) as Array<{ project: Project; habits: Habit[] }>;
+  }, [filteredHabits, projects]);
 
   const matchingCount = filteredHabits.length;
 
@@ -521,46 +529,60 @@ const Habits: React.FC = () => {
               <p className="text-sm text-destructive">{error}</p>
               <button onClick={fetchHabits} className="mt-2 text-sm text-primary hover:underline">Try again</button>
             </div>
-          ) : filteredHabits.length === 0 && !adding ? (
+          ) : myHabitsGroup.length === 0 && projectHabitGroups.length === 0 && !adding ? (
             <div className="text-center py-16">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">No habits found</p>
             </div>
           ) : (
             <>
-              {notCompletedToday.length > 0 && (
+              {/* My Habits section */}
+              {myHabitsGroup.length > 0 && (
                 <div className="mb-3">
-                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">To Complete Today</span>
-                    <span className="text-[10px] text-muted-foreground/50">({notCompletedToday.length})</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {notCompletedToday.map(habit => renderHabitRow(habit))}
-                  </div>
+                  <button
+                    onClick={() => setMyHabitsCollapsed(prev => !prev)}
+                    className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
+                  >
+                    {myHabitsCollapsed
+                      ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                      : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">My Habits</span>
+                    <span className="text-[10px] text-muted-foreground/50 ml-1">({myHabitsGroup.length})</span>
+                  </button>
+                  {!myHabitsCollapsed && (
+                    <div className="space-y-1.5">
+                      {myHabitsGroup.map(habit => renderHabitRow(habit))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {completedToday.length > 0 && (
-                <div className="mt-6 pt-4 border-t border-border/80">
-                  <div className="border border-label-green/20 rounded-xl bg-label-green/5">
+              {/* Project sections */}
+              {projectHabitGroups.map(({ project, habits: projectHabits }) => {
+                const isCollapsed = collapsedProjects.includes(project.id);
+                return (
+                  <div key={project.id} className="mb-3">
                     <button
-                      onClick={() => setCompletedOpen(prev => !prev)}
-                      className="w-full flex items-center justify-between px-4 py-3"
+                      onClick={() => setCollapsedProjects(prev =>
+                        prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
+                      )}
+                      className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
                     >
-                      <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Completed Today ({completedToday.length})
-                      </span>
-                      {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                      {isCollapsed
+                        ? <ChevronDown className="w-3.5 h-3.5" style={{ color: project.color }} />
+                        : <ChevronUp className="w-3.5 h-3.5" style={{ color: project.color }} />}
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground">{project.name}</span>
+                      <span className="text-[10px] text-muted-foreground/50 ml-1">({projectHabits.length})</span>
                     </button>
-                    {completedOpen && (
-                      <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                        {completedToday.map(habit => renderHabitRow(habit))}
+                    {!isCollapsed && (
+                      <div className="pl-4 space-y-1.5">
+                        {projectHabits.map(habit => renderHabitRow(habit))}
                       </div>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })}
             </>
           )}
         </div>
@@ -707,20 +729,25 @@ const Habits: React.FC = () => {
               </div>
 
               {/* Activity Section */}
-              <div className="border-t border-border pt-4">
-                <button onClick={() => { if (activityHabitId === editingHabit.id && showActivity) { setShowActivity(false); } else { fetchActivity(editingHabit.id); } }} className="flex items-center gap-2 w-full">
-                  <Activity className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-foreground">Activity</span>
-                  <ChevronRight className={cn('w-3 h-3 text-muted-foreground ml-auto transition-transform', showActivity && activityHabitId === editingHabit.id && 'rotate-90')} />
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setActivityCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Activity</h3>
+                  </div>
+                  {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                 </button>
-                {showActivity && activityHabitId === editingHabit.id && (
-                  <div className="mt-2 space-y-1">
+                {!activityCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
                     {activityLogs.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No activity yet</p>
+                      <p className="text-sm text-muted-foreground">No activity yet</p>
                     ) : activityLogs.map(log => (
-                      <div key={log.id} className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-                        <span className="capitalize font-medium">{log.action}</span>
-                        <span className="ml-2">{new Date(log.createdAt).toLocaleString()}</span>
+                      <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                        <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>

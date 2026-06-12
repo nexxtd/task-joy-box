@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Target, Plus, Trash2, X, Tag, Activity, ChevronRight, ChevronDown, ChevronUp, Search, FolderKanban } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Target, Plus, Trash2, X, Tag, BarChart3, ChevronDown, ChevronUp, Search, FolderKanban } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface GoalTag {
@@ -74,8 +73,7 @@ const Goals: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [showActivity, setShowActivity] = useState(false);
-  const [activityGoalId, setActivityGoalId] = useState<number | null>(null);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -224,6 +222,7 @@ const Goals: React.FC = () => {
       columnId: goal.columnId ? String(goal.columnId) : '',
     });
     setEditSubGoalTitle('');
+    fetchActivity(goal.id);
   };
 
   const updateGoal = async () => {
@@ -279,7 +278,7 @@ const Goals: React.FC = () => {
   const fetchActivity = async (goalId: number) => {
     try {
       const res = await fetch(`/api/goals/${goalId}/activity`, { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setActivityLogs(data); setActivityGoalId(goalId); setShowActivity(true); }
+      if (res.ok) { const data = await res.json(); setActivityLogs(data); }
     } catch {}
   };
 
@@ -950,20 +949,25 @@ const Goals: React.FC = () => {
               </div>
 
               {/* Activity Section */}
-              <div className="border-t border-border pt-4">
-                <button onClick={() => { if (activityGoalId === editingGoal.id && showActivity) { setShowActivity(false); } else { fetchActivity(editingGoal.id); } }} className="flex items-center gap-2 w-full">
-                  <Activity className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-foreground">Activity</span>
-                  <ChevronRight className={cn('w-3 h-3 text-muted-foreground ml-auto transition-transform', showActivity && activityGoalId === editingGoal.id && 'rotate-90')} />
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setActivityCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Activity</h3>
+                  </div>
+                  {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                 </button>
-                {showActivity && activityGoalId === editingGoal.id && (
-                  <div className="mt-2 space-y-1">
+                {!activityCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
                     {activityLogs.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No activity yet</p>
+                      <p className="text-sm text-muted-foreground">No activity yet</p>
                     ) : activityLogs.map(log => (
-                      <div key={log.id} className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-                        <span className="capitalize font-medium">{log.action}</span>
-                        <span className="ml-2">{new Date(log.createdAt).toLocaleString()}</span>
+                      <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                        <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
                       </div>
                     ))}
                   </div>

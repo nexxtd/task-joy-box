@@ -7,6 +7,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { CircleToggle } from '@/components/ToggleComponents';
 import { Select as RadixSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ProjectBoard = () => {
@@ -211,10 +212,15 @@ const ProjectBoard = () => {
                     className="task-card group rounded-lg bg-white p-3 cursor-pointer border border-gray-200 hover:border-gray-300 transition-all duration-150 hover:bg-gray-50"
                   >
                     <div className="flex items-center gap-2 mb-2">
+                      <CircleToggle
+                        completed={task.completed || false}
+                        onClick={e => { e.stopPropagation(); updateTask(task.id, { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : undefined }); }}
+                        size="sm"
+                      />
                       {task.color && (
                         <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
                       )}
-                      <p className="text-sm font-bold text-gray-900 leading-snug truncate">{task.title}</p>
+                      <p className={`text-sm font-bold leading-snug truncate ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.title}</p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

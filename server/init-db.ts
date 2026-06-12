@@ -162,6 +162,9 @@ export async function initDatabase() {
     await addColumnIfNotExists('columns', 'icon', 'TEXT');
     await addColumnIfNotExists('notes', 'pinned', 'BOOLEAN DEFAULT FALSE');
 
+    // User settings table new columns
+    await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
+
     // --- WHITEBOARD TABLES ---
     console.log('Verifying whiteboard tables...');
     

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  BarChart3,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   FolderKanban,
   Loader2,
   Pin,
@@ -11,7 +13,6 @@ import {
   Tag,
   Trash2,
   X,
-  Activity,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -116,7 +117,7 @@ const Notes: React.FC = () => {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [showActivity, setShowActivity] = useState(false);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [editingTitleNoteId, setEditingTitleNoteId] = useState<number | null>(null);
   const [editingTitleText, setEditingTitleText] = useState('');
   const [editingContentNoteId, setEditingContentNoteId] = useState<number | null>(null);
@@ -124,6 +125,8 @@ const Notes: React.FC = () => {
   const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [myNotesCollapsed, setMyNotesCollapsed] = useState(false);
+  const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createContent, setCreateContent] = useState('');
@@ -315,7 +318,7 @@ const Notes: React.FC = () => {
   const fetchNoteActivity = async (noteId: number) => {
     try {
       const res = await fetch(`/api/notes/${noteId}/activity`, { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setActivityLogs(data); setShowActivity(true); }
+      if (res.ok) { const data = await res.json(); setActivityLogs(data); }
     } catch {}
   };
 
@@ -343,6 +346,30 @@ const Notes: React.FC = () => {
   }, [filteredNotes, sortMode]);
 
   const matchingCount = filteredNotes.length;
+
+  const myNotesGroup = useMemo(() => {
+    return filteredNotes.filter(n => !n.projectId).sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
+      const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
+      const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
+      return new Date(bVal).getTime() - new Date(aVal).getTime();
+    });
+  }, [filteredNotes, sortMode]);
+
+  const projectNoteGroups = useMemo(() => {
+    return projects.map(project => {
+      const noteItems = filteredNotes.filter(n => n.projectId === project.id).sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
+        const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
+        const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
+        return new Date(bVal).getTime() - new Date(aVal).getTime();
+      });
+      if (noteItems.length === 0) return null;
+      return { project, notes: noteItems };
+    }).filter(Boolean) as Array<{ project: Project; notes: Note[] }>;
+  }, [filteredNotes, projects, sortMode]);
 
   const handleBulkDelete = () => {
     if (selectedDeleteIds.length === 0) return;
@@ -668,38 +695,60 @@ const Notes: React.FC = () => {
               <p className="text-sm text-destructive">{error}</p>
               <button onClick={fetchNotes} className="mt-2 text-sm text-primary hover:underline">Try again</button>
             </div>
-          ) : sortedNotes.pinned.length === 0 && sortedNotes.unpinned.length === 0 ? (
+          ) : myNotesGroup.length === 0 && projectNoteGroups.length === 0 ? (
             <div className="text-center py-16">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">No notes found</p>
             </div>
           ) : (
             <>
-              {sortedNotes.pinned.length > 0 && (
+              {/* My Notes section */}
+              {myNotesGroup.length > 0 && (
                 <div className="mb-3">
-                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
-                    <Pin className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pinned</span>
-                    <span className="text-[10px] text-muted-foreground/50">({sortedNotes.pinned.length})</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {sortedNotes.pinned.map(renderNoteRow)}
-                  </div>
+                  <button
+                    onClick={() => setMyNotesCollapsed(prev => !prev)}
+                    className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
+                  >
+                    {myNotesCollapsed
+                      ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                      : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">My Notes</span>
+                    <span className="text-[10px] text-muted-foreground/50 ml-1">({myNotesGroup.length})</span>
+                  </button>
+                  {!myNotesCollapsed && (
+                    <div className="space-y-1.5">
+                      {myNotesGroup.map(renderNoteRow)}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {sortedNotes.unpinned.length > 0 && (
-                <div className="mt-4">
-                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
-                    <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">All Notes</span>
-                    <span className="text-[10px] text-muted-foreground/50">({sortedNotes.unpinned.length})</span>
+              {/* Project sections */}
+              {projectNoteGroups.map(({ project, notes: projectNotes }) => {
+                const isCollapsed = collapsedProjects.includes(project.id);
+                return (
+                  <div key={project.id} className="mb-3">
+                    <button
+                      onClick={() => setCollapsedProjects(prev =>
+                        prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
+                      )}
+                      className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
+                    >
+                      {isCollapsed
+                        ? <ChevronDown className="w-3.5 h-3.5" style={{ color: project.color }} />
+                        : <ChevronUp className="w-3.5 h-3.5" style={{ color: project.color }} />}
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
+                      <span className="text-xs font-bold uppercase tracking-wider text-foreground">{project.name}</span>
+                      <span className="text-[10px] text-muted-foreground/50 ml-1">({projectNotes.length})</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="pl-4 space-y-1.5">
+                        {projectNotes.map(renderNoteRow)}
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-1.5">
-                    {sortedNotes.unpinned.map(renderNoteRow)}
-                  </div>
-                </div>
-              )}
+                );
+              })}
             </>
           )}
         </div>
@@ -928,19 +977,29 @@ const Notes: React.FC = () => {
               </div>
 
               {/* Activity Section */}
-              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                <div className="flex items-center gap-2 w-full mb-2">
-                  <Activity className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-foreground">Activity</span>
-                </div>
-                {activityLogs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No activity yet</p>
-                ) : activityLogs.map(log => (
-                  <div key={log.id} className="text-xs text-muted-foreground bg-background rounded-lg px-3 py-2 mt-1">
-                    <span className="capitalize font-medium">{log.action}</span>
-                    <span className="ml-2">{new Date(log.createdAt).toLocaleString()}</span>
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setActivityCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Activity</h3>
                   </div>
-                ))}
+                  {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!activityCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
+                    {activityLogs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No activity yet</p>
+                    ) : activityLogs.map(log => (
+                      <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                        <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
