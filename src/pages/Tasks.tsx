@@ -158,6 +158,58 @@ interface AIGeneratedTask {
   checklistItems: string[];
 }
 
+const PriorityBadge: React.FC<{
+  task: Task;
+  onUpdate: (priority: Priority) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}> = ({ task, onUpdate, isOpen, onToggle }) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onToggle(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen, onToggle]);
+  const pConfig = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG];
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      {task.priority !== 'none' ? (
+        <button
+          onClick={e => { e.stopPropagation(); onToggle(); }}
+          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${pConfig?.className || 'bg-muted text-muted-foreground'}`}
+        >
+          {pConfig?.label}
+        </button>
+      ) : isOpen ? (
+        <button
+          onClick={e => { e.stopPropagation(); onToggle(); }}
+          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 bg-muted text-muted-foreground`}
+        >
+          Priority
+        </button>
+      ) : null}
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 z-50 w-32 bg-card border border-border rounded-xl shadow-xl p-1 space-y-0.5">
+          {(['urgent', 'high', 'medium', 'low'] as const).map(p => {
+            const cfg = PRIORITY_CONFIG[p];
+            return (
+              <button
+                key={p}
+                onClick={e => { e.stopPropagation(); onUpdate(p); }}
+                className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
+              >
+                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${cfg.className}`} />
+                {cfg.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PremiumGate: React.FC<{
   title: string;
   description: string;
@@ -240,6 +292,7 @@ const Tasks: React.FC = () => {
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
   const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
+  const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditDueDate, setQuickEditDueDate] = useState('');
   const [quickEditDueTime, setQuickEditDueTime] = useState('');
   const [quickEditDuration, setQuickEditDuration] = useState(0);
@@ -273,6 +326,7 @@ const Tasks: React.FC = () => {
   const [newChecklistItems, setNewChecklistItems] = useState<string[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
   const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
   const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
@@ -280,8 +334,15 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(false);
-  const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
-  const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
+  const [collapsedProjects, setCollapsedProjects] = useState<number[]>(() => {
+    try { const v = localStorage.getItem('tasks-collapsed-projects'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
+  const [collapsedColumns, setCollapsedColumns] = useState<string[]>(() => {
+    try { const v = localStorage.getItem('tasks-collapsed-columns'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
+
+  useEffect(() => { localStorage.setItem('tasks-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
+  useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
 
   const [completedOpen, setCompletedOpen] = useState(true);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -423,55 +484,105 @@ const Tasks: React.FC = () => {
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || sortByDueDate) return;
-    if (result.source.droppableId !== result.destination.droppableId) return;
 
-    const droppableId = result.source.droppableId;
-    let sectionTasks: Task[];
-
-    if (droppableId === 'my-tasks') {
-      sectionTasks = myTasksGroup;
-    } else if (droppableId.startsWith('col-')) {
-      const columnId = droppableId.slice(4);
-      const colGroup = projectTaskGroups
-        .flatMap(pg => pg.columnGroups)
-        .find(cg => cg.column.id === columnId);
-      if (!colGroup) return;
-      sectionTasks = colGroup.tasks;
-    } else if (droppableId.startsWith('uncat-')) {
-      const projectId = Number(droppableId.slice(6));
-      const pg = projectTaskGroups.find(p => p.project.id === projectId);
-      if (!pg) return;
-      sectionTasks = pg.uncategorized;
-    } else {
-      return;
-    }
-
-    const sectionTaskIds = sectionTasks.map(t => t.id);
-    const ids = [...sectionTaskIds];
-    const [removed] = ids.splice(result.source.index, 1);
-    ids.splice(result.destination.index, 0, removed);
-
-    ids.forEach((id, idx) => updateTask(id, { order: idx }));
-
-    const base = orderedActiveIds.length > 0
-      ? [...orderedActiveIds]
-      : filtered.active.map(t => t.id);
-
-    const sectionIdSet = new Set(sectionTaskIds);
-    const resultIds: string[] = [];
-    let inserted = false;
-    for (const id of base) {
-      if (sectionIdSet.has(id)) {
-        if (!inserted) {
-          resultIds.push(...ids);
-          inserted = true;
-        }
-      } else {
-        resultIds.push(id);
+    const getProjectIdForDroppable = (id: string): number | 'my-tasks' | null => {
+      if (id === 'my-tasks') return 'my-tasks';
+      if (id.startsWith('col-')) {
+        const col = board.columns.find(c => c.id === id.slice(4));
+        return col?.projectId ?? null;
       }
-    }
+      if (id.startsWith('uncat-')) return Number(id.slice(6));
+      return null;
+    };
 
-    setOrderedActiveIds(resultIds);
+    const getTasksForDroppable = (id: string): Task[] | null => {
+      if (id === 'my-tasks') return myTasksGroup;
+      if (id.startsWith('col-')) {
+        const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
+        return colGroup?.tasks ?? null;
+      }
+      if (id.startsWith('uncat-')) {
+        const pg = projectTaskGroups.find(p => p.project.id === Number(id.slice(6)));
+        return pg?.uncategorized ?? null;
+      }
+      return null;
+    };
+
+    const srcProject = getProjectIdForDroppable(result.source.droppableId);
+    const dstProject = getProjectIdForDroppable(result.destination.droppableId);
+    if (srcProject === null || dstProject === null) return;
+    if (srcProject !== dstProject) return;
+
+    const srcId = result.source.droppableId;
+    const dstId = result.destination.droppableId;
+    const isCrossColumn = srcId !== dstId;
+
+    if (isCrossColumn) {
+      const srcTasks = getTasksForDroppable(srcId);
+      const dstTasks = getTasksForDroppable(dstId);
+      if (!srcTasks || !dstTasks) return;
+
+      const movingTaskId = srcTasks[result.source.index]?.id;
+      if (!movingTaskId) return;
+
+      const newColumnId = dstId.startsWith('col-') ? dstId.slice(4) : undefined;
+      if (newColumnId) updateTask(movingTaskId, { columnId: newColumnId });
+
+      const srcIds = srcTasks.map(t => t.id);
+      const dstIds = dstTasks.map(t => t.id);
+      const [removed] = srcIds.splice(result.source.index, 1);
+      dstIds.splice(result.destination.index, 0, removed);
+
+      srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+      dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const srcSet = new Set(srcTasks.map(t => t.id));
+      const dstSet = new Set(dstTasks.map(t => t.id));
+      const resultIds: string[] = [];
+      let srcInserted = false;
+      let dstInserted = false;
+      for (const id of base) {
+        if (srcSet.has(id) && !srcInserted) {
+          resultIds.push(...srcIds);
+          srcInserted = true;
+        } else if (dstSet.has(id) && !dstInserted) {
+          resultIds.push(...dstIds);
+          dstInserted = true;
+        } else if (!srcSet.has(id) && !dstSet.has(id)) {
+          resultIds.push(id);
+        }
+      }
+      if (!srcInserted) resultIds.push(...srcIds);
+      if (!dstInserted) resultIds.push(...dstIds);
+      setOrderedActiveIds(resultIds);
+    } else {
+      const sectionTasks = getTasksForDroppable(srcId);
+      if (!sectionTasks) return;
+
+      const sectionTaskIds = sectionTasks.map(t => t.id);
+      const ids = [...sectionTaskIds];
+      const [removed] = ids.splice(result.source.index, 1);
+      ids.splice(result.destination.index, 0, removed);
+
+      ids.forEach((id, idx) => updateTask(id, { order: idx }));
+
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const sectionIdSet = new Set(sectionTaskIds);
+      const resultIds: string[] = [];
+      let inserted = false;
+      for (const id of base) {
+        if (sectionIdSet.has(id)) {
+          if (!inserted) {
+            resultIds.push(...ids);
+            inserted = true;
+          }
+        } else {
+          resultIds.push(id);
+        }
+      }
+      setOrderedActiveIds(resultIds);
+    }
   };
 
   const runTaskAnalysis = useCallback((type: AnalysisTab) => {
@@ -612,6 +723,7 @@ const Tasks: React.FC = () => {
     setNewChecklistItems([]);
     setNewChecklistText('');
     setNewFiles([]);
+    setNewTaskLabels([]);
   };
 
   const createTask = async () => {
@@ -648,6 +760,7 @@ const Tasks: React.FC = () => {
         completed: false,
         durationMinutes: st.durationMinutes,
       })),
+      labels: newTaskLabels,
       checklists: checklistItems.length
         ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
         : [],
@@ -868,6 +981,14 @@ const Tasks: React.FC = () => {
           )}
           <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
+            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+              <PriorityBadge
+                task={task}
+                onUpdate={(priority) => updateTask(task.id, { priority })}
+                isOpen={priorityEditTaskId === task.id}
+                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+              />
+            )}
             {taskDurFmt && (
               <button
                 onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
@@ -917,16 +1038,6 @@ const Tasks: React.FC = () => {
                 +{task.labels.length - taskTags.length}
               </span>
             )}
-            {task.projectId && (() => {
-              const col = board.columns.find(c => c.id === task.columnId);
-              if (!col) return null;
-              return (
-                <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-border/60 text-muted-foreground flex-shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
-                  {col.title}
-                </span>
-              );
-            })()}
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1516,7 +1627,7 @@ const Tasks: React.FC = () => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-                  <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v))}>
+                  <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v)); setNewTaskColumnId(''); }}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
@@ -1528,6 +1639,51 @@ const Tasks: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {newTaskProjectId !== '' && (
+                  <div>
+                    <label className="text-xs font-semibold uppercase text-muted-foreground">Column</label>
+                    <Select value={newTaskColumnId} onValueChange={v => setNewTaskColumnId(v)}>
+                      <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                        <SelectValue placeholder="Select column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {board.columns
+                          .filter(col => col.projectId === Number(newTaskProjectId))
+                          .sort((a, b) => a.order - b.order)
+                          .map(col => (
+                            <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {newTaskColumnId === '' && (
+                      <p className="text-[10px] text-destructive mt-1">Column is required when a project is selected</p>
+                    )}
+                  </div>
+                )}
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground">Tags</label>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 bg-muted/40 border border-border rounded-xl px-3 py-2 min-h-[2.5rem]">
+              {newTaskLabels.map(label => (
+                <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                  {label.name}
+                  <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">&times;</button>
+                </span>
+              ))}
+              {allTags
+                .filter(tag => !newTaskLabels.some(l => l.id === tag.id))
+                .slice(0, 5)
+                .map(tag => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setNewTaskLabels(prev => [...prev, tag])}
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium opacity-60 hover:opacity-100 transition-opacity ${LABEL_COLORS[tag.color]} text-primary-foreground`}
+                  >
+                    +{tag.name}
+                  </button>
+                ))}
+            </div>
           </div>
 
           {/* Start Date and Time Section */}
@@ -1782,7 +1938,7 @@ const Tasks: React.FC = () => {
               <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={!newTaskTitle.trim()}
+                disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
                 Save
@@ -1978,12 +2134,18 @@ const Tasks: React.FC = () => {
             </div>
 
             {!isPro ? (
-              <div className="p-6">
-                <PremiumGate
-                  title="AI Task Builder"
-                  description="Describe any task or project in plain text and AI will build a fully structured task for you automatically."
-                  icon={<Zap className="w-6 h-6 text-primary" />}
-                />
+              <div className="p-6 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+                  <Sparkles className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-base font-semibold text-foreground">Pro Feature</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">AI Task Builder is available exclusively for Pro users. Upgrade to unlock AI-powered task creation.</p>
+                <button
+                  onClick={() => window.location.href = '/pricing'}
+                  className="px-6 py-2.5 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all"
+                >
+                  Upgrade to Pro
+                </button>
               </div>
             ) : (
               <div className="p-5 space-y-4">
@@ -2098,18 +2260,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
   const activityEntries = useMemo(() => {
-    const entries = [
-      { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
-      ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
-      ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
-      ...(task.comments || []).map(comment => ({
-        id: comment.id,
-        text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
-        createdAt: comment.createdAt,
-      })),
-    ];
+    const entries = (task.activityLog || []).map(entry => ({
+      id: entry.id,
+      text: entry.text,
+      createdAt: entry.createdAt,
+    }));
     return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [task.comments, task.createdAt, task.projectId, task.updatedAt, taskProject?.name]);
+  }, [task.activityLog]);
 
   const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -2280,14 +2437,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
             />
           </div>
-          <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-            <div className="grid grid-cols-2 gap-2 mt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
               <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => onUpdateTask(task.id, {
                   projectId: v === 'my-tasks' ? null : Number(v),
                   projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
                 })}>
-                <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2297,9 +2454,12 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-              {task.projectId && (
+            </div>
+            {task.projectId && (
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Column</label>
                 <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
-                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="Column" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2311,8 +2471,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                       ))}
                   </SelectContent>
                 </Select>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Board, Task, Column, Checklist, ChecklistItem } from '@/types/board';
+import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem } from '@/types/board';
 import { emptyBoard } from '@/data/initialBoard';
 import { useAuth } from '@/context/AuthContext';
 
@@ -191,6 +191,17 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user?.id, board]);
 
+  const logActivity = useCallback((taskId: string, text: string) => {
+    setBoard(prev => ({
+      ...prev,
+      tasks: prev.tasks.map(t =>
+        t.id === taskId
+          ? { ...t, updatedAt: new Date().toISOString(), activityLog: [...(t.activityLog || []), { id: genId(), text, createdAt: new Date().toISOString() }] }
+          : t
+      ),
+    }));
+  }, []);
+
   const persist = useCallback((updater: (b: Board) => Board) => {
     setBoard(prev => {
       const next = updater(prev);
@@ -238,6 +249,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const taskId = details.id || genId();
     persist(b => {
       const tasksInCol = b.tasks.filter(t => t.columnId === columnId);
+      const now = new Date().toISOString();
       const newTask: Task = {
         id: taskId,
         title,
@@ -247,7 +259,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         labels: details.labels || [],
         checklists: details.checklists || [],
         subtasks: details.subtasks || [],
-        createdAt: new Date().toISOString().split('T')[0],
+        createdAt: now,
         columnId,
         order: tasksInCol.length,
         dueDate: details.dueDate,
@@ -264,29 +276,39 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recurrencePattern: details.recurrencePattern,
         attachments: details.attachments || [],
         comments: details.comments || [],
+        activityLog: [{ id: genId(), text: 'Task created', createdAt: now }],
       };
       return { ...b, tasks: [...b.tasks, newTask] };
     });
   }, [persist]);
 
   const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
+    const activityTexts: string[] = [];
+    if (updates.priority) activityTexts.push(`Priority set to ${updates.priority}`);
+    if (updates.status) activityTexts.push(`Status changed to ${updates.status}`);
+    if (updates.title) activityTexts.push(`Title changed`);
+    if (updates.columnId) activityTexts.push(`Moved to another column`);
+    if (updates.labels) activityTexts.push('Tags updated');
     persist(b => ({
       ...b,
       tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t),
     }));
-  }, [persist]);
+    activityTexts.forEach(text => logActivity(taskId, text));
+  }, [persist, logActivity]);
 
   const deleteTask = useCallback((taskId: string) => {
+    logActivity(taskId, 'Task deleted');
     persist(b => ({ ...b, tasks: b.tasks.filter(t => t.id !== taskId) }));
-  }, [persist]);
+  }, [persist, logActivity]);
 
   const moveTask = useCallback((taskId: string, toColumnId: string, newOrder: number) => {
     persist(b => {
       const task = b.tasks.find(t => t.id === taskId);
       if (!task) return b;
       
-      // Check if moving to a 'Completed' column
       const toCol = b.columns.find(c => c.id === toColumnId);
+      const fromCol = b.columns.find(c => c.id === task.columnId);
+      logActivity(taskId, `Moved from "${fromCol?.title || 'unknown'}" to "${toCol?.title || 'unknown'}"`);
       const isCompletedCol = toCol?.title.toLowerCase().trim() === 'completed';
       
       const otherTasks = b.tasks.filter(t => t.id !== taskId);
@@ -312,7 +334,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       return nextBoard;
     });
-  }, [persist, handleRecurrence]);
+  }, [persist, handleRecurrence, logActivity]);
 
   // Auto-delete completed tasks after 5 days
   useEffect(() => {
@@ -382,30 +404,40 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addChecklist = useCallback((taskId: string, title: string) => {
     const newChecklist: Checklist = { id: genId(), title, items: [] };
+    logActivity(taskId, `Checklist "${title}" added`);
     persist(b => ({
       ...b,
       tasks: b.tasks.map(t => t.id === taskId ? { ...t, checklists: [...t.checklists, newChecklist] } : t),
     }));
-  }, [persist]);
+  }, [persist, logActivity]);
 
   const toggleChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          checklists: t.checklists.map(cl => {
-            if (cl.id !== checklistId) return cl;
-            return { ...cl, items: cl.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i) };
-          }),
-        };
-      }),
-    }));
-  }, [persist]);
+    let itemText = '';
+    persist(b => {
+      const task = b.tasks.find(t => t.id === taskId);
+      const cl = task?.checklists.find(c => c.id === checklistId);
+      const item = cl?.items.find(i => i.id === itemId);
+      if (item) itemText = item.text;
+      return {
+        ...b,
+        tasks: b.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            checklists: t.checklists.map(cl => {
+              if (cl.id !== checklistId) return cl;
+              return { ...cl, items: cl.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i) };
+            }),
+          };
+        }),
+      };
+    });
+    if (itemText) logActivity(taskId, `Checklist item "${itemText}" toggled`);
+  }, [persist, logActivity]);
 
   const addChecklistItem = useCallback((taskId: string, checklistId: string, text: string) => {
     const newItem: ChecklistItem = { id: genId(), text, completed: false };
+    logActivity(taskId, `Checklist item "${text}" added`);
     persist(b => ({
       ...b,
       tasks: b.tasks.map(t => {
@@ -419,23 +451,31 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
       }),
     }));
-  }, [persist]);
+  }, [persist, logActivity]);
 
   const deleteChecklistItem = useCallback((taskId: string, checklistId: string, itemId: string) => {
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          checklists: t.checklists.map(cl => {
-            if (cl.id !== checklistId) return cl;
-            return { ...cl, items: cl.items.filter(i => i.id !== itemId) };
-          }),
-        };
-      }),
-    }));
-  }, [persist]);
+    let itemText = '';
+    persist(b => {
+      const task = b.tasks.find(t => t.id === taskId);
+      const cl = task?.checklists.find(c => c.id === checklistId);
+      const item = cl?.items.find(i => i.id === itemId);
+      if (item) itemText = item.text;
+      return {
+        ...b,
+        tasks: b.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            checklists: t.checklists.map(cl => {
+              if (cl.id !== checklistId) return cl;
+              return { ...cl, items: cl.items.filter(i => i.id !== itemId) };
+            }),
+          };
+        }),
+      };
+    });
+    if (itemText) logActivity(taskId, `Checklist item "${itemText}" deleted`);
+  }, [persist, logActivity]);
 
   const findTasksByTitle = useCallback((title: string): Task[] => {
     const lower = title.toLowerCase().trim();
