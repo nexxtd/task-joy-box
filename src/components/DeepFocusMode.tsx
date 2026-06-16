@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, LifeBuoy, Trash2 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
+import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 
 interface TodayStats {
   sessions: number;
@@ -473,6 +474,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const subtaskTotalMins = taskSubtasks.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
   const taskDurMins = selectedTask?.duration ?? 0;
   const remainingMins = taskDurMins - subtaskTotalMins;
+  const allSubtasksDone = taskSubtasks.length > 0 && taskSubtasks.every(st => st.completed);
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
   const r = 88;
   const circ = 2 * Math.PI * r;
@@ -651,176 +653,133 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           </div>
 
           {selectedTask && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Subtasks</span>
-                {taskDurMins > 0 && (
-                  <span
-                    className={`text-[11px] font-medium ${
-                      remainingMins > 0
-                        ? 'text-muted-foreground'
+            <div className="space-y-5">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                  {taskDurMins > 0 && (
+                    <span className={`text-xs font-medium ${
+                      remainingMins > 0 ? 'text-muted-foreground' :
+                      remainingMins < 0 ? 'text-orange-500' : 'text-label-green'
+                    }`}>
+                      {remainingMins > 0
+                        ? `${remainingMins} mins left`
                         : remainingMins < 0
-                          ? 'text-orange-500'
-                          : 'text-label-green'
-                    }`}
-                  >
-                    {remainingMins > 0
-                      ? `${remainingMins} mins left`
-                      : remainingMins < 0
                         ? `Over by ${Math.abs(remainingMins)} mins`
                         : '0 mins left ✓'}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
-                {taskSubtasks.map(sub => (
-                  <div key={sub.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                    <button
-                      onClick={() => toggleSubtask(sub.id)}
-                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
-                        sub.completed
-                          ? 'bg-green-500 border-green-500'
-                          : 'border-muted-foreground/40 hover:border-green-400'
-                      }`}
-                    >
-                      {sub.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
-                    </button>
-                    {editingSubtaskId === sub.id ? (
-                      <input
-                        autoFocus
-                        value={editingSubtaskText}
-                        onChange={e => setEditingSubtaskText(e.target.value)}
-                        className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                      />
-                    ) : (
-                      <span
-                        onClick={() => startEditing(sub)}
-                        className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                      >
-                        {sub.text}
-                      </span>
-                    )}
-                    <input
-                      type="number"
-                      min={0}
-                      value={editingSubtaskId === sub.id ? editingSubtaskDuration : (sub.durationMinutes || 0)}
-                      onChange={e => {
-                        if (editingSubtaskId === sub.id) {
-                          setEditingSubtaskDuration(Math.max(0, Number(e.target.value) || 0));
-                        } else {
-                          updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0));
-                        }
-                      }}
-                      className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right"
-                    />
-                    <div className="flex items-center gap-1">
-                      {editingSubtaskId === sub.id && (
-                        <button onClick={() => saveSubtaskEdit(sub.id)} className="text-xs text-primary font-bold">
-                          Save
-                        </button>
-                      )}
-                      <button
-                        onClick={() => deleteSubtask(sub.id)}
-                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {taskSubtasks.length === 0 && (
-                  <p className="text-xs text-center py-2 text-muted-foreground">No subtasks yet</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-                <input
-                  type="text"
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      addSubtask();
-                    }
-                  }}
-                  placeholder="New sub-task"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(e.target.value)}
-                  placeholder="min"
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button
-                  onClick={addSubtask}
-                  disabled={!newSubtaskText.trim()}
-                  className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg"
-                >
-                  Add
-                </button>
-              </div>
-
-              <div className="mt-5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Checklist</span>
-                </div>
-
-              <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
-                {focusChecklistItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-border/50 bg-muted/20 group">
-                      <button
-                        onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
-                        className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${
-                          item.completed
-                            ? 'bg-green-500 border-green-500'
-                            : 'border-muted-foreground/40 hover:border-green-400'
-                        }`}
-                      >
-                        {item.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
-                      </button>
-                      <span className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        {item.text}
-                      </span>
-                      <button
-                        onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
-                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete item"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  {focusChecklistItems.length === 0 && (
-                    <p className="text-xs text-center py-2 text-muted-foreground">No checklist items yet</p>
+                    </span>
                   )}
                 </div>
 
+                {allSubtasksDone && (
+                  <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                    All sub-tasks are done ✓
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {taskSubtasks.map(sub => (
+                    <div key={sub.id} className="grid grid-cols-[auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                      <CircleToggle
+                        completed={sub.completed}
+                        onClick={() => toggleSubtask(sub.id)}
+                        size="sm"
+                      />
+                      {editingSubtaskId === sub.id ? (
+                        <input
+                          autoFocus
+                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                          value={editingSubtaskText}
+                          onChange={e => setEditingSubtaskText(e.target.value)}
+                          onBlur={() => saveSubtaskEdit(sub.id)}
+                          onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(sub.id)}
+                        />
+                      ) : (
+                        <span
+                          onClick={() => startEditing(sub)}
+                          className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                        >
+                          {sub.text}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          value={sub.durationMinutes || 0}
+                          onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
+                        />
+                        <span className="text-[10px] text-muted-foreground">min</span>
+                        <button
+                          onClick={() => deleteSubtask(sub.id)}
+                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {taskSubtasks.length === 0 && (
+                    <p className="text-xs text-center py-2 text-muted-foreground">No subtasks yet</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                  <input
+                    value={newSubtaskText}
+                    onChange={e => setNewSubtaskText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                    placeholder="Add sub-task"
+                    className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    value={newSubtaskDuration}
+                    onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="min"
+                    className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                  />
+                  <button onClick={addSubtask} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+                {focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+                {focusChecklistItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    {focusChecklistItems.map(item => (
+                      <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                        <SquareToggle
+                          completed={item.completed}
+                          onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                          size="md"
+                        />
+                        <span className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                          {item.text}
+                        </span>
+                        <button
+                          onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          title="Delete item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
-                    type="text"
                     value={newChecklistText}
                     onChange={e => setNewChecklistText(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddChecklistItem();
-                      }
-                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
                     placeholder="Checklist item"
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                   />
-                  <button
-                    onClick={handleAddChecklistItem}
-                    disabled={!newChecklistText.trim()}
-                    className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg disabled:opacity-40"
-                  >
-                    Add
-                  </button>
+                  <button onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg disabled:opacity-40">Add</button>
                 </div>
               </div>
             </div>

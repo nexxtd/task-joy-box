@@ -276,6 +276,8 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recurrencePattern: details.recurrencePattern,
         attachments: details.attachments || [],
         comments: details.comments || [],
+        projectId: details.projectId,
+        projectName: details.projectName,
         activityLog: [{ id: genId(), text: 'Task created', createdAt: now }],
       };
       return { ...b, tasks: [...b.tasks, newTask] };
@@ -284,15 +286,43 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
     const activityTexts: string[] = [];
-    if (updates.priority) activityTexts.push(`Priority set to ${updates.priority}`);
-    if (updates.status) activityTexts.push(`Status changed to ${updates.status}`);
-    if (updates.title) activityTexts.push(`Title changed`);
-    if (updates.columnId) activityTexts.push(`Moved to another column`);
-    if (updates.labels) activityTexts.push('Tags updated');
-    persist(b => ({
-      ...b,
-      tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t),
-    }));
+    persist(b => {
+      const task = b.tasks.find(t => t.id === taskId);
+      if (!task) return b;
+      if (updates.title && updates.title !== task.title) activityTexts.push(`Title changed to "${updates.title}"`);
+      if (updates.priority && updates.priority !== task.priority) activityTexts.push(`Priority set to ${updates.priority}`);
+      if (updates.status && updates.status !== task.status) activityTexts.push(`Status changed to ${updates.status}`);
+      if (updates.columnId && updates.columnId !== task.columnId) {
+        const toCol = b.columns.find(c => c.id === updates.columnId);
+        activityTexts.push(`Moved to "${toCol?.title || 'unknown'}"`);
+      }
+      if (updates.description !== undefined && updates.description !== task.description) activityTexts.push('Description updated');
+      if (updates.dueDate !== undefined && updates.dueDate !== task.dueDate) activityTexts.push(`Due date ${updates.dueDate ? `set to ${updates.dueDate}` : 'removed'}`);
+      if (updates.dueTime !== undefined && updates.dueTime !== task.dueTime) activityTexts.push(`Due time ${updates.dueTime ? `set to ${updates.dueTime}` : 'removed'}`);
+      if (updates.startDate !== undefined && updates.startDate !== task.startDate) activityTexts.push(`Start date ${updates.startDate ? `set to ${updates.startDate}` : 'removed'}`);
+      if (updates.startTime !== undefined && updates.startTime !== task.startTime) activityTexts.push(`Start time ${updates.startTime ? `set to ${updates.startTime}` : 'removed'}`);
+      if (updates.duration !== undefined && updates.duration !== task.duration) activityTexts.push(`Duration ${updates.duration ? `set to ${updates.duration} min` : 'removed'}`);
+      if (updates.projectId !== undefined && updates.projectId !== task.projectId) {
+        const projName = updates.projectName || (updates.projectId ? 'a project' : 'no project');
+        activityTexts.push(`Assigned to ${projName}`);
+      }
+      if (updates.labels) activityTexts.push('Tags updated');
+      if (updates.subtasks) {
+        if (!task.subtasks || updates.subtasks.length > task.subtasks.length) {
+          activityTexts.push('Subtask added');
+        } else if (updates.subtasks.length < (task.subtasks?.length || 0)) {
+          activityTexts.push('Subtask removed');
+        }
+        const changed = updates.subtasks.filter((s, i) => {
+          const existing = task.subtasks?.[i];
+          return existing && (s.completed !== existing.completed);
+        });
+        if (changed.length > 0) {
+          changed.forEach(s => activityTexts.push(s.completed ? `Subtask "${s.text}" completed` : `Subtask "${s.text}" uncompleted`));
+        }
+      }
+      return { ...b, tasks: b.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) };
+    });
     activityTexts.forEach(text => logActivity(taskId, text));
   }, [persist, logActivity]);
 

@@ -158,6 +158,14 @@ interface AIGeneratedTask {
   checklistItems: string[];
 }
 
+const PRIORITY_GRADIENTS: Record<Priority, { bg: string; ring: string; label: string }> = {
+  urgent: { bg: 'linear-gradient(135deg, #dc2626, #ef4444)', ring: '#dc2626', label: 'Urgent' },
+  high: { bg: 'linear-gradient(135deg, #ea580c, #f97316)', ring: '#ea580c', label: 'High' },
+  medium: { bg: 'linear-gradient(135deg, #ca8a04, #eab308)', ring: '#ca8a04', label: 'Medium' },
+  low: { bg: 'linear-gradient(135deg, #2563eb, #3b82f6)', ring: '#2563eb', label: 'Low' },
+  none: { bg: '', ring: '', label: 'None' },
+};
+
 const PriorityBadge: React.FC<{
   task: Task;
   onUpdate: (priority: Priority) => void;
@@ -171,36 +179,41 @@ const PriorityBadge: React.FC<{
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, onToggle]);
-  const pConfig = PRIORITY_CONFIG[task.priority as keyof typeof PRIORITY_CONFIG];
+  const grad = PRIORITY_GRADIENTS[task.priority];
   return (
     <div className="relative flex-shrink-0" ref={ref}>
       {task.priority !== 'none' ? (
         <button
           onClick={e => { e.stopPropagation(); onToggle(); }}
-          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${pConfig?.className || 'bg-muted text-muted-foreground'}`}
+          style={{ background: grad.bg }}
+          className="text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 text-white shadow-sm"
         >
-          {pConfig?.label}
+          {grad.label}
         </button>
       ) : isOpen ? (
         <button
           onClick={e => { e.stopPropagation(); onToggle(); }}
-          className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 bg-muted text-muted-foreground`}
+          className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
         >
           Priority
         </button>
       ) : null}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-32 bg-card border border-border rounded-xl shadow-xl p-1 space-y-0.5">
-          {(['urgent', 'high', 'medium', 'low'] as const).map(p => {
-            const cfg = PRIORITY_CONFIG[p];
+        <div className="absolute top-full left-0 mt-1 z-50 w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5">
+          {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => {
+            const g = PRIORITY_GRADIENTS[p];
             return (
               <button
                 key={p}
                 onClick={e => { e.stopPropagation(); onUpdate(p); }}
-                className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
               >
-                <span className={`inline-block w-2 h-2 rounded-full mr-2 ${cfg.className}`} />
-                {cfg.label}
+                {p !== 'none' ? (
+                  <span className="inline-block w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ background: g.bg }} />
+                ) : (
+                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-border flex-shrink-0" />
+                )}
+                {g.label}
               </button>
             );
           })}
@@ -335,6 +348,11 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(false);
+  const [columnEditId, setColumnEditId] = useState<string | null>(null);
+  const [columnEditName, setColumnEditName] = useState('');
+  const [columnEditColor, setColumnEditColor] = useState('');
+  const [columnEditIcon, setColumnEditIcon] = useState('');
+  const COLUMN_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'];
   const [collapsedProjects, setCollapsedProjects] = useState<number[]>(() => {
     try { const v = localStorage.getItem('tasks-collapsed-projects'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
@@ -1440,18 +1458,27 @@ const Tasks: React.FC = () => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
-                          <button
-                            onClick={() => setCollapsedColumns(prev =>
-                              prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id]
-                            )}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 text-left hover:bg-muted/20 rounded-lg transition-all mb-1"
-                          >
-                            {isColumnCollapsed
-                              ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                              : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
-                            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80">{column.title}</span>
-                            <span className="text-[10px] text-muted-foreground/40 ml-1">({colTasks.length})</span>
-                          </button>
+                          <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
+                            <button
+                              onClick={() => setCollapsedColumns(prev =>
+                                prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id]
+                              )}
+                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all"
+                            >
+                              {isColumnCollapsed
+                                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
+                                : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+                              {column.icon && <span className="text-xs">{column.icon}</span>}
+                            </button>
+                            <button
+                              onClick={() => { setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
+                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
+                            >
+                              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80">{column.title}</span>
+                              <span className="text-[10px] text-muted-foreground/40">({colTasks.length})</span>
+                            </button>
+                          </div>
                           {!isColumnCollapsed && (
                             <Droppable droppableId={"col-" + column.id}>
                               {(dropProvided, snapshot) => (
@@ -1721,7 +1748,8 @@ const Tasks: React.FC = () => {
                       />
                       <button
                         onClick={() => setNewTagColor(randomTagColor())}
-                        className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
+                        className={`w-10 h-10 rounded-xl border-2 border-border/50 flex-shrink-0 transition-transform hover:scale-110 ${LABEL_COLORS[newTagColor]}`}
+                        title="Randomize color"
                       />
                       <button
                         onClick={() => {
@@ -1898,7 +1926,6 @@ const Tasks: React.FC = () => {
                 <div className="space-y-1">
                   {newChecklistItems.map((item, index) => (
                     <div key={`${item}-${index}`} className="flex items-center gap-2.5 text-sm bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                      <SquareToggle completed={false} onClick={e => e.preventDefault()} size="md" />
                       {editingDraftChecklistIndex === index ? (
                         <input
                           autoFocus
@@ -2169,6 +2196,40 @@ const Tasks: React.FC = () => {
         />
       )}
 
+      {columnEditId && (() => {
+        const col = board.columns.find(c => c.id === columnEditId);
+        if (!col) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setColumnEditId(null)}>
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-foreground">Edit Column</h3>
+                <button onClick={() => setColumnEditId(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Name</label>
+                <input value={columnEditName} onChange={e => setColumnEditName(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLUMN_COLORS.map(c => (
+                    <button key={c} onClick={() => setColumnEditColor(c)} className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${columnEditColor === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Icon</label>
+                <div className="flex gap-2">
+                  <input value={columnEditIcon} onChange={e => setColumnEditIcon(e.target.value)} placeholder="e.g. 📋 or 🚀" className="flex-1 bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm" />
+                  <button onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {aiBuilderOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setAiBuilderOpen(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
@@ -2302,6 +2363,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [activityCollapsed, setActivityCollapsed] = useState(false);
+  const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
+  const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
@@ -2504,10 +2567,12 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
-              <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => onUpdateTask(task.id, {
-                  projectId: v === 'my-tasks' ? null : Number(v),
-                  projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
-                })}>
+              <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => {
+                const newId = v === 'my-tasks' ? null : Number(v);
+                if (newId !== task.projectId) {
+                  setProjectChangeConfirm({ v, oldProjectId: task.projectId });
+                }
+              }}>
                 <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
@@ -2648,7 +2713,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                         {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
                       </button>
                       <button
-                        onClick={() => onDeleteTagEverywhere(label.id)}
+                        onClick={() => setTagDeleteConfirm(label.id)}
                         className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         title="Delete tag everywhere"
                       >
@@ -2685,6 +2750,19 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 >
                   Done
                 </button>
+              </div>
+            </div>
+          )}
+          {tagDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+              <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-sm font-bold text-foreground">Delete tag everywhere?</h3>
+                <p className="text-xs text-muted-foreground mt-2">This will remove this tag from all tasks. This action cannot be undone.</p>
+                <div className="flex justify-end gap-2 mt-4">
+                  <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                  <button onClick={() => { onDeleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
+                </div>
               </div>
             </div>
           )}
@@ -2998,6 +3076,30 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
         </div>
       </div>
+
+      {projectChangeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setProjectChangeConfirm(null)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+            <p className="text-xs text-muted-foreground mt-2">Changing the project will move this task. Do you want to continue?</p>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setProjectChangeConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={() => {
+                const { v } = projectChangeConfirm;
+                onUpdateTask(task.id, {
+                  projectId: v === 'my-tasks' ? null : Number(v),
+                  projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
+                });
+                if (v === 'my-tasks') {
+                  onUpdateTask(task.id, { columnId: boardColumns[0]?.id || task.columnId });
+                }
+                setProjectChangeConfirm(null);
+              }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
