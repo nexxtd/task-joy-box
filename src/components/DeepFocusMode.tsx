@@ -389,7 +389,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const addSubtask = useCallback(() => {
     if (!selectedTask || !newSubtaskText.trim()) return;
-    const dur = parseInt(newSubtaskDuration, 10) || 0;
+    const dur = newSubtaskDuration || 0;
     const newSub: Subtask = {
       id: crypto.randomUUID(),
       text: newSubtaskText.trim(),
@@ -400,7 +400,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       subtasks: [...(selectedTask.subtasks || []), newSub],
     });
     setNewSubtaskText('');
-    setNewSubtaskDuration('10');
+    setNewSubtaskDuration(10);
   }, [newSubtaskDuration, newSubtaskText, selectedTask, updateTask]);
 
   const taskChecklists = selectedTask?.checklists ?? [];
