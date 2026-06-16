@@ -158,12 +158,12 @@ interface AIGeneratedTask {
   checklistItems: string[];
 }
 
-const PRIORITY_GRADIENTS: Record<Priority, { bg: string; ring: string; label: string }> = {
-  urgent: { bg: 'linear-gradient(135deg, #dc2626, #ef4444)', ring: '#dc2626', label: 'Urgent' },
-  high: { bg: 'linear-gradient(135deg, #ea580c, #f97316)', ring: '#ea580c', label: 'High' },
-  medium: { bg: 'linear-gradient(135deg, #ca8a04, #eab308)', ring: '#ca8a04', label: 'Medium' },
-  low: { bg: 'linear-gradient(135deg, #2563eb, #3b82f6)', ring: '#2563eb', label: 'Low' },
-  none: { bg: '', ring: '', label: 'None' },
+const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
+  urgent: { bg: '#dc2626', label: 'Urgent' },
+  high: { bg: '#ea580c', label: 'High' },
+  medium: { bg: '#ca8a04', label: 'Medium' },
+  low: { bg: '#2563eb', label: 'Low' },
+  none: { bg: '#9ca3af', label: 'None' },
 };
 
 const PriorityBadge: React.FC<{
@@ -179,16 +179,16 @@ const PriorityBadge: React.FC<{
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isOpen, onToggle]);
-  const grad = PRIORITY_GRADIENTS[task.priority];
+  const pc = PRIORITY_COLORS[task.priority];
   return (
     <div className="relative flex-shrink-0" ref={ref}>
       {task.priority !== 'none' ? (
         <button
           onClick={e => { e.stopPropagation(); onToggle(); }}
-          style={{ background: grad.bg }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 text-white shadow-sm"
+          style={{ backgroundColor: pc?.bg }}
+          className="text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 text-white"
         >
-          {grad.label}
+          {pc?.label}
         </button>
       ) : isOpen ? (
         <button
@@ -201,19 +201,15 @@ const PriorityBadge: React.FC<{
       {isOpen && (
         <div className="absolute top-full left-0 mt-1 z-50 w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5">
           {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => {
-            const g = PRIORITY_GRADIENTS[p];
+            const c = PRIORITY_COLORS[p];
             return (
               <button
                 key={p}
                 onClick={e => { e.stopPropagation(); onUpdate(p); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
               >
-                {p !== 'none' ? (
-                  <span className="inline-block w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ background: g.bg }} />
-                ) : (
-                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-border flex-shrink-0" />
-                )}
-                {g.label}
+                <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.bg }} />
+                {c.label}
               </button>
             );
           })}
@@ -2771,7 +2767,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+            <h3 className="text-xs font-semibold uppercase text-muted-foreground">Sub-tasks</h3>
             {taskDuration > 0 && (
               <span className={`text-xs font-medium ${
                 subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
@@ -2858,7 +2854,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground">Checklist</h3>
           {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
           {checklistLists.length > 0 && (
             <div className="space-y-1.5">
