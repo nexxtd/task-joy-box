@@ -1436,10 +1436,10 @@ const Tasks: React.FC = () => {
           )}
 
           {/* Project sections */}
-          {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }) => {
+          {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }, idx) => {
             const isProjectCollapsed = collapsedProjects.includes(project.id);
             return (
-              <div key={project.id} className="mb-3">
+              <div key={project.id} className={`mb-3 ${idx > 0 ? 'border-t border-border/40 pt-4' : ''}`}>
                 <button
                   onClick={() => setCollapsedProjects(prev =>
                     prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
@@ -2759,7 +2759,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
               <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
                 <h3 className="text-sm font-bold text-foreground">Delete tag everywhere?</h3>
-                <p className="text-xs text-muted-foreground mt-2">This will remove this tag from all tasks. This action cannot be undone.</p>
+                <p className="text-xs text-muted-foreground mt-2">This will remove this tag from the whole app. This action cannot be undone.</p>
                 <div className="flex justify-end gap-2 mt-4">
                   <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
                   <button onClick={() => { onDeleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
@@ -3088,12 +3088,16 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               <button onClick={() => setProjectChangeConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button onClick={() => {
                 const { v } = projectChangeConfirm;
+                const newProjectId = v === 'my-tasks' ? null : Number(v);
                 onUpdateTask(task.id, {
-                  projectId: v === 'my-tasks' ? null : Number(v),
+                  projectId: newProjectId,
                   projectName: v === 'my-tasks' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
                 });
                 if (v === 'my-tasks') {
                   onUpdateTask(task.id, { columnId: boardColumns[0]?.id || task.columnId });
+                } else if (newProjectId && (!task.projectId || task.projectId !== newProjectId)) {
+                  const firstCol = boardColumns.filter(c => c.projectId === newProjectId).sort((a, b) => a.order - b.order)[0];
+                  if (firstCol) onUpdateTask(task.id, { columnId: firstCol.id });
                 }
                 setProjectChangeConfirm(null);
               }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>

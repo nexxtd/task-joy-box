@@ -485,14 +485,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     document.dispatchEvent(new CustomEvent('closeDeepFocus'));
   }, [stopSound]);
 
-  const handleHelpClick = () => {
-    stopSound();
-    document.dispatchEvent(new CustomEvent('closeDeepFocus'));
-    setTimeout(() => {
-      window.location.hash = '#/support';
-    }, 50);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
@@ -533,9 +525,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
         onClick={e => e.stopPropagation()}
       >
         <button
-          onClick={handleHelpClick}
+          onClick={() => { stopSound(); document.dispatchEvent(new CustomEvent('closeDeepFocus')); setTimeout(() => { window.location.hash = '#/deep-focus/resources'; }, 50); }}
           className="absolute bottom-4 left-4 p-2.5 rounded-full transition-all z-10 text-muted-foreground hover:text-foreground hover:bg-muted/80 bg-muted/40 border border-border/50"
-          aria-label="Help"
+          aria-label="Deep Focus Resources"
         >
           <LifeBuoy className="w-4 h-4" />
         </button>
@@ -779,7 +771,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     placeholder="Checklist item"
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                   />
-                  <button onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg disabled:opacity-40">Add</button>
+                  <button onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg disabled:opacity-40">Add</button>
                 </div>
               </div>
             </div>
