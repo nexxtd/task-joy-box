@@ -295,6 +295,17 @@ export async function initDatabase() {
       `);
     }
 
+    // Drop old FK constraints if they still reference the legacy tag tables
+    for (const { juncTable } of [
+      { juncTable: 'note_tag_assignments' },
+      { juncTable: 'goal_tag_assignments' },
+      { juncTable: 'habit_tag_assignments' },
+    ]) {
+      await pool.query(`
+        ALTER TABLE ${juncTable} DROP CONSTRAINT IF EXISTS ${juncTable}_tag_id_fkey;
+      `).catch(() => {});
+    }
+
     // Update junction table FK constraints to point to tags.id
     // (old tables' tag_id pointed to note_tags/goal_tags/habit_tags — we migrate IDs)
     for (const { juncTable, oldTagTable } of [
@@ -309,6 +320,13 @@ export async function initDatabase() {
         INNER JOIN tags t ON t.user_id = nt.user_id AND lower(t.name) = lower(nt.name)
         WHERE nta.tag_id = nt.id;
       `);
+
+      // Re-add FK constraint pointing to the unified tags table
+      await pool.query(`
+        ALTER TABLE ${juncTable}
+        ADD CONSTRAINT ${juncTable}_tag_id_fkey
+        FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE;
+      `).catch(() => {});
     }
 
     // Create junction tables if not exist (for features that may not have them yet)
