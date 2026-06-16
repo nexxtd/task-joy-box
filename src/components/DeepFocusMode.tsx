@@ -191,7 +191,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [todayStats, setTodayStats] = useState<TodayStats>({ sessions: 0, minutes: 0 });
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState('10');
+  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');

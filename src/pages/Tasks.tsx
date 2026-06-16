@@ -289,6 +289,7 @@ const Tasks: React.FC = () => {
     addChecklistItem,
     deleteChecklistItem,
     deleteTask,
+    updateColumn,
   } = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
