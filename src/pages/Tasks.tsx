@@ -186,7 +186,7 @@ const PriorityBadge: React.FC<{
         <button
           onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{ backgroundColor: pc?.bg }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 text-white"
+          className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white"
         >
           {pc?.label}
         </button>
@@ -1114,7 +1114,7 @@ const Tasks: React.FC = () => {
 
               return (
                 <div>
-                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Sub-tasks</h4>
+                  <h4 className="text-sm font-semibold text-foreground mb-2">Sub-tasks</h4>
                   <div className="space-y-1.5">
                     {subtasks.map(subtask => {
                       const completed = Boolean(subtask.completed);
@@ -1156,7 +1156,7 @@ const Tasks: React.FC = () => {
             })()}
             {task.checklists.length > 0 && (
               <div>
-                <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Checklist</h4>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Checklist</h4>
                 <div className="space-y-1.5">
                   {task.checklists.map(checklist => checklist.items.map(item => (
                     <div key={item.id} className="flex items-center gap-2.5 text-sm">
@@ -2767,7 +2767,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase text-muted-foreground">Sub-tasks</h3>
+            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
             {taskDuration > 0 && (
               <span className={`text-xs font-medium ${
                 subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
@@ -2854,7 +2854,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase text-muted-foreground">Checklist</h3>
+          <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
           {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
           {checklistLists.length > 0 && (
             <div className="space-y-1.5">
@@ -3058,7 +3058,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         <div className="flex items-center justify-between pt-2 border-t border-border">
           <div className="flex items-center gap-2">
             {task.priority !== 'none' && (
-              <span className={`${PRIORITY_CONFIG[task.priority as Exclude<typeof task.priority, 'none'>]?.className} text-[10px] font-bold px-2 py-0.5 rounded text-primary-foreground`}>
+              <span className={`${PRIORITY_CONFIG[task.priority as Exclude<typeof task.priority, 'none'>]?.className} text-[10px] font-medium px-2 py-0.5 rounded-full text-primary-foreground`}>
                 {PRIORITY_CONFIG[task.priority as Exclude<typeof task.priority, 'none'>]?.label}
               </span>
             )}
