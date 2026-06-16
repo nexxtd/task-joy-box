@@ -1687,7 +1687,7 @@ const Tasks: React.FC = () => {
                 )}
           </div>
 
-          <div>
+          <div className="relative">
             <label className="text-xs font-semibold uppercase text-muted-foreground">Tags</label>
             <div className="mt-1">
               {newTaskLabels.length > 0 && (
@@ -1712,7 +1712,7 @@ const Tasks: React.FC = () => {
               {newTagPickerOpen && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                  <div className="absolute left-0 mt-1.5 w-80 max-w-[90vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                  <div className="absolute right-0 mt-1.5 w-80 max-w-[90vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
                     <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
                       {allTags.length === 0 && (
                         <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
@@ -1756,6 +1756,7 @@ const Tasks: React.FC = () => {
                           setNewTaskLabels(prev => [...prev, newLabel]);
                           setNewTagName('');
                           setNewTagColor(randomTagColor());
+                          setNewTagPickerOpen(false);
                         }}
                         disabled={!newTagName.trim()}
                         className="px-4 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-xl disabled:opacity-40"
@@ -1849,6 +1850,8 @@ const Tasks: React.FC = () => {
                             className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                             value={editingDraftSubtaskText}
                             onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                            onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
+                            onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
                           />
                           <input
                             type="number"
@@ -1856,15 +1859,6 @@ const Tasks: React.FC = () => {
                             value={editingDraftSubtaskDuration}
                             onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
                           />
-                          <button
-                            onClick={() => {
-                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st));
-                              setEditingDraftSubtaskId(null);
-                            }}
-                            className="text-xs text-primary font-bold"
-                          >
-                            Save
-                          </button>
                         </>
                       ) : (
                         <>
