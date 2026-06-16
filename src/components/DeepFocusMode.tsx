@@ -675,7 +675,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
               <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
                 {taskSubtasks.map(sub => (
-                  <div key={sub.id} className="grid grid-cols-[auto_1fr_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                  <div key={sub.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
                     <button
                       onClick={() => toggleSubtask(sub.id)}
                       className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
@@ -687,51 +687,46 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       {sub.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
                     </button>
                     {editingSubtaskId === sub.id ? (
-                      <>
-                        <input
-                          autoFocus
-                          value={editingSubtaskText}
-                          onChange={e => setEditingSubtaskText(e.target.value)}
-                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                        />
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={editingSubtaskDuration}
-                            onChange={e => setEditingSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                            className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                          />
-                          <button onClick={() => saveSubtaskEdit(sub.id)} className="text-xs text-primary font-bold">
-                            Save
-                          </button>
-                        </div>
-                      </>
+                      <input
+                        autoFocus
+                        value={editingSubtaskText}
+                        onChange={e => setEditingSubtaskText(e.target.value)}
+                        className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                      />
                     ) : (
-                      <>
-                        <span
-                          onClick={() => startEditing(sub)}
-                          className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                        >
-                          {sub.text}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={sub.durationMinutes || 0}
-                            onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
-                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          />
-                          <span className="text-[10px] text-muted-foreground">min</span>
-                          <button
-                            onClick={() => deleteSubtask(sub.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </>
+                      <span
+                        onClick={() => startEditing(sub)}
+                        className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                      >
+                        {sub.text}
+                      </span>
                     )}
+                    <input
+                      type="number"
+                      min={0}
+                      value={editingSubtaskId === sub.id ? editingSubtaskDuration : (sub.durationMinutes || 0)}
+                      onChange={e => {
+                        if (editingSubtaskId === sub.id) {
+                          setEditingSubtaskDuration(Math.max(0, Number(e.target.value) || 0));
+                        } else {
+                          updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0));
+                        }
+                      }}
+                      className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right"
+                    />
+                    <div className="flex items-center gap-1">
+                      {editingSubtaskId === sub.id && (
+                        <button onClick={() => saveSubtaskEdit(sub.id)} className="text-xs text-primary font-bold">
+                          Save
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteSubtask(sub.id)}
+                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {taskSubtasks.length === 0 && (
@@ -739,7 +734,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2">
                 <input
                   type="text"
                   value={newSubtaskText}
@@ -775,15 +770,19 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Checklist</span>
                 </div>
 
-                <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
-                  {focusChecklistItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-all hover:bg-muted/30 group">
-                      <input
-                        type="checkbox"
-                        checked={item.completed}
-                        onChange={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
-                        className="w-4 h-4 rounded border-border accent-primary"
-                      />
+              <div className="space-y-1.5 mb-3 max-h-44 overflow-y-auto">
+                {focusChecklistItems.map(item => (
+                    <div key={item.id} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-border/50 bg-muted/20 group">
+                      <button
+                        onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                        className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${
+                          item.completed
+                            ? 'bg-green-500 border-green-500'
+                            : 'border-muted-foreground/40 hover:border-green-400'
+                        }`}
+                      >
+                        {item.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
+                      </button>
                       <span className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                         {item.text}
                       </span>
@@ -813,12 +812,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       }
                     }}
                     placeholder="Checklist item"
-                    className="flex-1 px-3 py-1.5 bg-muted/50 border border-border text-foreground rounded-lg text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                   />
                   <button
                     onClick={handleAddChecklistItem}
                     disabled={!newChecklistText.trim()}
-                    className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-all"
+                    className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg disabled:opacity-40"
                   >
                     Add
                   </button>
