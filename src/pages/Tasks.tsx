@@ -1399,7 +1399,7 @@ const Tasks: React.FC = () => {
 
           {/* MY TASKS section */}
           {myTasksGroup.length > 0 && (
-            <div className="mb-3">
+            <div className="mb-3 pb-3 border-b border-border/60">
               <button
                 onClick={() => setMyTasksCollapsed(prev => !prev)}
                 className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
@@ -1435,7 +1435,7 @@ const Tasks: React.FC = () => {
           {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }, idx) => {
             const isProjectCollapsed = collapsedProjects.includes(project.id);
             return (
-              <div key={project.id} className={`mb-3 ${idx > 0 ? 'border-t border-border/40 pt-4' : ''}`}>
+              <div key={project.id} className={`mb-3 ${idx > 0 ? 'border-t border-border/60 pt-4' : ''}`}>
                 <button
                   onClick={() => setCollapsedProjects(prev =>
                     prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
@@ -1451,10 +1451,10 @@ const Tasks: React.FC = () => {
                 </button>
                 {!isProjectCollapsed && (
                   <div className="pl-4 space-y-2">
-                    {columnGroups.map(({ column, tasks: colTasks }) => {
+                    {columnGroups.map(({ column, tasks: colTasks }, colIdx) => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
-                        <div key={column.id}>
+                        <div key={column.id} className={colIdx > 0 ? 'border-t border-border/60 pt-3 mt-2' : ''}>
                           <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
