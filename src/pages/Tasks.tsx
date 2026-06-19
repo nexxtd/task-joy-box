@@ -338,6 +338,7 @@ const Tasks: React.FC = () => {
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
+  const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null } | null>(null);
   const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
   const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
   const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
@@ -527,11 +528,20 @@ const Tasks: React.FC = () => {
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
     const dstProject = getProjectIdForDroppable(result.destination.droppableId);
     if (srcProject === null || dstProject === null) return;
-    if (srcProject !== dstProject) return;
 
     const srcId = result.source.droppableId;
     const dstId = result.destination.droppableId;
     const isCrossColumn = srcId !== dstId;
+    const isCrossProject = srcProject !== dstProject;
+
+    if (isCrossProject) {
+      const srcTasks = getTasksForDroppable(srcId);
+      if (!srcTasks) return;
+      const movingTaskId = srcTasks[result.source.index]?.id;
+      if (!movingTaskId) return;
+      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject });
+      return;
+    }
 
     if (isCrossColumn) {
       const srcTasks = getTasksForDroppable(srcId);
@@ -1454,7 +1464,7 @@ const Tasks: React.FC = () => {
                     {columnGroups.map(({ column, tasks: colTasks }, colIdx) => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
-                        <div key={column.id} className={colIdx > 0 ? 'border-t border-border/60 pt-3 mt-2' : ''}>
+                        <div key={column.id} className={colIdx > 0 ? 'border-t border-border/20 pt-3 mt-2' : ''}>
                           <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
@@ -1615,7 +1625,7 @@ const Tasks: React.FC = () => {
 
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Task title</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Task title</label>
                 <input
                   autoFocus
                   value={newTaskTitle}
@@ -1626,7 +1636,7 @@ const Tasks: React.FC = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
                   <Select value={newTaskPriority} onValueChange={v => setNewTaskPriority(v as Priority)}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select priority" />
@@ -1641,7 +1651,7 @@ const Tasks: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
                   <input
                     type="number"
                     min={0}
@@ -1651,7 +1661,7 @@ const Tasks: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
                   <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v)); setNewTaskColumnId(''); }}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select project" />
@@ -1666,7 +1676,7 @@ const Tasks: React.FC = () => {
                 </div>
                 {newTaskProjectId !== '' && (
                   <div>
-                    <label className="text-xs font-semibold uppercase text-muted-foreground">Column</label>
+                    <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
                     <Select value={newTaskColumnId} onValueChange={v => setNewTaskColumnId(v)}>
                       <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                         <SelectValue placeholder="Select column" />
@@ -1688,7 +1698,7 @@ const Tasks: React.FC = () => {
           </div>
 
           <div className="relative">
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Tags</label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Tags</label>
             <div className="mt-1">
               {newTaskLabels.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
@@ -1773,7 +1783,7 @@ const Tasks: React.FC = () => {
           {/* Start Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Date</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Start Date</label>
               <input
                 type="date"
                 value={newTaskStartDate}
@@ -1782,7 +1792,7 @@ const Tasks: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Time</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Start Time</label>
               <input
                 type="time"
                 value={newTaskStartTime}
@@ -1795,7 +1805,7 @@ const Tasks: React.FC = () => {
           {/* Due Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Date</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Due Date</label>
               <input
                 type="date"
                 value={newTaskDueDate}
@@ -1804,7 +1814,7 @@ const Tasks: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Time</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Due Time</label>
               <input
                 type="time"
                 value={newTaskDueTime}
@@ -1815,7 +1825,7 @@ const Tasks: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
                 <textarea
                   value={newTaskDescription}
                   onChange={e => setNewTaskDescription(e.target.value)}
@@ -1826,7 +1836,7 @@ const Tasks: React.FC = () => {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground">Sub-tasks</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Sub-tasks</label>
                   {newTaskDuration > 0 && (
                     <span className={`text-[11px] font-medium ${
                       newSubtaskRemaining > 0 ? 'text-muted-foreground' :
@@ -1913,7 +1923,7 @@ const Tasks: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Checklist</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Checklist</label>
                 <div className="space-y-1">
                   {newChecklistItems.map((item, index) => (
                     <div key={`${item}-${index}`} className="flex items-center gap-2.5 text-sm bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
@@ -1951,7 +1961,7 @@ const Tasks: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Attachments</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Attachments</label>
                 {!isPremium ? (
                   <div className="border border-dashed border-border rounded-xl">
                     <PremiumGate
@@ -2531,7 +2541,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
             <Select value={task.priority} onValueChange={v => onUpdateTask(task.id, { priority: v as Priority })}>
               <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                 <SelectValue placeholder="Select priority" />
@@ -2546,7 +2556,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </Select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
             <input
               type="number"
               min={0}
@@ -2557,7 +2567,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
               <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => {
                 const newId = v === 'my-tasks' ? null : Number(v);
                 if (newId !== task.projectId) {
@@ -2577,7 +2587,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
             {task.projectId && (
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Column</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
                 <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
                   <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="Column" />
@@ -2650,7 +2660,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
+          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
           <textarea
             value={task.description}
             onChange={e => onUpdateTask(task.id, { description: e.target.value })}
@@ -3095,6 +3105,74 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
         </div>
       )}
+
+      {pendingDragMove && (() => {
+        const applyDragMove = () => {
+          const { taskId, srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject } = pendingDragMove;
+          const getTasks = (id: string): Task[] | null => {
+            if (id === 'my-tasks') return myTasksGroup;
+            if (id.startsWith('col-')) {
+              const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
+              return colGroup?.tasks ?? null;
+            }
+            if (id.startsWith('uncat-')) {
+              const pg = projectTaskGroups.find(p => p.project.id === Number(id.slice(6)));
+              return pg?.uncategorized ?? null;
+            }
+            return null;
+          };
+          const srcTasks = getTasks(srcDroppableId);
+          const dstTasks = getTasks(dstDroppableId);
+          if (!srcTasks || !dstTasks) { setPendingDragMove(null); return; }
+
+          const newColumnId = dstDroppableId.startsWith('col-') ? dstDroppableId.slice(4) : undefined;
+          const updateFields: Record<string, any> = {};
+          if (newColumnId) updateFields.columnId = newColumnId;
+          if (dstProject === 'my-tasks') {
+            updateFields.projectId = null;
+          } else if (typeof dstProject === 'number') {
+            updateFields.projectId = dstProject;
+          }
+          if (Object.keys(updateFields).length > 0) updateTask(taskId, updateFields);
+
+          const srcIds = srcTasks.map(t => t.id);
+          const dstIds = dstTasks.map(t => t.id);
+          const [removed] = srcIds.splice(srcIndex, 1);
+          dstIds.splice(dstIndex, 0, removed);
+          srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+          dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+
+          const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+          const srcSet = new Set(srcTasks.map(t => t.id));
+          const dstSet = new Set(dstTasks.map(t => t.id));
+          const resultIds: string[] = [];
+          let srcInserted = false;
+          let dstInserted = false;
+          for (const id of base) {
+            if (srcSet.has(id) && !srcInserted) { resultIds.push(...srcIds); srcInserted = true; }
+            else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+            else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+          }
+          if (!srcInserted) resultIds.push(...srcIds);
+          if (!dstInserted) resultIds.push(...dstIds);
+          setOrderedActiveIds(resultIds);
+          setPendingDragMove(null);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+              <p className="text-xs text-muted-foreground mt-2">Changing the project will move this task. Do you want to continue?</p>
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button onClick={applyDragMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

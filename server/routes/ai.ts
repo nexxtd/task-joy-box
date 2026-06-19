@@ -174,7 +174,7 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
         messages: [{ role: 'user', content: prompt }],
         model: AI_MODEL,
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 2000,
       });
 
       console.log('OpenRouter response:', JSON.stringify({ choices: completion.choices?.length, model: completion.model, id: completion.id }));
@@ -1290,6 +1290,8 @@ Return ONLY a valid JSON object with these exact fields:
   "title": "concise task title extracted or generated",
   "description": "summarized description from input",
   "priority": "urgent|high|medium|low|none (infer from urgency language)",
+  "startDate": "YYYY-MM-DD or null if no start date mentioned",
+  "startTime": "HH:MM (24h) or null if no start time mentioned",
   "dueDate": "YYYY-MM-DD or null if no date mentioned",
   "dueTime": "HH:MM (24h) or null if no time mentioned",
   "duration": "estimated duration in minutes as integer or null",
