@@ -156,6 +156,7 @@ interface AIGeneratedTask {
   status: TaskStatus;
   subtasks: Array<{ text: string; durationMinutes: number }>;
   checklistItems: string[];
+  tags: string[];
 }
 
 const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
@@ -906,6 +907,7 @@ const Tasks: React.FC = () => {
         body: JSON.stringify({
           input: aiBuilderInput,
           columns: board.columns.map(c => ({ id: c.id, title: c.title })),
+          tags: allTags.map(t => t.name),
         }),
       });
       if (!res.ok) {
@@ -939,6 +941,13 @@ const Tasks: React.FC = () => {
         }))
       );
       setNewChecklistItems((data.checklistItems || []).map(text => ({ id: crypto.randomUUID(), text })));
+
+      if (data.tags && data.tags.length > 0) {
+        const matched = data.tags.map(tagName =>
+          allTags.find(t => t.name.toLowerCase() === tagName.toLowerCase())
+        ).filter(Boolean) as Label[];
+        setNewTaskLabels(matched);
+      }
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
