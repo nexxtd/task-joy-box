@@ -819,7 +819,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     placeholder="Checklist item"
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                   />
-                  <button onClick={handleAddChecklistItem} disabled={!newChecklistText.trim()} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg disabled:opacity-40">Add</button>
+                  <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
                 </div>
               </div>
             </div>
