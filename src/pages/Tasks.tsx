@@ -2008,7 +2008,7 @@ const Tasks: React.FC = () => {
                     placeholder="min"
                     className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
                   />
-                  <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                  <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
                 </div>
               </div>
 
@@ -2060,7 +2060,7 @@ const Tasks: React.FC = () => {
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     placeholder="Checklist item"
                   />
-                  <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                  <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
                 </div>
               </div>
 
@@ -3030,7 +3030,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               placeholder="min"
               className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
             />
-            <button onClick={addSubtask} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+            <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
           </div>
         </div>
 
@@ -3104,7 +3104,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               placeholder="Checklist item"
               className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
             />
-            <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+            <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
           </div>
         </div>
 
