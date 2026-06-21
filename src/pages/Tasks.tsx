@@ -2414,6 +2414,41 @@ const Tasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      {pendingDragMove && (() => {
+        const { srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject, moveType } = pendingDragMove;
+        const [dontAsk, setDontAsk] = React.useState(false);
+
+        const confirmMove = () => {
+          if (dontAsk) {
+            localStorage.setItem(`tasks-drag-confirm-${moveType}`, 'true');
+          }
+          applyDragMoveDirect(srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject);
+          setPendingDragMove(null);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+              <p className="text-xs text-muted-foreground mt-2">
+                {moveType === 'project'
+                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
+                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
+              </p>
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
+                <span className="text-xs text-muted-foreground">Don't ask me again</span>
+              </label>
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -3264,40 +3299,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
       )}
 
-      {pendingDragMove && (() => {
-        const { srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject, moveType } = pendingDragMove;
-        const [dontAsk, setDontAsk] = React.useState(false);
-
-        const confirmMove = () => {
-          if (dontAsk) {
-            localStorage.setItem(`tasks-drag-confirm-${moveType}`, 'true');
-          }
-          applyDragMoveDirect(srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject);
-          setPendingDragMove(null);
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
-            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
-              <p className="text-xs text-muted-foreground mt-2">
-                {moveType === 'project'
-                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
-                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
-              </p>
-              <label className="flex items-center gap-2 mt-3 cursor-pointer">
-                <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
-                <span className="text-xs text-muted-foreground">Don't ask me again</span>
-              </label>
-              <div className="flex justify-end gap-2 mt-4">
-                <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 };
