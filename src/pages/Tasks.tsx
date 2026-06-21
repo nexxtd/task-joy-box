@@ -370,6 +370,10 @@ const Tasks: React.FC = () => {
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
+  const [dateEditTaskId, setDateEditTaskId] = useState<string | null>(null);
+  const [dateEditField, setDateEditField] = useState<'start' | 'due' | null>(null);
+  const [tagPopupTaskId, setTagPopupTaskId] = useState<string | null>(null);
+  const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
 
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<AnalysisTab>('overview');
@@ -1105,21 +1109,39 @@ const Tasks: React.FC = () => {
                   {taskDurFmt}
                 </button>
               )}
-              {task.dueDate && (() => {
-                const warning = getDueTimeWarning(task);
-                return (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                    warning === 'overdue'
-                      ? 'bg-destructive/10 text-destructive'
-                      : warning === 'imminent' || warning === 'soon'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'bg-muted text-muted-foreground'
-                  }`}>
-                    <Calendar className="w-2.5 h-2.5" />
-                    {formatDate(task.dueDate)}{task.dueTime ? ` ${task.dueTime}` : ''}
-                  </span>
-                );
-              })()}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                  setDateEditField(prev => prev === 'start' ? null : 'start');
+                }}
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+              </button>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                  setDateEditField(prev => prev === 'due' ? null : 'due');
+                }}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  task.dueDate
+                    ? (() => {
+                        const warning = getDueTimeWarning(task);
+                        return warning === 'overdue'
+                          ? 'bg-destructive/10 text-destructive'
+                          : warning === 'imminent' || warning === 'soon'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground';
+                      })()
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+              </button>
               {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
@@ -1133,18 +1155,30 @@ const Tasks: React.FC = () => {
                   </span>
                 );
               })()}
+              {taskTags.length === 0 && task.labels.length === 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground"
+                >
+                  Tags
+                </button>
+              )}
               {taskTags.map(label => (
-                <span
+                <button
                   key={label.id}
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                   className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
-                </span>
+                </button>
               ))}
               {task.labels.length > taskTags.length && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                <button
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
                   +{task.labels.length - taskTags.length}
-                </span>
+                </button>
               )}
             </div>
           </div>
@@ -1192,74 +1226,57 @@ const Tasks: React.FC = () => {
             </div>
           </div>
         )}
+        {dateEditTaskId === task.id && dateEditField && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={dateEditField === 'start' ? (task.startDate || '') : (task.dueDate || '')}
+                  onChange={e => {
+                    const val = e.target.value || undefined;
+                    updateTask(task.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
+                  }}
+                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[140px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={dateEditField === 'start' ? (task.startTime || '') : (task.dueTime || '')}
+                  onChange={e => {
+                    const val = e.target.value || undefined;
+                    updateTask(task.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
+                  }}
+                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              {((dateEditField === 'start' && task.startDate) || (dateEditField === 'due' && task.dueDate)) && (
+                <button
+                  onClick={() => {
+                    updateTask(task.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
+                    setDateEditTaskId(null);
+                    setDateEditField(null);
+                  }}
+                  className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {isExpanded && !isDeleteMode && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
-              <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
-            </div>
-            {(() => {
-              const subtasks: Array<{ id: string; text?: string; completed?: boolean; durationMinutes?: number }> = Array.isArray(task.subtasks)
-                ? (task.subtasks as any)
-                : [];
-
-              if (subtasks.length === 0) return null;
-
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground mb-2">Sub-tasks</h4>
-                  <div className="space-y-1.5">
-                    {subtasks.map(subtask => {
-                      const completed = Boolean(subtask.completed);
-                      const durationMinutes = Number(subtask.durationMinutes) || 0;
-                      const text = String(subtask.text ?? '');
-
-                      return (
-                        <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
-                          <CircleToggle
-                            completed={completed}
-                            onClick={e => {
-                              e.stopPropagation();
-
-                              const nextSubtasks = subtasks.map(st => {
-                                const stCompleted = Boolean(st.completed);
-                                return st.id === subtask.id
-                                  ? { ...st, completed: !stCompleted }
-                                  : st;
-                              });
-
-                              updateTask(task.id, { subtasks: nextSubtasks as any });
-                            }}
-                            size="sm"
-                          />
-
-                          <span className={completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>
-                            {text}
-                          </span>
-
-                          {durationMinutes > 0 && (
-                            <span className="text-xs text-muted-foreground ml-auto">{durationMinutes} min</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-            {task.checklists.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">Checklist</h4>
-                <div className="space-y-1.5">
-                  {task.checklists.map(checklist => checklist.items.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 text-sm">
-                      <SquareToggle completed={item.completed} onClick={e => { e.stopPropagation(); toggleChecklistItem(task.id, checklist.id, item.id); }} size="md" />
-                      <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
-                    </div>
-                  )))}
-                </div>
-              </div>
-            )}
+            <TaskDropdownExpanded
+              task={task}
+              onUpdateTask={updateTask}
+              onToggleChecklistItem={toggleChecklistItem}
+              onAddChecklistItem={addChecklistItem}
+              onDeleteChecklistItem={deleteChecklistItem}
+            />
             <div className="flex justify-end pt-1">
               <button
                 onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
@@ -2460,6 +2477,94 @@ const Tasks: React.FC = () => {
         );
       })()}
 
+      {tagPopupTaskId && (() => {
+        const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
+        if (!popupTask) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-muted-foreground" />
+                Tags
+              </h3>
+              <div className="max-h-44 overflow-y-auto space-y-1 pr-1 mb-3">
+                {allTags.map(label => {
+                  const active = popupTask.labels.some(item => item.id === label.id);
+                  return (
+                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                      <button
+                        onClick={() => toggleTaskTag(popupTask.id, label)}
+                        className="flex flex-1 items-center gap-2 text-left"
+                      >
+                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
+                        <span className="text-sm text-foreground">{label.name}</span>
+                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                      </button>
+                      <button
+                        onClick={() => setTagDeleteConfirm(label.id)}
+                        className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete tag everywhere"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2 mb-3">
+                <input
+                  value={newTagName}
+                  onChange={e => setNewTagName(e.target.value)}
+                  placeholder="Create tag"
+                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <button
+                  onClick={() => setNewTagColor(randomTagColor())}
+                  className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
+                  title="Random color"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const name = normalizeTagName(newTagName);
+                    if (!name) return;
+                    const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color: newTagColor };
+                    updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+                    setNewTagName('');
+                    setNewTagColor(randomTagColor());
+                  }}
+                  disabled={!newTagName.trim()}
+                  className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                >
+                  Add tag
+                </button>
+                <button
+                  onClick={() => setTagPopupTaskId(null)}
+                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {tagDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-foreground">Delete tag everywhere?</h3>
+            <p className="text-xs text-muted-foreground mt-2">This will remove this tag from the whole app. This action cannot be undone.</p>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={() => { deleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); setTagPopupTaskId(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -2482,6 +2587,312 @@ interface TaskFullViewProps {
   isPro: boolean;
   onJumpToTask?: (taskId: string) => void;
 }
+
+const TaskDropdownExpanded: React.FC<{
+  task: Task;
+  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  onToggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
+  onAddChecklistItem: (taskId: string, checklistId: string, text: string) => void;
+  onDeleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
+}> = ({ task, onUpdateTask, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem }) => {
+  const [newSubtaskText, setNewSubtaskText] = useState('');
+  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [editingChecklistText, setEditingChecklistText] = useState('');
+
+  const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
+  const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
+  const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
+    ? task.subtasks
+    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
+  const primaryChecklist = checklistLists[0];
+  const taskDuration = Math.max(0, Number(task.duration) || 0);
+  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
+  const subtaskTimeRemaining = taskDuration - subtaskTotal;
+  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+
+  const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
+    const nextChecklists = legacySubtasksChecklist
+      ? task.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
+      : task.checklists;
+    onUpdateTask(task.id, { subtasks: nextSubtasks as any, checklists: nextChecklists });
+  };
+
+  const updateSubtask = (subtaskId: string, updates: Partial<Task['subtasks'][number]>) => {
+    persistSubtasks(effectiveSubtasks.map(st => st.id === subtaskId ? { ...st, ...updates } : st));
+  };
+
+  const addSubtask = () => {
+    if (!newSubtaskText.trim()) return;
+    persistSubtasks([
+      ...effectiveSubtasks,
+      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
+    ]);
+    setNewSubtaskText('');
+    setNewSubtaskDuration(10);
+  };
+
+  const removeSubtask = (subtaskId: string) => {
+    persistSubtasks(effectiveSubtasks.filter(st => st.id !== subtaskId));
+  };
+
+  const saveSubtaskEdit = (subtaskId: string) => {
+    const next = editingSubtaskText.trim();
+    if (next) updateSubtask(subtaskId, { text: next });
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
+  };
+
+  const addChecklistItemToTask = () => {
+    if (!newChecklistText.trim()) return;
+    if (!primaryChecklist) {
+      onUpdateTask(task.id, {
+        checklists: [...checklistLists, {
+          id: crypto.randomUUID(),
+          title: 'Checklist',
+          items: [{ id: crypto.randomUUID(), text: newChecklistText.trim(), completed: false }],
+        }],
+      });
+      setNewChecklistText('');
+      return;
+    }
+    onAddChecklistItem(task.id, primaryChecklist.id, newChecklistText.trim());
+    setNewChecklistText('');
+  };
+
+  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
+    const next = editingChecklistText.trim();
+    if (next) {
+      onUpdateTask(task.id, {
+        checklists: task.checklists.map(list =>
+          list.id !== checklistId ? list : {
+            ...list,
+            items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
+          }
+        ),
+      });
+    }
+    setEditingChecklistItemId(null);
+    setEditingChecklistText('');
+  };
+
+  const handleDropdownReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    if (result.source.droppableId === `dropdown-subtasks-${task.id}`) {
+      const items = Array.from(effectiveSubtasks);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      persistSubtasks(items);
+    } else if (result.source.droppableId.startsWith(`dropdown-checklist-${task.id}-`)) {
+      const checklistId = result.source.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
+      onUpdateTask(task.id, {
+        checklists: task.checklists.map(cl =>
+          cl.id === checklistId
+            ? { ...cl, items: (() => {
+                const items = Array.from(cl.items);
+                const [removed] = items.splice(result.source.index, 1);
+                items.splice(result.destination.index, 0, removed);
+                return items;
+              })() }
+            : cl
+        ),
+      });
+    }
+  }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
+        <textarea
+          value={task.description}
+          onChange={e => onUpdateTask(task.id, { description: e.target.value })}
+          rows={3}
+          className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+        />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+          {taskDuration > 0 && (
+            <span className={`text-xs font-medium ${
+              subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
+              subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+            }`}>
+              {subtaskTimeRemaining > 0
+                ? `${subtaskTimeRemaining} mins left`
+                : subtaskTimeRemaining < 0
+                ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
+                : '0 mins left ✓'}
+            </span>
+          )}
+        </div>
+
+        {allSubtasksDone && (
+          <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+            All sub-tasks are done ✓
+          </div>
+        )}
+
+        <DragDropContext onDragEnd={handleDropdownReorder}>
+          <Droppable droppableId={`dropdown-subtasks-${task.id}`}>
+            {(provided) => (
+              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                {effectiveSubtasks.map((subtask, index) => (
+                  <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+                        <CircleToggle
+                          completed={subtask.completed}
+                          onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                          size="sm"
+                        />
+                        {editingSubtaskId === subtask.id ? (
+                          <input
+                            autoFocus
+                            className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                            value={editingSubtaskText}
+                            onChange={e => setEditingSubtaskText(e.target.value)}
+                            onBlur={() => saveSubtaskEdit(subtask.id)}
+                            onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                          />
+                        ) : (
+                          <span
+                            onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                            className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                          >
+                            {subtask.text}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            value={subtask.durationMinutes || 0}
+                            onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                          />
+                          <span className="text-[10px] text-muted-foreground">min</span>
+                          <button
+                            onClick={() => removeSubtask(subtask.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+
+        <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+          <input
+            value={newSubtaskText}
+            onChange={e => setNewSubtaskText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addSubtask()}
+            placeholder="Add sub-task"
+            className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+          />
+          <input
+            type="number"
+            min={0}
+            value={newSubtaskDuration}
+            onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+            placeholder="min"
+            className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+          />
+          <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+        {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+        {checklistLists.length > 0 && (
+          <div className="space-y-1.5">
+            {checklistLists.map(list => (
+              <div key={list.id} className="space-y-1.5">
+                {checklistLists.length > 1 && (
+                  <div className="text-[11px] uppercase text-muted-foreground font-semibold">{list.title}</div>
+                )}
+                <DragDropContext onDragEnd={handleDropdownReorder}>
+                  <Droppable droppableId={"dropdown-checklist-" + task.id + "-" + list.id}>
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                        {list.items.map((item, index) => (
+                          <Draggable key={item.id} draggableId={item.id} index={index}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                <SquareToggle
+                                  completed={item.completed}
+                                  onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                                  size="md"
+                                />
+                                {editingChecklistItemId === item.id ? (
+                                  <input
+                                    autoFocus
+                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                    value={editingChecklistText}
+                                    onChange={e => setEditingChecklistText(e.target.value)}
+                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                  />
+                                ) : (
+                                  <span
+                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                  >
+                                    {item.text}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            value={newChecklistText}
+            onChange={e => setNewChecklistText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addChecklistItemToTask()}
+            placeholder="Checklist item"
+            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+          />
+          <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const TaskFullView: React.FC<TaskFullViewProps> = ({
   task,
