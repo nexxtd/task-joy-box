@@ -181,7 +181,7 @@ const PriorityBadge: React.FC<{
   }, [isOpen, onToggle]);
   const pc = PRIORITY_COLORS[task.priority];
   return (
-    <div className="relative flex-shrink-0" ref={ref}>
+    <div className="relative flex-shrink-0 flex items-center" ref={ref}>
       {task.priority !== 'none' ? (
         <button
           onClick={e => { e.stopPropagation(); onToggle(); }}
