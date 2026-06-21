@@ -1355,7 +1355,7 @@ const Tasks: React.FC = () => {
             {tagPickerOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
-                <div className="absolute left-0 mt-1.5 w-80 max-w-[90vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                <div className="absolute left-0 mt-1.5 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-semibold text-foreground">Tag filter</p>
