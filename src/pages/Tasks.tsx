@@ -1513,14 +1513,14 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
-          {myTasksGroup.length > 0 && projectTaskGroups.length > 0 && <div className="w-full h-px bg-border/40 my-4" />}
+          {myTasksGroup.length > 0 && projectTaskGroups.length > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
 
           {/* Project sections */}
           {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }, idx) => {
             const isProjectCollapsed = collapsedProjects.includes(project.id);
             return (
               <div key={project.id} className="mb-3">
-                {idx > 0 && <div className="w-full h-px bg-border/40 my-4" />}
+                {idx > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
                 <button
                   onClick={() => setCollapsedProjects(prev =>
                     prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
