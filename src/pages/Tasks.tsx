@@ -333,12 +333,12 @@ const Tasks: React.FC = () => {
   const [newTaskSubtasks, setNewTaskSubtasks] = useState<NewTaskSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);
-  const [newChecklistItems, setNewChecklistItems] = useState<string[]>([]);
+  const [newChecklistItems, setNewChecklistItems] = useState<{id: string; text: string}[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
-  const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null } | null>(null);
+  const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null; moveType: 'column' | 'project' } | null>(null);
   const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
   const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
   const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
@@ -499,31 +499,73 @@ const Tasks: React.FC = () => {
     }
   };
 
+  const getProjectIdForDroppable = (id: string): number | 'my-tasks' | null => {
+    if (id === 'my-tasks') return 'my-tasks';
+    if (id.startsWith('col-')) {
+      const col = board.columns.find(c => c.id === id.slice(4));
+      return col?.projectId ?? null;
+    }
+    if (id.startsWith('uncat-')) return Number(id.slice(6));
+    return null;
+  };
+
+  const getTasksForDroppable = (id: string): Task[] | null => {
+    if (id === 'my-tasks') return myTasksGroup;
+    if (id.startsWith('col-')) {
+      const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
+      return colGroup?.tasks ?? null;
+    }
+    if (id.startsWith('uncat-')) {
+      const pg = projectTaskGroups.find(p => p.project.id === Number(id.slice(6)));
+      return pg?.uncategorized ?? null;
+    }
+    return null;
+  };
+
+  const applyDragMoveDirect = (srcDroppableId: string, dstDroppableId: string, srcIndex: number, dstIndex: number, dstProject: number | 'my-tasks' | null) => {
+    const srcTasks = getTasksForDroppable(srcDroppableId);
+    const dstTasks = getTasksForDroppable(dstDroppableId);
+    if (!srcTasks || !dstTasks) return;
+    if (srcTasks.length <= srcIndex || dstTasks.length < dstIndex) return;
+
+    const movingTaskId = srcTasks[srcIndex]?.id;
+    if (!movingTaskId) return;
+
+    const newColumnId = dstDroppableId.startsWith('col-') ? dstDroppableId.slice(4) : undefined;
+    const updateFields: Record<string, any> = {};
+    if (newColumnId) updateFields.columnId = newColumnId;
+    if (dstProject === 'my-tasks') {
+      updateFields.projectId = null;
+    } else if (typeof dstProject === 'number') {
+      updateFields.projectId = dstProject;
+    }
+    if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
+
+    const srcIds = srcTasks.map(t => t.id);
+    const dstIds = dstTasks.map(t => t.id);
+    const [removed] = srcIds.splice(srcIndex, 1);
+    dstIds.splice(dstIndex, 0, removed);
+    srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+    dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+
+    const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+    const srcSet = new Set(srcTasks.map(t => t.id));
+    const dstSet = new Set(dstTasks.map(t => t.id));
+    const resultIds: string[] = [];
+    let srcInserted = false;
+    let dstInserted = false;
+    for (const id of base) {
+      if (srcSet.has(id) && !srcInserted) { resultIds.push(...srcIds); srcInserted = true; }
+      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    }
+    if (!srcInserted) resultIds.push(...srcIds);
+    if (!dstInserted) resultIds.push(...dstIds);
+    setOrderedActiveIds(resultIds);
+  };
+
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || sortByDueDate) return;
-
-    const getProjectIdForDroppable = (id: string): number | 'my-tasks' | null => {
-      if (id === 'my-tasks') return 'my-tasks';
-      if (id.startsWith('col-')) {
-        const col = board.columns.find(c => c.id === id.slice(4));
-        return col?.projectId ?? null;
-      }
-      if (id.startsWith('uncat-')) return Number(id.slice(6));
-      return null;
-    };
-
-    const getTasksForDroppable = (id: string): Task[] | null => {
-      if (id === 'my-tasks') return myTasksGroup;
-      if (id.startsWith('col-')) {
-        const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
-        return colGroup?.tasks ?? null;
-      }
-      if (id.startsWith('uncat-')) {
-        const pg = projectTaskGroups.find(p => p.project.id === Number(id.slice(6)));
-        return pg?.uncategorized ?? null;
-      }
-      return null;
-    };
 
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
     const dstProject = getProjectIdForDroppable(result.destination.droppableId);
@@ -535,24 +577,31 @@ const Tasks: React.FC = () => {
     const isCrossProject = srcProject !== dstProject;
 
     if (isCrossProject) {
+      if (localStorage.getItem('tasks-drag-confirm-project') === 'true') {
+        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
+        return;
+      }
       const srcTasks = getTasksForDroppable(srcId);
       if (!srcTasks) return;
       const movingTaskId = srcTasks[result.source.index]?.id;
       if (!movingTaskId) return;
-      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject });
+      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'project' });
       return;
     }
 
     if (isCrossColumn) {
+      if (localStorage.getItem('tasks-drag-confirm-column') === 'true') {
+        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
+        return;
+      }
       const srcTasks = getTasksForDroppable(srcId);
       const dstTasks = getTasksForDroppable(dstId);
       if (!srcTasks || !dstTasks) return;
 
       const movingTaskId = srcTasks[result.source.index]?.id;
       if (!movingTaskId) return;
-
-      const newColumnId = dstId.startsWith('col-') ? dstId.slice(4) : undefined;
-      if (newColumnId) updateTask(movingTaskId, { columnId: newColumnId });
+      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'column' });
+      return;
 
       const srcIds = srcTasks.map(t => t.id);
       const dstIds = dstTasks.map(t => t.id);
@@ -727,9 +776,28 @@ const Tasks: React.FC = () => {
 
   const addChecklistDraft = () => {
     if (!newChecklistText.trim()) return;
-    setNewChecklistItems(prev => [...prev, newChecklistText.trim()]);
+    setNewChecklistItems(prev => [...prev, { id: crypto.randomUUID(), text: newChecklistText.trim() }]);
     setNewChecklistText('');
   };
+
+  const handleDraftReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    if (result.source.droppableId === 'draft-subtasks') {
+      setNewTaskSubtasks(prev => {
+        const items = Array.from(prev);
+        const [removed] = items.splice(result.source.index, 1);
+        items.splice(result.destination.index, 0, removed);
+        return items;
+      });
+    } else if (result.source.droppableId === 'draft-checklist') {
+      setNewChecklistItems(prev => {
+        const items = Array.from(prev);
+        const [removed] = items.splice(result.source.index, 1);
+        items.splice(result.destination.index, 0, removed);
+        return items;
+      });
+    }
+  }, []);
 
   const resetTaskDraft = () => {
     setNewTaskTitle('');
@@ -758,9 +826,9 @@ const Tasks: React.FC = () => {
     if (!targetColumnId) return;
 
     const taskId = crypto.randomUUID();
-    const checklistItems = newChecklistItems.map(text => ({
+    const checklistItems = newChecklistItems.map(item => ({
       id: crypto.randomUUID(),
-      text,
+      text: item.text,
       completed: false,
     }));
 
@@ -868,7 +936,7 @@ const Tasks: React.FC = () => {
           durationMinutes: st.durationMinutes || 0,
         }))
       );
-      setNewChecklistItems(data.checklistItems || []);
+      setNewChecklistItems((data.checklistItems || []).map(text => ({ id: crypto.randomUUID(), text })));
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
@@ -1005,65 +1073,69 @@ const Tasks: React.FC = () => {
               />
             </div>
           )}
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
-            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
-              <PriorityBadge
-                task={task}
-                onUpdate={(priority) => updateTask(task.id, { priority })}
-                isOpen={priorityEditTaskId === task.id}
-                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
-              />
-            )}
-            {taskDurFmt && (
-              <button
-                onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-              >
-                {taskDurFmt}
-              </button>
-            )}
-            {task.dueDate && (() => {
-              const warning = getDueTimeWarning(task);
-              return (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  warning === 'overdue'
-                    ? 'bg-destructive/10 text-destructive'
-                    : warning === 'imminent' || warning === 'soon'
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'bg-muted text-muted-foreground'
-                }`}>
-                  <Calendar className="w-2.5 h-2.5" />
-                  {formatDate(task.dueDate)}{task.dueTime ? ` ${task.dueTime}` : ''}
-                </span>
-              );
-            })()}
-            {checklistTotal > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
-            {subtaskCount > 0 && (() => {
-              const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
-              return (
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+                <PriorityBadge
+                  task={task}
+                  onUpdate={(priority) => updateTask(task.id, { priority })}
+                  isOpen={priorityEditTaskId === task.id}
+                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+                />
+              )}
+              {taskDurFmt && (
+                <button
+                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  {taskDurFmt}
+                </button>
+              )}
+              {task.dueDate && (() => {
+                const warning = getDueTimeWarning(task);
+                return (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                    warning === 'overdue'
+                      ? 'bg-destructive/10 text-destructive'
+                      : warning === 'imminent' || warning === 'soon'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'bg-muted text-muted-foreground'
+                  }`}>
+                    <Calendar className="w-2.5 h-2.5" />
+                    {formatDate(task.dueDate)}{task.dueTime ? ` ${task.dueTime}` : ''}
+                  </span>
+                );
+              })()}
+              {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {subtaskDone}/{subtaskCount} sub task
+                  {checklistDone}/{checklistTotal} checklist
                 </span>
-              );
-            })()}
-            {taskTags.map(label => (
-              <span
-                key={label.id}
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-              >
-                {label.name}
-              </span>
-            ))}
-            {task.labels.length > taskTags.length && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                +{task.labels.length - taskTags.length}
-              </span>
-            )}
+              )}
+              {subtaskCount > 0 && (() => {
+                const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+                return (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                    {subtaskDone}/{subtaskCount} sub task
+                  </span>
+                );
+              })()}
+              {taskTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {task.labels.length > taskTags.length && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{task.labels.length - taskTags.length}
+                </span>
+              )}
+            </div>
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -1409,7 +1481,7 @@ const Tasks: React.FC = () => {
 
           {/* MY TASKS section */}
           {myTasksGroup.length > 0 && (
-            <div className="mb-3 pb-3 border-b border-border/60">
+            <div className="mb-3">
               <button
                 onClick={() => setMyTasksCollapsed(prev => !prev)}
                 className="flex items-center gap-2 w-full px-2 py-2 text-left hover:bg-muted/30 rounded-lg transition-all mb-1"
@@ -1441,11 +1513,14 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
+          {myTasksGroup.length > 0 && projectTaskGroups.length > 0 && <div className="w-full h-px bg-border/40 my-4" />}
+
           {/* Project sections */}
           {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }, idx) => {
             const isProjectCollapsed = collapsedProjects.includes(project.id);
             return (
-              <div key={project.id} className={`mb-3 ${idx > 0 ? 'border-t border-border/60 pt-4' : ''}`}>
+              <div key={project.id} className="mb-3">
+                {idx > 0 && <div className="w-full h-px bg-border/40 my-4" />}
                 <button
                   onClick={() => setCollapsedProjects(prev =>
                     prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
@@ -1464,7 +1539,8 @@ const Tasks: React.FC = () => {
                     {columnGroups.map(({ column, tasks: colTasks }, colIdx) => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
-                        <div key={column.id} className={colIdx > 0 ? 'border-t border-border/20 pt-3 mt-2' : ''}>
+                        <div key={column.id}>
+                        {colIdx > 0 && <div className="w-full h-px bg-border/20 my-2.5" />}
                           <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
@@ -1722,7 +1798,7 @@ const Tasks: React.FC = () => {
               {newTagPickerOpen && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                  <div className="absolute right-0 mt-1.5 w-80 max-w-[90vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                  <div className="absolute left-0 mt-2 w-80 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
                     <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
                       {allTags.length === 0 && (
                         <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
@@ -1850,58 +1926,72 @@ const Tasks: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <div className="space-y-2">
-                  {newTaskSubtasks.map((subtask) => (
-                    <div key={subtask.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                      {editingDraftSubtaskId === subtask.id ? (
-                        <>
-                          <input
-                            autoFocus
-                            className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                            value={editingDraftSubtaskText}
-                            onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                            onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                            onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                          />
-                          <input
-                            type="number"
-                            className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                            value={editingDraftSubtaskDuration}
-                            onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                            className="text-sm text-foreground font-medium cursor-text"
-                          >
-                            {subtask.text}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              value={subtask.durationMinutes || 0}
-                              onChange={e => {
-                                const val = Math.max(0, Number(e.target.value) || 0);
-                                setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                              }}
-                            />
-                            <span className="text-[10px] text-muted-foreground">min</span>
-                            <button
-                              onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <DragDropContext onDragEnd={handleDraftReorder}>
+                  <Droppable droppableId="draft-subtasks">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                        {newTaskSubtasks.map((subtask, index) => (
+                          <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                {editingDraftSubtaskId === subtask.id ? (
+                                  <>
+                                    <input
+                                      autoFocus
+                                      className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                      value={editingDraftSubtaskText}
+                                      onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                                      onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
+                                      onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
+                                    />
+                                    <input
+                                      type="number"
+                                      className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                      value={editingDraftSubtaskDuration}
+                                      onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span
+                                      onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
+                                      className="text-sm text-foreground font-medium cursor-text"
+                                    >
+                                      {subtask.text}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                        value={subtask.durationMinutes || 0}
+                                        onChange={e => {
+                                          const val = Math.max(0, Number(e.target.value) || 0);
+                                          setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                                        }}
+                                      />
+                                      <span className="text-[10px] text-muted-foreground">min</span>
+                                      <button
+                                        onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
                 <div className="grid grid-cols-[1fr_120px_auto] gap-2">
                   <input
                     value={newSubtaskText}
@@ -1924,30 +2014,44 @@ const Tasks: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Checklist</label>
-                <div className="space-y-1">
-                  {newChecklistItems.map((item, index) => (
-                    <div key={`${item}-${index}`} className="flex items-center gap-2.5 text-sm bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                      {editingDraftChecklistIndex === index ? (
-                        <input
-                          autoFocus
-                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                          value={editingDraftChecklistText}
-                          onChange={e => setEditingDraftChecklistText(e.target.value)}
-                          onBlur={() => { setNewChecklistItems(prev => prev.map((it, i) => i === index ? editingDraftChecklistText : it)); setEditingDraftChecklistIndex(null); }}
-                          onKeyDown={e => { if (e.key === 'Enter') { setNewChecklistItems(prev => prev.map((it, i) => i === index ? editingDraftChecklistText : it)); setEditingDraftChecklistIndex(null); } }}
-                        />
-                      ) : (
-                        <span onClick={() => { setEditingDraftChecklistIndex(index); setEditingDraftChecklistText(item); }} className="flex-1 cursor-text">{item}</span>
-                      )}
-                      <button
-                        onClick={() => setNewChecklistItems(prev => prev.filter((_, i) => i !== index))}
-                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <DragDropContext onDragEnd={handleDraftReorder}>
+                  <Droppable droppableId="draft-checklist">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                        {newChecklistItems.map((item, index) => (
+                          <Draggable key={item.id} draggableId={item.id} index={index}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                {editingDraftChecklistIndex === index ? (
+                                  <input
+                                    autoFocus
+                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                    value={editingDraftChecklistText}
+                                    onChange={e => setEditingDraftChecklistText(e.target.value)}
+                                    onBlur={() => { setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText } : it)); setEditingDraftChecklistIndex(null); }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText } : it)); setEditingDraftChecklistIndex(null); } }}
+                                  />
+                                ) : (
+                                  <span onClick={() => { setEditingDraftChecklistIndex(index); setEditingDraftChecklistText(item.text); }} className="flex-1 cursor-text">{item.text}</span>
+                                )}
+                                <button
+                                  onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
                 <div className="flex gap-2">
                   <input
                     value={newChecklistText}
@@ -2461,6 +2565,30 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     setEditingChecklistText('');
   };
 
+  const handleFullViewReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    if (result.source.droppableId === 'fullview-subtasks') {
+      const items = Array.from(effectiveSubtasks);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      persistSubtasks(items);
+    } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
+      const checklistId = result.source.droppableId.replace('fullview-checklist-', '');
+      onUpdateTask(task.id, {
+        checklists: task.checklists.map(cl =>
+          cl.id === checklistId
+            ? { ...cl, items: (() => {
+                const items = Array.from(cl.items);
+                const [removed] = items.splice(result.source.index, 1);
+                items.splice(result.destination.index, 0, removed);
+                return items;
+              })() }
+            : cl
+        ),
+      });
+    }
+  }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;
@@ -2792,50 +2920,64 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
           )}
 
-          <div className="space-y-2">
-            {effectiveSubtasks.map(subtask => (
-              <div key={subtask.id} className="grid grid-cols-[auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-                <CircleToggle
-                  completed={subtask.completed}
-                  onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                  size="sm"
-                />
-                {editingSubtaskId === subtask.id ? (
-                  <input
-                    autoFocus
-                    className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                    value={editingSubtaskText}
-                    onChange={e => setEditingSubtaskText(e.target.value)}
-                    onBlur={() => saveSubtaskEdit(subtask.id)}
-                    onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                  />
-                ) : (
-                  <span
-                    onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                    className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                  >
-                    {subtask.text}
-                  </span>
-                )}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                    value={subtask.durationMinutes || 0}
-                    onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                  />
-                  <span className="text-[10px] text-muted-foreground">min</span>
-                  <button
-                    onClick={() => removeSubtask(subtask.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+          <DragDropContext onDragEnd={handleFullViewReorder}>
+            <Droppable droppableId="fullview-subtasks">
+              {(provided) => (
+                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                  {effectiveSubtasks.map((subtask, index) => (
+                    <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          <CircleToggle
+                            completed={subtask.completed}
+                            onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                            size="sm"
+                          />
+                          {editingSubtaskId === subtask.id ? (
+                            <input
+                              autoFocus
+                              className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                              value={editingSubtaskText}
+                              onChange={e => setEditingSubtaskText(e.target.value)}
+                              onBlur={() => saveSubtaskEdit(subtask.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                              className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                            >
+                              {subtask.text}
+                            </span>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              value={subtask.durationMinutes || 0}
+                              onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                            />
+                            <span className="text-[10px] text-muted-foreground">min</span>
+                            <button
+                              onClick={() => removeSubtask(subtask.id)}
+                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </Droppable>
+          </DragDropContext>
 
           <div className="grid grid-cols-[1fr_120px_auto] gap-2">
             <input
@@ -2867,38 +3009,54 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   {checklistLists.length > 1 && (
                     <div className="text-[11px] uppercase text-muted-foreground font-semibold">{list.title}</div>
                   )}
-                  {list.items.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 text-sm group">
-                      <SquareToggle
-                        completed={item.completed}
-                        onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                        size="md"
-                      />
-                      {editingChecklistItemId === item.id ? (
-                        <input
-                          autoFocus
-                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                          value={editingChecklistText}
-                          onChange={e => setEditingChecklistText(e.target.value)}
-                          onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                          onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                        />
-                      ) : (
-                        <span
-                          onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                          className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                        >
-                          {item.text}
-                        </span>
+                  <DragDropContext onDragEnd={handleFullViewReorder}>
+                    <Droppable droppableId={"fullview-checklist-" + list.id}>
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                          {list.items.map((item, index) => (
+                            <Draggable key={item.id} draggableId={item.id} index={index}>
+                              {(provided) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <SquareToggle
+                                    completed={item.completed}
+                                    onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                                    size="md"
+                                  />
+                                  {editingChecklistItemId === item.id ? (
+                                    <input
+                                      autoFocus
+                                      className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                      value={editingChecklistText}
+                                      onChange={e => setEditingChecklistText(e.target.value)}
+                                      onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                      onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                    />
+                                  ) : (
+                                    <span
+                                      onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                      className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                    >
+                                      {item.text}
+                                    </span>
+                                  )}
+                                  <button
+                                    onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
                       )}
-                      <button
-                        onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                    </Droppable>
+                  </DragDropContext>
                 </div>
               ))}
             </div>
@@ -3107,55 +3265,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       )}
 
       {pendingDragMove && (() => {
-        const applyDragMove = () => {
-          const { taskId, srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject } = pendingDragMove;
-          const getTasks = (id: string): Task[] | null => {
-            if (id === 'my-tasks') return myTasksGroup;
-            if (id.startsWith('col-')) {
-              const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
-              return colGroup?.tasks ?? null;
-            }
-            if (id.startsWith('uncat-')) {
-              const pg = projectTaskGroups.find(p => p.project.id === Number(id.slice(6)));
-              return pg?.uncategorized ?? null;
-            }
-            return null;
-          };
-          const srcTasks = getTasks(srcDroppableId);
-          const dstTasks = getTasks(dstDroppableId);
-          if (!srcTasks || !dstTasks) { setPendingDragMove(null); return; }
+        const { srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject, moveType } = pendingDragMove;
+        const [dontAsk, setDontAsk] = React.useState(false);
 
-          const newColumnId = dstDroppableId.startsWith('col-') ? dstDroppableId.slice(4) : undefined;
-          const updateFields: Record<string, any> = {};
-          if (newColumnId) updateFields.columnId = newColumnId;
-          if (dstProject === 'my-tasks') {
-            updateFields.projectId = null;
-          } else if (typeof dstProject === 'number') {
-            updateFields.projectId = dstProject;
+        const confirmMove = () => {
+          if (dontAsk) {
+            localStorage.setItem(`tasks-drag-confirm-${moveType}`, 'true');
           }
-          if (Object.keys(updateFields).length > 0) updateTask(taskId, updateFields);
-
-          const srcIds = srcTasks.map(t => t.id);
-          const dstIds = dstTasks.map(t => t.id);
-          const [removed] = srcIds.splice(srcIndex, 1);
-          dstIds.splice(dstIndex, 0, removed);
-          srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
-          dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
-
-          const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-          const srcSet = new Set(srcTasks.map(t => t.id));
-          const dstSet = new Set(dstTasks.map(t => t.id));
-          const resultIds: string[] = [];
-          let srcInserted = false;
-          let dstInserted = false;
-          for (const id of base) {
-            if (srcSet.has(id) && !srcInserted) { resultIds.push(...srcIds); srcInserted = true; }
-            else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
-            else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
-          }
-          if (!srcInserted) resultIds.push(...srcIds);
-          if (!dstInserted) resultIds.push(...dstIds);
-          setOrderedActiveIds(resultIds);
+          applyDragMoveDirect(srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject);
           setPendingDragMove(null);
         };
 
@@ -3164,10 +3281,18 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
               <h3 className="text-sm font-bold text-foreground">Move task?</h3>
-              <p className="text-xs text-muted-foreground mt-2">Changing the project will move this task. Do you want to continue?</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {moveType === 'project'
+                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
+                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
+              </p>
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
+                <span className="text-xs text-muted-foreground">Don't ask me again</span>
+              </label>
               <div className="flex justify-end gap-2 mt-4">
                 <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                <button onClick={applyDragMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
               </div>
             </div>
           </div>
