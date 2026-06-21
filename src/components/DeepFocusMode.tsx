@@ -524,7 +524,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
       {showCompletionDialog && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
-          <div className="border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center bg-white border-gray-200">
+          <div className="border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center bg-card border-border">
             <CheckCircle2 className="w-8 h-8 text-primary mx-auto mb-4" />
             <h3 className="text-lg font-bold text-foreground">Session Complete!</h3>
             <p className="text-sm text-muted-foreground mb-6">
@@ -819,7 +819,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     placeholder="Checklist item"
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                   />
-                  <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                  <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                 </div>
               </div>
             </div>

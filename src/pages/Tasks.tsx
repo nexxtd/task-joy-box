@@ -3115,7 +3115,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               placeholder="Checklist item"
               className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
             />
-            <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+            <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
           </div>
         </div>
 
