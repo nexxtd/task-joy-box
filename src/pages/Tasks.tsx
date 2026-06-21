@@ -312,6 +312,14 @@ const Tasks: React.FC = () => {
 
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const [expandedSubtaskEdit, setExpandedSubtaskEdit] = useState<string | null>(null);
+  const [expandedSubtaskText, setExpandedSubtaskText] = useState('');
+  const [expandedSubtaskDuration, setExpandedSubtaskDuration] = useState(0);
+  const [expandedChecklistEdit, setExpandedChecklistEdit] = useState<string | null>(null);
+  const [expandedChecklistText, setExpandedChecklistText] = useState('');
+  const [expandedNewSubtaskText, setExpandedNewSubtaskText] = useState('');
+  const [expandedNewSubtaskDuration, setExpandedNewSubtaskDuration] = useState(10);
+  const [expandedNewChecklistText, setExpandedNewChecklistText] = useState('');
 
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'high' | 'medium' | 'low'>('all');
@@ -1198,68 +1206,215 @@ const Tasks: React.FC = () => {
               <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
               <p className="text-sm text-foreground whitespace-pre-wrap">{task.description || 'No description'}</p>
             </div>
-            {(() => {
-              const subtasks: Array<{ id: string; text?: string; completed?: boolean; durationMinutes?: number }> = Array.isArray(task.subtasks)
-                ? (task.subtasks as any)
-                : [];
-
-              if (subtasks.length === 0) return null;
-
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground mb-2">Sub-tasks</h4>
-                  <div className="space-y-1.5">
-                    {subtasks.map(subtask => {
-                      const completed = Boolean(subtask.completed);
-                      const durationMinutes = Number(subtask.durationMinutes) || 0;
-                      const text = String(subtask.text ?? '');
-
-                      return (
-                        <div key={subtask.id} className="flex items-center gap-2.5 text-sm">
-                          <CircleToggle
-                            completed={completed}
-                            onClick={e => {
-                              e.stopPropagation();
-
-                              const nextSubtasks = subtasks.map(st => {
-                                const stCompleted = Boolean(st.completed);
-                                return st.id === subtask.id
-                                  ? { ...st, completed: !stCompleted }
-                                  : st;
-                              });
-
-                              updateTask(task.id, { subtasks: nextSubtasks as any });
-                            }}
-                            size="sm"
-                          />
-
-                          <span className={completed ? 'line-through text-muted-foreground' : 'text-foreground flex-1'}>
-                            {text}
-                          </span>
-
-                          {durationMinutes > 0 && (
-                            <span className="text-xs text-muted-foreground ml-auto">{durationMinutes} min</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-            {task.checklists.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-2">Checklist</h4>
-                <div className="space-y-1.5">
-                  {task.checklists.map(checklist => checklist.items.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 text-sm">
-                      <SquareToggle completed={item.completed} onClick={e => { e.stopPropagation(); toggleChecklistItem(task.id, checklist.id, item.id); }} size="md" />
-                      <span className={item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}>{item.text}</span>
-                    </div>
-                  )))}
-                </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-foreground">Sub-tasks</h4>
               </div>
-            )}
+              {(() => {
+                const subtaskList = Array.isArray(task.subtasks) ? (task.subtasks as any) : [];
+                return (
+                  <>
+                    {subtaskList.length > 0 ? (
+                      <div className="space-y-1.5 mb-2">
+                        {subtaskList.map((subtask: any, idx: number) => {
+                          const completed = Boolean(subtask.completed);
+                          const text = String(subtask.text ?? '');
+                          return (
+                            <div key={subtask.id} className="flex items-center gap-2 text-sm group">
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  const next = [...subtaskList];
+                                  if (idx > 0) { [next[idx-1], next[idx]] = [next[idx], next[idx-1]]; updateTask(task.id, { subtasks: next as any }); }
+                                }}
+                                className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground disabled:opacity-20"
+                                disabled={idx === 0}
+                              >
+                                <ChevronUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  const next = [...subtaskList];
+                                  if (idx < subtaskList.length - 1) { [next[idx], next[idx+1]] = [next[idx+1], next[idx]]; updateTask(task.id, { subtasks: next as any }); }
+                                }}
+                                className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground disabled:opacity-20"
+                                disabled={idx === subtaskList.length - 1}
+                              >
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                              <CircleToggle
+                                completed={completed}
+                                onClick={() => {
+                                  const next = subtaskList.map((st: any) => st.id === subtask.id ? { ...st, completed: !completed } : st);
+                                  updateTask(task.id, { subtasks: next as any });
+                                }}
+                                size="sm"
+                              />
+                              {expandedSubtaskEdit === subtask.id ? (
+                                <div className="flex items-center gap-1 flex-1">
+                                  <input
+                                    autoFocus
+                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                    value={expandedSubtaskText}
+                                    onChange={e => setExpandedSubtaskText(e.target.value)}
+                                    onBlur={() => { if (expandedSubtaskText.trim()) updateTask(task.id, { subtasks: subtaskList.map((st: any) => st.id === subtask.id ? { ...st, text: expandedSubtaskText.trim() } : st) as any }); setExpandedSubtaskEdit(null); }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { if (expandedSubtaskText.trim()) updateTask(task.id, { subtasks: subtaskList.map((st: any) => st.id === subtask.id ? { ...st, text: expandedSubtaskText.trim() } : st) as any }); setExpandedSubtaskEdit(null); } }}
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    className="w-14 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right"
+                                    value={expandedSubtaskDuration}
+                                    onChange={e => { const val = Math.max(0, Number(e.target.value) || 0); setExpandedSubtaskDuration(val); updateTask(task.id, { subtasks: subtaskList.map((st: any) => st.id === subtask.id ? { ...st, durationMinutes: val } : st) as any }); }}
+                                  />
+                                </div>
+                              ) : (
+                                <span
+                                  onClick={e => { e.stopPropagation(); setExpandedSubtaskEdit(subtask.id); setExpandedSubtaskText(text); setExpandedSubtaskDuration(Number(subtask.durationMinutes) || 0); }}
+                                  className={`flex-1 text-sm cursor-text ${completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                >
+                                  {text}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground">{Number(subtask.durationMinutes) || 0} min</span>
+                              <button
+                                onClick={e => { e.stopPropagation(); updateTask(task.id, { subtasks: subtaskList.filter((st: any) => st.id !== subtask.id) as any }); }}
+                                className="p-1 text-muted-foreground hover:text-destructive"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mb-2">No subtasks</p>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        value={expandedNewSubtaskText}
+                        onChange={e => setExpandedNewSubtaskText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && expandedNewSubtaskText.trim()) {
+                            e.stopPropagation();
+                            const newSub = { id: crypto.randomUUID(), text: expandedNewSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(expandedNewSubtaskDuration) || 0) };
+                            updateTask(task.id, { subtasks: [...subtaskList, newSub] as any });
+                            setExpandedNewSubtaskText('');
+                            setExpandedNewSubtaskDuration(10);
+                          }
+                        }}
+                        placeholder="Add sub-task"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-xs"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={expandedNewSubtaskDuration}
+                        onChange={e => setExpandedNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="min"
+                        className="w-14 bg-muted/40 border border-border rounded-lg px-1.5 py-1.5 text-xs"
+                      />
+                      <button
+                        onClick={e => { e.stopPropagation(); if (expandedNewSubtaskText.trim()) { const newSub = { id: crypto.randomUUID(), text: expandedNewSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(expandedNewSubtaskDuration) || 0) }; updateTask(task.id, { subtasks: [...subtaskList, newSub] as any }); setExpandedNewSubtaskText(''); setExpandedNewSubtaskDuration(10); } }}
+                        className="px-2.5 py-1.5 text-xs !bg-[#000] !text-white rounded-lg"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-foreground">Checklist</h4>
+              </div>
+              {(() => {
+                const checklistItems = task.checklists.flatMap(cl => cl.items.map(item => ({ ...item, checklistId: cl.id, checklistTitle: cl.title })));
+                return (
+                  <>
+                    {checklistItems.length > 0 ? (
+                      <div className="space-y-1.5 mb-2">
+                        {checklistItems.map((item, idx) => (
+                          <div key={item.id} className="flex items-center gap-2 text-sm group">
+                            <button
+                              onClick={e => { e.stopPropagation(); }}
+                              className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground disabled:opacity-20"
+                              disabled={idx === 0}
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); }}
+                              className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground disabled:opacity-20"
+                              disabled={idx === checklistItems.length - 1}
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            <SquareToggle
+                              completed={item.completed}
+                              onClick={e => { e.stopPropagation(); toggleChecklistItem(task.id, item.checklistId, item.id); }}
+                              size="sm"
+                            />
+                            {expandedChecklistEdit === item.id ? (
+                              <input
+                                autoFocus
+                                className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                value={expandedChecklistText}
+                                onChange={e => setExpandedChecklistText(e.target.value)}
+                                onBlur={() => { if (expandedChecklistText.trim()) updateTask(task.id, { checklists: task.checklists.map(cl => cl.id === item.checklistId ? { ...cl, items: cl.items.map(i => i.id === item.id ? { ...i, text: expandedChecklistText.trim() } : i) } : cl) }); setExpandedChecklistEdit(null); }}
+                                onKeyDown={e => { if (e.key === 'Enter') { if (expandedChecklistText.trim()) updateTask(task.id, { checklists: task.checklists.map(cl => cl.id === item.checklistId ? { ...cl, items: cl.items.map(i => i.id === item.id ? { ...i, text: expandedChecklistText.trim() } : i) } : cl) }); setExpandedChecklistEdit(null); } }}
+                              />
+                            ) : (
+                              <span
+                                onClick={e => { e.stopPropagation(); setExpandedChecklistEdit(item.id); setExpandedChecklistText(item.text); }}
+                                className={`flex-1 text-sm cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                              >
+                                {item.text}
+                              </span>
+                            )}
+                            <button
+                              onClick={e => { e.stopPropagation(); deleteChecklistItem(task.id, item.checklistId, item.id); }}
+                              className="p-1 text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mb-2">No checklist items</p>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        value={expandedNewChecklistText}
+                        onChange={e => setExpandedNewChecklistText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && expandedNewChecklistText.trim()) {
+                            e.stopPropagation();
+                            if (!task.checklists.length) {
+                              updateTask(task.id, { checklists: [{ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: expandedNewChecklistText.trim(), completed: false }] }] });
+                            } else {
+                              addChecklistItem(task.id, task.checklists[0].id, expandedNewChecklistText.trim());
+                            }
+                            setExpandedNewChecklistText('');
+                          }
+                        }}
+                        placeholder="Add checklist item"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-xs"
+                      />
+                      <button
+                        onClick={e => { e.stopPropagation(); if (expandedNewChecklistText.trim()) { if (!task.checklists.length) { updateTask(task.id, { checklists: [{ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: expandedNewChecklistText.trim(), completed: false }] }] }); } else { addChecklistItem(task.id, task.checklists[0].id, expandedNewChecklistText.trim()); } setExpandedNewChecklistText(''); } }}
+                        className="px-2.5 py-1.5 text-xs !bg-[#000] !text-white rounded-lg"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
             <div className="flex justify-end pt-1">
               <button
                 onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
@@ -1551,7 +1706,6 @@ const Tasks: React.FC = () => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
-                        {colIdx > 0 && <div className="w-full h-px bg-border/20 my-2.5" />}
                           <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
