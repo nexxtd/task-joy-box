@@ -575,10 +575,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               <span className="text-sm font-semibold text-foreground">{Math.round(totalSecs / 60)} min</span>
             </div>
 
-            {taskSubtasks.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-semibold text-foreground mb-2">Sub-tasks</h4>
-                <div className="space-y-1.5">
+            <div className="mb-4">
+              <h4 className="text-xs font-semibold text-foreground mb-2">Sub-tasks</h4>
+              {taskSubtasks.length > 0 ? (
+                <div className="space-y-1.5 mb-2">
                   {taskSubtasks.map(sub => (
                     <div key={sub.id} className="flex items-center gap-2.5 text-sm py-1">
                       <CircleToggle
@@ -593,13 +593,33 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mb-2">No subtasks yet</p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={newSubtaskText}
+                  onChange={e => setNewSubtaskText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                  placeholder="Add sub-task"
+                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newSubtaskDuration}
+                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="min"
+                  className="w-16 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                />
+                <button onClick={addSubtask} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
               </div>
-            )}
+            </div>
 
-            {focusChecklistItems.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-xs font-semibold text-foreground mb-2">Checklist</h4>
-                <div className="space-y-1.5">
+            <div className="mb-4">
+              <h4 className="text-xs font-semibold text-foreground mb-2">Checklist</h4>
+              {focusChecklistItems.length > 0 ? (
+                <div className="space-y-1.5 mb-2">
                   {focusChecklistItems.map(item => (
                     <div key={item.id} className="flex items-center gap-2.5 text-sm py-1">
                       <SquareToggle
@@ -613,8 +633,20 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mb-2">No checklist items yet</p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={newChecklistText}
+                  onChange={e => setNewChecklistText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
+                  placeholder="Checklist item"
+                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm"
+                />
+                <button onClick={handleAddChecklistItem} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
               </div>
-            )}
+            </div>
 
             <div className="flex gap-3 mt-6">
               <button
