@@ -311,7 +311,9 @@ const Tasks: React.FC = () => {
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
 
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => {
+    try { const v = localStorage.getItem('tasks-expanded-ids'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
 
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'high' | 'medium' | 'low'>('all');
@@ -362,6 +364,7 @@ const Tasks: React.FC = () => {
 
   useEffect(() => { localStorage.setItem('tasks-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
+  useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
   useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
 
   const [completedOpen, setCompletedOpen] = useState(true);
@@ -1662,7 +1665,7 @@ const Tasks: React.FC = () => {
                             setOpenTaskId(task.id);
                           }
                         }}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group ${
                           isDeleteMode
                             ? selectedDeleteTaskIds.includes(task.id)
                               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -1692,6 +1695,13 @@ const Tasks: React.FC = () => {
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
                           Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
                         </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
+                          className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                          title="Delete task"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
