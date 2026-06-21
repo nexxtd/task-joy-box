@@ -534,7 +534,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       />
 
       {showCompletionDialog && (
-        <div className="absolute inset-0 flex items-center justify-center z-10">
+        <div className="absolute inset-0 flex items-center justify-center z-20">
           <div className="border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center bg-card border-border">
             <CheckCircle2 className="w-8 h-8 text-primary mx-auto mb-4" />
             <h3 className="text-lg font-bold text-foreground">Session Complete!</h3>
@@ -560,7 +560,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       {showDetailDialog && selectedTask && (
-        <div className="absolute inset-0 flex items-center justify-center z-10">
+        <div className="absolute inset-0 flex items-center justify-center z-20">
           <div className="border rounded-2xl p-6 shadow-2xl max-w-md w-full mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" />
