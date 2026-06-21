@@ -339,6 +339,7 @@ const Tasks: React.FC = () => {
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null; moveType: 'column' | 'project' } | null>(null);
+  const [dontAsk, setDontAsk] = useState(false);
   const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
   const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
   const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
@@ -360,6 +361,7 @@ const Tasks: React.FC = () => {
 
   useEffect(() => { localStorage.setItem('tasks-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
+  useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
 
   const [completedOpen, setCompletedOpen] = useState(true);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -1798,7 +1800,7 @@ const Tasks: React.FC = () => {
               {newTagPickerOpen && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-80 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
+                  <div className="absolute left-0 mt-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
                     <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
                       {allTags.length === 0 && (
                         <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
@@ -1845,7 +1847,7 @@ const Tasks: React.FC = () => {
                           setNewTagPickerOpen(false);
                         }}
                         disabled={!newTagName.trim()}
-                        className="px-4 py-2 text-xs font-medium bg-primary text-primary-foreground rounded-xl disabled:opacity-40"
+                        className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-xl disabled:opacity-40"
                       >
                         Add
                       </button>
@@ -2417,7 +2419,6 @@ const Tasks: React.FC = () => {
 
       {pendingDragMove && (() => {
         const { srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject, moveType } = pendingDragMove;
-        const [dontAsk, setDontAsk] = React.useState(false);
 
         const confirmMove = () => {
           if (dontAsk) {
@@ -2449,6 +2450,7 @@ const Tasks: React.FC = () => {
           </div>
         );
       })()}
+
     </div>
   );
 };

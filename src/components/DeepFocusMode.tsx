@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, LifeBuoy, Trash2, GripVertical } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -552,14 +552,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
         className="relative z-10 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
         onClick={e => e.stopPropagation()}
       >
-        <button
-          onClick={() => { stopSound(); document.dispatchEvent(new CustomEvent('closeDeepFocus')); setTimeout(() => { window.location.hash = '#/deep-focus/resources'; }, 50); }}
-          className="absolute bottom-4 left-4 p-2.5 rounded-full transition-all z-10 text-muted-foreground hover:text-foreground hover:bg-muted/80 bg-muted/40 border border-border/50"
-          aria-label="Deep Focus Resources"
-        >
-          <LifeBuoy className="w-4 h-4" />
-        </button>
-
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">

@@ -1287,8 +1287,8 @@ ${safeInput}
 
 Return ONLY a valid JSON object with these exact fields:
 {
-  "title": "concise task title extracted or generated",
-  "description": "summarized description from input",
+  "title": "concise task title extracted or generated from user input",
+  "description": "empty string unless the user's input contains a detailed description separate from the title — never repeat the user's prompt here",
   "priority": "urgent|high|medium|low|none (infer from urgency language)",
   "startDate": "YYYY-MM-DD or null if no start date mentioned",
   "startTime": "HH:MM (24h) or null if no start time mentioned",
@@ -1304,6 +1304,8 @@ Return ONLY a valid JSON object with these exact fields:
 }
 
 Rules:
+- title: the actual task name, extracted from the user's input (e.g. if user says "work task high priority", title should be "Work task", NOT the whole prompt)
+- description: leave empty ("") unless the user provided a separate detailed description beyond the title/the task name itself. NEVER copy the entire user prompt into description.
 - subtasks: break down complex tasks. Each gets a realistic durationMinutes.
 - checklistItems: for step-by-step actions or checklist-style items in the input.
 - duration: sum of subtask durations if subtasks exist, otherwise estimate from scope.
