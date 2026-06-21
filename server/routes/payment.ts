@@ -3,7 +3,7 @@ import { db } from '../db';
 import { users, organizations, coupons, couponRedemptions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
-import * as paypalSdk from 'paypal-rest-sdk';
+import paypalSdk from 'paypal-rest-sdk';
 import { encrypt, decrypt } from '../lib/encryption';
 
 const router = Router();
