@@ -1568,7 +1568,6 @@ const Tasks: React.FC = () => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
-                        {colIdx > 0 && <div className="w-full h-px bg-border/20 my-2.5" />}
                           <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
