@@ -194,6 +194,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [showSoundPicker, setShowSoundPicker] = useState(false);
 
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [todayStats, setTodayStats] = useState<TodayStats>({ sessions: 0, minutes: 0 });
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -333,11 +334,21 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     setShowCompletionDialog(true);
   }, [stopSound]);
 
-  const handleCompletedTask = useCallback(async () => {
-    await saveSession(true);
+  const handleCompletedTask = useCallback(() => {
     setShowCompletionDialog(false);
+    setShowDetailDialog(true);
+  }, []);
+
+  const handleFinalComplete = useCallback(async () => {
+    await saveSession(true);
+    setShowDetailDialog(false);
     document.dispatchEvent(new CustomEvent('closeDeepFocus'));
   }, [saveSession]);
+
+  const handleBackToCompletion = useCallback(() => {
+    setShowDetailDialog(false);
+    setShowCompletionDialog(true);
+  }, []);
 
   const handleAnotherSession = useCallback(async () => {
     await saveSession(false);
@@ -542,6 +553,81 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 className="flex-1 py-2.5 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all"
               >
                 Yes, Done!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDetailDialog && selectedTask && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="border rounded-2xl p-6 shadow-2xl max-w-md w-full mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-4">
+              <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" />
+              <div>
+                <h3 className="text-base font-bold text-foreground">Review & Complete</h3>
+                <p className="text-xs text-muted-foreground">{selectedTask.title}</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-muted/30 p-3 mb-4 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Session Duration</span>
+              <span className="text-sm font-semibold text-foreground">{Math.round(totalSecs / 60)} min</span>
+            </div>
+
+            {taskSubtasks.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-foreground mb-2">Sub-tasks</h4>
+                <div className="space-y-1.5">
+                  {taskSubtasks.map(sub => (
+                    <div key={sub.id} className="flex items-center gap-2.5 text-sm py-1">
+                      <CircleToggle
+                        completed={sub.completed}
+                        onClick={() => toggleSubtask(sub.id)}
+                        size="sm"
+                      />
+                      <span className={`flex-1 ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                        {sub.text}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{sub.durationMinutes || 0} min</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {focusChecklistItems.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-xs font-semibold text-foreground mb-2">Checklist</h4>
+                <div className="space-y-1.5">
+                  {focusChecklistItems.map(item => (
+                    <div key={item.id} className="flex items-center gap-2.5 text-sm py-1">
+                      <SquareToggle
+                        completed={item.completed}
+                        onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                        size="md"
+                      />
+                      <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                        {item.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleBackToCompletion}
+                className="flex-1 py-2.5 px-4 text-sm font-medium border rounded-xl text-muted-foreground border-border hover:bg-muted transition-all"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleFinalComplete}
+                className="flex-1 py-2.5 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all"
+              >
+                Complete
               </button>
             </div>
           </div>
