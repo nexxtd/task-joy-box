@@ -91,29 +91,11 @@ export interface Column {
   projectId?: number | null;
 }
 
-export interface TaskTemplate {
-  id: string;
-  name: string;
-  title: string;
-  description: string;
-  priority: Priority;
-  labels: Label[];
-  checklists: Checklist[];
-  subtasks: Subtask[];
-  duration?: number;
-  sessionsNeeded?: number;
-  subject?: string;
-  color?: string;
-  icon?: string;
-  recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
-}
-
 export interface Board {
   id: string;
   title: string;
   columns: Column[];
   tasks: Task[];
-  templates: TaskTemplate[];
 }
 
 export const DEFAULT_LABELS: Label[] = [];

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem, TaskTemplate } from '@/types/board';
+import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem } from '@/types/board';
 import { emptyBoard } from '@/data/initialBoard';
 import { useAuth } from '@/context/AuthContext';
 
@@ -23,9 +23,6 @@ interface BoardContextType {
   getColumnByName: (name: string) => Column | undefined;
   bulkDeleteTasks: (taskIds: string[]) => void;
   reorderTasks: (orderedIds: string[]) => void;
-  saveTemplate: (name: string, data: Partial<Task>) => void;
-  updateTemplate: (templateId: string, updates: Partial<TaskTemplate>) => void;
-  deleteTemplate: (templateId: string) => void;
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';
@@ -51,18 +48,15 @@ async function loadBoard(userId: number): Promise<Board> {
     if (res.ok) {
       const data = await res.json();
       if (data.board) {
-        const board = { ...data.board, templates: data.board.templates || [] };
-        localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-        return board;
+        localStorage.setItem(getBoardKey(userId), JSON.stringify(data.board));
+        return data.board;
       }
     }
   } catch {}
+  // Fallback to localStorage
   try {
     const saved = localStorage.getItem(getBoardKey(userId));
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { ...parsed, templates: parsed.templates || [] };
-    }
+    if (saved) return JSON.parse(saved);
   } catch {}
   return { ...emptyBoard };
 }
@@ -566,50 +560,12 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [persist]);
 
-  const saveTemplate = useCallback((name: string, data: Partial<Task>) => {
-    const template: TaskTemplate = {
-      id: genId(),
-      name,
-      title: data.title || '',
-      description: data.description || '',
-      priority: data.priority || 'none',
-      labels: (data.labels || []).map(l => ({ ...l, id: genId() })),
-      checklists: (data.checklists || []).map(cl => ({
-        ...cl, id: genId(),
-        items: cl.items.map(it => ({ ...it, id: genId(), completed: false })),
-      })),
-      subtasks: (data.subtasks || []).map(st => ({ ...st, id: genId(), completed: false })),
-      duration: data.duration,
-      sessionsNeeded: data.sessionsNeeded,
-      subject: data.subject,
-      color: data.color,
-      icon: data.icon,
-      recurrencePattern: data.recurrencePattern,
-    };
-    persist(b => ({ ...b, templates: [...(b.templates || []), template] }));
-  }, [persist]);
-
-  const updateTemplate = useCallback((templateId: string, updates: Partial<TaskTemplate>) => {
-    persist(b => ({
-      ...b,
-      templates: (b.templates || []).map(t => t.id === templateId ? { ...t, ...updates } : t),
-    }));
-  }, [persist]);
-
-  const deleteTemplate = useCallback((templateId: string) => {
-    persist(b => ({
-      ...b,
-      templates: (b.templates || []).filter(t => t.id !== templateId),
-    }));
-  }, [persist]);
-
   return (
     <BoardContext.Provider value={{
       board, addTask, updateTask, deleteTask, moveTask,
       addColumn, updateColumn, deleteColumn, reorderColumns,
       addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
       findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks,
-      saveTemplate, updateTemplate, deleteTemplate,
       lastSyncTime, syncStatus,
     }}>
       {children}
