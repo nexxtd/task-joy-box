@@ -1296,24 +1296,21 @@ const Tasks: React.FC = () => {
               onDeleteChecklistItem={deleteChecklistItem}
             />
             <div className="flex justify-between pt-1">
-              <div className="relative">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={e => { e.stopPropagation(); setTemplatePopup(templatePopup === 'save' ? null : 'save'); setTemplateSaveSource('task'); setTemplateSaveTaskId(task.id); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-primary hover:bg-primary/10 rounded-lg transition-all"
+                  onClick={e => { e.stopPropagation(); setTemplateSaveSource('task'); setTemplateSaveTaskId(task.id); setTemplateSaveName(task.title); setTemplatePopup('save'); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg border border-border hover:bg-muted/50 transition-all"
                 >
                   <LayoutTemplate className="w-3.5 h-3.5" />
-                  Templates
+                  Save as Template
                 </button>
-                {templatePopup === 'save' && templateSaveSource === 'task' && templateSaveTaskId === task.id && (
-                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 py-1">
-                    <button onClick={() => { setTemplateSaveName(task.title); setTemplatePopup(null); }} className="w-full px-3 py-2 text-sm text-left hover:bg-muted/50 flex items-center gap-2">
-                      <LayoutTemplate className="w-4 h-4" /> Save as Template
-                    </button>
-                    <button onClick={() => setTemplatePopup('load')} className="w-full px-3 py-2 text-sm text-left hover:bg-muted/50 flex items-center gap-2">
-                      <Search className="w-4 h-4" /> Load Template
-                    </button>
-                  </div>
-                )}
+                <button
+                  onClick={e => { e.stopPropagation(); setTemplatePopup('load'); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg border border-border hover:bg-muted/50 transition-all"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  Load Template
+                </button>
               </div>
               <button
                 onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
@@ -2200,24 +2197,21 @@ const Tasks: React.FC = () => {
             </div>
 
             <div className="px-5 py-4 border-t border-border flex justify-between gap-2">
-              <div className="relative">
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setTemplatePopup(templatePopup === 'save' ? null : 'save')}
+                  onClick={() => { setTemplateSaveSource('create'); setTemplateSaveName(newTaskTitle || ''); setTemplatePopup('save'); }}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg border border-border hover:bg-muted/50 transition-all"
                 >
                   <LayoutTemplate className="w-4 h-4" />
-                  Templates
+                  Save as Template
                 </button>
-                {templatePopup === 'save' && (
-                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 py-1">
-                    <button onClick={() => { setTemplateSaveSource('create'); setTemplateSaveName(newTaskTitle || ''); setTemplatePopup(null); }} className="w-full px-3 py-2 text-sm text-left hover:bg-muted/50 flex items-center gap-2">
-                      <LayoutTemplate className="w-4 h-4" /> Save as Template
-                    </button>
-                    <button onClick={() => setTemplatePopup('load')} className="w-full px-3 py-2 text-sm text-left hover:bg-muted/50 flex items-center gap-2">
-                      <Search className="w-4 h-4" /> Load Template
-                    </button>
-                  </div>
-                )}
+                <button
+                  onClick={() => setTemplatePopup('load')}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg border border-border hover:bg-muted/50 transition-all"
+                >
+                  <Search className="w-4 h-4" />
+                  Load Template
+                </button>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
@@ -2633,8 +2627,8 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
-      {templatePopup === null && templateSaveName && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }}>
+      {templatePopup === 'save' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setTemplatePopup(null); setTemplateSaveName(''); setTemplateSaveTaskId(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-sm font-bold text-foreground">Save as Template</h3>
@@ -2650,18 +2644,18 @@ const Tasks: React.FC = () => {
                     ? board.tasks.find(t => t.id === templateSaveTaskId)
                     : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
                   if (data) saveTemplate(templateSaveName.trim(), data);
-                  setTemplateSaveName(''); setTemplateSaveTaskId(null);
+                  setTemplatePopup(null); setTemplateSaveName(''); setTemplateSaveTaskId(null);
                 }
               }}
             />
             <div className="flex justify-end gap-2">
-              <button onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={() => { setTemplatePopup(null); setTemplateSaveName(''); setTemplateSaveTaskId(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={() => {
                   const data = templateSaveSource === 'task' && templateSaveTaskId
                     ? board.tasks.find(t => t.id === templateSaveTaskId)
                     : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
-                  if (data && templateSaveName.trim()) { saveTemplate(templateSaveName.trim(), data); setTemplateSaveName(''); setTemplateSaveTaskId(null); }
+                  if (data && templateSaveName.trim()) { saveTemplate(templateSaveName.trim(), data); setTemplatePopup(null); setTemplateSaveName(''); setTemplateSaveTaskId(null); }
                 }}
                 disabled={!templateSaveName.trim()}
                 className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-40"
