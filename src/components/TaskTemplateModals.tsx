@@ -65,9 +65,9 @@ export const TemplateMenuButton: React.FC<TemplateMenuButtonProps> = ({
   const buttonSize = size === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-4 py-2 text-sm';
 
   return (
-    <div className={`relative inline-block ${className}`}>
+    <div className={`relative inline-block ${className}`} onClick={e => e.stopPropagation()}>
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
         className={`flex items-center gap-1.5 ${buttonSize} rounded-lg border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all`}
       >
         <LayoutTemplate className="w-3.5 h-3.5" />
@@ -78,20 +78,14 @@ export const TemplateMenuButton: React.FC<TemplateMenuButtonProps> = ({
       {open && (
         <div className="absolute bottom-full mb-1 left-0 z-50 w-48 bg-card border border-border rounded-xl shadow-xl p-1 space-y-0.5">
           <button
-            onClick={() => {
-              setOpen(false);
-              setSaveOpen(true);
-            }}
+            onClick={e => { e.stopPropagation(); setOpen(false); setSaveOpen(true); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all text-left"
           >
             <Save className="w-3.5 h-3.5 text-primary" />
             Save as Template
           </button>
           <button
-            onClick={() => {
-              setOpen(false);
-              setLoadOpen(true);
-            }}
+            onClick={e => { e.stopPropagation(); setOpen(false); setLoadOpen(true); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all text-left"
           >
             <FolderOpen className="w-3.5 h-3.5 text-primary" />
@@ -102,7 +96,7 @@ export const TemplateMenuButton: React.FC<TemplateMenuButtonProps> = ({
 
       {/* Click outside to close dropdown */}
       {open && (
-        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+        <div className="fixed inset-0 z-40" onClick={e => { e.stopPropagation(); setOpen(false); }} />
       )}
 
       <SaveTemplateModal
