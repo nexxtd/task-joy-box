@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, LABEL_COLORS } from '@/types/board';
+import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import {
   ArrowDown,
   ArrowUp,
@@ -218,149 +218,6 @@ const PriorityBadge: React.FC<{
         </div>
       )}
 
-      {templatePopup === null && templateSaveName && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }}>
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-foreground">Save as Template</h3>
-            <input
-              value={templateSaveName}
-              onChange={e => setTemplateSaveName(e.target.value)}
-              placeholder="Template name"
-              className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              autoFocus
-              onKeyDown={e => {
-                if (e.key === 'Enter' && templateSaveName.trim()) {
-                  const data = templateSaveSource === 'task' && templateSaveTaskId
-                    ? board.tasks.find(t => t.id === templateSaveTaskId)
-                    : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
-                  if (data) saveTemplate(templateSaveName.trim(), data);
-                  setTemplateSaveName(''); setTemplateSaveTaskId(null);
-                }
-              }}
-            />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-              <button
-                onClick={() => {
-                  const data = templateSaveSource === 'task' && templateSaveTaskId
-                    ? board.tasks.find(t => t.id === templateSaveTaskId)
-                    : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
-                  if (data && templateSaveName.trim()) { saveTemplate(templateSaveName.trim(), data); setTemplateSaveName(''); setTemplateSaveTaskId(null); }
-                }}
-                disabled={!templateSaveName.trim()}
-                className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-40"
-              >Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {templatePopup === 'load' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTemplatePopup(null)}>
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-lg w-full max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-foreground">Load Template</h3>
-              <button onClick={() => setTemplatePopup(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
-            </div>
-            {(board.templates || []).length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <LayoutTemplate className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No templates saved yet</p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto space-y-2">
-                {(board.templates || []).map(t => (
-                  <div key={t.id} className="border border-border rounded-xl p-3 hover:bg-muted/30 transition-all flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{t.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{t.title}{t.priority !== 'none' ? ` \u00B7 ${t.priority}` : ''}</p>
-                    </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <button onClick={() => {
-                        if (templateSaveSource === 'create') {
-                          setNewTaskTitle(t.title); setNewTaskDescription(t.description); setNewTaskPriority(t.priority);
-                          setNewTaskLabels(t.labels.map(l => ({ ...l, id: crypto.randomUUID() })));
-                          setNewTaskDuration(t.duration || 0);
-                        }
-                        setTemplatePopup(null);
-                      }} className="px-2 py-1 text-xs text-primary hover:bg-primary/10 rounded-lg">Load</button>
-                      <button onClick={() => {
-                        setTemplateEditId(t.id);
-                        setTemplateEditDraft({ title: t.title, description: t.description, priority: t.priority, labels: t.labels, checklists: t.checklists, subtasks: t.subtasks, duration: t.duration, sessionsNeeded: t.sessionsNeeded, subject: t.subject, color: t.color, icon: t.icon, recurrencePattern: t.recurrencePattern });
-                        setTemplatePopup(null);
-                      }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg" title="Edit template">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      </button>
-                      <button onClick={() => deleteTemplate(t.id)} className="p-1.5 text-destructive/60 hover:text-destructive hover:bg-destructive/10 rounded-lg" title="Delete template">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {templateEditId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTemplateEditId(null)}>
-          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
-              <h2 className="text-base font-semibold text-foreground">Edit Template</h2>
-              <button onClick={() => setTemplateEditId(null)} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4 text-muted-foreground" /></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Name</label>
-                <input value={templateEditDraft.name || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, name: e.target.value } as any))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Title</label>
-                <input value={templateEditDraft.title || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, title: e.target.value }))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
-                <textarea value={templateEditDraft.description || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, description: e.target.value }))} rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
-                  <Select value={templateEditDraft.priority || 'none'} onValueChange={v => setTemplateEditDraft(d => ({ ...d, priority: v as any }))}>
-                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Duration (min)</label>
-                  <input type="number" min={0} value={templateEditDraft.duration || 0} onChange={e => setTemplateEditDraft(d => ({ ...d, duration: Math.max(0, Number(e.target.value) || 0) }))} className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
-                </div>
-              </div>
-            </div>
-            <div className="px-5 py-4 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-card">
-              <button onClick={() => setTemplateEditId(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-              <button onClick={() => {
-                if (templateEditDraft.name) {
-                  updateTemplate(templateEditId, { name: templateEditDraft.name, title: templateEditDraft.title || '', description: templateEditDraft.description || '', priority: templateEditDraft.priority || 'none', labels: templateEditDraft.labels || [], checklists: templateEditDraft.checklists || [], subtasks: templateEditDraft.subtasks || [], duration: templateEditDraft.duration, sessionsNeeded: templateEditDraft.sessionsNeeded, subject: templateEditDraft.subject, color: templateEditDraft.color, icon: templateEditDraft.icon, recurrencePattern: templateEditDraft.recurrencePattern });
-                }
-                setTemplateEditId(null);
-              }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Save Template</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };
@@ -542,7 +399,7 @@ const Tasks: React.FC = () => {
   const [templateSaveSource, setTemplateSaveSource] = useState<'create' | 'task'>('create');
   const [templateSaveTaskId, setTemplateSaveTaskId] = useState<string | null>(null);
   const [templateEditId, setTemplateEditId] = useState<string | null>(null);
-  const [templateEditDraft, setTemplateEditDraft] = useState<Partial<Task>>({});
+  const [templateEditDraft, setTemplateEditDraft] = useState<Partial<TaskTemplate>>({});
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -2771,6 +2628,149 @@ const Tasks: React.FC = () => {
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button onClick={() => { deleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); setTagPopupTaskId(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {templatePopup === null && templateSaveName && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-foreground">Save as Template</h3>
+            <input
+              value={templateSaveName}
+              onChange={e => setTemplateSaveName(e.target.value)}
+              placeholder="Template name"
+              className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter' && templateSaveName.trim()) {
+                  const data = templateSaveSource === 'task' && templateSaveTaskId
+                    ? board.tasks.find(t => t.id === templateSaveTaskId)
+                    : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
+                  if (data) saveTemplate(templateSaveName.trim(), data);
+                  setTemplateSaveName(''); setTemplateSaveTaskId(null);
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setTemplateSaveName(''); setTemplateSaveTaskId(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button
+                onClick={() => {
+                  const data = templateSaveSource === 'task' && templateSaveTaskId
+                    ? board.tasks.find(t => t.id === templateSaveTaskId)
+                    : { title: newTaskTitle, description: newTaskDescription, priority: newTaskPriority, labels: newTaskLabels, checklists: [], subtasks: newTaskSubtasks.map(s => ({ id: crypto.randomUUID(), text: s.text, completed: false, durationMinutes: s.durationMinutes })), duration: newTaskDuration };
+                  if (data && templateSaveName.trim()) { saveTemplate(templateSaveName.trim(), data); setTemplateSaveName(''); setTemplateSaveTaskId(null); }
+                }}
+                disabled={!templateSaveName.trim()}
+                className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-40"
+              >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {templatePopup === 'load' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTemplatePopup(null)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-lg w-full max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-foreground">Load Template</h3>
+              <button onClick={() => setTemplatePopup(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+            </div>
+            {(board.templates || []).length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <LayoutTemplate className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No templates saved yet</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {(board.templates || []).map(t => (
+                  <div key={t.id} className="border border-border rounded-xl p-3 hover:bg-muted/30 transition-all flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{t.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t.title}{t.priority !== 'none' ? ` \u00B7 ${t.priority}` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-1 ml-2">
+                      <button onClick={() => {
+                        if (templateSaveSource === 'create') {
+                          setNewTaskTitle(t.title); setNewTaskDescription(t.description); setNewTaskPriority(t.priority);
+                          setNewTaskLabels(t.labels.map(l => ({ ...l, id: crypto.randomUUID() })));
+                          setNewTaskDuration(t.duration || 0);
+                        }
+                        setTemplatePopup(null);
+                      }} className="px-2 py-1 text-xs text-primary hover:bg-primary/10 rounded-lg">Load</button>
+                      <button onClick={() => {
+                        setTemplateEditId(t.id);
+                        setTemplateEditDraft({ title: t.title, description: t.description, priority: t.priority, labels: t.labels, checklists: t.checklists, subtasks: t.subtasks, duration: t.duration, sessionsNeeded: t.sessionsNeeded, subject: t.subject, color: t.color, icon: t.icon, recurrencePattern: t.recurrencePattern });
+                        setTemplatePopup(null);
+                      }} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg" title="Edit template">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button onClick={() => deleteTemplate(t.id)} className="p-1.5 text-destructive/60 hover:text-destructive hover:bg-destructive/10 rounded-lg" title="Delete template">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {templateEditId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTemplateEditId(null)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
+              <h2 className="text-base font-semibold text-foreground">Edit Template</h2>
+              <button onClick={() => setTemplateEditId(null)} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4 text-muted-foreground" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Name</label>
+                <input value={templateEditDraft.name || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, name: e.target.value } as any))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Title</label>
+                <input value={templateEditDraft.title || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, title: e.target.value }))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
+                <textarea value={templateEditDraft.description || ''} onChange={e => setTemplateEditDraft(d => ({ ...d, description: e.target.value }))} rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
+                  <Select value={templateEditDraft.priority || 'none'} onValueChange={v => setTemplateEditDraft(d => ({ ...d, priority: v as any }))}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Duration (min)</label>
+                  <input type="number" min={0} value={templateEditDraft.duration || 0} onChange={e => setTemplateEditDraft(d => ({ ...d, duration: Math.max(0, Number(e.target.value) || 0) }))} className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-card">
+              <button onClick={() => setTemplateEditId(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={() => {
+                if (templateEditDraft.name) {
+                  updateTemplate(templateEditId, { name: templateEditDraft.name, title: templateEditDraft.title || '', description: templateEditDraft.description || '', priority: templateEditDraft.priority || 'none', labels: templateEditDraft.labels || [], checklists: templateEditDraft.checklists || [], subtasks: templateEditDraft.subtasks || [], duration: templateEditDraft.duration, sessionsNeeded: templateEditDraft.sessionsNeeded, subject: templateEditDraft.subject, color: templateEditDraft.color, icon: templateEditDraft.icon, recurrencePattern: templateEditDraft.recurrencePattern });
+                }
+                setTemplateEditId(null);
+              }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Save Template</button>
             </div>
           </div>
         </div>
