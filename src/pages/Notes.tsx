@@ -414,7 +414,11 @@ const Notes: React.FC = () => {
             <input
               type="checkbox"
               checked={selectedDeleteIds.includes(note.id)}
-              onChange={() => {}}
+              onChange={() => {
+                setSelectedDeleteIds(prev =>
+                  prev.includes(note.id) ? prev.filter(id => id !== note.id) : [...prev, note.id]
+                );
+              }}
               onClick={e => e.stopPropagation()}
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />

@@ -1077,7 +1077,11 @@ const Tasks: React.FC = () => {
             <input
               type="checkbox"
               checked={selectedDeleteTaskIds.includes(task.id)}
-              onChange={() => {}}
+              onChange={() => {
+                setSelectedDeleteTaskIds(prev =>
+                  prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
+                );
+              }}
               onClick={e => e.stopPropagation()}
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />
@@ -1677,7 +1681,11 @@ const Tasks: React.FC = () => {
                           <input
                             type="checkbox"
                             checked={selectedDeleteTaskIds.includes(task.id)}
-                            onChange={() => {}}
+                            onChange={() => {
+                              setSelectedDeleteTaskIds(prev =>
+                                prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
+                              );
+                            }}
                             onClick={e => e.stopPropagation()}
                             className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
                           />

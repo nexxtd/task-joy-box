@@ -335,7 +335,11 @@ const Habits: React.FC = () => {
             <input
               type="checkbox"
               checked={selectedDeleteIds.includes(habit.id)}
-              onChange={() => {}}
+              onChange={() => {
+                setSelectedDeleteIds(prev =>
+                  prev.includes(habit.id) ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
+                );
+              }}
               onClick={e => e.stopPropagation()}
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />
