@@ -5,4 +5,5 @@ export const emptyBoard: Board = {
   title: 'My Board',
   columns: [],
   tasks: [],
+  templates: [],
 };
