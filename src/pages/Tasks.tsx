@@ -2184,33 +2184,43 @@ const Tasks: React.FC = () => {
               <div className="relative">
                 <button
                   onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
-                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-secondary/50 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
                 >
+                  <Star className="w-3.5 h-3.5" />
                   Templates
                 </button>
                 {templateMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover border border-border rounded-lg shadow-xl z-50 overflow-hidden">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setTemplateMenuOpen(false); setSaveTemplateOpen(true); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-secondary/50 transition-all"
-                    >
-                      Save as template
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setTemplateMenuOpen(false);
-                        try {
-                          const t = await fetchTemplates();
-                          setTemplates(t);
-                          setLoadTemplateOpen(true);
-                        } catch { /* ignore */ }
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-secondary/50 transition-all border-t border-border"
-                    >
-                      Load template
-                    </button>
-                  </div>
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setTemplateMenuOpen(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setTemplateMenuOpen(false); setSaveTemplateOpen(true); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center">
+                          <Plus className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        Save as template
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setTemplateMenuOpen(false);
+                          try {
+                            const t = await fetchTemplates();
+                            setTemplates(t);
+                            setLoadTemplateOpen(true);
+                          } catch { /* ignore */ }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+                          <FolderKanban className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        Load template
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -2229,19 +2239,37 @@ const Tasks: React.FC = () => {
       )}
 
       {saveTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setSaveTemplateOpen(false)}>
-          <div className="bg-card border border-border rounded-xl shadow-2xl p-5 w-96" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Save as template</h3>
-            <input
-              autoFocus
-              placeholder="Template name"
-              value={templateName}
-              onChange={e => setTemplateName(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSaveTemplateOpen(false)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
+              </div>
+              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <input
+                  autoFocus
+                  placeholder="e.g. Daily Standup Task"
+                  value={templateName}
+                  onChange={e => setTemplateName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
+                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
               <button
+                id="save-template-btn"
                 onClick={async () => {
                   if (!templateName.trim()) return;
                   try {
@@ -2266,7 +2294,7 @@ const Tasks: React.FC = () => {
                   } catch { /* ignore */ }
                 }}
                 disabled={!templateName.trim()}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
                 Save
               </button>
@@ -2276,41 +2304,74 @@ const Tasks: React.FC = () => {
       )}
 
       {loadTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setLoadTemplateOpen(false)}>
-          <div className="bg-card border border-border rounded-xl shadow-2xl p-5 w-96 max-h-96 overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-foreground mb-4">Load template</h3>
-            {templates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No templates saved yet.</p>
-            ) : (
-              <div className="space-y-1">
-                {templates.map(tmpl => (
-                  <button
-                    key={tmpl.id}
-                    onClick={() => {
-                      setNewTaskTitle(tmpl.title || '');
-                      setNewTaskDescription(tmpl.description || '');
-                      setNewTaskPriority(tmpl.priority || 'medium');
-                      setNewTaskDuration(tmpl.duration || 0);
-                      setNewTaskStartDate(tmpl.startDate || '');
-                      setNewTaskStartTime(tmpl.startTime || '');
-                      setNewTaskDueDate(tmpl.dueDate || '');
-                      setNewTaskDueTime(tmpl.dueTime || '');
-                      setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
-                      setNewTaskColumnId(tmpl.columnId || '');
-                      setNewTaskLabels(tmpl.labels || []);
-                      setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
-                      setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
-                      setLoadTemplateOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-secondary/50 rounded-lg transition-all"
-                  >
-                    {tmpl.name}
-                  </button>
-                ))}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setLoadTemplateOpen(false)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <FolderKanban className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">Load template</h2>
               </div>
-            )}
-            <div className="flex justify-end mt-4">
-              <button onClick={() => setLoadTemplateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Close</button>
+              <button onClick={() => setLoadTemplateOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2">
+              {templates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
+                    <FolderKanban className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">No templates yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a task as a template first.</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {templates.map(tmpl => (
+                    <button
+                      key={tmpl.id}
+                      onClick={() => {
+                        setNewTaskTitle(tmpl.title || '');
+                        setNewTaskDescription(tmpl.description || '');
+                        setNewTaskPriority(tmpl.priority || 'medium');
+                        setNewTaskDuration(tmpl.duration || 0);
+                        setNewTaskStartDate(tmpl.startDate || '');
+                        setNewTaskStartTime(tmpl.startTime || '');
+                        setNewTaskDueDate(tmpl.dueDate || '');
+                        setNewTaskDueTime(tmpl.dueTime || '');
+                        setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+                        setNewTaskColumnId(tmpl.columnId || '');
+                        setNewTaskLabels(tmpl.labels || []);
+                        setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
+                        setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
+                        setLoadTemplateOpen(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-3 text-sm text-foreground hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                        <Star className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium block truncate">{tmpl.name}</span>
+                        {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                      </div>
+                      <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full flex-shrink-0 ${
+                        tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
+                        tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
+                        tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Medium'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end px-5 py-4 border-t border-border">
+              <button onClick={() => setLoadTemplateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
             </div>
           </div>
         </div>
@@ -3854,72 +3915,51 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     setTemplatePopupOpen(true);
                   } catch { /* ignore */ }
                 }}
-                className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-secondary/50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
               >
+                <Star className="w-3.5 h-3.5" />
                 Templates
               </button>
               {templatePopupOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-72 bg-popover border border-border rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto">
+                <div className="absolute bottom-full left-0 mb-2 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 max-h-96 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <h3 className="text-sm font-semibold text-foreground">Templates</h3>
-                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); }} className="text-muted-foreground hover:text-foreground">
-                      <X className="w-4 h-4" />
+                    <div className="flex items-center gap-2">
+                      <Star className="w-4 h-4 text-primary" />
+                      <h3 className="text-sm font-semibold text-foreground">Templates</h3>
+                    </div>
+                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); }} className="p-1.5 rounded-lg hover:bg-muted">
+                      <X className="w-4 h-4 text-muted-foreground" />
                     </button>
                   </div>
-                  {editingTmpl ? (
-                    <div className="p-4 space-y-3">
-                      <input value={editingTmplName} onChange={e => setEditingTmplName(e.target.value)} placeholder="Template name" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Title" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
-                      <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Description" rows={3} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
-                      <select value={editingTmplPriority} onChange={e => setEditingTmplPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-                        <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
-                      </select>
-                      <div className="flex gap-2">
-                        <input type="number" value={editingTmplDuration} onChange={e => setEditingTmplDuration(Number(e.target.value))} placeholder="Duration (min)" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
+                  {fullViewTemplates.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                      <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-2">
+                        <Star className="w-5 h-5 text-muted-foreground" />
                       </div>
-                      <input type="date" value={editingTmplStartDate} onChange={e => setEditingTmplStartDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
-                      <input type="time" value={editingTmplStartTime} onChange={e => setEditingTmplStartTime(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
-                      <input type="date" value={editingTmplDueDate} onChange={e => setEditingTmplDueDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
-                      <input type="time" value={editingTmplDueTime} onChange={e => setEditingTmplDueTime(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
-                      <div className="flex justify-end gap-2 pt-2">
-                        <button onClick={() => setEditingTmpl(null)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
-                        <button
-                          onClick={async () => {
-                            if (!editingTmpl) return;
-                            try {
-                              await updateTemplate(editingTmpl.id, {
-                                name: editingTmplName,
-                                title: editingTmplTitle,
-                                description: editingTmplDesc,
-                                priority: editingTmplPriority,
-                                duration: editingTmplDuration,
-                                startDate: editingTmplStartDate || undefined,
-                                startTime: editingTmplStartTime || undefined,
-                                dueDate: editingTmplDueDate || undefined,
-                                dueTime: editingTmplDueTime || undefined,
-                                labels: editingTmpl.labels,
-                                subtasks: editingTmpl.subtasks,
-                                checklists: editingTmpl.checklists,
-                              });
-                              const t = await fetchTemplates();
-                              setFullViewTemplates(t);
-                              setEditingTmpl(null);
-                            } catch { /* ignore */ }
-                          }}
-                          className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
-                        >
-                          Save
-                        </button>
-                      </div>
+                      <p className="text-sm text-foreground">No templates yet</p>
                     </div>
-                  ) : fullViewTemplates.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground text-center">No templates saved yet.</div>
                   ) : (
-                    <div className="divide-y divide-border">
+                    <div className="max-h-72 overflow-y-auto divide-y divide-border">
                       {fullViewTemplates.map(tmpl => (
-                        <div key={tmpl.id} className="flex items-center justify-between px-4 py-3 hover:bg-secondary/30 transition-all">
-                          <span className="text-sm text-foreground">{tmpl.name}</span>
-                          <div className="flex gap-1">
+                        <div key={tmpl.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-all group">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                              <Star className="w-3.5 h-3.5 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
+                              {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
+                            </div>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                              tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
+                              tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
+                              tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Med'}
+                            </span>
+                          </div>
+                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
                             <button
                               onClick={() => {
                                 setEditingTmpl(tmpl);
@@ -3933,7 +3973,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                 setEditingTmplDueDate(tmpl.dueDate || '');
                                 setEditingTmplDueTime(tmpl.dueTime || '');
                               }}
-                              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-all"
+                              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                              title="Edit template"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
@@ -3947,6 +3988,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                 } catch { /* ignore */ }
                               }}
                               className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                              title="Delete template"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3992,6 +4034,105 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 }
                 setProjectChangeConfirm(null);
               }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingTmpl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditingTmpl(null)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">Edit template</h2>
+              </div>
+              <button onClick={() => setEditingTmpl(null)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <input value={editingTmplName} onChange={e => setEditingTmplName(e.target.value)} placeholder="Template name" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Title</label>
+                <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Task title" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Description</label>
+                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Priority</label>
+                  <select value={editingTmplPriority} onChange={e => setEditingTmplPriority(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Duration (min)</label>
+                  <input type="number" min={0} value={editingTmplDuration} onChange={e => setEditingTmplDuration(Math.max(0, Number(e.target.value) || 0))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Start date</label>
+                  <input type="date" value={editingTmplStartDate} onChange={e => setEditingTmplStartDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Start time</label>
+                  <input type="time" value={editingTmplStartTime} onChange={e => setEditingTmplStartTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Due date</label>
+                  <input type="date" value={editingTmplDueDate} onChange={e => setEditingTmplDueDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Due time</label>
+                  <input type="time" value={editingTmplDueTime} onChange={e => setEditingTmplDueTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button onClick={() => setEditingTmpl(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!editingTmpl || !editingTmplName.trim()) return;
+                  try {
+                    await updateTemplate(editingTmpl.id, {
+                      name: editingTmplName,
+                      title: editingTmplTitle,
+                      description: editingTmplDesc,
+                      priority: editingTmplPriority,
+                      duration: editingTmplDuration,
+                      startDate: editingTmplStartDate || undefined,
+                      startTime: editingTmplStartTime || undefined,
+                      dueDate: editingTmplDueDate || undefined,
+                      dueTime: editingTmplDueTime || undefined,
+                      labels: editingTmpl.labels,
+                      subtasks: editingTmpl.subtasks,
+                      checklists: editingTmpl.checklists,
+                    });
+                    const t = await fetchTemplates();
+                    setFullViewTemplates(t);
+                    setEditingTmpl(null);
+                  } catch { /* ignore */ }
+                }}
+                disabled={!editingTmplName.trim()}
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>
