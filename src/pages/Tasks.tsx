@@ -35,8 +35,6 @@ import {
   DropResult,
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TemplateMenuButton } from '@/components/TaskTemplateModals';
-import { taskToTemplateDraft } from '@/hooks/useTemplates';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -831,57 +829,6 @@ const Tasks: React.FC = () => {
     setNewFiles([]);
     setNewTaskLabels([]);
   };
-
-  const loadTemplate = (draft: {
-    title: string;
-    description: string;
-    priority: Priority;
-    status: TaskStatus;
-    startDate?: string;
-    startTime?: string;
-    dueDate?: string;
-    dueTime?: string;
-    duration?: number;
-    subject?: string;
-    color?: string;
-    icon?: string;
-    recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
-    subtasks: Array<{ text: string; durationMinutes: number }>;
-    checklists: Array<{ id: string; title: string; items: Array<{ id: string; text: string; completed: boolean }> }>;
-    labels: Label[];
-  }) => {
-    setNewTaskTitle(draft.title);
-    setNewTaskDescription(draft.description);
-    setNewTaskPriority(draft.priority);
-    setNewTaskStatus(draft.status);
-    setNewTaskStartDate(draft.startDate || '');
-    setNewTaskStartTime(draft.startTime || '');
-    setNewTaskDueDate(draft.dueDate || '');
-    setNewTaskDueTime(draft.dueTime || '');
-    setNewTaskDuration(draft.duration || 60);
-    setNewTaskSubtasks(draft.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: st.durationMinutes })));
-    setNewChecklistItems(draft.checklists.flatMap(cl => cl.items.map(it => ({ id: crypto.randomUUID(), text: it.text }))));
-    setNewTaskLabels(draft.labels);
-    setAddingTask(true);
-  };
-
-  const getCurrentDraft = () =>
-    taskToTemplateDraft({
-      title: newTaskTitle,
-      description: newTaskDescription,
-      priority: newTaskPriority,
-      status: newTaskStatus,
-      startDate: newTaskStartDate,
-      startTime: newTaskStartTime,
-      dueDate: newTaskDueDate,
-      dueTime: newTaskDueTime,
-      duration: newTaskDuration,
-      subtasks: newTaskSubtasks,
-      checklists: newChecklistItems.length
-        ? [{ id: crypto.randomUUID(), title: 'Checklist', items: newChecklistItems.map(item => ({ id: item.id, text: item.text, completed: false })) }]
-        : [],
-      labels: newTaskLabels,
-    });
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
@@ -1756,35 +1703,6 @@ const Tasks: React.FC = () => {
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
                           Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
                         </span>
-                        <TemplateMenuButton
-                          getCurrentDraft={() => taskToTemplateDraft(task)}
-                          onLoadTemplate={(draft) => {
-                            updateTask(task.id, {
-                              title: draft.title,
-                              description: draft.description,
-                              priority: draft.priority,
-                              status: draft.status,
-                              startDate: draft.startDate,
-                              startTime: draft.startTime,
-                              dueDate: draft.dueDate,
-                              dueTime: draft.dueTime,
-                              duration: draft.duration,
-                              subject: draft.subject,
-                              color: draft.color,
-                              icon: draft.icon,
-                              recurrencePattern: draft.recurrencePattern,
-                              subtasks: draft.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, completed: false, durationMinutes: st.durationMinutes })),
-                              checklists: draft.checklists.map(cl => ({
-                                id: crypto.randomUUID(),
-                                title: cl.title,
-                                items: cl.items.map(it => ({ id: crypto.randomUUID(), text: it.text, completed: false })),
-                              })),
-                              labels: draft.labels,
-                            });
-                          }}
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        />
                         <button
                           onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
                           className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
@@ -2251,21 +2169,15 @@ const Tasks: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
-              <TemplateMenuButton
-                getCurrentDraft={getCurrentDraft}
-                onLoadTemplate={loadTemplate}
-              />
-              <div className="flex items-center gap-2">
-                <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                <button
-                  onClick={createTask}
-                  disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
-                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-                >
-                  Save
-                </button>
-              </div>
+            <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+              <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button
+                onClick={createTask}
+                disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>

@@ -4,8 +4,6 @@ import { useBoardContext } from '@/context/BoardContext';
 import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TemplateMenuButton } from '@/components/TaskTemplateModals';
-import { taskToTemplateDraft } from '@/hooks/useTemplates';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -116,50 +114,6 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
       deleteTask(task.id);
       onClose();
     }
-  };
-
-  const getCurrentDraft = () => taskToTemplateDraft(task);
-
-  const applyTemplate = (draft: {
-    title: string;
-    description: string;
-    priority: Priority;
-    status: any;
-    startDate?: string;
-    startTime?: string;
-    dueDate?: string;
-    dueTime?: string;
-    duration?: number;
-    subject?: string;
-    color?: string;
-    icon?: string;
-    recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
-    subtasks: Array<{ text: string; durationMinutes: number }>;
-    checklists: Array<{ id: string; title: string; items: Array<{ id: string; text: string; completed: boolean }> }>;
-    labels: Label[];
-  }) => {
-    updateTask(task.id, {
-      title: draft.title,
-      description: draft.description,
-      priority: draft.priority,
-      status: draft.status,
-      startDate: draft.startDate,
-      startTime: draft.startTime,
-      dueDate: draft.dueDate,
-      dueTime: draft.dueTime,
-      duration: draft.duration,
-      subject: draft.subject,
-      color: draft.color,
-      icon: draft.icon,
-      recurrencePattern: draft.recurrencePattern,
-      subtasks: draft.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, completed: false, durationMinutes: st.durationMinutes })),
-      checklists: draft.checklists.map(cl => ({
-        id: crypto.randomUUID(),
-        title: cl.title,
-        items: cl.items.map(it => ({ id: crypto.randomUUID(), text: it.text, completed: false })),
-      })),
-      labels: draft.labels,
-    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -636,14 +590,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
             })}
           </div>
 
-          {/* Delete + Templates */}
+          {/* Delete */}
           {canEdit && (
-            <div className="pt-4 border-t border-border flex justify-end gap-2">
-              <TemplateMenuButton
-                getCurrentDraft={getCurrentDraft}
-                onLoadTemplate={applyTemplate}
-                size="sm"
-              />
+            <div className="pt-4 border-t border-border flex justify-end">
               <button
                 onClick={handleDelete}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"

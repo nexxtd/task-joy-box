@@ -15,8 +15,6 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TemplateMenuButton } from '@/components/TaskTemplateModals';
-import { taskToTemplateDraft } from '@/hooks/useTemplates';
 
 // This component is extracted from the "Create Task" modal flow inside src/pages/Tasks.tsx.
 // It intentionally focuses only on the create-task overlay (not the full Tasks page).
@@ -181,57 +179,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setNewTagName('');
     setNewTagColor(randomTagColor());
   };
-
-  const loadTemplate = (draft: {
-    title: string;
-    description: string;
-    priority: Priority;
-    status: TaskStatus;
-    startDate?: string;
-    startTime?: string;
-    dueDate?: string;
-    dueTime?: string;
-    duration?: number;
-    subject?: string;
-    color?: string;
-    icon?: string;
-    recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
-    subtasks: Array<{ text: string; durationMinutes: number }>;
-    checklists: Array<{ id: string; title: string; items: Array<{ id: string; text: string; completed: boolean }> }>;
-    labels: Label[];
-  }) => {
-    setNewTaskTitle(draft.title);
-    setNewTaskDescription(draft.description);
-    setNewTaskPriority(draft.priority);
-    setNewTaskStatus(draft.status);
-    setNewTaskStartDate(draft.startDate || '');
-    setNewTaskStartTime(draft.startTime || '');
-    setNewTaskDueDate(draft.dueDate || '');
-    setNewTaskDueTime(draft.dueTime || '');
-    setNewTaskDuration(draft.duration || 60);
-    setNewTaskSubtasks(draft.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: st.durationMinutes })));
-    setNewChecklistItems(draft.checklists.flatMap(cl => cl.items.map(it => it.text)));
-    // labels aren't shown in CreateTaskModal but we can store them if needed
-    setAddingTask(true);
-  };
-
-  const getCurrentDraft = () =>
-    taskToTemplateDraft({
-      title: newTaskTitle,
-      description: newTaskDescription,
-      priority: newTaskPriority,
-      status: newTaskStatus,
-      startDate: newTaskStartDate,
-      startTime: newTaskStartTime,
-      dueDate: newTaskDueDate,
-      dueTime: newTaskDueTime,
-      duration: newTaskDuration,
-      subtasks: newTaskSubtasks,
-      checklists: newChecklistItems.length
-        ? [{ id: crypto.randomUUID(), title: 'Checklist', items: newChecklistItems.map(text => ({ id: crypto.randomUUID(), text, completed: false })) }]
-        : [],
-      labels: [],
-    });
 
   // Keep draft column/project synced with defaults when opened
   useEffect(() => {
@@ -778,28 +725,22 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             )}
           </div>
 
-          <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
-            <TemplateMenuButton
-              getCurrentDraft={getCurrentDraft}
-              onLoadTemplate={loadTemplate}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  onClose();
-                }}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createTask}
-                disabled={!newTaskTitle.trim()}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-              >
-                Save
-              </button>
-            </div>
+          <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+            <button
+              onClick={() => {
+                onClose();
+              }}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={createTask}
+              disabled={!newTaskTitle.trim()}
+              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+            >
+              Save
+            </button>
           </div>
         </div>
 
