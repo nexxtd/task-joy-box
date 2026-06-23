@@ -506,6 +506,27 @@ export const milestones = pgTable('milestones', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const taskTemplates = pgTable('task_templates', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  priority: text('priority').default('medium'),
+  duration: integer('duration'),
+  startDate: text('start_date'),
+  startTime: text('start_time'),
+  dueDate: text('due_date'),
+  dueTime: text('due_time'),
+  projectId: integer('project_id'),
+  columnId: text('column_id'),
+  labels: text('labels').default('[]'),
+  subtasks: text('subtasks').default('[]'),
+  checklists: text('checklists').default('[]'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export type InsertGoal = any;
 export type InsertHabit = any;
 export type UpdateUserSettings = any;

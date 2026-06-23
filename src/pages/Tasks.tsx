@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, LABEL_COLORS } from '@/types/board';
+import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
+import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import {
   ArrowDown,
   ArrowUp,
@@ -13,6 +14,7 @@ import {
   ChevronUp,
   Clock,
   Clock3,
+  Edit3,
   GripVertical,
   FolderKanban,
   Paperclip,
@@ -292,7 +294,7 @@ const Tasks: React.FC = () => {
   const { open: openDeepFocus } = useDeepFocus();
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isPro = user?.subscriptionTier === 'pro';
+  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
@@ -389,6 +391,15 @@ const Tasks: React.FC = () => {
   const [aiBuilderError, setAiBuilderError] = useState('');
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
+
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateFullListOpen, setTemplateFullListOpen] = useState(false);
+  const [templateDeleteConfirm, setTemplateDeleteConfirm] = useState<number | null>(null);
+  const [editTemplateData, setEditTemplateData] = useState<TaskTemplate | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -2169,15 +2180,137 @@ const Tasks: React.FC = () => {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
-              <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+            <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
+              <div className="relative">
+                <button
+                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
+                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-secondary/50 transition-all"
+                >
+                  Templates
+                </button>
+                {templateMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setTemplateMenuOpen(false); setSaveTemplateOpen(true); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-secondary/50 transition-all"
+                    >
+                      Save as template
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setTemplateMenuOpen(false);
+                        try {
+                          const t = await fetchTemplates();
+                          setTemplates(t);
+                          setLoadTemplateOpen(true);
+                        } catch { /* ignore */ }
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-foreground hover:bg-secondary/50 transition-all border-t border-border"
+                    >
+                      Load template
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setAddingTask(false); resetTaskDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  onClick={createTask}
+                  disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveTemplateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setSaveTemplateOpen(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-5 w-96" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-foreground mb-4">Save as template</h3>
+            <input
+              autoFocus
+              placeholder="Template name"
+              value={templateName}
+              onChange={e => setTemplateName(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
-                onClick={createTask}
-                disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                onClick={async () => {
+                  if (!templateName.trim()) return;
+                  try {
+                    await createTemplate({
+                      name: templateName.trim(),
+                      title: newTaskTitle || '',
+                      description: newTaskDescription || '',
+                      priority: newTaskPriority || 'medium',
+                      duration: newTaskDuration || 0,
+                      startDate: newTaskStartDate || undefined,
+                      startTime: newTaskStartTime || undefined,
+                      dueDate: newTaskDueDate || undefined,
+                      dueTime: newTaskDueTime || undefined,
+                      projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
+                      columnId: newTaskColumnId || undefined,
+                      labels: newTaskLabels || [],
+                      subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
+                      checklists: newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                    });
+                    setSaveTemplateOpen(false);
+                    setTemplateName('');
+                  } catch { /* ignore */ }
+                }}
+                disabled={!templateName.trim()}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
                 Save
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {loadTemplateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setLoadTemplateOpen(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-2xl p-5 w-96 max-h-96 overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-foreground mb-4">Load template</h3>
+            {templates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No templates saved yet.</p>
+            ) : (
+              <div className="space-y-1">
+                {templates.map(tmpl => (
+                  <button
+                    key={tmpl.id}
+                    onClick={() => {
+                      setNewTaskTitle(tmpl.title || '');
+                      setNewTaskDescription(tmpl.description || '');
+                      setNewTaskPriority(tmpl.priority || 'medium');
+                      setNewTaskDuration(tmpl.duration || 0);
+                      setNewTaskStartDate(tmpl.startDate || '');
+                      setNewTaskStartTime(tmpl.startTime || '');
+                      setNewTaskDueDate(tmpl.dueDate || '');
+                      setNewTaskDueTime(tmpl.dueTime || '');
+                      setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+                      setNewTaskColumnId(tmpl.columnId || '');
+                      setNewTaskLabels(tmpl.labels || []);
+                      setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
+                      setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
+                      setLoadTemplateOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-secondary/50 rounded-lg transition-all"
+                  >
+                    {tmpl.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setLoadTemplateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Close</button>
             </div>
           </div>
         </div>
@@ -2941,6 +3074,19 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
+
+  const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
+  const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
+  const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
+  const [editingTmplName, setEditingTmplName] = useState('');
+  const [editingTmplTitle, setEditingTmplTitle] = useState('');
+  const [editingTmplDesc, setEditingTmplDesc] = useState('');
+  const [editingTmplPriority, setEditingTmplPriority] = useState<string>('medium');
+  const [editingTmplDuration, setEditingTmplDuration] = useState(0);
+  const [editingTmplStartDate, setEditingTmplStartDate] = useState('');
+  const [editingTmplStartTime, setEditingTmplStartTime] = useState('');
+  const [editingTmplDueDate, setEditingTmplDueDate] = useState('');
+  const [editingTmplDueTime, setEditingTmplDueTime] = useState('');
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
@@ -3699,6 +3845,119 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               </span>
             )}
             <span className="text-xs text-muted-foreground">Created: {new Date(task.createdAt).toLocaleDateString()}</span>
+            <div className="relative">
+              <button
+                onClick={async () => {
+                  try {
+                    const t = await fetchTemplates();
+                    setFullViewTemplates(t);
+                    setTemplatePopupOpen(true);
+                  } catch { /* ignore */ }
+                }}
+                className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-secondary/50 transition-all"
+              >
+                Templates
+              </button>
+              {templatePopupOpen && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 bg-popover border border-border rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <h3 className="text-sm font-semibold text-foreground">Templates</h3>
+                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); }} className="text-muted-foreground hover:text-foreground">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {editingTmpl ? (
+                    <div className="p-4 space-y-3">
+                      <input value={editingTmplName} onChange={e => setEditingTmplName(e.target.value)} placeholder="Template name" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Title" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Description" rows={3} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none" />
+                      <select value={editingTmplPriority} onChange={e => setEditingTmplPriority(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                        <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <input type="number" value={editingTmplDuration} onChange={e => setEditingTmplDuration(Number(e.target.value))} placeholder="Duration (min)" className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" />
+                      </div>
+                      <input type="date" value={editingTmplStartDate} onChange={e => setEditingTmplStartDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+                      <input type="time" value={editingTmplStartTime} onChange={e => setEditingTmplStartTime(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+                      <input type="date" value={editingTmplDueDate} onChange={e => setEditingTmplDueDate(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+                      <input type="time" value={editingTmplDueTime} onChange={e => setEditingTmplDueTime(e.target.value)} className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg" />
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button onClick={() => setEditingTmpl(null)} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                        <button
+                          onClick={async () => {
+                            if (!editingTmpl) return;
+                            try {
+                              await updateTemplate(editingTmpl.id, {
+                                name: editingTmplName,
+                                title: editingTmplTitle,
+                                description: editingTmplDesc,
+                                priority: editingTmplPriority,
+                                duration: editingTmplDuration,
+                                startDate: editingTmplStartDate || undefined,
+                                startTime: editingTmplStartTime || undefined,
+                                dueDate: editingTmplDueDate || undefined,
+                                dueTime: editingTmplDueTime || undefined,
+                                labels: editingTmpl.labels,
+                                subtasks: editingTmpl.subtasks,
+                                checklists: editingTmpl.checklists,
+                              });
+                              const t = await fetchTemplates();
+                              setFullViewTemplates(t);
+                              setEditingTmpl(null);
+                            } catch { /* ignore */ }
+                          }}
+                          className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : fullViewTemplates.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground text-center">No templates saved yet.</div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {fullViewTemplates.map(tmpl => (
+                        <div key={tmpl.id} className="flex items-center justify-between px-4 py-3 hover:bg-secondary/30 transition-all">
+                          <span className="text-sm text-foreground">{tmpl.name}</span>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingTmpl(tmpl);
+                                setEditingTmplName(tmpl.name);
+                                setEditingTmplTitle(tmpl.title);
+                                setEditingTmplDesc(tmpl.description);
+                                setEditingTmplPriority(tmpl.priority || 'medium');
+                                setEditingTmplDuration(tmpl.duration || 0);
+                                setEditingTmplStartDate(tmpl.startDate || '');
+                                setEditingTmplStartTime(tmpl.startTime || '');
+                                setEditingTmplDueDate(tmpl.dueDate || '');
+                                setEditingTmplDueTime(tmpl.dueTime || '');
+                              }}
+                              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-secondary/50 transition-all"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                                try {
+                                  await deleteTemplateApi(tmpl.id);
+                                  const t = await fetchTemplates();
+                                  setFullViewTemplates(t);
+                                } catch { /* ignore */ }
+                              }}
+                              className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <button
             onClick={() => onDeleteTask(task.id)}

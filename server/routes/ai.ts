@@ -133,7 +133,7 @@ async function requirePremiumTier(req: AuthRequest, res: Response) {
   const user = await getAuthenticatedUser(req, res);
   if (!user) return null;
 
-  if (user.subscriptionTier !== 'premium' && user.subscriptionStatus !== 'active') {
+  if (user.subscriptionTier !== 'premium' && user.subscriptionTier !== 'pro' && user.subscriptionStatus !== 'active') {
     res.status(403).json({
       error: 'Premium subscription required',
       currentTier: user.subscriptionTier || 'free',

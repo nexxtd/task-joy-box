@@ -98,6 +98,27 @@ export interface Board {
   tasks: Task[];
 }
 
+export interface TaskTemplate {
+  id: number;
+  userId: number;
+  name: string;
+  title: string;
+  description: string;
+  priority: Priority;
+  duration: number;
+  startDate?: string;
+  startTime?: string;
+  dueDate?: string;
+  dueTime?: string;
+  projectId?: number | null;
+  columnId?: string;
+  labels: Label[];
+  subtasks: Array<{ text: string; durationMinutes: number }>;
+  checklists: Checklist[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const DEFAULT_LABELS: Label[] = [];
 
 export const PRIORITY_CONFIG: Record<Exclude<Priority, 'none'>, { label: string; className: string }> = {
