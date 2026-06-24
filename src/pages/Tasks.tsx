@@ -2734,6 +2734,8 @@ const Tasks: React.FC = () => {
           onEditTemplate={handleEditTemplate}
           onSaveTemplate={handleSaveTemplate}
           editingTemplateMeta={editingTemplateMeta}
+          templateEditName={templateEditName}
+          onTemplateEditNameChange={setTemplateEditName}
         />
       )}
 
@@ -3046,6 +3048,8 @@ interface TaskFullViewProps {
   onEditTemplate?: (template: TaskTemplate) => void;
   onSaveTemplate?: () => Promise<void>;
   editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
+  templateEditName?: string;
+  onTemplateEditNameChange?: (name: string) => void;
 }
 
 const TaskDropdownExpanded: React.FC<{
@@ -3374,6 +3378,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   onEditTemplate,
   onSaveTemplate,
   editingTemplateMeta,
+  templateEditName,
+  onTemplateEditNameChange,
 }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
@@ -3602,8 +3608,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Template name</label>
                 <input
                   className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  value={templateEditName}
-                  onChange={e => setTemplateEditName(e.target.value)}
+                  value={templateEditName || ''}
+                  onChange={e => onTemplateEditNameChange?.(e.target.value)}
                   placeholder="Template name"
                 />
               </div>

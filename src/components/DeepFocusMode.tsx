@@ -281,9 +281,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     }
   }, []);
 
-  useEffect(() => { handleTimerCompleteRef.current = handleTimerComplete; }, [handleTimerComplete]);
-  useEffect(() => { startSoundRef.current = startSound; }, [startSound]);
-  useEffect(() => { stopSoundRef.current = stopSound; }, [stopSound]);
   useEffect(() => { totalSecsRef.current = totalSecs; }, [totalSecs]);
   useEffect(() => { activePillRef.current = activePill; }, [activePill]);
   useEffect(() => { customMinutesRef.current = customMinutes; }, [customMinutes]);
@@ -365,6 +362,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     }
     setShowCompletionDialog(true);
   }, [stopSound]);
+
+  useEffect(() => { handleTimerCompleteRef.current = handleTimerComplete; }, [handleTimerComplete]);
+  useEffect(() => { startSoundRef.current = startSound; }, [startSound]);
+  useEffect(() => { stopSoundRef.current = stopSound; }, [stopSound]);
 
   const handleCompletedTask = useCallback(() => {
     setShowCompletionDialog(false);
