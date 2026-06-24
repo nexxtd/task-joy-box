@@ -1428,14 +1428,6 @@ const Tasks: React.FC = () => {
                             <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
                             {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
                           </div>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                            tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
-                            tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
-                            tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
-                            'bg-muted text-muted-foreground'
-                          }`}>
-                            {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Med'}
-                          </span>
                         </div>
                         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
                           <button
@@ -4110,14 +4102,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                               <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
                               {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
                             </div>
-                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                              tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
-                              tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
-                              tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Med'}
-                            </span>
                           </div>
                           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
                             <button
