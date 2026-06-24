@@ -214,9 +214,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const customMinutesRef = useRef(customMinutes);
   const soundEnabledRef = useRef(soundEnabled);
   const selectedSoundRef = useRef(selectedSound);
-  const handleTimerCompleteRef = useRef(handleTimerComplete);
-  const startSoundRef = useRef(startSound);
-  const stopSoundRef = useRef(stopSound);
+  const handleTimerCompleteRef = useRef<() => void>(() => {});
+  const startSoundRef = useRef<(sound?: SoundType) => void>(() => {});
+  const stopSoundRef = useRef<() => void>(() => {});
 
   const getDurationSecs = useCallback((pill: Pill, mins: number) => {
     if (pill === 'custom') return (mins || 30) * 60;
