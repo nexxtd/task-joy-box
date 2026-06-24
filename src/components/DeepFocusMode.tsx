@@ -298,34 +298,36 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
     intervalRef.current = setInterval(tick, 200);
 
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') tick();
-    };
+    const handleVisibility = () => { tick(); };
     document.addEventListener('visibilitychange', handleVisibility);
+    const handleFocus = () => { tick(); };
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [isRunning]);
 
   const handleStartSession = useCallback(() => {
     const secs = getDurationSecs(activePill, customMinutes);
+    startedAtRef.current = Date.now();
+    totalSecsRef.current = secs;
     setTimeLeft(secs);
     setTotalSecs(secs);
     setIsRunning(true);
-    startedAtRef.current = Date.now();
     if (soundEnabled) startSound();
   }, [activePill, customMinutes, getDurationSecs, soundEnabled, startSound]);
 
   const handlePause = useCallback(() => {
     setIsRunning(false);
-    startedAtRef.current = null;
     stopSound();
   }, [stopSound]);
 
   const handleResume = useCallback(() => {
-    startedAtRef.current = Date.now() - (totalSecs - timeLeft) * 1000;
+    const elapsed = totalSecs - timeLeft;
+    startedAtRef.current = Date.now() - elapsed * 1000;
     setIsRunning(true);
     if (soundEnabled) startSound();
   }, [soundEnabled, startSound, totalSecs, timeLeft]);
