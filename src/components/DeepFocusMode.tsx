@@ -208,6 +208,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const soundCleanupRef = useRef<(() => void) | null>(null);
   const customPopupRef = useRef<HTMLDivElement>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const totalSecsRef = useRef(totalSecs);
+  const activePillRef = useRef(activePill);
+  const customMinutesRef = useRef(customMinutes);
+  const soundEnabledRef = useRef(soundEnabled);
+  const selectedSoundRef = useRef(selectedSound);
+  const handleTimerCompleteRef = useRef(handleTimerComplete);
+  const startSoundRef = useRef(startSound);
+  const stopSoundRef = useRef(stopSound);
 
   const getDurationSecs = useCallback((pill: Pill, mins: number) => {
     if (pill === 'custom') return (mins || 30) * 60;
@@ -239,29 +248,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     fetchTodayStats();
   }, []);
 
-  useEffect(() => {
-    if (!isRunning) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
-    }
-
-    intervalRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          handleTimerComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // handleTimerComplete is stable through closure usage below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRunning]);
-
   const getAudioCtx = () => {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
       audioCtxRef.current = new AudioContext();
@@ -283,23 +269,69 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     soundCleanupRef.current = createSoundEngine(ctx, sound);
   }, [selectedSound, stopSound]);
 
+  const tick = useCallback(() => {
+    if (!startedAtRef.current) return;
+    const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+    const remaining = Math.max(0, totalSecsRef.current - elapsed);
+    setTimeLeft(remaining);
+    if (remaining <= 0) {
+      setIsRunning(false);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      handleTimerCompleteRef.current();
+    }
+  }, []);
+
+  useEffect(() => { handleTimerCompleteRef.current = handleTimerComplete; }, [handleTimerComplete]);
+  useEffect(() => { startSoundRef.current = startSound; }, [startSound]);
+  useEffect(() => { stopSoundRef.current = stopSound; }, [stopSound]);
+  useEffect(() => { totalSecsRef.current = totalSecs; }, [totalSecs]);
+  useEffect(() => { activePillRef.current = activePill; }, [activePill]);
+  useEffect(() => { customMinutesRef.current = customMinutes; }, [customMinutes]);
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { selectedSoundRef.current = selectedSound; }, [selectedSound]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      startedAtRef.current = null;
+      return;
+    }
+
+    tick();
+
+    intervalRef.current = setInterval(tick, 200);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isRunning]);
+
   const handleStartSession = useCallback(() => {
     const secs = getDurationSecs(activePill, customMinutes);
     setTimeLeft(secs);
     setTotalSecs(secs);
     setIsRunning(true);
+    startedAtRef.current = Date.now();
     if (soundEnabled) startSound();
   }, [activePill, customMinutes, getDurationSecs, soundEnabled, startSound]);
 
   const handlePause = useCallback(() => {
     setIsRunning(false);
+    startedAtRef.current = null;
     stopSound();
   }, [stopSound]);
 
   const handleResume = useCallback(() => {
+    startedAtRef.current = Date.now() - (totalSecs - timeLeft) * 1000;
     setIsRunning(true);
     if (soundEnabled) startSound();
-  }, [soundEnabled, startSound]);
+  }, [soundEnabled, startSound, totalSecs, timeLeft]);
 
   const saveSession = useCallback(async (completed: boolean) => {
     const minutes = Math.round(totalSecs / 60);
