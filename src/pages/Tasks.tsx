@@ -557,7 +557,7 @@ const Tasks: React.FC = () => {
     if (!editingTemplateMeta) return;
     const edited = templateEditOverrides || {};
     try {
-      await updateTemplate(editingTemplateMeta.id, {
+      const saved = await updateTemplate(editingTemplateMeta.id, {
         name: templateEditName || editingTemplateMeta.name,
         title: (edited.title ?? editingTemplateMeta.template.title) || '',
         description: (edited.description ?? editingTemplateMeta.template.description) || '',
@@ -573,6 +573,9 @@ const Tasks: React.FC = () => {
         subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
       });
+      setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
+      setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
+      setFullViewLoadTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setTemplateEditName('');
       setTemplateEditOverrides(null);
       setEditingTemplateMeta(null);
