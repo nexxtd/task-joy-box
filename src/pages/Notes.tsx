@@ -1147,7 +1147,7 @@ const Notes: React.FC = () => {
       )}
       {/* Save Template Modal */}
       {saveTmplOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); setTemplateEditOverrides(null); }}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-4">
@@ -1171,7 +1171,7 @@ const Notes: React.FC = () => {
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); setTemplateEditOverrides(null); }}
+                onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}
                 className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all"
               >
                 Cancel
