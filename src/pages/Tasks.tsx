@@ -19,6 +19,7 @@ import {
   FolderKanban,
   Paperclip,
   Plus,
+  Save,
   Search,
   Tag,
   Sparkles,
@@ -398,6 +399,7 @@ const Tasks: React.FC = () => {
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
+  const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -505,6 +507,47 @@ const Tasks: React.FC = () => {
 
   const matchingCount = filtered.active.length + filtered.completed.length;
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
+
+  const templateEditTask = useMemo(() => {
+    if (!editingTemplateMeta) return null;
+    const tmpl = editingTemplateMeta.template;
+    return {
+      id: `template-edit-${tmpl.id}`,
+      title: tmpl.title || '',
+      description: tmpl.description || '',
+      priority: tmpl.priority || 'medium',
+      duration: tmpl.duration || 0,
+      startDate: tmpl.startDate || '',
+      startTime: tmpl.startTime || '',
+      dueDate: tmpl.dueDate || '',
+      dueTime: tmpl.dueTime || '',
+      projectId: tmpl.projectId ?? null,
+      columnId: tmpl.columnId || '',
+      labels: tmpl.labels || [],
+      subtasks: tmpl.subtasks || [],
+      checklists: tmpl.checklists || [],
+      comments: [],
+      attachments: [],
+      columnName: '',
+      projectName: '',
+      createdAt: new Date().toISOString(),
+    } as Task;
+  }, [editingTemplateMeta]);
+
+  const handleEditTemplate = useCallback((template: TaskTemplate) => {
+    setEditingTemplateMeta({ id: template.id, name: template.name, template });
+  }, []);
+
+  const handleSaveTemplate = useCallback(async (data: any) => {
+    if (!editingTemplateMeta) return;
+    try {
+      await updateTemplate(editingTemplateMeta.id, data);
+      setEditingTemplateMeta(null);
+      setOpenTaskId(null);
+    } catch (err) {
+      console.error('Failed to save template:', err);
+    }
+  }, [editingTemplateMeta]);
 
   const toggleSortByDueDate = () => {
     if (!sortByDueDate) {
@@ -2375,14 +2418,6 @@ const Tasks: React.FC = () => {
                         <span className="font-medium block truncate">{tmpl.name}</span>
                         {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
                       </div>
-                      <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full flex-shrink-0 ${
-                        tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
-                        tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
-                        tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Medium'}
-                      </span>
                     </button>
                   ))}
                 </div>
@@ -2483,10 +2518,10 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
-      {openTask && (
+      {(openTask || templateEditTask) && (
         <TaskFullView
-          task={openTask}
-          onClose={() => setOpenTaskId(null)}
+          task={templateEditTask || openTask!}
+          onClose={() => { setOpenTaskId(null); setEditingTemplateMeta(null); }}
           boardColumns={board.columns}
           projects={projects}
           allTags={allTags}
@@ -2506,6 +2541,9 @@ const Tasks: React.FC = () => {
           isPremium={isPremium}
           isPro={isPro}
           onJumpToTask={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
+          onEditTemplate={handleEditTemplate}
+          onSaveTemplate={handleSaveTemplate}
+          editingTemplateMeta={editingTemplateMeta}
         />
       )}
 
@@ -2815,6 +2853,9 @@ interface TaskFullViewProps {
   isPremium: boolean;
   isPro: boolean;
   onJumpToTask?: (taskId: string) => void;
+  onEditTemplate?: (template: TaskTemplate) => void;
+  onSaveTemplate?: (data: { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[] }) => Promise<void>;
+  editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
 }
 
 const TaskDropdownExpanded: React.FC<{
@@ -3155,6 +3196,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
 
   const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
+  const [rightTmplPopupOpen, setRightTmplPopupOpen] = useState(false);
+  const [rightTemplates, setRightTemplates] = useState<TaskTemplate[]>([]);
   const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
   const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
   const [editingTmplName, setEditingTmplName] = useState('');
@@ -3166,6 +3209,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingTmplStartTime, setEditingTmplStartTime] = useState('');
   const [editingTmplDueDate, setEditingTmplDueDate] = useState('');
   const [editingTmplDueTime, setEditingTmplDueTime] = useState('');
+  const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
+  const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
@@ -3941,13 +3986,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 Templates
               </button>
               {templatePopupOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 max-h-96 overflow-hidden">
+                <div className="absolute bottom-full left-0 mb-2 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <div className="flex items-center gap-2">
                       <Star className="w-4 h-4 text-primary" />
                       <h3 className="text-sm font-semibold text-foreground">Templates</h3>
                     </div>
-                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); }} className="p-1.5 rounded-lg hover:bg-muted">
+                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); setFullViewSaveTmplOpen(false); }} className="p-1.5 rounded-lg hover:bg-muted">
                       <X className="w-4 h-4 text-muted-foreground" />
                     </button>
                   </div>
@@ -3982,16 +4027,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
                             <button
                               onClick={() => {
-                                setEditingTmpl(tmpl);
-                                setEditingTmplName(tmpl.name);
-                                setEditingTmplTitle(tmpl.title);
-                                setEditingTmplDesc(tmpl.description);
-                                setEditingTmplPriority(tmpl.priority || 'medium');
-                                setEditingTmplDuration(tmpl.duration || 0);
-                                setEditingTmplStartDate(tmpl.startDate || '');
-                                setEditingTmplStartTime(tmpl.startTime || '');
-                                setEditingTmplDueDate(tmpl.dueDate || '');
-                                setEditingTmplDueTime(tmpl.dueTime || '');
+                                setTemplatePopupOpen(false);
+                                onEditTemplate?.(tmpl);
                               }}
                               className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
                               title="Edit template"
@@ -4019,17 +4056,219 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                       ))}
                     </div>
                   )}
+                  <div className="border-t border-border px-3 py-2">
+                    {fullViewSaveTmplOpen ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={fullViewTmplName}
+                          onChange={e => setFullViewTmplName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
+                            try {
+                              await createTemplate({
+                                name: fullViewTmplName.trim(),
+                                title: task.title || '',
+                                description: task.description || '',
+                                priority: task.priority || 'medium',
+                                duration: Number(task.duration) || 0,
+                                startDate: task.startDate || undefined,
+                                startTime: task.startTime || undefined,
+                                dueDate: task.dueDate || undefined,
+                                dueTime: task.dueTime || undefined,
+                                projectId: task.projectId ?? null,
+                                columnId: task.columnId || undefined,
+                                labels: task.labels || [],
+                                subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+                                checklists: task.checklists || [],
+                              });
+                              setFullViewSaveTmplOpen(false);
+                              setFullViewTmplName('');
+                              const t = await fetchTemplates();
+                              setFullViewTemplates(t);
+                            } catch (err) {
+                              console.error('Failed to save template:', err);
+                            }
+                          })()}
+                          placeholder="Template name..."
+                          className="flex-1 text-xs bg-muted/40 border border-border rounded-lg px-2 py-1.5 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!fullViewTmplName.trim()) return;
+                            try {
+                              await createTemplate({
+                                name: fullViewTmplName.trim(),
+                                title: task.title || '',
+                                description: task.description || '',
+                                priority: task.priority || 'medium',
+                                duration: Number(task.duration) || 0,
+                                startDate: task.startDate || undefined,
+                                startTime: task.startTime || undefined,
+                                dueDate: task.dueDate || undefined,
+                                dueTime: task.dueTime || undefined,
+                                projectId: task.projectId ?? null,
+                                columnId: task.columnId || undefined,
+                                labels: task.labels || [],
+                                subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+                                checklists: task.checklists || [],
+                              });
+                              setFullViewSaveTmplOpen(false);
+                              setFullViewTmplName('');
+                              const t = await fetchTemplates();
+                              setFullViewTemplates(t);
+                            } catch (err) {
+                              console.error('Failed to save template:', err);
+                            }
+                          }}
+                          disabled={!fullViewTmplName.trim()}
+                          className="px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all flex-shrink-0"
+                        >
+                          Save
+                        </button>
+                        <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground flex-shrink-0">
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setFullViewSaveTmplOpen(true)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Save current task as template
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
           </div>
-          <button
-            onClick={() => onDeleteTask(task.id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete Task
-          </button>
+          <div className="relative">
+            <button
+              onClick={async () => {
+                try {
+                  const t = await fetchTemplates();
+                  setRightTemplates(t);
+                  setRightTmplPopupOpen(true);
+                } catch (err) {
+                  console.error('Failed to fetch templates:', err);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+            >
+              <Star className="w-3.5 h-3.5" />
+              Templates
+            </button>
+            {rightTmplPopupOpen && (
+              <div className="absolute bottom-full right-0 mb-2 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">Templates</h3>
+                  </div>
+                  <button onClick={() => setRightTmplPopupOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+                {rightTemplates.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                    <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-2">
+                      <Star className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-foreground">No templates yet</p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-border">
+                    {rightTemplates.map(tmpl => (
+                      <div key={tmpl.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-all group">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                            <Star className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
+                            {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
+                          </div>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                            tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
+                            tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
+                            tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Med'}
+                          </span>
+                        </div>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
+                          <button
+                            onClick={() => {
+                              setRightTmplPopupOpen(false);
+                              onEditTemplate?.(tmpl);
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                            title="Edit template"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                              try {
+                                await deleteTemplateApi(tmpl.id);
+                                setRightTemplates(await fetchTemplates());
+                              } catch (err) {
+                                console.error('Failed to delete template:', err);
+                              }
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                            title="Delete template"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {editingTemplateMeta ? (
+            <div className="flex items-center gap-2">
+              <button onClick={onClose} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all font-medium">
+                Cancel
+              </button>
+              <button onClick={async () => {
+                if (!onSaveTemplate) return;
+                await onSaveTemplate({
+                  name: editingTemplateMeta.name,
+                  title: task.title || '',
+                  description: task.description || '',
+                  priority: task.priority || 'medium',
+                  duration: Number(task.duration) || 0,
+                  startDate: task.startDate || undefined,
+                  startTime: task.startTime || undefined,
+                  dueDate: task.dueDate || undefined,
+                  dueTime: task.dueTime || undefined,
+                  projectId: task.projectId ?? null,
+                  columnId: task.columnId || undefined,
+                  labels: task.labels || [],
+                  subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+                  checklists: task.checklists || [],
+                });
+              }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all">
+                <Save className="w-3.5 h-3.5" />
+                Save Template
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onDeleteTask(task.id)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Task
+            </button>
+          )}
         </div>
       </div>
 
