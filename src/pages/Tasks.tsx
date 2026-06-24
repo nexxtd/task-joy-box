@@ -403,6 +403,7 @@ const Tasks: React.FC = () => {
   const [templateError, setTemplateError] = useState('');
   const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
   const [templateEditOverrides, setTemplateEditOverrides] = useState<Partial<Task> | null>(null);
+  const [templateEditName, setTemplateEditName] = useState('');
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -540,6 +541,7 @@ const Tasks: React.FC = () => {
 
   const handleEditTemplate = useCallback((template: TaskTemplate) => {
     setTemplateEditOverrides(null);
+    setTemplateEditName(template.name);
     setEditingTemplateMeta({ id: template.id, name: template.name, template });
   }, []);
 
@@ -556,7 +558,7 @@ const Tasks: React.FC = () => {
     const edited = templateEditOverrides || {};
     try {
       await updateTemplate(editingTemplateMeta.id, {
-        name: editingTemplateMeta.name,
+        name: templateEditName || editingTemplateMeta.name,
         title: (edited.title ?? editingTemplateMeta.template.title) || '',
         description: (edited.description ?? editingTemplateMeta.template.description) || '',
         priority: (edited.priority ?? editingTemplateMeta.template.priority) || 'medium',
@@ -571,13 +573,14 @@ const Tasks: React.FC = () => {
         subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
       });
+      setTemplateEditName('');
       setTemplateEditOverrides(null);
       setEditingTemplateMeta(null);
       setOpenTaskId(null);
     } catch (err) {
       console.error('Failed to save template:', err);
     }
-  }, [editingTemplateMeta, templateEditOverrides]);
+  }, [editingTemplateMeta, templateEditOverrides, templateEditName]);
 
   const toggleSortByDueDate = () => {
     if (!sortByDueDate) {
@@ -2661,7 +2664,7 @@ const Tasks: React.FC = () => {
       {(openTask || templateEditTask) && (
         <TaskFullView
           task={templateEditTask || openTask!}
-          onClose={() => { setOpenTaskId(null); setEditingTemplateMeta(null); }}
+          onClose={() => { setOpenTaskId(null); setEditingTemplateMeta(null); setTemplateEditName(''); }}
           boardColumns={board.columns}
           projects={projects}
           allTags={allTags}
@@ -3593,11 +3596,24 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
-          <input
-            className="flex-1 px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
-            value={task.title}
-            onChange={e => onUpdateTask(task.id, { title: e.target.value })}
-          />
+          <div className="flex-1 min-w-0">
+            {editingTemplateMeta && (
+              <div className="mb-2">
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Template name</label>
+                <input
+                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={templateEditName}
+                  onChange={e => setTemplateEditName(e.target.value)}
+                  placeholder="Template name"
+                />
+              </div>
+            )}
+            <input
+              className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+              value={task.title}
+              onChange={e => onUpdateTask(task.id, { title: e.target.value })}
+            />
+          </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0">
             <X className="w-4 h-4" />
           </button>
