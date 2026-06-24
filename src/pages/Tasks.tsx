@@ -4178,169 +4178,38 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 Templates
               </button>
               {templatePopupOpen && (
-                <div className="absolute bottom-full left-0 mb-2 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-primary" />
-                      <h3 className="text-sm font-semibold text-foreground">Templates</h3>
-                    </div>
-                    <button onClick={() => { setTemplatePopupOpen(false); setEditingTmpl(null); setFullViewSaveTmplOpen(false); }} className="p-1.5 rounded-lg hover:bg-muted">
-                      <X className="w-4 h-4 text-muted-foreground" />
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setTemplatePopupOpen(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
+                    <button
+                      onClick={() => { setTemplatePopupOpen(false); setFullViewSaveTmplOpen(true); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                    >
+                      <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center">
+                        <Plus className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      Save as template
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setTemplatePopupOpen(false);
+                        try {
+                          const t = await fetchTemplates();
+                          setFullViewLoadTemplates(t);
+                          setFullViewLoadTmplOpen(true);
+                        } catch (err) {
+                          console.error('Failed to load templates:', err);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                    >
+                      <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+                        <FolderKanban className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                      Load template
                     </button>
                   </div>
-                  {fullViewTemplates.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                      <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-2">
-                        <Star className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                      <p className="text-sm text-foreground">No templates yet</p>
-                    </div>
-                  ) : (
-                    <div className="max-h-72 overflow-y-auto divide-y divide-border">
-                      {fullViewTemplates.map(tmpl => (
-                        <div key={tmpl.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-all group">
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                              <Star className="w-3.5 h-3.5 text-primary" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
-                              {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
-                            </div>
-                          </div>
-                          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
-                            <button
-                              onClick={() => {
-                                setTemplatePopupOpen(false);
-                                onEditTemplate?.(tmpl);
-                              }}
-                              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
-                              title="Edit template"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
-                                try {
-                                  await deleteTemplateApi(tmpl.id);
-                                  const t = await fetchTemplates();
-                                  setFullViewTemplates(t);
-                                } catch (err) {
-                                  console.error('Failed to delete template:', err);
-                                }
-                              }}
-                              className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
-                              title="Delete template"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="border-t border-border px-3 py-2">
-                    {fullViewSaveTmplOpen ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          autoFocus
-                          value={fullViewTmplName}
-                          onChange={e => setFullViewTmplName(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
-                            try {
-                              await createTemplate({
-                                name: fullViewTmplName.trim(),
-                                title: task.title || '',
-                                description: task.description || '',
-                                priority: task.priority || 'medium',
-                                duration: Number(task.duration) || 0,
-                                startDate: task.startDate || undefined,
-                                startTime: task.startTime || undefined,
-                                dueDate: task.dueDate || undefined,
-                                dueTime: task.dueTime || undefined,
-                                projectId: task.projectId ?? null,
-                                columnId: task.columnId || undefined,
-                                labels: task.labels || [],
-                                subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-                                checklists: task.checklists || [],
-                              });
-                              setFullViewSaveTmplOpen(false);
-                              setFullViewTmplName('');
-                              const t = await fetchTemplates();
-                              setFullViewTemplates(t);
-                            } catch (err) {
-                              console.error('Failed to save template:', err);
-                            }
-                          })()}
-                          placeholder="Template name..."
-                          className="flex-1 text-xs bg-muted/40 border border-border rounded-lg px-2 py-1.5 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                        <button
-                          onClick={async () => {
-                            if (!fullViewTmplName.trim()) return;
-                            try {
-                              await createTemplate({
-                                name: fullViewTmplName.trim(),
-                                title: task.title || '',
-                                description: task.description || '',
-                                priority: task.priority || 'medium',
-                                duration: Number(task.duration) || 0,
-                                startDate: task.startDate || undefined,
-                                startTime: task.startTime || undefined,
-                                dueDate: task.dueDate || undefined,
-                                dueTime: task.dueTime || undefined,
-                                projectId: task.projectId ?? null,
-                                columnId: task.columnId || undefined,
-                                labels: task.labels || [],
-                                subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-                                checklists: task.checklists || [],
-                              });
-                              setFullViewSaveTmplOpen(false);
-                              setFullViewTmplName('');
-                              const t = await fetchTemplates();
-                              setFullViewTemplates(t);
-                            } catch (err) {
-                              console.error('Failed to save template:', err);
-                            }
-                          }}
-                          disabled={!fullViewTmplName.trim()}
-                          className="px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all flex-shrink-0"
-                        >
-                          Save
-                        </button>
-                        <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground flex-shrink-0">
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setFullViewSaveTmplOpen(true)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          Save current task as template
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const t = await fetchTemplates();
-                              setFullViewLoadTemplates(t);
-                              setFullViewLoadTmplOpen(true);
-                            } catch (err) {
-                              console.error('Failed to fetch templates:', err);
-                            }
-                          }}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
-                        >
-                          <FolderKanban className="w-3.5 h-3.5" />
-                          Load template
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -4366,6 +4235,95 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
       </div>
+
+      {fullViewSaveTmplOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFullViewSaveTmplOpen(false)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
+              </div>
+              <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <input
+                  autoFocus
+                  placeholder="e.g. Daily Standup Task"
+                  value={fullViewTmplName}
+                  onChange={e => setFullViewTmplName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
+                    try {
+                      await createTemplate({
+                        name: fullViewTmplName.trim(),
+                        title: task.title || '',
+                        description: task.description || '',
+                        priority: task.priority || 'medium',
+                        duration: Number(task.duration) || 0,
+                        startDate: task.startDate || undefined,
+                        startTime: task.startTime || undefined,
+                        dueDate: task.dueDate || undefined,
+                        dueTime: task.dueTime || undefined,
+                        projectId: task.projectId ?? null,
+                        columnId: task.columnId || undefined,
+                        labels: task.labels || [],
+                        subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+                        checklists: task.checklists || [],
+                      });
+                      setFullViewSaveTmplOpen(false);
+                      setFullViewTmplName('');
+                    } catch (err) {
+                      console.error('Failed to save template:', err);
+                    }
+                  })()}
+                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!fullViewTmplName.trim()) return;
+                  try {
+                    await createTemplate({
+                      name: fullViewTmplName.trim(),
+                      title: task.title || '',
+                      description: task.description || '',
+                      priority: task.priority || 'medium',
+                      duration: Number(task.duration) || 0,
+                      startDate: task.startDate || undefined,
+                      startTime: task.startTime || undefined,
+                      dueDate: task.dueDate || undefined,
+                      dueTime: task.dueTime || undefined,
+                      projectId: task.projectId ?? null,
+                      columnId: task.columnId || undefined,
+                      labels: task.labels || [],
+                      subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+                      checklists: task.checklists || [],
+                    });
+                    setFullViewSaveTmplOpen(false);
+                    setFullViewTmplName('');
+                  } catch (err) {
+                    console.error('Failed to save template:', err);
+                  }
+                }}
+                disabled={!fullViewTmplName.trim()}
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {fullViewLoadTmplOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFullViewLoadTmplOpen(false)}>
@@ -4398,7 +4356,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                       <button
                         onClick={() => {
                           setFullViewLoadTmplOpen(false);
-                          setTemplatePopupOpen(false);
                           onEditTemplate?.(tmpl);
                         }}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
@@ -4415,7 +4372,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                         <button
                           onClick={() => {
                             setFullViewLoadTmplOpen(false);
-                            setTemplatePopupOpen(false);
                             onEditTemplate?.(tmpl);
                           }}
                           className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
