@@ -385,6 +385,8 @@ const Tasks: React.FC = () => {
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<AnalysisTab>('overview');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [mainTmplPopupOpen, setMainTmplPopupOpen] = useState(false);
+  const [mainTemplates, setMainTemplates] = useState<TaskTemplate[]>([]);
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [aiBuilderInput, setAiBuilderInput] = useState('');
@@ -1379,6 +1381,96 @@ const Tasks: React.FC = () => {
             <Trash2 className="w-4 h-4" />
             {isDeleteMode ? 'Exit Delete' : 'Delete'}
           </button>
+
+          <div className="relative">
+            <button
+              onClick={async () => {
+                try {
+                  const t = await fetchTemplates();
+                  setMainTemplates(t);
+                  setMainTmplPopupOpen(true);
+                } catch (err) {
+                  console.error('Failed to fetch templates:', err);
+                }
+              }}
+              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border transition-all bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Star className="w-4 h-4" />
+              Templates
+            </button>
+            {mainTmplPopupOpen && (
+              <div className="absolute right-0 mt-1.5 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">Templates</h3>
+                  </div>
+                  <button onClick={() => setMainTmplPopupOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </div>
+                {mainTemplates.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                    <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-2">
+                      <Star className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-foreground">No templates yet</p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-border">
+                    {mainTemplates.map(tmpl => (
+                      <div key={tmpl.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-all group">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="w-7 h-7 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                            <Star className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-medium text-foreground block truncate">{tmpl.name}</span>
+                            {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
+                          </div>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                            tmpl.priority === 'urgent' ? 'bg-destructive/15 text-destructive' :
+                            tmpl.priority === 'high' ? 'bg-orange-500/15 text-orange-600' :
+                            tmpl.priority === 'low' ? 'bg-blue-500/15 text-blue-600' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {tmpl.priority ? tmpl.priority.charAt(0).toUpperCase() + tmpl.priority.slice(1) : 'Med'}
+                          </span>
+                        </div>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
+                          <button
+                            onClick={() => {
+                              setMainTmplPopupOpen(false);
+                              handleEditTemplate(tmpl);
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                            title="Edit template"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                              try {
+                                await deleteTemplateApi(tmpl.id);
+                                setMainTemplates(await fetchTemplates());
+                              } catch (err) {
+                                console.error('Failed to delete template:', err);
+                              }
+                            }}
+                            className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                            title="Delete template"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => setAddingTask(true)}
