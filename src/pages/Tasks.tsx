@@ -3401,6 +3401,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingTmplDueTime, setEditingTmplDueTime] = useState('');
   const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
   const [fullViewTmplName, setFullViewTmplName] = useState('');
+  const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
+  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
@@ -4312,13 +4314,30 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setFullViewSaveTmplOpen(true)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Save current task as template
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setFullViewSaveTmplOpen(true)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Save current task as template
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const t = await fetchTemplates();
+                              setFullViewLoadTemplates(t);
+                              setFullViewLoadTmplOpen(true);
+                            } catch (err) {
+                              console.error('Failed to fetch templates:', err);
+                            }
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                        >
+                          <FolderKanban className="w-3.5 h-3.5" />
+                          Load template
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -4347,6 +4366,90 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
       </div>
+
+      {fullViewLoadTmplOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFullViewLoadTmplOpen(false)}>
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <FolderKanban className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">Load template</h2>
+              </div>
+              <button onClick={() => setFullViewLoadTmplOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2">
+              {fullViewLoadTemplates.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
+                    <FolderKanban className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">No templates yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a task as a template first.</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {fullViewLoadTemplates.map(tmpl => (
+                    <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
+                      <button
+                        onClick={() => {
+                          setFullViewLoadTmplOpen(false);
+                          setTemplatePopupOpen(false);
+                          onEditTemplate?.(tmpl);
+                        }}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                          <Star className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium block truncate">{tmpl.name}</span>
+                          {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                        </div>
+                      </button>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setFullViewLoadTmplOpen(false);
+                            setTemplatePopupOpen(false);
+                            onEditTemplate?.(tmpl);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                          title="Edit template"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                            try {
+                              await deleteTemplateApi(tmpl.id);
+                              setFullViewLoadTemplates(await fetchTemplates());
+                            } catch (err) {
+                              console.error('Failed to delete template:', err);
+                            }
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                          title="Delete template"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end px-5 py-4 border-t border-border">
+              <button onClick={() => setFullViewLoadTmplOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {projectChangeConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setProjectChangeConfirm(null)}>
