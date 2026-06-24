@@ -402,6 +402,7 @@ const Tasks: React.FC = () => {
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
   const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
+  const [templateEditOverrides, setTemplateEditOverrides] = useState<Partial<Task> | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -513,11 +514,11 @@ const Tasks: React.FC = () => {
   const templateEditTask = useMemo(() => {
     if (!editingTemplateMeta) return null;
     const tmpl = editingTemplateMeta.template;
-    return {
+    const base: Task = {
       id: `template-edit-${tmpl.id}`,
       title: tmpl.title || '',
       description: tmpl.description || '',
-      priority: tmpl.priority || 'medium',
+      priority: tmpl.priority || ('medium' as Priority),
       duration: tmpl.duration || 0,
       startDate: tmpl.startDate || '',
       startTime: tmpl.startTime || '',
@@ -533,23 +534,50 @@ const Tasks: React.FC = () => {
       columnName: '',
       projectName: '',
       createdAt: new Date().toISOString(),
-    } as unknown as Task;
-  }, [editingTemplateMeta]);
+    } as Task;
+    return templateEditOverrides ? { ...base, ...templateEditOverrides } : base;
+  }, [editingTemplateMeta, templateEditOverrides]);
 
   const handleEditTemplate = useCallback((template: TaskTemplate) => {
+    setTemplateEditOverrides(null);
     setEditingTemplateMeta({ id: template.id, name: template.name, template });
   }, []);
 
-  const handleSaveTemplate = useCallback(async (data: any) => {
+  const wrappedUpdateTask = useCallback((taskId: string, updates: Partial<Task>) => {
+    if (taskId.startsWith('template-edit-')) {
+      setTemplateEditOverrides(prev => ({ ...prev, ...updates } as Partial<Task>));
+    } else {
+      updateTask(taskId, updates);
+    }
+  }, [updateTask]);
+
+  const handleSaveTemplate = useCallback(async () => {
     if (!editingTemplateMeta) return;
+    const edited = templateEditOverrides || {};
     try {
-      await updateTemplate(editingTemplateMeta.id, data);
+      await updateTemplate(editingTemplateMeta.id, {
+        name: editingTemplateMeta.name,
+        title: (edited.title ?? editingTemplateMeta.template.title) || '',
+        description: (edited.description ?? editingTemplateMeta.template.description) || '',
+        priority: (edited.priority ?? editingTemplateMeta.template.priority) || 'medium',
+        duration: Number(edited.duration ?? editingTemplateMeta.template.duration) || 0,
+        startDate: (edited.startDate ?? editingTemplateMeta.template.startDate) || undefined,
+        startTime: (edited.startTime ?? editingTemplateMeta.template.startTime) || undefined,
+        dueDate: (edited.dueDate ?? editingTemplateMeta.template.dueDate) || undefined,
+        dueTime: (edited.dueTime ?? editingTemplateMeta.template.dueTime) || undefined,
+        projectId: (edited.projectId !== undefined ? edited.projectId : editingTemplateMeta.template.projectId) ?? null,
+        columnId: (edited.columnId ?? editingTemplateMeta.template.columnId) || undefined,
+        labels: edited.labels ?? editingTemplateMeta.template.labels || [],
+        subtasks: (edited.subtasks ?? editingTemplateMeta.template.subtasks || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+        checklists: edited.checklists ?? editingTemplateMeta.template.checklists || [],
+      });
+      setTemplateEditOverrides(null);
       setEditingTemplateMeta(null);
       setOpenTaskId(null);
     } catch (err) {
       console.error('Failed to save template:', err);
     }
-  }, [editingTemplateMeta]);
+  }, [editingTemplateMeta, templateEditOverrides]);
 
   const toggleSortByDueDate = () => {
     if (!sortByDueDate) {
@@ -2609,17 +2637,64 @@ const Tasks: React.FC = () => {
           boardColumns={board.columns}
           projects={projects}
           allTags={allTags}
-          onUpdateTask={updateTask}
-          onToggleChecklistItem={toggleChecklistItem}
-          onAddChecklistItem={addChecklistItem}
-          onDeleteChecklistItem={deleteChecklistItem}
+          onUpdateTask={wrappedUpdateTask}
+          onToggleChecklistItem={(taskId, checklistId, itemId) => {
+            if (taskId.startsWith('template-edit-')) {
+              const overrides = templateEditOverrides || {};
+              const checklists = overrides.checklists || editingTemplateMeta?.template.checklists || [];
+              const next = checklists.map((list: any) =>
+                list.id === checklistId
+                  ? { ...list, items: (list.items || []).map((item: any) => item.id === itemId ? { ...item, done: !item.done } : item) }
+                  : list
+              );
+              wrappedUpdateTask(taskId, { checklists: next } as any);
+            } else {
+              toggleChecklistItem(taskId, checklistId, itemId);
+            }
+          }}
+          onAddChecklistItem={(taskId, checklistId, text) => {
+            if (taskId.startsWith('template-edit-')) {
+              const overrides = templateEditOverrides || {};
+              const checklists = overrides.checklists || editingTemplateMeta?.template.checklists || [];
+              const item = { id: `item-${crypto.randomUUID()}`, text, done: false };
+              const next = checklists.map((list: any) =>
+                list.id === checklistId ? { ...list, items: [...(list.items || []), item] } : list
+              );
+              wrappedUpdateTask(taskId, { checklists: next } as any);
+            } else {
+              addChecklistItem(taskId, checklistId, text);
+            }
+          }}
+          onDeleteChecklistItem={(taskId, checklistId, itemId) => {
+            if (taskId.startsWith('template-edit-')) {
+              const overrides = templateEditOverrides || {};
+              const checklists = overrides.checklists || editingTemplateMeta?.template.checklists || [];
+              const next = checklists.map((list: any) =>
+                list.id === checklistId ? { ...list, items: (list.items || []).filter((item: any) => item.id !== itemId) } : list
+              );
+              wrappedUpdateTask(taskId, { checklists: next } as any);
+            } else {
+              deleteChecklistItem(taskId, checklistId, itemId);
+            }
+          }}
           onDeleteTask={taskId => { setSingleDeleteTaskId(taskId); setOpenTaskId(null); }}
-          onToggleTag={toggleTaskTag}
+          onToggleTag={(taskId, label) => {
+            if (taskId.startsWith('template-edit-')) {
+              wrappedUpdateTask(taskId, { labels: [...((templateEditTask?.labels || []) as Label[]), label] });
+            } else {
+              toggleTaskTag(taskId, label);
+            }
+          }}
           onCreateTag={(taskId, name, color) => {
-            const task = board.tasks.find(item => item.id === taskId);
-            if (!task) return;
-            const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
-            updateTask(taskId, { labels: [...task.labels, label] });
+            if (taskId.startsWith('template-edit-')) {
+              const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
+              wrappedUpdateTask(taskId, { labels: [...((templateEditTask?.labels || []) as Label[]), label] });
+            } else {
+              const task = board.tasks.find(item => item.id === taskId);
+              if (!task) return;
+              const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
+              updateTask(taskId, { labels: [...task.labels, label] });
+            }
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           isPremium={isPremium}
@@ -2938,7 +3013,7 @@ interface TaskFullViewProps {
   isPro: boolean;
   onJumpToTask?: (taskId: string) => void;
   onEditTemplate?: (template: TaskTemplate) => void;
-  onSaveTemplate?: (data: { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[] }) => Promise<void>;
+  onSaveTemplate?: () => Promise<void>;
   editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
 }
 
@@ -4228,25 +4303,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               <button onClick={onClose} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all font-medium">
                 Cancel
               </button>
-              <button onClick={async () => {
-                if (!onSaveTemplate) return;
-                await onSaveTemplate({
-                  name: editingTemplateMeta.name,
-                  title: task.title || '',
-                  description: task.description || '',
-                  priority: task.priority || 'medium',
-                  duration: Number(task.duration) || 0,
-                  startDate: task.startDate || undefined,
-                  startTime: task.startTime || undefined,
-                  dueDate: task.dueDate || undefined,
-                  dueTime: task.dueTime || undefined,
-                  projectId: task.projectId ?? null,
-                  columnId: task.columnId || undefined,
-                  labels: task.labels || [],
-                  subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-                  checklists: task.checklists || [],
-                });
-              }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all">
+              <button onClick={() => onSaveTemplate?.()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all">
                 <Save className="w-3.5 h-3.5" />
                 Save Template
               </button>
