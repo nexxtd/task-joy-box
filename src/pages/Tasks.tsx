@@ -514,7 +514,7 @@ const Tasks: React.FC = () => {
   const templateEditTask = useMemo(() => {
     if (!editingTemplateMeta) return null;
     const tmpl = editingTemplateMeta.template;
-    const base: Task = {
+    const base = {
       id: `template-edit-${tmpl.id}`,
       title: tmpl.title || '',
       description: tmpl.description || '',
@@ -534,8 +534,8 @@ const Tasks: React.FC = () => {
       columnName: '',
       projectName: '',
       createdAt: new Date().toISOString(),
-    } as Task;
-    return templateEditOverrides ? { ...base, ...templateEditOverrides } : base;
+    };
+    return (templateEditOverrides ? { ...base, ...templateEditOverrides } : base) as unknown as Task;
   }, [editingTemplateMeta, templateEditOverrides]);
 
   const handleEditTemplate = useCallback((template: TaskTemplate) => {
@@ -567,9 +567,9 @@ const Tasks: React.FC = () => {
         dueTime: (edited.dueTime ?? editingTemplateMeta.template.dueTime) || undefined,
         projectId: (edited.projectId !== undefined ? edited.projectId : editingTemplateMeta.template.projectId) ?? null,
         columnId: (edited.columnId ?? editingTemplateMeta.template.columnId) || undefined,
-        labels: edited.labels ?? editingTemplateMeta.template.labels || [],
-        subtasks: (edited.subtasks ?? editingTemplateMeta.template.subtasks || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-        checklists: edited.checklists ?? editingTemplateMeta.template.checklists || [],
+        labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
+        subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+        checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
       });
       setTemplateEditOverrides(null);
       setEditingTemplateMeta(null);
