@@ -575,7 +575,6 @@ const Tasks: React.FC = () => {
       });
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
-      setFullViewLoadTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setTemplateEditName('');
       setTemplateEditOverrides(null);
       setEditingTemplateMeta(null);
