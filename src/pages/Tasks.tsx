@@ -397,9 +397,7 @@ const Tasks: React.FC = () => {
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
-  const [templateFullListOpen, setTemplateFullListOpen] = useState(false);
-  const [templateDeleteConfirm, setTemplateDeleteConfirm] = useState<number | null>(null);
-  const [editTemplateData, setEditTemplateData] = useState<TaskTemplate | null>(null);
+  const [templateError, setTemplateError] = useState('');
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -2203,15 +2201,19 @@ const Tasks: React.FC = () => {
                         Save as template
                       </button>
                       <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setTemplateMenuOpen(false);
-                          try {
-                            const t = await fetchTemplates();
-                            setTemplates(t);
-                            setLoadTemplateOpen(true);
-                          } catch { /* ignore */ }
-                        }}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setTemplateMenuOpen(false);
+                        setTemplateError('');
+                        try {
+                          const t = await fetchTemplates();
+                          setTemplates(t);
+                          setLoadTemplateOpen(true);
+                        } catch (err) {
+                          setTemplateError('Failed to load templates. Check your connection and try again.');
+                          setTimeout(() => setTemplateError(''), 4000);
+                        }
+                      }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
                       >
                         <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
@@ -2254,6 +2256,12 @@ const Tasks: React.FC = () => {
               </button>
             </div>
             <div className="px-5 py-5 space-y-4">
+              {templateError && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
+                  <span>⚠</span>
+                  <span>{templateError}</span>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
                 <input
@@ -2272,6 +2280,7 @@ const Tasks: React.FC = () => {
                 id="save-template-btn"
                 onClick={async () => {
                   if (!templateName.trim()) return;
+                  setTemplateError('');
                   try {
                     await createTemplate({
                       name: templateName.trim(),
@@ -2291,7 +2300,10 @@ const Tasks: React.FC = () => {
                     });
                     setSaveTemplateOpen(false);
                     setTemplateName('');
-                  } catch { /* ignore */ }
+                  } catch (err) {
+                    setTemplateError('Failed to save template. Check your connection and try again.');
+                    setTimeout(() => setTemplateError(''), 4000);
+                  }
                 }}
                 disabled={!templateName.trim()}
                 className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
@@ -2318,6 +2330,12 @@ const Tasks: React.FC = () => {
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
+            {templateError && (
+              <div className="flex items-center gap-2 px-5 py-2 text-xs text-destructive bg-destructive/10">
+                <span>⚠</span>
+                <span>{templateError}</span>
+              </div>
+            )}
             <div className="max-h-80 overflow-y-auto p-2">
               {templates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
@@ -3913,7 +3931,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     const t = await fetchTemplates();
                     setFullViewTemplates(t);
                     setTemplatePopupOpen(true);
-                  } catch { /* ignore */ }
+                  } catch (err) {
+                    console.error('Failed to fetch templates:', err);
+                  }
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
               >
@@ -3985,7 +4005,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   await deleteTemplateApi(tmpl.id);
                                   const t = await fetchTemplates();
                                   setFullViewTemplates(t);
-                                } catch { /* ignore */ }
+                                } catch (err) {
+                                  console.error('Failed to delete template:', err);
+                                }
                               }}
                               className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
                               title="Delete template"
@@ -4126,7 +4148,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     const t = await fetchTemplates();
                     setFullViewTemplates(t);
                     setEditingTmpl(null);
-                  } catch { /* ignore */ }
+                  } catch (err) {
+                    console.error('Failed to update template:', err);
+                  }
                 }}
                 disabled={!editingTmplName.trim()}
                 className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"

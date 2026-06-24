@@ -479,6 +479,32 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_logs_entity_idx ON activity_logs(entity_type, entity_id);`);
     console.log('Activity logs table verified');
 
+    // Task Templates
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        priority TEXT DEFAULT 'medium',
+        duration INTEGER,
+        start_date TEXT,
+        start_time TEXT,
+        due_date TEXT,
+        due_time TEXT,
+        project_id INTEGER,
+        column_id TEXT,
+        labels TEXT DEFAULT '[]',
+        subtasks TEXT DEFAULT '[]',
+        checklists TEXT DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS task_templates_user_id_idx ON task_templates(user_id);`);
+    console.log('Task templates table verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails
