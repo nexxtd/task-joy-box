@@ -1174,42 +1174,48 @@ const Notes: React.FC = () => {
       )}
       {/* Save Template Modal */}
       {saveTmplOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Save className="w-4 h-4 text-primary" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Star className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-sm font-semibold text-foreground">{editingNoteTemplate ? 'Edit template' : 'Save as template'}</h2>
               </div>
-              <h2 className="text-sm font-semibold text-foreground">{editingNoteTemplate ? 'Edit template' : 'Save as template'}</h2>
+              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
             </div>
-            <div className="space-y-3">
+            <div className="px-5 py-5 space-y-4">
+              {tmplError && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
+                  <span>⚠</span>
+                  <span>{tmplError}</span>
+                </div>
+              )}
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Template name</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
+                  placeholder="e.g. Meeting Notes Template"
                   value={tmplName}
                   onChange={e => setTmplName(e.target.value)}
-                  placeholder="Template name"
-                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onKeyDown={e => e.key === 'Enter' && normalize(tmplName) && document.getElementById('save-note-template-btn')?.click()}
+                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 />
               </div>
-              {tmplError && <p className="text-xs text-destructive">{tmplError}</p>}
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
               <button
-                onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all"
-              >
-                Cancel
-              </button>
-              <button
+                id="save-note-template-btn"
                 onClick={editingNoteTemplate ? handleUpdateNoteTemplate : handleSaveNoteTemplate}
                 disabled={!normalize(tmplName)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all disabled:opacity-50"
+                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
-                <Save className="w-3.5 h-3.5" />
-                {editingNoteTemplate ? 'Save changes' : 'Save template'}
+                {editingNoteTemplate ? 'Save changes' : 'Save'}
               </button>
             </div>
           </div>
@@ -1218,13 +1224,13 @@ const Notes: React.FC = () => {
 
       {/* Load Template Modal */}
       {loadTmplOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={() => setLoadTmplOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setLoadTmplOpen(false)}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Save className="w-4 h-4 text-primary" />
+                  <FolderKanban className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-sm font-semibold text-foreground">Load template</h2>
               </div>
@@ -1236,43 +1242,65 @@ const Notes: React.FC = () => {
               {noteTemplates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
-                    <Save className="w-6 h-6 text-muted-foreground" />
+                    <FolderKanban className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm font-medium text-foreground">No templates yet</p>
                   <p className="text-xs text-muted-foreground mt-1">Save a note as a template first.</p>
                 </div>
               ) : (
-                noteTemplates.map(tmpl => (
-                  <div key={tmpl.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-muted transition-all">
-                    <button
-                      onClick={() => handleLoadNoteTemplate(tmpl)}
-                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center flex-shrink-0">
-                        <StickyNote className="w-4 h-4 text-muted-foreground" />
+                <div className="space-y-1">
+                  {noteTemplates.map(tmpl => (
+                    <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
+                      <button
+                        onClick={() => {
+                          setCreateTitle(tmpl.title || '');
+                          setCreateContent(tmpl.content || '');
+                          setCreateColor(tmpl.color || NOTE_COLORS[0]);
+                          setCreateProjectId(tmpl.projectId ? String(tmpl.projectId) : '');
+                          setCreateSelectedTagIds(Array.isArray(tmpl.tags) ? tmpl.tags.map((t: any) => t.id) : []);
+                          setLoadTmplOpen(false);
+                          setShowCreateModal(true);
+                        }}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                          <Star className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium block truncate">{tmpl.name}</span>
+                          {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                        </div>
+                      </button>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setLoadTmplOpen(false);
+                            handleEditNoteTemplate(tmpl);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                          title="Edit template"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                            await handleDeleteNoteTemplate(tmpl.id);
+                            setNoteTemplates(await fetchNoteTemplates());
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                          title="Delete template"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{tmpl.name}</p>
-                        {tmpl.title && <p className="text-[11px] text-muted-foreground truncate">{tmpl.title}</p>}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { setLoadTmplOpen(false); handleEditNoteTemplate(tmpl); }}
-                      className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
-                      title="Edit template"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteNoteTemplate(tmpl.id)}
-                      className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
-                      title="Delete template"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
+                    </div>
+                  ))}
+                </div>
               )}
+            </div>
+            <div className="flex justify-end px-5 py-4 border-t border-border">
+              <button onClick={() => setLoadTmplOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
             </div>
           </div>
         </div>
