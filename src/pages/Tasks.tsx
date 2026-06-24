@@ -531,7 +531,7 @@ const Tasks: React.FC = () => {
       columnName: '',
       projectName: '',
       createdAt: new Date().toISOString(),
-    } as Task;
+    } as unknown as Task;
   }, [editingTemplateMeta]);
 
   const handleEditTemplate = useCallback((template: TaskTemplate) => {
@@ -3179,6 +3179,11 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   onCreateTag,
   onDeleteTagEverywhere,
   isPremium,
+  isPro,
+  onJumpToTask,
+  onEditTemplate,
+  onSaveTemplate,
+  editingTemplateMeta,
 }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
