@@ -2503,34 +2503,62 @@ const Tasks: React.FC = () => {
               ) : (
                 <div className="space-y-1">
                   {templates.map(tmpl => (
-                    <button
-                      key={tmpl.id}
-                      onClick={() => {
-                        setNewTaskTitle(tmpl.title || '');
-                        setNewTaskDescription(tmpl.description || '');
-                        setNewTaskPriority(tmpl.priority || 'medium');
-                        setNewTaskDuration(tmpl.duration || 0);
-                        setNewTaskStartDate(tmpl.startDate || '');
-                        setNewTaskStartTime(tmpl.startTime || '');
-                        setNewTaskDueDate(tmpl.dueDate || '');
-                        setNewTaskDueTime(tmpl.dueTime || '');
-                        setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
-                        setNewTaskColumnId(tmpl.columnId || '');
-                        setNewTaskLabels(tmpl.labels || []);
-                        setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
-                        setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
-                        setLoadTemplateOpen(false);
-                      }}
-                      className="w-full flex items-center gap-3 px-3 py-3 text-sm text-foreground hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all text-left"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                        <Star className="w-4 h-4 text-primary" />
+                    <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
+                      <button
+                        onClick={() => {
+                          setNewTaskTitle(tmpl.title || '');
+                          setNewTaskDescription(tmpl.description || '');
+                          setNewTaskPriority(tmpl.priority || 'medium');
+                          setNewTaskDuration(tmpl.duration || 0);
+                          setNewTaskStartDate(tmpl.startDate || '');
+                          setNewTaskStartTime(tmpl.startTime || '');
+                          setNewTaskDueDate(tmpl.dueDate || '');
+                          setNewTaskDueTime(tmpl.dueTime || '');
+                          setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+                          setNewTaskColumnId(tmpl.columnId || '');
+                          setNewTaskLabels(tmpl.labels || []);
+                          setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
+                          setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
+                          setLoadTemplateOpen(false);
+                        }}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                          <Star className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium block truncate">{tmpl.name}</span>
+                          {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                        </div>
+                      </button>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                        <button
+                          onClick={() => {
+                            setLoadTemplateOpen(false);
+                            handleEditTemplate(tmpl);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all"
+                          title="Edit template"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
+                            try {
+                              await deleteTemplateApi(tmpl.id);
+                              setTemplates(await fetchTemplates());
+                            } catch (err) {
+                              console.error('Failed to delete template:', err);
+                            }
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all"
+                          title="Delete template"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium block truncate">{tmpl.name}</span>
-                        {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
-                      </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
