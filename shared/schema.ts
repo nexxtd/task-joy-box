@@ -527,6 +527,19 @@ export const taskTemplates = pgTable('task_templates', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const noteTemplates = pgTable('note_templates', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  title: text('title').notNull(),
+  content: text('content'),
+  color: text('color').notNull(),
+  projectId: integer('project_id'),
+  tags: text('tags').default('[]'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export type InsertGoal = any;
 export type InsertHabit = any;
 export type UpdateUserSettings = any;
