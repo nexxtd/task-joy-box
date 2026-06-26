@@ -131,6 +131,7 @@ const Notes: React.FC = () => {
   const [loadTmplOpen, setLoadTmplOpen] = useState(false);
   const [tmplName, setTmplName] = useState('');
   const [tmplError, setTmplError] = useState('');
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [editingNoteTemplateMeta, setEditingNoteTemplateMeta] = useState<{ id: number; name: string; template: NoteTemplate } | null>(null);
   const [noteTemplateEditOverrides, setNoteTemplateEditOverrides] = useState<Partial<Note> | null>(null);
   const [noteTemplateEditName, setNoteTemplateEditName] = useState('');
@@ -401,21 +402,28 @@ const Notes: React.FC = () => {
   };
 
   const handleSaveNoteTemplate = useCallback(async () => {
-    if (!activeNote || !normalize(tmplName)) return;
+    if (!normalize(tmplName)) return;
+    const fromCreate = showCreateModal && createTitle.trim();
+    const source = fromCreate
+      ? { title: createTitle, content: createContent, color: createColor, projectId: createProjectId || null, tags: [] as { id: number; name: string; color: string }[] }
+      : activeNote
+        ? { title: activeNote.title, content: activeNote.content, color: activeNote.color, projectId: activeNote.projectId || null, tags: activeNote.tags }
+        : null;
+    if (!source) return;
     try {
       const saved = await createNoteTemplate({
         name: normalize(tmplName),
-        title: activeNote.title,
-        content: activeNote.content,
-        color: activeNote.color,
-        projectId: activeNote.projectId || null,
-        tags: activeNote.tags,
+        title: source.title,
+        content: source.content,
+        color: source.color,
+        projectId: source.projectId,
+        tags: source.tags,
       });
       setNoteTemplates(prev => [...prev, saved]);
       setSaveTmplOpen(false);
       setTmplName('');
     } catch { setTmplError('Failed to save template'); }
-  }, [activeNote, tmplName]);
+  }, [activeNote, tmplName, showCreateModal, createTitle, createContent, createColor, createProjectId]);
 
   const handleLoadNoteTemplate = (tmpl: NoteTemplate) => {
     setCreateTitle(tmpl.title);
@@ -423,6 +431,7 @@ const Notes: React.FC = () => {
     setCreateColor(tmpl.color);
     setCreateProjectId(tmpl.projectId ? String(tmpl.projectId) : '');
     setCreateSelectedTagIds(tmpl.tags.map(t => t.id));
+    setShowCreateModal(true);
     setLoadTmplOpen(false);
   };
 
@@ -1197,15 +1206,9 @@ const Notes: React.FC = () => {
           <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Create Note</h2>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setLoadTmplOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
-                  <FolderKanban className="w-3.5 h-3.5" />
-                  Load template
-                </button>
-                <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
+              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
             </div>
             <div className="p-5 space-y-5">
               <div>
@@ -1261,13 +1264,61 @@ const Notes: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-              <button onClick={handleCreateNote} disabled={creating || !createTitle.trim()}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Save
-              </button>
+            <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
+              <div className="relative">
+                <button
+                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  Templates
+                </button>
+                {templateMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setTemplateMenuOpen(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setTemplateMenuOpen(false); setTmplName(''); setTmplError(''); setSaveTmplOpen(true); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center">
+                          <Plus className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        Save as template
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setTemplateMenuOpen(false);
+                          setTmplError('');
+                          try {
+                            const t = await fetchNoteTemplates();
+                            setNoteTemplates(t);
+                            setLoadTmplOpen(true);
+                          } catch (err) {
+                            setTmplError('Failed to load templates. Check your connection and try again.');
+                            setTimeout(() => setTmplError(''), 4000);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+                          <FolderKanban className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        Load template
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button onClick={handleCreateNote} disabled={creating || !createTitle.trim()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>
