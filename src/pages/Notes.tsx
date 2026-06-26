@@ -1446,8 +1446,9 @@ const Notes: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <button onClick={handleSaveAsTemplate} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Save as template">
-                      <Save className="h-4 w-4" />
+                    <button onClick={handleSaveAsTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all" title="Save as template">
+                      <Star className="w-3.5 h-3.5" />
+                      Templates
                     </button>
                     <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
                       <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
