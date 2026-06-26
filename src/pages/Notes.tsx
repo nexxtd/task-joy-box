@@ -11,17 +11,23 @@ import {
   Save,
   Search,
   Star,
-  StickyNote,
   Tag,
   Trash2,
   X,
-  ChevronRight,
   Edit3,
+  GripVertical,
+  ChevronRight,
 } from 'lucide-react';
 import { fetchNoteTemplates, createNoteTemplate, updateNoteTemplate, deleteNoteTemplate as deleteNoteTemplateApi } from '@/services/noteTemplateService';
 import type { NoteTemplate } from '@/services/noteTemplateService';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from '@hello-pangea/dnd';
 
 interface NoteTag {
   id: number;
@@ -111,7 +117,6 @@ const Notes: React.FC = () => {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftProjectId, setDraftProjectId] = useState<string>('');
-  const [draftColumnId, setDraftColumnId] = useState<string>('');
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<number[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -126,6 +131,9 @@ const Notes: React.FC = () => {
   const [loadTmplOpen, setLoadTmplOpen] = useState(false);
   const [tmplName, setTmplName] = useState('');
   const [tmplError, setTmplError] = useState('');
+  const [editingNoteTemplateMeta, setEditingNoteTemplateMeta] = useState<{ id: number; name: string; template: NoteTemplate } | null>(null);
+  const [noteTemplateEditOverrides, setNoteTemplateEditOverrides] = useState<Partial<Note> | null>(null);
+  const [noteTemplateEditName, setNoteTemplateEditName] = useState('');
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -138,7 +146,9 @@ const Notes: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [myNotesCollapsed, setMyNotesCollapsed] = useState(false);
-  const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
+  const [collapsedProjects, setCollapsedProjects] = useState<number[]>(() => {
+    try { const v = localStorage.getItem('notes-collapsed-projects'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createContent, setCreateContent] = useState('');
@@ -148,7 +158,42 @@ const Notes: React.FC = () => {
   const [createNewTagName, setCreateNewTagName] = useState('');
   const [createNewTagColor, setCreateNewTagColor] = useState(randomFrom(TAG_COLORS));
 
-  const activeNote = useMemo(() => notes.find(n => n.id === openNoteId) || null, [notes, openNoteId]);
+  const [orderedNoteIds, setOrderedNoteIds] = useState<number[]>(() => {
+    try { const v = localStorage.getItem('notes-ordered-ids'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
+  const [pendingDragMove, setPendingDragMove] = useState<{ noteId: number; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-notes' | null } | null>(null);
+  const [dontAsk, setDontAsk] = useState(false);
+  const [expandedNoteIds, setExpandedNoteIds] = useState<number[]>([]);
+
+  const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  useEffect(() => { localStorage.setItem('notes-ordered-ids', JSON.stringify(orderedNoteIds)); }, [orderedNoteIds]);
+  useEffect(() => { localStorage.setItem('notes-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
+  useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
+
+  const noteTemplateEditNote = useMemo((): Note | null => {
+    if (!editingNoteTemplateMeta) return null;
+    const tmpl = editingNoteTemplateMeta.template;
+    const base: Note = {
+      id: `template-edit-${tmpl.id}` as any,
+      title: tmpl.title || '',
+      content: tmpl.content || '',
+      color: tmpl.color || NOTE_COLORS[0],
+      pinned: false,
+      projectId: tmpl.projectId ?? null,
+      columnId: null,
+      tags: tmpl.tags || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return noteTemplateEditOverrides ? { ...base, ...noteTemplateEditOverrides } : base;
+  }, [editingNoteTemplateMeta, noteTemplateEditOverrides]);
+
+  const activeNote = useMemo(() => {
+    if (noteTemplateEditNote) return noteTemplateEditNote;
+    return notes.find(n => n.id === openNoteId) || null;
+  }, [notes, openNoteId, noteTemplateEditNote]);
   const tagPopupNote = useMemo(() => notes.find(n => n.id === tagPopupNoteId) || null, [notes, tagPopupNoteId]);
 
   const fetchNotes = async () => {
@@ -183,12 +228,12 @@ const Notes: React.FC = () => {
   const loadNoteTemplates = async () => {
     try { setNoteTemplates(await fetchNoteTemplates()); } catch {}
   };
+
   useEffect(() => {
     if (!activeNote) return;
     setDraftTitle(activeNote.title);
     setDraftContent(activeNote.content);
     setDraftProjectId(activeNote.projectId ? String(activeNote.projectId) : '');
-    setDraftColumnId(activeNote.columnId ? String(activeNote.columnId) : '');
     fetchNoteActivity(activeNote.id);
   }, [activeNote?.id]);
 
@@ -277,7 +322,16 @@ const Notes: React.FC = () => {
   const toggleTagFilter = (tagId: number) =>
     setSelectedTagIds(prev => (prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]));
 
-  const toggleTagOnNote = async (noteId: number, tagId: number) => {
+  const toggleTagOnNote = async (noteId: number | string, tagId: number) => {
+    if (typeof noteId === 'string' && noteId.startsWith('template-edit-')) {
+      const currentTags = activeNote?.tags || [];
+      const hasTag = currentTags.some(t => t.id === tagId);
+      const newTags = hasTag
+        ? currentTags.filter(t => t.id !== tagId)
+        : [...currentTags, tags.find(t => t.id === tagId)!];
+      setNoteTemplateEditOverrides(prev => ({ ...prev, tags: newTags }));
+      return;
+    }
     try {
       const res = await fetch(`/api/notes/${noteId}/tags/${tagId}/toggle`, { method: 'POST', credentials: 'include' });
       if (!res.ok) throw new Error('Failed to toggle tag');
@@ -322,12 +376,20 @@ const Notes: React.FC = () => {
 
   const saveDrafts = async () => {
     if (!activeNote) return;
+    if (editingNoteTemplateMeta) {
+      setNoteTemplateEditOverrides(prev => ({
+        ...prev,
+        title: draftTitle.trim(),
+        content: draftContent,
+        projectId: draftProjectId ? Number(draftProjectId) : null,
+      }));
+      return;
+    }
     const nextTitle = draftTitle.trim();
     const nextContent = draftContent;
     const nextProjectId = draftProjectId ? Number(draftProjectId) : null;
-    const nextColumnId = draftColumnId ? Number(draftColumnId) : null;
-    if (nextTitle !== activeNote.title || nextContent !== activeNote.content || nextProjectId !== activeNote.projectId || nextColumnId !== activeNote.columnId) {
-      await applyNoteUpdate(activeNote.id, { title: nextTitle, content: nextContent, projectId: nextProjectId, columnId: nextColumnId });
+    if (nextTitle !== activeNote.title || nextContent !== activeNote.content || nextProjectId !== activeNote.projectId) {
+      await applyNoteUpdate(activeNote.id, { title: nextTitle, content: nextContent, projectId: nextProjectId });
     }
   };
 
@@ -364,31 +426,32 @@ const Notes: React.FC = () => {
     setLoadTmplOpen(false);
   };
 
-  const [editingNoteTemplate, setEditingNoteTemplate] = useState<NoteTemplate | null>(null);
+  const handleEditNoteTemplate = useCallback((tmpl: NoteTemplate) => {
+    setNoteTemplateEditOverrides(null);
+    setNoteTemplateEditName(tmpl.name);
+    setEditingNoteTemplateMeta({ id: tmpl.id, name: tmpl.name, template: tmpl });
+    setOpenNoteId(`template-edit-${tmpl.id}` as any);
+  }, []);
 
-  const handleEditNoteTemplate = (tmpl: NoteTemplate) => {
-    setEditingNoteTemplate(tmpl);
-    setTmplName(tmpl.name);
-    setSaveTmplOpen(true);
-  };
-
-  const handleUpdateNoteTemplate = async () => {
-    if (!editingNoteTemplate || !normalize(tmplName)) return;
+  const handleSaveNoteTemplateEdit = useCallback(async () => {
+    if (!editingNoteTemplateMeta) return;
+    const edited = noteTemplateEditOverrides || {};
     try {
-      const saved = await updateNoteTemplate(editingNoteTemplate.id, {
-        name: normalize(tmplName),
-        title: editingNoteTemplate.title,
-        content: editingNoteTemplate.content,
-        color: editingNoteTemplate.color,
-        projectId: editingNoteTemplate.projectId ?? null,
-        tags: editingNoteTemplate.tags,
+      const saved = await updateNoteTemplate(editingNoteTemplateMeta.id, {
+        name: noteTemplateEditName || editingNoteTemplateMeta.name,
+        title: (edited.title ?? editingNoteTemplateMeta.template.title) || '',
+        content: (edited.content ?? editingNoteTemplateMeta.template.content) || '',
+        color: (edited.color ?? editingNoteTemplateMeta.template.color) || NOTE_COLORS[0],
+        projectId: (edited.projectId !== undefined ? edited.projectId : editingNoteTemplateMeta.template.projectId) ?? null,
+        tags: (edited.tags ?? editingNoteTemplateMeta.template.tags) || [],
       });
       setNoteTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
-      setSaveTmplOpen(false);
-      setTmplName('');
-      setEditingNoteTemplate(null);
-    } catch { setTmplError('Failed to update template'); }
-  };
+      setNoteTemplateEditName('');
+      setNoteTemplateEditOverrides(null);
+      setEditingNoteTemplateMeta(null);
+      setOpenNoteId(null);
+    } catch { setTmplError('Failed to save template'); }
+  }, [editingNoteTemplateMeta, noteTemplateEditOverrides, noteTemplateEditName]);
 
   const handleDeleteNoteTemplate = async (id: number) => {
     try { await deleteNoteTemplateApi(id); setNoteTemplates(prev => prev.filter(t => t.id !== id)); } catch {}
@@ -398,7 +461,7 @@ const Notes: React.FC = () => {
     if (!activeNote) return;
     setTmplName(activeNote.title || 'Untitled note');
     setTmplError('');
-    setEditingNoteTemplate(null);
+    setEditingNoteTemplateMeta(null);
     setSaveTmplOpen(true);
   };
 
@@ -415,27 +478,35 @@ const Notes: React.FC = () => {
 
   const sortedNotes = useMemo(() => {
     const compare = (a: Note, b: Note) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
       const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
       const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
       return new Date(bVal).getTime() - new Date(aVal).getTime();
     };
-    const pinned = filteredNotes.filter(n => n.pinned).sort(compare);
-    const unpinned = filteredNotes.filter(n => !n.pinned).sort(compare);
-    return { pinned, unpinned };
+    return [...filteredNotes].sort(compare);
   }, [filteredNotes, sortMode]);
 
-  const matchingCount = filteredNotes.length;
-
   const myNotesGroup = useMemo(() => {
-    return filteredNotes.filter(n => !n.projectId).sort((a, b) => {
+    const notes = filteredNotes.filter(n => !n.projectId);
+    if (orderedNoteIds.length > 0) {
+      const idSet = new Set(notes.map(n => n.id));
+      const ordered = orderedNoteIds.filter(id => idSet.has(id));
+      const unordered = notes.filter(n => !orderedNoteIds.includes(n.id));
+      const orderedNotes = ordered.map(id => notes.find(n => n.id === id)!).filter(Boolean);
+      return [...orderedNotes, ...unordered];
+    }
+    return notes.sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
       const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
       const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
       return new Date(bVal).getTime() - new Date(aVal).getTime();
     });
-  }, [filteredNotes, sortMode]);
+  }, [filteredNotes, sortMode, orderedNoteIds]);
+
+  const pinnedFromMyNotes = useMemo(() => myNotesGroup.filter(n => n.pinned), [myNotesGroup]);
+  const unpinnedFromMyNotes = useMemo(() => myNotesGroup.filter(n => !n.pinned), [myNotesGroup]);
 
   const projectNoteGroups = useMemo(() => {
     return projects.map(project => {
@@ -468,28 +539,141 @@ const Notes: React.FC = () => {
     setSingleDeleteId(null);
   };
 
-  const renderNoteRow = (note: Note) => {
+  const getNoteIdForDroppable = (id: string): number | 'my-notes' | null => {
+    if (id === 'my-notes') return 'my-notes';
+    if (id.startsWith('project-')) return Number(id.slice(8));
+    return null;
+  };
+
+  const getNotesForDroppable = (id: string): Note[] | null => {
+    if (id === 'my-notes') return myNotesGroup;
+    if (id.startsWith('project-')) {
+      const pg = projectNoteGroups.find(p => p.project.id === Number(id.slice(8)));
+      return pg?.notes ?? null;
+    }
+    return null;
+  };
+
+  const applyDragMoveDirect = (srcDroppableId: string, dstDroppableId: string, srcIndex: number, dstIndex: number, dstProject: number | 'my-notes' | null) => {
+    const srcNotes = getNotesForDroppable(srcDroppableId);
+    const dstNotes = getNotesForDroppable(dstDroppableId);
+    if (!srcNotes || !dstNotes) return;
+    if (srcNotes.length <= srcIndex || dstNotes.length < dstIndex) return;
+
+    const movingNoteId = srcNotes[srcIndex]?.id;
+    if (!movingNoteId) return;
+
+    if (dstProject === 'my-notes') {
+      applyNoteUpdate(movingNoteId, { projectId: null });
+    } else if (typeof dstProject === 'number') {
+      applyNoteUpdate(movingNoteId, { projectId: dstProject });
+    }
+
+    const srcIds = srcNotes.map(n => n.id);
+    const dstIds = dstNotes.map(n => n.id);
+    const [removed] = srcIds.splice(srcIndex, 1);
+    dstIds.splice(dstIndex, 0, removed);
+
+    const base = orderedNoteIds.length > 0 ? [...orderedNoteIds] : filteredNotes.map(n => n.id);
+    const srcSet = new Set(srcNotes.map(n => n.id));
+    const dstSet = new Set(dstNotes.map(n => n.id));
+    const resultIds: number[] = [];
+    let srcInserted = false;
+    let dstInserted = false;
+    for (const id of base) {
+      if (srcSet.has(id) && !srcInserted) { resultIds.push(...srcIds); srcInserted = true; }
+      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    }
+    if (!srcInserted) resultIds.push(...srcIds);
+    if (!dstInserted) resultIds.push(...dstIds);
+    setOrderedNoteIds(resultIds);
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) return;
+
+    const srcProject = getNoteIdForDroppable(result.source.droppableId);
+    const dstProject = getNoteIdForDroppable(result.destination.droppableId);
+    if (srcProject === null || dstProject === null) return;
+
+    const srcId = result.source.droppableId;
+    const dstId = result.destination.droppableId;
+    const isCrossProject = srcProject !== dstProject;
+
+    if (isCrossProject) {
+      const srcNotes = getNotesForDroppable(srcId);
+      if (!srcNotes) return;
+      const movingNoteId = srcNotes[result.source.index]?.id;
+      if (!movingNoteId) return;
+      setPendingDragMove({ noteId: movingNoteId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, });
+      return;
+    }
+
+    const sectionNotes = getNotesForDroppable(srcId);
+    if (!sectionNotes) return;
+
+    const sectionNoteIds = sectionNotes.map(n => n.id);
+    const ids = [...sectionNoteIds];
+    const [removed] = ids.splice(result.source.index, 1);
+    ids.splice(result.destination.index, 0, removed);
+
+    const base = orderedNoteIds.length > 0 ? [...orderedNoteIds] : filteredNotes.map(n => n.id);
+    const sectionIdSet = new Set(sectionNoteIds);
+    const resultIds: number[] = [];
+    let inserted = false;
+    for (const id of base) {
+      if (sectionIdSet.has(id)) {
+        if (!inserted) { resultIds.push(...ids); inserted = true; }
+      } else {
+        resultIds.push(id);
+      }
+    }
+    setOrderedNoteIds(resultIds);
+  };
+
+  const toggleExpand = (noteId: number) => {
+    setExpandedNoteIds(prev =>
+      prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]
+    );
+  };
+
+  const matchingCount = filteredNotes.length;
+
+  const renderNoteRow = (note: Note, dragHandleProps?: any, isDragging?: boolean) => {
+    const isExpanded = expandedNoteIds.includes(note.id);
     const preview = note.content.split('\n').slice(0, 2).join(' ').trim();
+
     return (
       <div
         key={note.id}
+        onClick={() => {
+          if (isDeleteMode) {
+            setSelectedDeleteIds(prev =>
+              prev.includes(note.id) ? prev.filter(id => id !== note.id) : [...prev, note.id]
+            );
+          } else {
+            setOpenNoteId(note.id);
+          }
+        }}
         className={cn(
           'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
           isDeleteMode
             ? selectedDeleteIds.includes(note.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
               : 'border-border hover:bg-muted/20'
-            : 'border-border hover:border-border/80 hover:shadow-sm'
+            : isDragging
+              ? 'border-primary/40 shadow-lg rotate-[2deg]'
+              : 'border-border hover:border-border/80 hover:shadow-sm'
         )}
-        onClick={() => {
-          if (isDeleteMode) {
-            setSelectedDeleteIds(prev => prev.includes(note.id) ? prev.filter(id => id !== note.id) : [...prev, note.id]);
-          } else {
-            setOpenNoteId(note.id);
-          }
-        }}
+        style={!isDeleteMode ? { borderLeftColor: note.color === NOTE_COLORS[0] ? undefined : note.color, borderLeftWidth: note.color === NOTE_COLORS[0] ? undefined : '3px' } : undefined}
       >
         <div className="flex items-center gap-1 px-3 py-3">
+          {dragHandleProps && (
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
           {isDeleteMode ? (
             <input
               type="checkbox"
@@ -593,6 +777,13 @@ const Notes: React.FC = () => {
             <span className="text-[10px] text-muted-foreground">
               {new Date(note.updatedAt || note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
+            <button
+              onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
             {!isDeleteMode && (
               <>
                 <button
@@ -613,6 +804,56 @@ const Notes: React.FC = () => {
             )}
           </div>
         </div>
+
+        {isExpanded && !isDeleteMode && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-3 bg-muted/10 rounded-b-xl">
+            <div
+              className="rounded-xl border border-border p-3 min-h-[80px] text-sm text-foreground leading-relaxed whitespace-pre-wrap"
+              style={{ backgroundColor: note.color }}
+            >
+              {note.content || 'No content'}
+            </div>
+            <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">Tags</label>
+              <div className="flex flex-wrap gap-2">
+                {tags.length === 0 && <p className="text-xs text-muted-foreground">No tags available</p>}
+                {tags.map(tag => {
+                  const active = note.tags.some(t => t.id === tag.id);
+                  return (
+                    <button key={tag.id} onClick={() => toggleTagOnNote(note.id, tag.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
+                      <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Project</label>
+              <Select value={String(note.projectId || 'none')} onValueChange={v => applyNoteUpdate(note.id, { projectId: v === 'none' ? null : Number(v) })}>
+                <SelectTrigger className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm h-9">
+                  <SelectValue placeholder="My Notes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">My Notes</SelectItem>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={e => { e.stopPropagation(); setSingleDeleteId(note.id); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Note
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -621,7 +862,7 @@ const Notes: React.FC = () => {
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
         <div>
-          <h1 className="text-lg font-bold text-foreground">Notes</h1>
+          <h1 className="text-lg font-bold text-foreground">All Notes</h1>
           <p className="text-xs text-muted-foreground">{matchingCount} notes matching filters</p>
         </div>
         <div className="flex items-center gap-2">
@@ -826,7 +1067,14 @@ const Notes: React.FC = () => {
             )}
           </div>
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setAnalysisPanelOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Note Analysis
+            </button>
             <Select value={sortMode} onValueChange={v => setSortMode(v as typeof sortMode)}>
               <SelectTrigger className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground h-9">
                 <SelectValue placeholder="Sort by" />
@@ -841,7 +1089,8 @@ const Notes: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 relative">
+        <DragDropContext onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {loading ? (
             <div className="text-center py-16">
@@ -874,18 +1123,34 @@ const Notes: React.FC = () => {
                     <span className="text-[10px] text-muted-foreground/50 ml-1">({myNotesGroup.length})</span>
                   </button>
                   {!myNotesCollapsed && (
-                    <div className="space-y-1.5">
-                      {myNotesGroup.map(renderNoteRow)}
-                    </div>
+                    <Droppable droppableId="my-notes">
+                      {(dropProvided, snapshot) => (
+                        <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
+                          {myNotesGroup.map((note, index) => (
+                            <Draggable key={note.id} draggableId={String(note.id)} index={index}>
+                              {(taskProvided, taskSnapshot) => (
+                                <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                  {renderNoteRow(note, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {dropProvided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
                   )}
                 </div>
               )}
 
+              {myNotesGroup.length > 0 && projectNoteGroups.length > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
+
               {/* Project sections */}
-              {projectNoteGroups.map(({ project, notes: projectNotes }) => {
+              {projectNoteGroups.map(({ project, notes: projectNotes }, idx) => {
                 const isCollapsed = collapsedProjects.includes(project.id);
                 return (
                   <div key={project.id} className="mb-3">
+                    {idx > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
                     <button
                       onClick={() => setCollapsedProjects(prev =>
                         prev.includes(project.id) ? prev.filter(id => id !== project.id) : [...prev, project.id]
@@ -900,9 +1165,22 @@ const Notes: React.FC = () => {
                       <span className="text-[10px] text-muted-foreground/50 ml-1">({projectNotes.length})</span>
                     </button>
                     {!isCollapsed && (
-                      <div className="pl-4 space-y-1.5">
-                        {projectNotes.map(renderNoteRow)}
-                      </div>
+                      <Droppable droppableId={"project-" + project.id}>
+                        {(dropProvided, snapshot) => (
+                          <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-4 space-y-1.5">
+                            {projectNotes.map((note, index) => (
+                              <Draggable key={note.id} draggableId={"p-" + note.id} index={index}>
+                                {(taskProvided, taskSnapshot) => (
+                                  <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                    {renderNoteRow(note, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {dropProvided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
                     )}
                   </div>
                 );
@@ -910,6 +1188,7 @@ const Notes: React.FC = () => {
             </>
           )}
         </div>
+        </DragDropContext>
       </div>
 
       {showCreateModal && (
@@ -918,18 +1197,24 @@ const Notes: React.FC = () => {
           <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Create Note</h2>
-              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setLoadTmplOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                  <FolderKanban className="w-3.5 h-3.5" />
+                  Load template
+                </button>
+                <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Title</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Title</label>
                 <input autoFocus value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="Note title"
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground">Content</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
                 <textarea value={createContent} onChange={e => setCreateContent(e.target.value)} placeholder="Write your note..." rows={6}
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
               </div>
@@ -947,10 +1232,10 @@ const Notes: React.FC = () => {
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Project</label>
                 <Select value={createProjectId || 'none'} onValueChange={v => setCreateProjectId(v === 'none' ? '' : v)}>
                   <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                    <SelectValue placeholder="My Tasks" />
+                    <SelectValue placeholder="My Notes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">My Tasks</SelectItem>
+                    <SelectItem value="none">My Notes</SelectItem>
                     {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
                   </SelectContent>
                 </Select>
@@ -977,12 +1262,6 @@ const Notes: React.FC = () => {
               </div>
             </div>
             <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
-              <button
-                onClick={() => { setLoadTmplOpen(true); }}
-                className="px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                Load template
-              </button>
               <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button onClick={handleCreateNote} disabled={creating || !createTitle.trim()}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">
@@ -1081,10 +1360,22 @@ const Notes: React.FC = () => {
 
       {activeNote && (
         <div className="fixed inset-0 z-[50] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} />
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={async () => { await saveDrafts(); if (!editingNoteTemplateMeta) setOpenNoteId(null); else { setNoteTemplateEditOverrides(null); setNoteTemplateEditName(''); setEditingNoteTemplateMeta(null); setOpenNoteId(null); } }} />
           <div className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
               <div className="flex-1">
+                {editingNoteTemplateMeta ? (
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Edit3 className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground uppercase">Editing template</p>
+                      <input value={noteTemplateEditName} onChange={e => setNoteTemplateEditName(e.target.value)} placeholder="Template name"
+                        className="bg-transparent text-sm font-semibold text-foreground outline-none border-b border-dashed border-border/50 focus:border-foreground/30" />
+                    </div>
+                  </div>
+                ) : null}
                 <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} onBlur={saveDrafts} placeholder="Untitled note"
                   className="w-full bg-transparent text-2xl font-semibold text-foreground outline-none" />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -1092,18 +1383,32 @@ const Notes: React.FC = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={handleSaveAsTemplate} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Save as template">
-                  <Save className="h-4 w-4" />
-                </button>
-                <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
-                  <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
-                </button>
-                <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
+                {editingNoteTemplateMeta ? (
+                  <>
+                    <button onClick={async () => { setNoteTemplateEditOverrides(null); setNoteTemplateEditName(''); setEditingNoteTemplateMeta(null); setOpenNoteId(null); }} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all font-medium">
+                      Cancel
+                    </button>
+                    <button onClick={handleSaveNoteTemplateEdit} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all">
+                      <Save className="w-3.5 h-3.5" />
+                      Save Template
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={handleSaveAsTemplate} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Save as template">
+                      <Save className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
+                      <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
+                    </button>
+                    <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                    <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1127,15 +1432,14 @@ const Notes: React.FC = () => {
                 </div>
               </div>
 
-              {/* Project Selector */}
               <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Project</label>
                 <Select value={draftProjectId || 'none'} onValueChange={v => { setDraftProjectId(v === 'none' ? '' : v); saveDrafts(); }}>
                   <SelectTrigger className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm h-9">
-                    <SelectValue placeholder="My Tasks" />
+                    <SelectValue placeholder="My Notes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">My Tasks</SelectItem>
+                    <SelectItem value="none">My Notes</SelectItem>
                     {projects.map(p => (
                       <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                     ))}
@@ -1143,7 +1447,6 @@ const Notes: React.FC = () => {
                 </Select>
               </div>
 
-              {/* Activity Section */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
                   onClick={() => setActivityCollapsed(prev => !prev)}
@@ -1172,9 +1475,56 @@ const Notes: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Save Template Modal */}
+
+      {analysisPanelOpen && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div className="absolute inset-0 bg-black/10 pointer-events-auto" onClick={() => setAnalysisPanelOpen(false)} />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-sm bg-card border-l border-border shadow-[-10px_0_30px_rgba(0,0,0,0.08)] pointer-events-auto flex flex-col">
+            <header className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Note Analysis</h3>
+              </div>
+              <button onClick={() => setAnalysisPanelOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4">
+              {analysisLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Analyzing notes...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <h4 className="text-base font-semibold text-foreground">Notes Overview</h4>
+                  <p className="text-sm text-muted-foreground">{filteredNotes.length} notes in current view</p>
+                  <div className="space-y-2">
+                    {(() => {
+                      const pinnedCount = filteredNotes.filter(n => n.pinned).length;
+                      const withTags = filteredNotes.filter(n => n.tags.length > 0).length;
+                      const withProjects = filteredNotes.filter(n => n.projectId).length;
+                      return [
+                        { text: `${pinnedCount} pinned` },
+                        { text: `${filteredNotes.length - pinnedCount} unpinned` },
+                        { text: `${withTags} with tags` },
+                        { text: `${withProjects} with projects` },
+                      ].map((line, idx) => (
+                        <div key={idx} className="text-sm text-foreground bg-muted/30 rounded-lg px-3 py-2">{line.text}</div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
       {saveTmplOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplateMeta(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -1182,9 +1532,9 @@ const Notes: React.FC = () => {
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Star className="w-4 h-4 text-primary" />
                 </div>
-                <h2 className="text-sm font-semibold text-foreground">{editingNoteTemplate ? 'Edit template' : 'Save as template'}</h2>
+                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
               </div>
-              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplateMeta(null); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
@@ -1208,21 +1558,20 @@ const Notes: React.FC = () => {
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplate(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+              <button onClick={() => { setSaveTmplOpen(false); setTmplName(''); setTmplError(''); setEditingNoteTemplateMeta(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
               <button
                 id="save-note-template-btn"
-                onClick={editingNoteTemplate ? handleUpdateNoteTemplate : handleSaveNoteTemplate}
+                onClick={handleSaveNoteTemplate}
                 disabled={!normalize(tmplName)}
                 className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
-                {editingNoteTemplate ? 'Save changes' : 'Save'}
+                Save
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Load Template Modal */}
       {loadTmplOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setLoadTmplOpen(false)}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
@@ -1252,15 +1601,7 @@ const Notes: React.FC = () => {
                   {noteTemplates.map(tmpl => (
                     <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
                       <button
-                        onClick={() => {
-                          setCreateTitle(tmpl.title || '');
-                          setCreateContent(tmpl.content || '');
-                          setCreateColor(tmpl.color || NOTE_COLORS[0]);
-                          setCreateProjectId(tmpl.projectId ? String(tmpl.projectId) : '');
-                          setCreateSelectedTagIds(Array.isArray(tmpl.tags) ? tmpl.tags.map((t: any) => t.id) : []);
-                          setLoadTmplOpen(false);
-                          setShowCreateModal(true);
-                        }}
+                        onClick={() => handleLoadNoteTemplate(tmpl)}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
                       >
                         <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
@@ -1305,6 +1646,38 @@ const Notes: React.FC = () => {
           </div>
         </div>
       )}
+
+      {pendingDragMove && (() => {
+        const { srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject } = pendingDragMove;
+
+        const confirmMove = () => {
+          if (dontAsk) {
+            localStorage.setItem('notes-drag-confirm-project', 'true');
+          }
+          applyDragMoveDirect(srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject);
+          setPendingDragMove(null);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+              <h3 className="text-sm font-bold text-foreground">Move note?</h3>
+              <p className="text-xs text-muted-foreground mt-2">
+                Are you sure you want to move this note? It will change the note&apos;s project.
+              </p>
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
+                <span className="text-xs text-muted-foreground">Don&apos;t ask me again</span>
+              </label>
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
