@@ -405,9 +405,9 @@ const Notes: React.FC = () => {
     if (!normalize(tmplName)) return;
     const fromCreate = showCreateModal && createTitle.trim();
     const source = fromCreate
-      ? { title: createTitle, content: createContent, color: createColor, projectId: createProjectId || null, tags: [] as { id: number; name: string; color: string }[] }
+      ? { title: createTitle, content: createContent, color: createColor, projectId: createProjectId ? Number(createProjectId) : null, tags: [] as { id: number; name: string; color: string }[] }
       : activeNote
-        ? { title: activeNote.title, content: activeNote.content, color: activeNote.color, projectId: activeNote.projectId || null, tags: activeNote.tags }
+        ? { title: activeNote.title, content: activeNote.content, color: activeNote.color, projectId: activeNote.projectId ?? null, tags: activeNote.tags }
         : null;
     if (!source) return;
     try {
