@@ -1284,7 +1284,7 @@ const Notes: React.FC = () => {
                   {newTagPickerOpen && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                      <div className="absolute left-0 mt-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
+                      <div className="absolute left-0 bottom-full mb-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
                         <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
                           {tags.length === 0 && (
                             <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
