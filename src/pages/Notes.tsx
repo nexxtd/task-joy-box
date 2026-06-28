@@ -157,6 +157,8 @@ const Notes: React.FC = () => {
   const [createContent, setCreateContent] = useState('');
   const [createColor, setCreateColor] = useState(randomFrom(NOTE_COLORS));
   const [createProjectId, setCreateProjectId] = useState<string>('');
+  const [createColumnId, setCreateColumnId] = useState<string>('');
+  const [boardColumns, setBoardColumns] = useState<{ id: string; title: string; order: number; projectId?: number | null }[]>([]);
   const [createSelectedTagIds, setCreateSelectedTagIds] = useState<number[]>([]);
   const [createNewTagName, setCreateNewTagName] = useState('');
   const [createNewTagColor, setCreateNewTagColor] = useState(randomFrom(TAG_COLORS));
@@ -174,6 +176,14 @@ const Notes: React.FC = () => {
   useEffect(() => { localStorage.setItem('notes-ordered-ids', JSON.stringify(orderedNoteIds)); }, [orderedNoteIds]);
   useEffect(() => { localStorage.setItem('notes-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
   useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+    fetch('/api/boards/snapshot', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => { if (data?.board?.columns) setBoardColumns(data.board.columns); })
+      .catch(() => {});
+  }, [showCreateModal]);
 
   const noteTemplateEditNote = useMemo((): Note | null => {
     if (!editingNoteTemplateMeta) return null;
@@ -276,7 +286,7 @@ const Notes: React.FC = () => {
       setCreating(true);
       const res = await fetch('/api/notes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ title: createTitle, content: createContent, color: createColor, pinned: false, projectId: createProjectId || null }),
+        body: JSON.stringify({ title: createTitle, content: createContent, color: createColor, pinned: false, projectId: createProjectId || null, columnId: createColumnId || null }),
       });
       if (!res.ok) throw new Error('Failed to create note');
       const created = await res.json();
@@ -1247,7 +1257,7 @@ const Notes: React.FC = () => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
-                  <Select value={createProjectId || 'none'} onValueChange={v => setCreateProjectId(v === 'none' ? '' : v)}>
+                  <Select value={createProjectId || 'none'} onValueChange={v => { setCreateProjectId(v === 'none' ? '' : v); setCreateColumnId(''); }}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="My Notes" />
                     </SelectTrigger>
@@ -1257,6 +1267,24 @@ const Notes: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {createProjectId !== '' && (
+                  <div>
+                    <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
+                    <Select value={createColumnId} onValueChange={v => setCreateColumnId(v)}>
+                      <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                        <SelectValue placeholder="Select column" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {boardColumns
+                          .filter(col => col.projectId === Number(createProjectId))
+                          .sort((a, b) => a.order - b.order)
+                          .map(col => (
+                            <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <div>
