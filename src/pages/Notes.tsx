@@ -1096,13 +1096,6 @@ const Notes: React.FC = () => {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={() => setAnalysisPanelOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              Note Analysis
-            </button>
             <Select value={sortMode} onValueChange={v => setSortMode(v as typeof sortMode)}>
               <SelectTrigger className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground h-9">
                 <SelectValue placeholder="Sort by" />
@@ -1268,7 +1261,7 @@ const Notes: React.FC = () => {
 
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Tags</label>
-                <div className="mt-1">
+                <div className="mt-1 relative">
                   {createSelectedTagIds.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {tags.filter(t => createSelectedTagIds.includes(t.id)).map(tag => (
@@ -1414,7 +1407,7 @@ const Notes: React.FC = () => {
                   disabled={creating || !createTitle.trim()}
                   className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
                 >
-                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Save
                 </button>
               </div>
