@@ -122,6 +122,8 @@ const Notes: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteId, setSingleDeleteId] = useState<number | null>(null);
   const [tagPopupNoteId, setTagPopupNoteId] = useState<number | null>(null);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(randomFrom(TAG_COLORS));
 
@@ -987,47 +989,64 @@ const Notes: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-2 min-w-0">
-            {tags.map(tag => {
-              const active = selectedTagIds.includes(tag.id);
-              return (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleTagFilter(tag.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${
-                    active
-                      ? 'border-foreground/20 text-foreground shadow-sm'
-                      : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                  }`}
-                >
-                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                  {tag.name}
-                </button>
-              );
-            })}
             {selectedTagIds.length > 0 && (
               <button
                 onClick={() => setSelectedTagIds([])}
-                className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
               >
                 Clear tags
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border">
-            {PIN_FILTERS.map(filter => (
-              <button
-                key={filter}
-                onClick={() => setPinFilter(filter)}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
-                  pinFilter === filter
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-              </button>
-            ))}
+          <div className="relative">
+            <button
+              onClick={() => setTagPickerOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              Tags
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {tagPickerOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Tag filter</p>
+                      <p className="text-xs text-muted-foreground">Filter notes by tag.</p>
+                    </div>
+                    <button onClick={() => setTagPickerOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                    {tags.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">No tags yet.</p>
+                    )}
+                    {tags.map(tag => {
+                      const isActive = selectedTagIds.includes(tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          onClick={() => toggleTagFilter(tag.id)}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
+                            isActive
+                              ? 'border-primary/30 bg-primary/5 shadow-sm'
+                              : 'border-border/60 hover:bg-muted/40'
+                          }`}
+                        >
+                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                          <span className="text-sm text-foreground flex-1">{tag.name}</span>
+                          {isActive && <span className="text-[10px] text-primary font-bold">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="relative">
@@ -1206,64 +1225,141 @@ const Notes: React.FC = () => {
           <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Create Note</h2>
-              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setShowCreateModal(false); setCreateNewTagName(''); setCreateNewTagColor(randomFrom(TAG_COLORS)); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
+
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Title</label>
-                <input autoFocus value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="Note title"
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Note title</label>
+                <input
+                  autoFocus
+                  value={createTitle}
+                  onChange={e => setCreateTitle(e.target.value)}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                />
               </div>
+
               <div>
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
-                <textarea value={createContent} onChange={e => setCreateContent(e.target.value)} placeholder="Write your note..." rows={6}
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+                <textarea
+                  value={createContent}
+                  onChange={e => setCreateContent(e.target.value)}
+                  rows={4}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                />
               </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Color</label>
-                <div className="flex gap-2">
-                  {NOTE_COLORS.map(color => (
-                    <button key={color} onClick={() => setCreateColor(color)}
-                      className={`w-8 h-8 rounded-full border-2 transition-all ${createColor === color ? 'border-foreground scale-110' : 'border-border'}`}
-                      style={{ backgroundColor: color }} />
-                  ))}
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
+                  <Select value={createProjectId || 'none'} onValueChange={v => setCreateProjectId(v === 'none' ? '' : v)}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="My Notes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">My Notes</SelectItem>
+                      {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Project</label>
-                <Select value={createProjectId || 'none'} onValueChange={v => setCreateProjectId(v === 'none' ? '' : v)}>
-                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                    <SelectValue placeholder="My Notes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">My Notes</SelectItem>
-                    {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Tags</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {tags.map(tag => {
-                    const active = createSelectedTagIds.includes(tag.id);
-                    return (
-                      <button key={tag.id} onClick={() => setCreateSelectedTagIds(prev => prev.includes(tag.id) ? prev.filter(id => id !== tag.id) : [...prev, tag.id])}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
-                        <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-2">
-                  <input value={createNewTagName} onChange={e => setCreateNewTagName(e.target.value)} placeholder="New tag name"
-                    className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm" />
-                  <button onClick={() => setCreateNewTagColor(randomFrom(TAG_COLORS))} className="w-10 rounded-xl border border-border" style={{ backgroundColor: createNewTagColor }} title="Random color" />
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Tags</label>
+                <div className="mt-1">
+                  {createSelectedTagIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {tags.filter(t => createSelectedTagIds.includes(t.id)).map(tag => (
+                        <span key={tag.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: tag.color }}>
+                          {tag.name}
+                          <button onClick={() => setCreateSelectedTagIds(prev => prev.filter(id => id !== tag.id))} className="hover:opacity-70">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setNewTagPickerOpen(prev => !prev)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    {createSelectedTagIds.length > 0 ? `${createSelectedTagIds.length} tag${createSelectedTagIds.length > 1 ? 's' : ''} selected` : 'Add tags'}
+                  </button>
+                  {newTagPickerOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
+                      <div className="absolute left-0 mt-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
+                        <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                          {tags.length === 0 && (
+                            <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
+                          )}
+                          {tags.map(tag => {
+                            const active = createSelectedTagIds.includes(tag.id);
+                            return (
+                              <button
+                                key={tag.id}
+                                onClick={() => setCreateSelectedTagIds(prev => active ? prev.filter(id => id !== tag.id) : [...prev, tag.id])}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
+                                  active
+                                    ? 'border-primary/30 bg-primary/5 shadow-sm'
+                                    : 'border-border/60 hover:bg-muted/40'
+                                }`}
+                              >
+                                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                                <span className="text-sm text-foreground flex-1">{tag.name}</span>
+                                {active && <span className="text-[10px] text-primary font-bold">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2 border-t border-border pt-3">
+                          <input
+                            value={createNewTagName}
+                            onChange={e => setCreateNewTagName(e.target.value)}
+                            placeholder="Create tag"
+                            className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                          <button
+                            onClick={() => setCreateNewTagColor(randomFrom(TAG_COLORS))}
+                            className="w-10 h-10 rounded-xl border-2 border-border/50 flex-shrink-0 transition-transform hover:scale-110"
+                            style={{ backgroundColor: createNewTagColor }}
+                            title="Randomize color"
+                          />
+                          <button
+                            onClick={async () => {
+                              const name = normalize(createNewTagName);
+                              if (!name) return;
+                              try {
+                                const res = await fetch('/api/notes/tags', {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                                  body: JSON.stringify({ name, color: createNewTagColor }),
+                                });
+                                if (res.ok) {
+                                  const newTag = await res.json();
+                                  setTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)));
+                                  setCreateSelectedTagIds(prev => [...prev, newTag.id]);
+                                }
+                              } catch {}
+                              setCreateNewTagName('');
+                              setCreateNewTagColor(randomFrom(TAG_COLORS));
+                              setNewTagPickerOpen(false);
+                            }}
+                            disabled={!createNewTagName.trim()}
+                            className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-xl disabled:opacity-40"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
+
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
               <div className="relative">
                 <button
@@ -1313,8 +1409,11 @@ const Notes: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                <button onClick={handleCreateNote} disabled={creating || !createTitle.trim()}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">
+                <button
+                  onClick={handleCreateNote}
+                  disabled={creating || !createTitle.trim()}
+                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                >
                   {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   Save
                 </button>
@@ -1410,26 +1509,29 @@ const Notes: React.FC = () => {
       )}
 
       {activeNote && (
-        <div className="fixed inset-0 z-[50] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={async () => { await saveDrafts(); if (!editingNoteTemplateMeta) setOpenNoteId(null); else { setNoteTemplateEditOverrides(null); setNoteTemplateEditName(''); setEditingNoteTemplateMeta(null); setOpenNoteId(null); } }} />
-          <div className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-              <div className="flex-1">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={async () => { await saveDrafts(); if (!editingNoteTemplateMeta) setOpenNoteId(null); else { setNoteTemplateEditOverrides(null); setNoteTemplateEditName(''); setEditingNoteTemplateMeta(null); setOpenNoteId(null); } }}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
                 {editingNoteTemplateMeta ? (
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Edit3 className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-muted-foreground uppercase">Editing template</p>
-                      <input value={noteTemplateEditName} onChange={e => setNoteTemplateEditName(e.target.value)} placeholder="Template name"
-                        className="bg-transparent text-sm font-semibold text-foreground outline-none border-b border-dashed border-border/50 focus:border-foreground/30" />
-                    </div>
+                  <div className="mb-2">
+                    <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Template name</label>
+                    <input
+                      className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      value={noteTemplateEditName}
+                      onChange={e => setNoteTemplateEditName(e.target.value)}
+                      placeholder="Template name"
+                    />
                   </div>
                 ) : null}
-                <input value={draftTitle} onChange={e => setDraftTitle(e.target.value)} onBlur={saveDrafts} placeholder="Untitled note"
-                  className="w-full bg-transparent text-2xl font-semibold text-foreground outline-none" />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <input
+                  className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+                  value={draftTitle}
+                  onChange={e => setDraftTitle(e.target.value)}
+                  onBlur={saveDrafts}
+                />
+                <p className="mt-1 text-xs text-muted-foreground px-1">
                   Last edited {new Date(activeNote.updatedAt || activeNote.createdAt).toLocaleString()}
                 </p>
               </div>
@@ -1464,30 +1566,11 @@ const Notes: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid gap-4 p-5">
-              <textarea value={draftContent} onChange={e => setDraftContent(e.target.value)} onBlur={saveDrafts} placeholder="Write your note..." rows={10}
-                className="min-h-[280px] w-full resize-y rounded-2xl border border-border bg-muted/20 p-4 text-sm leading-6 text-foreground outline-none focus:ring-2 focus:ring-primary/20" />
-
-              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">Tags</label>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map(tag => {
-                    const active = activeNote.tags.some(t => t.id === tag.id);
-                    return (
-                      <button key={tag.id} onClick={() => toggleTagOnNote(activeNote.id, tag.id)}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
-                        <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                        {tag.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Project</label>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
                 <Select value={draftProjectId || 'none'} onValueChange={v => { setDraftProjectId(v === 'none' ? '' : v); saveDrafts(); }}>
-                  <SelectTrigger className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm h-9">
+                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="My Notes" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1498,31 +1581,129 @@ const Notes: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-border bg-muted/20">
+            <div>
+              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
+              <textarea
+                value={draftContent}
+                onChange={e => setDraftContent(e.target.value)}
+                onBlur={saveDrafts}
+                rows={8}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-muted-foreground" />
+                  Tags
+                </h3>
                 <button
-                  onClick={() => setActivityCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
+                  onClick={() => setTagPopupNoteId(tagPopupNoteId === activeNote.id ? null : activeNote.id)}
+                  className="text-xs text-primary hover:underline"
                 >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Activity</h3>
-                  </div>
-                  {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  {tagPopupNoteId === activeNote.id ? 'Close' : 'Edit'}
                 </button>
-                {!activityCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
-                    {activityLogs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No activity yet</p>
-                    ) : activityLogs.map(log => (
-                      <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                        <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
+
+              {activeNote.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {activeNote.tags.map(tag => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-white"
+                      style={{ backgroundColor: tag.color }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {tagPopupNoteId === activeNote.id && (
+                <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-3">
+                  <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
+                    {tags.map(tag => {
+                      const active = activeNote.tags.some(t => t.id === tag.id);
+                      return (
+                        <div key={tag.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                          <button
+                            onClick={() => toggleTagOnNote(activeNote.id, tag.id)}
+                            className="flex flex-1 items-center gap-2 text-left"
+                          >
+                            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                            <span className="text-sm text-foreground">{tag.name}</span>
+                            {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                          </button>
+                          <button
+                            onClick={() => deleteTagEverywhere(tag.id)}
+                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Delete tag everywhere"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newTagName}
+                      onChange={e => setNewTagName(e.target.value)}
+                      placeholder="Create tag"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      onClick={() => setNewTagColor(randomFrom(TAG_COLORS))}
+                      className="w-11 rounded-xl border border-border"
+                      style={{ backgroundColor: newTagColor }}
+                      title="Random color"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={addTagToNote}
+                      disabled={!normalize(newTagName)}
+                      className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                    >
+                      Add tag
+                    </button>
+                    <button
+                      onClick={() => setTagPopupNoteId(null)}
+                      className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-border bg-muted/20">
+              <button
+                onClick={() => setActivityCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">Activity</h3>
+                </div>
+                {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {!activityCollapsed && (
+                <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
+                  {activityLogs.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No activity yet</p>
+                  ) : activityLogs.map(log => (
+                    <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
+                      <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
