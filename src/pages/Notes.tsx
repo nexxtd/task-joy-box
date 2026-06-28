@@ -123,7 +123,7 @@ const Notes: React.FC = () => {
   const [singleDeleteId, setSingleDeleteId] = useState<number | null>(null);
   const [tagPopupNoteId, setTagPopupNoteId] = useState<number | null>(null);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
-  const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
+
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(randomFrom(TAG_COLORS));
 
@@ -160,8 +160,6 @@ const Notes: React.FC = () => {
   const [createColumnId, setCreateColumnId] = useState<string>('');
   const [boardColumns, setBoardColumns] = useState<{ id: string; title: string; order: number; projectId?: number | null }[]>([]);
   const [createSelectedTagIds, setCreateSelectedTagIds] = useState<number[]>([]);
-  const [createNewTagName, setCreateNewTagName] = useState('');
-  const [createNewTagColor, setCreateNewTagColor] = useState(randomFrom(TAG_COLORS));
 
   const [orderedNoteIds, setOrderedNoteIds] = useState<number[]>(() => {
     try { const v = localStorage.getItem('notes-ordered-ids'); return v ? JSON.parse(v) : []; } catch { return []; }
@@ -275,9 +273,8 @@ const Notes: React.FC = () => {
     setCreateContent('');
     setCreateColor(randomFrom(NOTE_COLORS));
     setCreateProjectId('');
+    setCreateColumnId('');
     setCreateSelectedTagIds([]);
-    setCreateNewTagName('');
-    setCreateNewTagColor(randomFrom(TAG_COLORS));
     setShowCreateModal(true);
   };
 
@@ -1228,7 +1225,7 @@ const Notes: React.FC = () => {
           <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Create Note</h2>
-              <button onClick={() => { setShowCreateModal(false); setCreateNewTagName(''); setCreateNewTagColor(randomFrom(TAG_COLORS)); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setShowCreateModal(false); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
@@ -1287,98 +1284,6 @@ const Notes: React.FC = () => {
                 )}
               </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Tags</label>
-                <div className="mt-1 relative">
-                  {createSelectedTagIds.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {tags.filter(t => createSelectedTagIds.includes(t.id)).map(tag => (
-                        <span key={tag.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: tag.color }}>
-                          {tag.name}
-                          <button onClick={() => setCreateSelectedTagIds(prev => prev.filter(id => id !== tag.id))} className="hover:opacity-70">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setNewTagPickerOpen(prev => !prev)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                  >
-                    <Tag className="w-3.5 h-3.5" />
-                    {createSelectedTagIds.length > 0 ? `${createSelectedTagIds.length} tag${createSelectedTagIds.length > 1 ? 's' : ''} selected` : 'Add tags'}
-                  </button>
-                  {newTagPickerOpen && (
-                    <>
-                      <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                      <div className="absolute left-0 bottom-full mb-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
-                        <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                          {tags.length === 0 && (
-                            <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
-                          )}
-                          {tags.map(tag => {
-                            const active = createSelectedTagIds.includes(tag.id);
-                            return (
-                              <button
-                                key={tag.id}
-                                onClick={() => setCreateSelectedTagIds(prev => active ? prev.filter(id => id !== tag.id) : [...prev, tag.id])}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
-                                  active
-                                    ? 'border-primary/30 bg-primary/5 shadow-sm'
-                                    : 'border-border/60 hover:bg-muted/40'
-                                }`}
-                              >
-                                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                                <span className="text-sm text-foreground flex-1">{tag.name}</span>
-                                {active && <span className="text-[10px] text-primary font-bold">✓</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="flex gap-2 border-t border-border pt-3">
-                          <input
-                            value={createNewTagName}
-                            onChange={e => setCreateNewTagName(e.target.value)}
-                            placeholder="Create tag"
-                            className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <button
-                            onClick={() => setCreateNewTagColor(randomFrom(TAG_COLORS))}
-                            className="w-10 h-10 rounded-xl border-2 border-border/50 flex-shrink-0 transition-transform hover:scale-110"
-                            style={{ backgroundColor: createNewTagColor }}
-                            title="Randomize color"
-                          />
-                          <button
-                            onClick={async () => {
-                              const name = normalize(createNewTagName);
-                              if (!name) return;
-                              try {
-                                const res = await fetch('/api/notes/tags', {
-                                  method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                                  body: JSON.stringify({ name, color: createNewTagColor }),
-                                });
-                                if (res.ok) {
-                                  const newTag = await res.json();
-                                  setTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)));
-                                  setCreateSelectedTagIds(prev => [...prev, newTag.id]);
-                                }
-                              } catch {}
-                              setCreateNewTagName('');
-                              setCreateNewTagColor(randomFrom(TAG_COLORS));
-                              setNewTagPickerOpen(false);
-                            }}
-                            disabled={!createNewTagName.trim()}
-                            className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-xl disabled:opacity-40"
-                          >
-                            Add
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
