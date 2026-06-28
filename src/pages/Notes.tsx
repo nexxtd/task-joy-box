@@ -54,12 +54,6 @@ interface Project {
   color: string;
 }
 
-interface ActivityLog {
-  id: number;
-  action: string;
-  details?: string;
-  createdAt: string;
-}
 
 const NOTE_COLORS = [
   'hsl(var(--card))',
@@ -139,8 +133,7 @@ const Notes: React.FC = () => {
   const [noteTemplateEditName, setNoteTemplateEditName] = useState('');
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [activityCollapsed, setActivityCollapsed] = useState(false);
+
   const [editingTitleNoteId, setEditingTitleNoteId] = useState<number | null>(null);
   const [editingTitleText, setEditingTitleText] = useState('');
   const [editingContentNoteId, setEditingContentNoteId] = useState<number | null>(null);
@@ -149,6 +142,7 @@ const Notes: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [myNotesCollapsed, setMyNotesCollapsed] = useState(false);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState<number[]>(() => {
     try { const v = localStorage.getItem('notes-collapsed-projects'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
@@ -246,7 +240,7 @@ const Notes: React.FC = () => {
     setDraftTitle(activeNote.title);
     setDraftContent(activeNote.content);
     setDraftProjectId(activeNote.projectId ? String(activeNote.projectId) : '');
-    fetchNoteActivity(activeNote.id);
+
   }, [activeNote?.id]);
 
   const fetchProjects = async () => {
@@ -318,6 +312,16 @@ const Notes: React.FC = () => {
     finally { setCreating(false); }
   };
 
+  const resetCreateNoteDraft = () => {
+    setCreateTitle('');
+    setCreateContent('');
+    setCreateColor(randomFrom(NOTE_COLORS));
+    setCreateProjectId('');
+    setCreateColumnId('');
+    setCreateSelectedTagIds([]);
+    setCreateTagPickerOpen(false);
+    setTemplateMenuOpen(false);
+  };
   const deleteNote = async (id: number) => {
     try {
       const res = await fetch(`/api/notes/${id}`, { method: 'DELETE', credentials: 'include' });
@@ -404,12 +408,6 @@ const Notes: React.FC = () => {
     }
   };
 
-  const fetchNoteActivity = async (noteId: number) => {
-    try {
-      const res = await fetch(`/api/notes/${noteId}/activity`, { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setActivityLogs(data); }
-    } catch {}
-  };
 
   const handleSaveNoteTemplate = useCallback(async () => {
     if (!normalize(tmplName)) return;
@@ -1235,14 +1233,16 @@ const Notes: React.FC = () => {
         </div>
         </DragDropContext>
       </div>
-
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setShowCreateModal(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => { setShowCreateModal(false); resetCreateNoteDraft(); }}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div
+            className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h2 className="text-base font-semibold text-foreground">Create Note</h2>
-              <button onClick={() => { setShowCreateModal(false); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setShowCreateModal(false); resetCreateNoteDraft(); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
@@ -1256,6 +1256,22 @@ const Notes: React.FC = () => {
                   onChange={e => setCreateTitle(e.target.value)}
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Color</label>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {NOTE_COLORS.map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setCreateColor(color)}
+                      className={`h-9 w-9 rounded-full border-2 transition-transform hover:scale-105 ${createColor === color ? 'border-primary shadow-md' : 'border-border/50'}`}
+                      style={{ backgroundColor: color }}
+                      title="Select note color"
+                    />
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -1350,6 +1366,7 @@ const Notes: React.FC = () => {
                             );
                           })}
                         </div>
+
                       </div>
                     </>
                   )}
@@ -1405,7 +1422,7 @@ const Notes: React.FC = () => {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                <button onClick={() => { setShowCreateModal(false); resetCreateNoteDraft(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
                 <button
                   onClick={handleCreateNote}
                   disabled={creating || !createTitle.trim()}
@@ -1419,7 +1436,6 @@ const Notes: React.FC = () => {
           </div>
         </div>
       )}
-
       {isDeleteMode && (
         <div className="sticky bottom-0 left-0 right-0 z-30 p-4 bg-background/80 backdrop-blur-md border-t border-border flex justify-center animate-fade-in">
           <div className="w-full max-w-lg bg-card border border-border rounded-2xl shadow-xl px-5 py-3.5 flex items-center justify-between">
@@ -1678,30 +1694,6 @@ const Notes: React.FC = () => {
               )}
             </div>
 
-            <div className="rounded-2xl border border-border bg-muted/20">
-              <button
-                onClick={() => setActivityCollapsed(prev => !prev)}
-                className="w-full flex items-center justify-between px-4 py-3"
-              >
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold text-foreground">Activity</h3>
-                </div>
-                {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-              </button>
-              {!activityCollapsed && (
-                <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
-                  {activityLogs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No activity yet</p>
-                  ) : activityLogs.map(log => (
-                    <div key={log.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                      <p className="text-sm text-foreground capitalize">{log.action}{log.details ? ` — ${log.details}` : ''}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
