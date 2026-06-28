@@ -507,20 +507,24 @@ const Notes: React.FC = () => {
 
   const myNotesGroup = useMemo(() => {
     const notes = filteredNotes.filter(n => !n.projectId);
-    if (orderedNoteIds.length > 0) {
-      const idSet = new Set(notes.map(n => n.id));
-      const ordered = orderedNoteIds.filter(id => idSet.has(id));
-      const unordered = notes.filter(n => !orderedNoteIds.includes(n.id));
-      const orderedNotes = ordered.map(id => notes.find(n => n.id === id)!).filter(Boolean);
-      return [...orderedNotes, ...unordered];
-    }
-    return notes.sort((a, b) => {
+    const sorter = (a: Note, b: Note) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (sortMode === 'alphabetical') return a.title.localeCompare(b.title);
       const aVal = sortMode === 'created' ? a.createdAt : a.updatedAt;
       const bVal = sortMode === 'created' ? b.createdAt : b.updatedAt;
       return new Date(bVal).getTime() - new Date(aVal).getTime();
-    });
+    };
+    if (orderedNoteIds.length > 0) {
+      const idSet = new Set(notes.map(n => n.id));
+      const ordered = orderedNoteIds.filter(id => idSet.has(id));
+      const unordered = notes.filter(n => !orderedNoteIds.includes(n.id));
+      const orderedNotes = ordered.map(id => notes.find(n => n.id === id)!).filter(Boolean);
+      const all = [...orderedNotes, ...unordered];
+      const pinned = all.filter(n => n.pinned);
+      const unpinned = all.filter(n => !n.pinned);
+      return [...pinned.sort(sorter), ...unpinned.sort(sorter)];
+    }
+    return [...notes].sort(sorter);
   }, [filteredNotes, sortMode, orderedNoteIds]);
 
   const pinnedFromMyNotes = useMemo(() => myNotesGroup.filter(n => n.pinned), [myNotesGroup]);
@@ -686,7 +690,7 @@ const Notes: React.FC = () => {
         )}
         style={!isDeleteMode ? { borderLeftColor: note.color === NOTE_COLORS[0] ? undefined : note.color, borderLeftWidth: note.color === NOTE_COLORS[0] ? undefined : '3px' } : undefined}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1 px-4 py-5 min-h-[88px]">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
@@ -783,7 +787,7 @@ const Notes: React.FC = () => {
               preview ? (
                 <p
                   onClick={e => { e.stopPropagation(); setEditingContentNoteId(note.id); setEditingContentText(note.content || ''); }}
-                  className="text-xs text-muted-foreground mt-0.5 truncate cursor-text hover:bg-muted/30 rounded px-1 -mx-1"
+                  className="text-xs text-muted-foreground mt-1.5 line-clamp-2 cursor-text hover:bg-muted/30 rounded px-1 -mx-1"
                 >
                   {preview}
                 </p>
@@ -1055,6 +1059,18 @@ const Notes: React.FC = () => {
               </>
             )}
           </div>
+
+          <button
+            onClick={() => setPinFilter(prev => prev === 'all' ? 'pinned' : prev === 'pinned' ? 'unpinned' : 'all')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+              pinFilter !== 'all'
+                ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <Pin className={`w-3.5 h-3.5 ${pinFilter === 'pinned' ? 'fill-current' : ''}`} />
+            <span>{pinFilter === 'all' ? 'Pinned' : pinFilter === 'pinned' ? 'Pinned' : 'Unpinned'}</span>
+          </button>
 
           <div className="relative">
             <button
