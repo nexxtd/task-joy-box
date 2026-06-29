@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { fetchNoteTemplates, createNoteTemplate, updateNoteTemplate, deleteNoteTemplate as deleteNoteTemplateApi } from '@/services/noteTemplateService';
 import type { NoteTemplate } from '@/services/noteTemplateService';
+import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -29,11 +30,7 @@ import {
   DropResult,
 } from '@hello-pangea/dnd';
 
-interface NoteTag {
-  id: number;
-  name: string;
-  color: string;
-}
+type NoteTag = SharedTag;
 
 interface Note {
   id: number;
@@ -202,6 +199,15 @@ const Notes: React.FC = () => {
   }, [notes, openNoteId, noteTemplateEditNote]);
   const tagPopupNote = useMemo(() => notes.find(n => n.id === tagPopupNoteId) || null, [notes, tagPopupNoteId]);
 
+  const loadSharedTags = async () => {
+    try {
+      const sharedTags = await fetchTags();
+      setTags(sharedTags.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch {
+      // Keep the existing tag list if the shared tag endpoint is unavailable.
+    }
+  };
+
   const fetchNotes = async () => {
     try {
       setLoading(true);
@@ -229,7 +235,7 @@ const Notes: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchNotes(); fetchProjects(); loadNoteTemplates(); }, []);
+  useEffect(() => { fetchNotes(); fetchProjects(); loadNoteTemplates(); loadSharedTags(); }, []);
 
   const loadNoteTemplates = async () => {
     try { setNoteTemplates(await fetchNoteTemplates()); } catch {}
@@ -1560,21 +1566,9 @@ const Notes: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  <>
-                    <button onClick={handleSaveAsTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all" title="Save as template">
-                      <Star className="w-3.5 h-3.5" />
-                      Templates
-                    </button>
-                    <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
-                      <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
-                    </button>
-                    <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </>
+                  <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             </div>
@@ -1694,6 +1688,24 @@ const Notes: React.FC = () => {
               )}
             </div>
 
+            {!editingNoteTemplateMeta && (
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
+                <div className="flex items-center gap-2">
+                  <button onClick={handleSaveAsTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all" title="Save as template">
+                    <Star className="w-3.5 h-3.5" />
+                    Templates
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
+                    <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
+                  </button>
+                  <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

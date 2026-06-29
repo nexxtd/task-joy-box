@@ -3,6 +3,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
 import {
   ArrowDown,
   ArrowUp,
@@ -132,6 +133,34 @@ const TAG_COLOR_OPTIONS: LabelColor[] = ['red', 'orange', 'yellow', 'green', 'bl
 const randomTagColor = (): LabelColor => TAG_COLOR_OPTIONS[Math.floor(Math.random() * TAG_COLOR_OPTIONS.length)] || 'blue';
 
 const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const SHARED_TAG_PREFIX = 'shared-tag-';
+const SHARED_COLOR_MAP: Record<string, LabelColor> = {
+  red: 'red',
+  orange: 'orange',
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  purple: 'purple',
+  pink: 'pink',
+};
+const SHARED_COLOR_HEX_MAP: Array<{ hex: string; color: LabelColor }> = [
+  { hex: '#ef4444', color: 'red' },
+  { hex: '#f97316', color: 'orange' },
+  { hex: '#eab308', color: 'yellow' },
+  { hex: '#22c55e', color: 'green' },
+  { hex: '#3b82f6', color: 'blue' },
+  { hex: '#8b5cf6', color: 'purple' },
+  { hex: '#ec4899', color: 'pink' },
+];
+const sharedTagLabelId = (id: number) => `${SHARED_TAG_PREFIX}${id}`;
+const sharedTagToLabel = (tag: SharedTag): Label => ({
+  id: sharedTagLabelId(tag.id),
+  name: tag.name,
+  color: SHARED_COLOR_MAP[tag.color.toLowerCase()]
+    || SHARED_COLOR_HEX_MAP.find(item => item.hex.toLowerCase() === tag.color.toLowerCase())?.color
+    || 'blue',
+});
 
 interface ProjectMeta {
   id: number;
@@ -298,6 +327,7 @@ const Tasks: React.FC = () => {
   const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
@@ -419,14 +449,31 @@ const Tasks: React.FC = () => {
     loadProjects();
   }, []);
 
+  useEffect(() => {
+    const loadSharedTags = async () => {
+      try {
+        setSharedTags(await fetchTags());
+      } catch {
+        setSharedTags([]);
+      }
+    };
+    loadSharedTags();
+  }, []);
+
   const allTags = useMemo<Label[]>(() => {
-    const byId = new Map<string, Label>();
-    DEFAULT_LABELS.forEach(label => byId.set(label.id, label));
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
     board.tasks.forEach(task => task.labels.forEach(label => {
-      if (!byId.has(label.id)) byId.set(label.id, label);
+      const key = normalizeTagName(label.name).toLowerCase();
+      if (!byName.has(key)) byName.set(key, label);
     }));
-    return Array.from(byId.values());
-  }, [board.tasks]);
+    sharedTags.forEach(tag => {
+      const label = sharedTagToLabel(tag);
+      const key = normalizeTagName(label.name).toLowerCase();
+      byName.set(key, label);
+    });
+    return Array.from(byName.values());
+  }, [board.tasks, sharedTags]);
 
   const filteredTasksByBase = useMemo(() => {
     return board.tasks.filter(task => {
@@ -1095,24 +1142,42 @@ const Tasks: React.FC = () => {
     updateTask(taskId, { labels: nextLabels });
   };
 
-  const createTaskTag = (taskId: string) => {
-    const task = board.tasks.find(item => item.id === taskId);
-    if (!task) return;
-    
-    const name = normalizeTagName(newTagName);
-    if (!name) return;
-    const newLabel: Label = {
-      id: `tag-${crypto.randomUUID()}`,
-      name,
-      color: newTagColor,
-    };
-    updateTask(taskId, { labels: [...task.labels, newLabel] });
-    setNewTagName('');
-    setNewTagColor(randomTagColor());
-    setTagPickerOpen(false);
+  const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
+    const tag = await createTag({ name, color });
+    return sharedTagToLabel(tag);
   };
 
-  const deleteTagEverywhere = (tagId: string) => {
+  const createTaskTag = async (taskId: string) => {
+    const task = board.tasks.find(item => item.id === taskId);
+    if (!task) return;
+
+    const name = normalizeTagName(newTagName);
+    if (!name) return;
+
+    try {
+      const newLabel = await createSharedTaskLabel(name, newTagColor);
+      updateTask(taskId, { labels: [...task.labels, newLabel] });
+      setNewTagName('');
+      setNewTagColor(randomTagColor());
+      setTagPickerOpen(false);
+    } catch (error) {
+      console.error('Failed to create task tag:', error);
+    }
+  };
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
     board.tasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
         updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
@@ -1120,6 +1185,7 @@ const Tasks: React.FC = () => {
     });
     setTagFilterIds(prev => prev.filter(id => id !== tagId));
   };
+
 
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
@@ -2049,14 +2115,18 @@ const Tasks: React.FC = () => {
                         title="Randomize color"
                       />
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           const name = normalizeTagName(newTagName);
                           if (!name) return;
-                          const newLabel: Label = { id: `tag-${crypto.randomUUID()}`, name, color: newTagColor };
-                          setNewTaskLabels(prev => [...prev, newLabel]);
-                          setNewTagName('');
-                          setNewTagColor(randomTagColor());
-                          setNewTagPickerOpen(false);
+                          try {
+                            const newLabel = await createSharedTaskLabel(name, newTagColor);
+                            setNewTaskLabels(prev => [...prev, newLabel]);
+                            setNewTagName('');
+                            setNewTagColor(randomTagColor());
+                            setNewTagPickerOpen(false);
+                          } catch (error) {
+                            console.error('Failed to create task tag:', error);
+                          }
                         }}
                         disabled={!newTagName.trim()}
                         className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-xl disabled:opacity-40"
@@ -2718,15 +2788,18 @@ const Tasks: React.FC = () => {
               toggleTaskTag(taskId, label);
             }
           }}
-          onCreateTag={(taskId, name, color) => {
-            if (taskId.startsWith('template-edit-')) {
-              const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
-              wrappedUpdateTask(taskId, { labels: [...((templateEditTask?.labels || []) as Label[]), label] });
-            } else {
-              const task = board.tasks.find(item => item.id === taskId);
-              if (!task) return;
-              const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color };
-              updateTask(taskId, { labels: [...task.labels, label] });
+          onCreateTag={async (taskId, name, color) => {
+            try {
+              const label = await createSharedTaskLabel(name, color);
+              if (taskId.startsWith('template-edit-')) {
+                wrappedUpdateTask(taskId, { labels: [...((templateEditTask?.labels || []) as Label[]), label] });
+              } else {
+                const task = board.tasks.find(item => item.id === taskId);
+                if (!task) return;
+                updateTask(taskId, { labels: [...task.labels, label] });
+              }
+            } catch (error) {
+              console.error('Failed to create task tag:', error);
             }
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
@@ -2988,13 +3061,17 @@ const Tasks: React.FC = () => {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const name = normalizeTagName(newTagName);
                     if (!name) return;
-                    const label: Label = { id: `tag-${crypto.randomUUID()}`, name, color: newTagColor };
-                    updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
-                    setNewTagName('');
-                    setNewTagColor(randomTagColor());
+                    try {
+                      const label = await createSharedTaskLabel(name, newTagColor);
+                      updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+                      setNewTagName('');
+                      setNewTagColor(randomTagColor());
+                    } catch (error) {
+                      console.error('Failed to create task tag:', error);
+                    }
                   }}
                   disabled={!newTagName.trim()}
                   className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
