@@ -1550,9 +1550,7 @@ const Notes: React.FC = () => {
                   onChange={e => setDraftTitle(e.target.value)}
                   onBlur={saveDrafts}
                 />
-                <p className="mt-1 text-xs text-muted-foreground px-1">
-                  Last edited {new Date(activeNote.updatedAt || activeNote.createdAt).toLocaleString()}
-                </p>
+
               </div>
               <div className="flex items-center gap-2">
                 {editingNoteTemplateMeta ? (
@@ -1691,6 +1689,9 @@ const Notes: React.FC = () => {
             {!editingNoteTemplateMeta && (
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
                 <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    Created {new Date(activeNote.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
                   <button onClick={handleSaveAsTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all" title="Save as template">
                     <Star className="w-3.5 h-3.5" />
                     Templates
