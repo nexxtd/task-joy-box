@@ -904,17 +904,20 @@ const Notes: React.FC = () => {
               rows={3}
               className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <div className="flex flex-wrap gap-2">
-              {tags.map(tag => {
-                const active = note.tags.some(t => t.id === tag.id);
-                return (
-                  <button key={tag.id} onClick={() => toggleTagOnNote(note.id, tag.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
-                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                    {tag.name}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2 flex-wrap">
+              {note.tags.slice(0, 5).map(tag => (
+                <span key={tag.id} className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white" style={{ backgroundColor: tag.color }}>
+                  {tag.name}
+                </span>
+              ))}
+              {note.tags.length > 5 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  +{note.tags.length - 5}
+                </span>
+              )}
+              <button onClick={e => { e.stopPropagation(); setTagPopupNoteId(tagPopupNoteId === note.id ? null : note.id); }} className="text-[10px] px-2 py-0.5 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all">
+                Edit tags
+              </button>
             </div>
             <div className="flex justify-end pt-1">
               <button
