@@ -1591,9 +1591,14 @@ const Notes: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => setOpenNoteId(null)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-                    <X className="h-4 w-4" />
-                  </button>
+                  <>
+                    <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-colors ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
+                      <Pin className={`w-4 h-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
+                    </button>
+                    <button onClick={() => setOpenNoteId(null)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
                 )}
               </div>
             </div>
