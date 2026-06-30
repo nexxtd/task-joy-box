@@ -1264,32 +1264,6 @@ const Notes: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Color</label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {NOTE_COLORS.map(color => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setCreateColor(color)}
-                      className={`h-9 w-9 rounded-full border-2 transition-transform hover:scale-105 ${createColor === color ? 'border-primary shadow-md' : 'border-border/50'}`}
-                      style={{ backgroundColor: color }}
-                      title="Select note color"
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
-                <textarea
-                  value={createContent}
-                  onChange={e => setCreateContent(e.target.value)}
-                  rows={4}
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
-                />
-              </div>
-
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
@@ -1372,11 +1346,20 @@ const Notes: React.FC = () => {
                             );
                           })}
                         </div>
-
                       </div>
                     </>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
+                <textarea
+                  value={createContent}
+                  onChange={e => setCreateContent(e.target.value)}
+                  rows={4}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                />
               </div>
             </div>
 
