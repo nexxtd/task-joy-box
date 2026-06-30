@@ -279,6 +279,7 @@ export const goals = pgTable('goals', {
   completedAt: text('completed_at'),
   projectId: integer('project_id').references(() => projects.id),
   columnId: integer('column_id'),
+  pinned: boolean('pinned').default(false).notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -295,6 +296,7 @@ export const habits = pgTable('habits', {
   title: text('title').notNull(),
   category: text('category').default('Personal').notNull(),
   color: text('color').default('primary').notNull(),
+  pinned: boolean('pinned').default(false).notNull(),
   streak: integer('streak').default(0).notNull(),
   completedDays: text('completed_days').default('[]').notNull(), // JSON array of ISO dates
   dailyTime: integer('daily_time'), // minutes per day required

@@ -72,7 +72,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const goalId = parseInt(req.params.id);
-    const allowedFields = ['title', 'description', 'target', 'unit', 'color', 'progress', 'timeframe', 'subGoals', 'projectId', 'columnId'];
+    const allowedFields = ['title', 'description', 'target', 'unit', 'color', 'progress', 'timeframe', 'subGoals', 'projectId', 'columnId', 'pinned'];
     const updates: Record<string, any> = {};
     
     for (const field of allowedFields) {

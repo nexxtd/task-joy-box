@@ -18,6 +18,7 @@ import {
   Edit3,
   GripVertical,
   FolderKanban,
+  Image,
   Paperclip,
   Plus,
   Save,
@@ -3492,6 +3493,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
@@ -4175,6 +4177,75 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => setImagesCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-1 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <Image className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Images</h3>
+              {task.images && task.images.length > 0 && (
+                <span className="text-xs text-muted-foreground">({task.images.length})</span>
+              )}
+            </div>
+            {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!imagesCollapsed && (
+            <div className="space-y-3">
+              <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                <div className="flex flex-col items-center justify-center py-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
+                    <Paperclip className="w-4 h-4 text-primary" />
+                  </div>
+                  <p className="text-xs font-medium text-foreground">Click to upload images</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
+                </div>
+                <input type="file" multiple accept="image/*" onChange={async e => {
+                  if (!e.target.files) return;
+                  const files = Array.from(e.target.files);
+                  const newImages: Attachment[] = [];
+                  for (const file of files) {
+                    newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType: file.type || 'image/*', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+                  }
+                  onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
+                  e.target.value = '';
+                }} className="hidden" />
+              </label>
+              {task.images && task.images.length > 0 && (
+                <div className="space-y-2">
+                  {task.images.map((img, idx) => (
+                    <div key={img.id} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
+                      <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        <button onClick={() => {
+                          const imgs = [...(task.images || [])];
+                          const i = imgs.findIndex(x => x.id === img.id);
+                          if (i > 0) { [imgs[i-1], imgs[i]] = [imgs[i], imgs[i-1]]; onUpdateTask(task.id, { images: imgs }); }
+                        }} disabled={idx === 0} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-3 h-3" /></button>
+                        <button onClick={() => {
+                          const imgs = [...(task.images || [])];
+                          const i = imgs.findIndex(x => x.id === img.id);
+                          if (i < imgs.length - 1) { [imgs[i], imgs[i+1]] = [imgs[i+1], imgs[i]]; onUpdateTask(task.id, { images: imgs }); }
+                        }} disabled={idx === task.images!.length - 1} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-3 h-3" /></button>
+                      </div>
+                      {img.fileUrl.match(/^data:image/) ? (
+                        <img src={img.fileUrl} alt={img.fileName} className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{img.fileName}</p>
+                        <p className="text-[10px] text-muted-foreground">{(img.fileSize / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <button onClick={() => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== img.id) })} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/img:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

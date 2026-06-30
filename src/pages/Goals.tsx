@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Target, Plus, Trash2, X, Tag, BarChart3, ChevronDown, ChevronUp, Search, FolderKanban } from 'lucide-react';
+import { Target, Plus, Trash2, X, Tag, BarChart3, ChevronDown, ChevronUp, Search, FolderKanban, Pin, GripVertical, Image, Paperclip, Edit3, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface GoalTag {
@@ -28,6 +28,8 @@ interface Goal {
   projectId?: number | null;
   columnId?: number | null;
   tags: GoalTag[];
+  pinned: boolean;
+  images?: { id: string; fileName: string; fileUrl: string; fileSize: number; }[];
 }
 
 interface Project {
@@ -85,6 +87,9 @@ const Goals: React.FC = () => {
 
   const [myGoalsCollapsed, setMyGoalsCollapsed] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
+  const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
+  const [imagesCollapsed, setImagesCollapsed] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchGoals();
@@ -121,6 +126,8 @@ const Goals: React.FC = () => {
         projectId: g.projectId,
         columnId: g.columnId,
         tags: g.tags || [],
+        pinned: g.pinned || false,
+        images: g.images || [],
       })));
     } catch (err) {
       setError('Failed to load goals');
@@ -157,7 +164,7 @@ const Goals: React.FC = () => {
         unit: created.unit || 'tasks', color: created.color || GOAL_COLORS[0],
         category: created.category || 'Personal', timeframe: created.timeframe || '1month',
         subGoals: created.subGoals ? (typeof created.subGoals === 'string' ? JSON.parse(created.subGoals) : created.subGoals) : [],
-        projectId: created.projectId, columnId: created.columnId, tags: [],
+        projectId: created.projectId, columnId: created.columnId, tags: [], pinned: false, images: [],
       };
 
       setGoals(prev => [...prev, goal]);
@@ -300,6 +307,60 @@ const Goals: React.FC = () => {
     }
   };
 
+  const togglePin = (id: number) => {
+    setGoals(prev => prev.map(g => g.id === id ? { ...g, pinned: !g.pinned } : g));
+    fetch(`/api/goals/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pinned: !goals.find(g => g.id === id)?.pinned }) }).catch(() => fetchGoals());
+  };
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const uploadGoalImages = async (goalId: number, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const newImages: { id: string; fileName: string; fileUrl: string; fileSize: number; }[] = [];
+    for (const file of Array.from(files)) {
+      const url = await fileToDataUrl(file);
+      newImages.push({ id: crypto.randomUUID(), fileName: file.name, fileUrl: url, fileSize: file.size });
+    }
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, images: [...(g.images || []), ...newImages] } : g));
+    setUploading(false);
+  };
+
+  const deleteGoalImage = (goalId: number, imageId: string) => {
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, images: (g.images || []).filter(img => img.id !== imageId) } : g));
+  };
+
+  const moveGoalImage = (goalId: number, imageId: string, direction: 'up' | 'down') => {
+    setGoals(prev => prev.map(g => {
+      if (g.id !== goalId) return g;
+      const imgs = [...(g.images || [])];
+      const idx = imgs.findIndex(img => img.id === imageId);
+      if (idx === -1) return g;
+      if (direction === 'up' && idx === 0) return g;
+      if (direction === 'down' && idx === imgs.length - 1) return g;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [imgs[idx], imgs[swapIdx]] = [imgs[swapIdx], imgs[idx]];
+      return { ...g, images: imgs };
+    }));
+  };
+
+  const toggleSubGoalComplete = async (goal: Goal, subGoalId: string) => {
+    const sg = goal.subGoals.find(s => s.id === subGoalId);
+    if (!sg) return;
+    const delta = sg.completed ? -1 : 1;
+    updateProgress(goal.id, delta);
+    setGoals(prev => prev.map(g => {
+      if (g.id !== goal.id) return g;
+      return { ...g, subGoals: g.subGoals.map(s => s.id === subGoalId ? { ...s, completed: !s.completed } : s) };
+    }));
+  };
+
   const isGoalCompleted = (g: Goal) => Math.round((g.progress / g.target) * 100) >= 100;
 
   const filteredGoals = useMemo(() => {
@@ -310,9 +371,10 @@ const Goals: React.FC = () => {
       const matchesTimeframe = timeframeFilter === 'all' || g.timeframe === timeframeFilter;
       const matchesProject = projectFilterId === 'all' || g.projectId === projectFilterId;
       const matchesTags = selectedGoalTagIds.length === 0 || selectedGoalTagIds.every(id => g.tags?.some(t => t.id === id));
-      return matchesSearch && matchesCategory && matchesTimeframe && matchesProject && matchesTags;
+      const matchesPin = pinFilter === 'all' || (pinFilter === 'pinned' ? g.pinned : !g.pinned);
+      return matchesSearch && matchesCategory && matchesTimeframe && matchesProject && matchesTags && matchesPin;
     });
-  }, [goals, search, categoryFilter, timeframeFilter, projectFilterId, selectedGoalTagIds]);
+  }, [goals, search, categoryFilter, timeframeFilter, projectFilterId, selectedGoalTagIds, pinFilter]);
 
   const sortedGoals = useMemo(() => {
     const active = filteredGoals.filter(g => !isGoalCompleted(g));
@@ -354,6 +416,13 @@ const Goals: React.FC = () => {
         onClick={() => openEditGoal(goal)}
       >
         <div className="flex items-center gap-1 px-3 py-3">
+          <button
+            onClick={e => { e.stopPropagation(); togglePin(goal.id); }}
+            className={`p-1.5 rounded-md flex-shrink-0 transition-all ${goal.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+            title={goal.pinned ? 'Unpin goal' : 'Pin goal'}
+          >
+            <Pin className={`w-3.5 h-3.5 ${goal.pinned ? 'fill-current' : ''}`} />
+          </button>
           <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
             {goal.tags?.length > 0 && <Tag className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
@@ -540,6 +609,17 @@ const Goals: React.FC = () => {
               }`}
             >
               Sort by Progress
+            </button>
+            <button
+              onClick={() => setPinFilter(prev => prev === 'all' ? 'pinned' : prev === 'pinned' ? 'unpinned' : 'all')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                pinFilter !== 'all'
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <Pin className={`w-3.5 h-3.5 ${pinFilter === 'pinned' ? 'fill-current' : ''}`} />
+              <span>{pinFilter === 'all' ? 'Pinned' : pinFilter === 'pinned' ? 'Pinned' : 'Unpinned'}</span>
             </button>
           </div>
         </div>
@@ -910,6 +990,7 @@ const Goals: React.FC = () => {
                       {editGoal.subGoals.map((sg, i) => (
                         <div key={sg.id} className="flex items-center gap-2 text-xs bg-muted/30 border border-border rounded-lg px-3 py-1.5">
                           <input type="checkbox" checked={sg.completed} onChange={() => {
+                            toggleSubGoalComplete(editingGoal, sg.id);
                             const next = [...editGoal.subGoals]; next[i] = { ...sg, completed: !sg.completed };
                             setEditGoal(g => ({ ...g, subGoals: next }));
                           }} className="rounded" />
@@ -970,6 +1051,65 @@ const Goals: React.FC = () => {
                         <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Images Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setImagesCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-1 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {editingGoal.images && editingGoal.images.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({editingGoal.images.length})</span>
+                    )}
+                  </div>
+                  {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!imagesCollapsed && (
+                  <div className="space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
+                          <Paperclip className="w-4 h-4 text-primary" />
+                        </div>
+                        <p className="text-xs font-medium text-foreground">Click to upload images</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
+                      </div>
+                      <input type="file" multiple accept="image/*" onChange={e => { uploadGoalImages(editingGoal.id, e.target.files); e.target.value = ''; }} disabled={uploading} className="hidden" />
+                    </label>
+                    {uploading && (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span className="text-xs text-muted-foreground">Uploading...</span>
+                      </div>
+                    )}
+                    {editingGoal.images && editingGoal.images.length > 0 && (
+                      <div className="space-y-2">
+                        {editingGoal.images.map((img, idx) => (
+                          <div key={img.id} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
+                              <button onClick={() => moveGoalImage(editingGoal.id, img.id, 'up')} disabled={idx === 0} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-3 h-3" /></button>
+                              <button onClick={() => moveGoalImage(editingGoal.id, img.id, 'down')} disabled={idx === editingGoal.images!.length - 1} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-3 h-3" /></button>
+                            </div>
+                            {img.fileUrl.match(/^data:image/) ? (
+                              <img src={img.fileUrl} alt={img.fileName} className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground truncate">{img.fileName}</p>
+                              <p className="text-[10px] text-muted-foreground">{(img.fileSize / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <button onClick={() => deleteGoalImage(editingGoal.id, img.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/img:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

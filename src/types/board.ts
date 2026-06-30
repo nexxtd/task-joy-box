@@ -76,6 +76,7 @@ export interface Task {
   recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
   nextOccurrence?: string | null;
   attachments?: Attachment[];
+  images?: Attachment[];
   comments?: TaskComment[];
   activityLog?: TaskActivity[];
   assignedToUserId?: number | null;

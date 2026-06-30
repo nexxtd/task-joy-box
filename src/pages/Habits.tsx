@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, Tag, BarChart3 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, Tag, BarChart3, Pin, Image, Paperclip, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,6 +20,8 @@ interface Habit {
   projectId?: number | null;
   columnId?: number | null;
   tags: HabitTag[];
+  pinned: boolean;
+  images?: { id: string; fileName: string; fileUrl: string; fileSize: number; }[];
 }
 
 interface Project {
@@ -76,6 +78,50 @@ const Habits: React.FC = () => {
       prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
     );
   };
+
+  const togglePin = (id: number) => {
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, pinned: !h.pinned } : h));
+    fetch(`/api/habits/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ pinned: !habits.find(h => h.id === id)?.pinned }) }).catch(() => fetchHabits());
+  };
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const uploadHabitImages = async (habitId: number, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const newImages: { id: string; fileName: string; fileUrl: string; fileSize: number; }[] = [];
+    for (const file of Array.from(files)) {
+      const url = await fileToDataUrl(file);
+      newImages.push({ id: crypto.randomUUID(), fileName: file.name, fileUrl: url, fileSize: file.size });
+    }
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, images: [...(h.images || []), ...newImages] } : h));
+    setUploading(false);
+  };
+
+  const deleteHabitImage = (habitId: number, imageId: string) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, images: (h.images || []).filter(img => img.id !== imageId) } : h));
+  };
+
+  const moveHabitImage = (habitId: number, imageId: string, direction: 'up' | 'down') => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const imgs = [...(h.images || [])];
+      const idx = imgs.findIndex(img => img.id === imageId);
+      if (idx === -1) return h;
+      if (direction === 'up' && idx === 0) return h;
+      if (direction === 'down' && idx === imgs.length - 1) return h;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [imgs[idx], imgs[swapIdx]] = [imgs[swapIdx], imgs[idx]];
+      return { ...h, images: imgs };
+    }));
+  };
+
   const [habits, setHabits] = useState<Habit[]>([]);
   const [adding, setAdding] = useState(false);
   const [newHabit, setNewHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
@@ -102,6 +148,9 @@ const Habits: React.FC = () => {
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [myHabitsCollapsed, setMyHabitsCollapsed] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState<number[]>([]);
+  const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
+  const [imagesCollapsed, setImagesCollapsed] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const getTodayUTC = () => {
     const now = new Date();
@@ -137,6 +186,8 @@ const Habits: React.FC = () => {
         projectId: h.projectId,
         columnId: h.columnId,
         tags: h.tags || [],
+        pinned: h.pinned || false,
+        images: h.images || [],
       })));
     } catch (err) {
       setError('Failed to load habits');
@@ -188,6 +239,7 @@ const Habits: React.FC = () => {
         id: created.id, title: created.title, streak: 0, completedDays: [],
         category: created.category || 'Personal', color: created.color || 'primary',
         projectId: created.projectId, columnId: created.columnId, tags: [],
+        pinned: false, images: [],
       }]);
       setNewHabit({ title: '', category: 'Personal', projectId: '', columnId: '' });
       setAdding(false);
@@ -275,9 +327,10 @@ const Habits: React.FC = () => {
       const matchesSearch = !term || habit.title.toLowerCase().includes(term);
       const matchesCategory = categoryFilter === 'all' || habit.category === categoryFilter;
       const matchesTags = selectedHabitTagIds.length === 0 || selectedHabitTagIds.every(id => habit.tags?.some(t => t.id === id));
-      return matchesSearch && matchesCategory && matchesTags;
+      const matchesPin = pinFilter === 'all' || (pinFilter === 'pinned' ? habit.pinned : !habit.pinned);
+      return matchesSearch && matchesCategory && matchesTags && matchesPin;
     });
-  }, [habits, search, categoryFilter, selectedHabitTagIds]);
+  }, [habits, search, categoryFilter, selectedHabitTagIds, pinFilter]);
 
   const myHabitsGroup = useMemo(() => filteredHabits.filter(h => !h.projectId), [filteredHabits]);
   const projectHabitGroups = useMemo(() => {
@@ -352,6 +405,16 @@ const Habits: React.FC = () => {
                 title={isCompleted ? 'Mark incomplete' : 'Mark complete'}
               />
             </div>
+          )}
+
+          {!isDeleteMode && (
+            <button
+              onClick={e => { e.stopPropagation(); togglePin(habit.id); }}
+              className={`p-1.5 rounded-md flex-shrink-0 transition-all ${habit.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+              title={habit.pinned ? 'Unpin habit' : 'Pin habit'}
+            >
+              <Pin className={`w-3.5 h-3.5 ${habit.pinned ? 'fill-current' : ''}`} />
+            </button>
           )}
 
           <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -517,6 +580,17 @@ const Habits: React.FC = () => {
               <Flame className="w-3.5 h-3.5 text-orange-500" />
               <span>{habits.filter(h => h.streak > 0).length} active streaks</span>
             </div>
+            <button
+              onClick={() => setPinFilter(prev => prev === 'all' ? 'pinned' : prev === 'pinned' ? 'unpinned' : 'all')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                pinFilter !== 'all'
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <Pin className={`w-3.5 h-3.5 ${pinFilter === 'pinned' ? 'fill-current' : ''}`} />
+              <span>{pinFilter === 'all' ? 'Pinned' : pinFilter === 'pinned' ? 'Pinned' : 'Unpinned'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -754,6 +828,65 @@ const Habits: React.FC = () => {
                         <p className="text-[11px] text-muted-foreground mt-1">{new Date(log.createdAt).toLocaleString()}</p>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Images Section */}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setImagesCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-1 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {editingHabit.images && editingHabit.images.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({editingHabit.images.length})</span>
+                    )}
+                  </div>
+                  {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!imagesCollapsed && (
+                  <div className="space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
+                          <Paperclip className="w-4 h-4 text-primary" />
+                        </div>
+                        <p className="text-xs font-medium text-foreground">Click to upload images</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
+                      </div>
+                      <input type="file" multiple accept="image/*" onChange={e => { uploadHabitImages(editingHabit.id, e.target.files); e.target.value = ''; }} disabled={uploading} className="hidden" />
+                    </label>
+                    {uploading && (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        <span className="text-xs text-muted-foreground">Uploading...</span>
+                      </div>
+                    )}
+                    {editingHabit.images && editingHabit.images.length > 0 && (
+                      <div className="space-y-2">
+                        {editingHabit.images.map((img, idx) => (
+                          <div key={img.id} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
+                              <button onClick={() => moveHabitImage(editingHabit.id, img.id, 'up')} disabled={idx === 0} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-3 h-3" /></button>
+                              <button onClick={() => moveHabitImage(editingHabit.id, img.id, 'down')} disabled={idx === editingHabit.images!.length - 1} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-3 h-3" /></button>
+                            </div>
+                            {img.fileUrl.match(/^data:image/) ? (
+                              <img src={img.fileUrl} alt={img.fileName} className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground truncate">{img.fileName}</p>
+                              <p className="text-[10px] text-muted-foreground">{(img.fileSize / 1024).toFixed(1)} KB</p>
+                            </div>
+                            <button onClick={() => deleteHabitImage(editingHabit.id, img.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/img:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -93,7 +93,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const habitId = parseInt(req.params.id);
-    const { completedDays, title, category, color, projectId, columnId } = req.body;
+    const { completedDays, title, category, color, projectId, columnId, pinned } = req.body;
 
     const updates: any = {};
     if (completedDays !== undefined) { updates.completedDays = JSON.stringify(completedDays); updates.streak = calculateStreak(completedDays); }
@@ -102,6 +102,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (color !== undefined) updates.color = color;
     if (projectId !== undefined) updates.projectId = projectId;
     if (columnId !== undefined) updates.columnId = columnId;
+    if (pinned !== undefined) updates.pinned = pinned;
     updates.updatedAt = new Date().toISOString();
 
     const [updated] = await db.update(habits).set(updates)
