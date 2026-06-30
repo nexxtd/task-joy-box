@@ -161,6 +161,8 @@ export async function initDatabase() {
     // Columns table new columns
     await addColumnIfNotExists('columns', 'icon', 'TEXT');
     await addColumnIfNotExists('notes', 'pinned', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('goals', 'pinned', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('habits', 'pinned', 'BOOLEAN DEFAULT FALSE');
 
     // User settings table new columns
     await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
