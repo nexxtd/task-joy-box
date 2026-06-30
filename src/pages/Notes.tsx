@@ -1511,7 +1511,7 @@ const Notes: React.FC = () => {
       )}
 
       {activeNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={async () => { await saveDrafts(); if (!editingNoteTemplateMeta) setOpenNoteId(null); else { setNoteTemplateEditOverrides(null); setNoteTemplateEditName(''); setEditingNoteTemplateMeta(null); setOpenNoteId(null); } }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setOpenNoteId(null); }}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-3">
@@ -1530,10 +1530,8 @@ const Notes: React.FC = () => {
                 <input
                   className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
                   value={draftTitle}
-                  onChange={e => setDraftTitle(e.target.value)}
-                  onBlur={saveDrafts}
+                  onChange={e => { setDraftTitle(e.target.value); saveDrafts(); }}
                 />
-
               </div>
               <div className="flex items-center gap-2">
                 {editingNoteTemplateMeta ? (
@@ -1547,7 +1545,7 @@ const Notes: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  <button onClick={async () => { await saveDrafts(); setOpenNoteId(null); }} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                  <button onClick={() => setOpenNoteId(null)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                     <X className="h-4 w-4" />
                   </button>
                 )}
@@ -1575,8 +1573,7 @@ const Notes: React.FC = () => {
               <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
               <textarea
                 value={draftContent}
-                onChange={e => setDraftContent(e.target.value)}
-                onBlur={saveDrafts}
+                onChange={e => { setDraftContent(e.target.value); saveDrafts(); }}
                 rows={8}
                 className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
               />
@@ -1669,27 +1666,58 @@ const Notes: React.FC = () => {
               )}
             </div>
 
-            {!editingNoteTemplateMeta && (
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    Created {new Date(activeNote.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                  <button onClick={handleSaveAsTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all" title="Save as template">
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Created: {new Date(activeNote.createdAt).toLocaleDateString()}</span>
+                <div className="relative">
+                  <button
+                    onClick={async () => { try { const t = await fetchNoteTemplates(); setNoteTemplates(t); setTemplateMenuOpen(true); } catch {} }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+                  >
                     <Star className="w-3.5 h-3.5" />
                     Templates
                   </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => togglePin(activeNote)} className={`rounded-lg p-2 transition-all ${activeNote.pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} title={activeNote.pinned ? 'Unpin note' : 'Pin note'}>
-                    <Pin className={`h-4 w-4 ${activeNote.pinned ? 'fill-current' : ''}`} />
-                  </button>
-                  <button onClick={() => setSingleDeleteId(activeNote.id)} className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive" title="Delete note">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {templateMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-20" onClick={() => setTemplateMenuOpen(false)} />
+                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
+                        <button
+                          onClick={() => { setTemplateMenuOpen(false); setTmplName(''); setTmplError(''); setSaveTmplOpen(true); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                        >
+                          <div className="w-6 h-6 rounded-md bg-primary/5 flex items-center justify-center">
+                            <Plus className="w-3.5 h-3.5 text-primary" />
+                          </div>
+                          Save as template
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setTemplateMenuOpen(false);
+                            try {
+                              const t = await fetchNoteTemplates();
+                              setNoteTemplates(t);
+                              setLoadTmplOpen(true);
+                            } catch {}
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                        >
+                          <div className="w-6 h-6 rounded-md bg-muted/50 flex items-center justify-center">
+                            <FolderKanban className="w-3.5 h-3.5 text-muted-foreground" />
+                          </div>
+                          Load template
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <button onClick={() => setSingleDeleteId(activeNote.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete Note
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
