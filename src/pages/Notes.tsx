@@ -17,6 +17,9 @@ import {
   Edit3,
   GripVertical,
   ChevronRight,
+  Image,
+  ChevronLeft,
+  Paperclip,
 } from 'lucide-react';
 import { fetchNoteTemplates, createNoteTemplate, updateNoteTemplate, deleteNoteTemplate as deleteNoteTemplateApi } from '@/services/noteTemplateService';
 import type { NoteTemplate } from '@/services/noteTemplateService';
@@ -32,6 +35,13 @@ import {
 
 type NoteTag = SharedTag;
 
+interface NoteImage {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+}
+
 interface Note {
   id: number;
   title: string;
@@ -43,6 +53,7 @@ interface Note {
   createdAt: string;
   updatedAt: string;
   tags: NoteTag[];
+  images?: NoteImage[];
 }
 
 interface Project {
@@ -139,6 +150,8 @@ const Notes: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [myNotesCollapsed, setMyNotesCollapsed] = useState(false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [collapsedProjects, setCollapsedProjects] = useState<number[]>(() => {
     try { const v = localStorage.getItem('notes-collapsed-projects'); return v ? JSON.parse(v) : []; } catch { return []; }
@@ -159,6 +172,7 @@ const Notes: React.FC = () => {
   const [pendingDragMove, setPendingDragMove] = useState<{ noteId: number; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-notes' | null } | null>(null);
   const [dontAsk, setDontAsk] = useState(false);
   const [expandedNoteIds, setExpandedNoteIds] = useState<number[]>([]);
+  const [expandedContentMap, setExpandedContentMap] = useState<Record<number, string>>({});
 
   const [analysisPanelOpen, setAnalysisPanelOpen] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
@@ -339,6 +353,44 @@ const Notes: React.FC = () => {
   };
 
   const togglePin = (note: Note) => applyNoteUpdate(note.id, { pinned: !note.pinned });
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const uploadImages = async (noteId: number, files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const newImages: NoteImage[] = [];
+    for (const file of Array.from(files)) {
+      const url = await fileToDataUrl(file);
+      newImages.push({ id: crypto.randomUUID(), fileName: file.name, fileUrl: url, fileSize: file.size });
+    }
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, images: [...(n.images || []), ...newImages] } : n));
+    setUploading(false);
+  };
+
+  const deleteNoteImage = (noteId: number, imageId: string) => {
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, images: (n.images || []).filter(img => img.id !== imageId) } : n));
+  };
+
+  const moveNoteImage = (noteId: number, imageId: string, direction: 'up' | 'down') => {
+    setNotes(prev => prev.map(n => {
+      if (n.id !== noteId) return n;
+      const imgs = [...(n.images || [])];
+      const idx = imgs.findIndex(img => img.id === imageId);
+      if (idx === -1) return n;
+      if (direction === 'up' && idx === 0) return n;
+      if (direction === 'down' && idx === imgs.length - 1) return n;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [imgs[idx], imgs[swapIdx]] = [imgs[swapIdx], imgs[idx]];
+      return { ...n, images: imgs };
+    }));
+  };
 
   const toggleTagFilter = (tagId: number) =>
     setSelectedTagIds(prev => (prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]));
@@ -660,9 +712,14 @@ const Notes: React.FC = () => {
   };
 
   const toggleExpand = (noteId: number) => {
+    const note = notes.find(n => n.id === noteId);
     setExpandedNoteIds(prev =>
       prev.includes(noteId) ? prev.filter(id => id !== noteId) : [...prev, noteId]
     );
+    if (note) {
+      setEditingContentText(note.content || '');
+      setExpandedContentMap(prev => ({ ...prev, [noteId]: note.content || '' }));
+    }
   };
 
   const matchingCount = filteredNotes.length;
@@ -684,7 +741,7 @@ const Notes: React.FC = () => {
           }
         }}
         className={cn(
-          'group border rounded-xl bg-card transition-all duration-200 cursor-pointer relative',
+          'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
           isDeleteMode
             ? selectedDeleteIds.includes(note.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -695,20 +752,20 @@ const Notes: React.FC = () => {
         )}
         style={!isDeleteMode ? { borderLeftColor: note.color === NOTE_COLORS[0] ? undefined : note.color, borderLeftWidth: note.color === NOTE_COLORS[0] ? undefined : '3px' } : undefined}
       >
-        {!isDeleteMode && (
-          <button
-            onClick={e => { e.stopPropagation(); togglePin(note); }}
-            className={`absolute top-2 right-2 p-1 rounded-md transition-all z-10 ${note.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100'}`}
-            title={note.pinned ? 'Unpin note' : 'Pin note'}
-          >
-            <Pin className={`w-3.5 h-3.5 ${note.pinned ? 'fill-current' : ''}`} />
-          </button>
-        )}
         <div className="flex items-center gap-1 px-4 py-5 min-h-[88px]">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </div>
+          )}
+          {!isDeleteMode && (
+            <button
+              onClick={e => { e.stopPropagation(); togglePin(note); }}
+              className={`p-1.5 rounded-md flex-shrink-0 transition-all ${note.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
+              title={note.pinned ? 'Unpin note' : 'Pin note'}
+            >
+              <Pin className={`w-3.5 h-3.5 ${note.pinned ? 'fill-current' : ''}`} />
+            </button>
           )}
           {isDeleteMode ? (
             <input
@@ -835,41 +892,29 @@ const Notes: React.FC = () => {
 
         {isExpanded && !isDeleteMode && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-3 bg-muted/10 rounded-b-xl">
-            <div
-              className="rounded-xl border border-border p-3 min-h-[80px] text-sm text-foreground leading-relaxed whitespace-pre-wrap"
-              style={{ backgroundColor: note.color }}
-            >
-              {note.content || 'No content'}
-            </div>
-            <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">Tags</label>
-              <div className="flex flex-wrap gap-2">
-                {tags.length === 0 && <p className="text-xs text-muted-foreground">No tags available</p>}
-                {tags.map(tag => {
-                  const active = note.tags.some(t => t.id === tag.id);
-                  return (
-                    <button key={tag.id} onClick={() => toggleTagOnNote(note.id, tag.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
-                      <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Project</label>
-              <Select value={String(note.projectId || 'none')} onValueChange={v => applyNoteUpdate(note.id, { projectId: v === 'none' ? null : Number(v) })}>
-                <SelectTrigger className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm h-9">
-                  <SelectValue placeholder="My Notes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">My Notes</SelectItem>
-                  {projects.map(p => (
-                    <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <textarea
+              value={expandedContentMap[note.id] ?? note.content ?? ''}
+              onChange={e => setExpandedContentMap(prev => ({ ...prev, [note.id]: e.target.value }))}
+              onBlur={async () => {
+                const val = expandedContentMap[note.id] ?? note.content ?? '';
+                if (val !== (note.content || '')) {
+                  await applyNoteUpdate(note.id, { content: val });
+                }
+              }}
+              rows={3}
+              className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <div className="flex flex-wrap gap-2">
+              {tags.map(tag => {
+                const active = note.tags.some(t => t.id === tag.id);
+                return (
+                  <button key={tag.id} onClick={() => toggleTagOnNote(note.id, tag.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${active ? 'border-foreground/20 text-foreground shadow-sm' : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}>
+                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
             <div className="flex justify-end pt-1">
               <button
@@ -1663,6 +1708,83 @@ const Notes: React.FC = () => {
                       Done
                     </button>
                   </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => setImagesCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-1 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Image className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                  {activeNote.images && activeNote.images.length > 0 && (
+                    <span className="text-xs text-muted-foreground">({activeNote.images.length})</span>
+                  )}
+                </div>
+                {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {!imagesCollapsed && (
+                <div className="space-y-3">
+                  <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                    <div className="flex flex-col items-center justify-center py-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
+                        <Paperclip className="w-4 h-4 text-primary" />
+                      </div>
+                      <p className="text-xs font-medium text-foreground">Click to upload images</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
+                    </div>
+                    <input type="file" multiple accept="image/*" onChange={e => { uploadImages(activeNote.id, e.target.files); e.target.value = ''; }} disabled={uploading} className="hidden" />
+                  </label>
+                  {uploading && (
+                    <div className="flex items-center justify-center gap-2 py-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <span className="text-xs text-muted-foreground">Uploading...</span>
+                    </div>
+                  )}
+                  {activeNote.images && activeNote.images.length > 0 && (
+                    <div className="space-y-2">
+                      {activeNote.images.map((img, idx) => (
+                        <div key={img.id} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
+                          <div className="flex flex-col gap-0.5 flex-shrink-0">
+                            <button
+                              onClick={() => moveNoteImage(activeNote.id, img.id, 'up')}
+                              disabled={idx === 0}
+                              className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => moveNoteImage(activeNote.id, img.id, 'down')}
+                              disabled={idx === activeNote.images!.length - 1}
+                              className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {img.fileUrl.match(/^data:image/) ? (
+                            <img src={img.fileUrl} alt={img.fileName} className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0">
+                              <Paperclip className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">{img.fileName}</p>
+                            <p className="text-[10px] text-muted-foreground">{(img.fileSize / 1024).toFixed(1)} KB</p>
+                          </div>
+                          <button
+                            onClick={() => deleteNoteImage(activeNote.id, img.id)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/img:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
