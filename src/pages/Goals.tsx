@@ -465,7 +465,7 @@ const Goals: React.FC = () => {
             </div>
             <button
               onClick={e => { e.stopPropagation(); deleteGoal(goal.id); }}
-              className="p-1.5 rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+              className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
