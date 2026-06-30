@@ -684,7 +684,7 @@ const Notes: React.FC = () => {
           }
         }}
         className={cn(
-          'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
+          'group border rounded-xl bg-card transition-all duration-200 cursor-pointer relative',
           isDeleteMode
             ? selectedDeleteIds.includes(note.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -695,6 +695,15 @@ const Notes: React.FC = () => {
         )}
         style={!isDeleteMode ? { borderLeftColor: note.color === NOTE_COLORS[0] ? undefined : note.color, borderLeftWidth: note.color === NOTE_COLORS[0] ? undefined : '3px' } : undefined}
       >
+        {!isDeleteMode && (
+          <button
+            onClick={e => { e.stopPropagation(); togglePin(note); }}
+            className={`absolute top-2 right-2 p-1 rounded-md transition-all z-10 ${note.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground opacity-0 group-hover:opacity-100'}`}
+            title={note.pinned ? 'Unpin note' : 'Pin note'}
+          >
+            <Pin className={`w-3.5 h-3.5 ${note.pinned ? 'fill-current' : ''}`} />
+          </button>
+        )}
         <div className="flex items-center gap-1 px-4 py-5 min-h-[88px]">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
@@ -713,15 +722,7 @@ const Notes: React.FC = () => {
               onClick={e => e.stopPropagation()}
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />
-          ) : (
-            <button
-              onClick={e => { e.stopPropagation(); togglePin(note); }}
-              className={`p-1.5 rounded-md flex-shrink-0 transition-all ${note.pinned ? 'text-primary' : 'text-muted-foreground/30 hover:text-muted-foreground'}`}
-              title={note.pinned ? 'Unpin note' : 'Pin note'}
-            >
-              <Pin className={`w-3.5 h-3.5 ${note.pinned ? 'fill-current' : ''}`} />
-            </button>
-          )}
+          ) : null}
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
