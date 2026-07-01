@@ -12,7 +12,7 @@ import {
 } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import { Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
+import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical } from 'lucide-react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -148,6 +148,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
+  const [newTaskTags, setNewTaskTags] = useState<Label[]>([]);
+  const [newTaskImages, setNewTaskImages] = useState<File[]>([]);
+  const [createTagPickerOpen, setCreateTagPickerOpen] = useState(false);
 
   const resetTaskDraft = () => {
     setNewTaskTitle('');
@@ -178,6 +181,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setAiBuilderError('');
     setNewTagName('');
     setNewTagColor(randomTagColor());
+    setNewTaskTags([]);
+    setNewTaskImages([]);
+    setCreateTagPickerOpen(false);
   };
 
   // Keep draft column/project synced with defaults when opened
@@ -239,6 +245,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const attachmentUrls = newFiles.length > 0
       ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
       : [];
+    const imageUrls = newTaskImages.length > 0
+      ? await Promise.all(newTaskImages.map(f => fileToDataUrl(f)))
+      : [];
 
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
@@ -272,6 +281,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         fileType: file.type || 'application/octet-stream',
         fileSize: file.size,
         fileUrl: attachmentUrls[i],
+        createdAt: new Date().toISOString(),
+      })),
+      labels: newTaskTags,
+      images: newTaskImages.map((file, i) => ({
+        id: crypto.randomUUID(),
+        taskId,
+        fileName: file.name,
+        fileType: file.type || 'image/png',
+        fileSize: file.size,
+        fileUrl: imageUrls[i],
         createdAt: new Date().toISOString(),
       })),
       completed: false,
@@ -722,6 +741,94 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   </div>
                 )}
               </>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Tag className="w-4 h-4 text-muted-foreground" />
+                Tags
+              </h3>
+              <button
+                onClick={() => setCreateTagPickerOpen(prev => !prev)}
+                className="text-xs text-primary hover:underline"
+              >
+                {createTagPickerOpen ? 'Close' : 'Edit'}
+              </button>
+            </div>
+            {newTaskTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {newTaskTags.map(label => (
+                  <span key={label.id} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-primary-foreground" style={{ backgroundColor: label.color }}>
+                    {label.name}
+                  </span>
+                ))}
+              </div>
+            )}
+            {createTagPickerOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setCreateTagPickerOpen(false)}>
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+                <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-foreground">Tags</h3>
+                    <button onClick={() => setCreateTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+                    {(board.tasks.flatMap(t => t.labels).filter((l, i, a) => a.findIndex(x => x.id === l.id) === i) || []).map(label => {
+                      const active = newTaskTags.some(t => t.id === label.id);
+                      return (
+                        <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                          <button onClick={() => {
+                            setNewTaskTags(prev => active ? prev.filter(t => t.id !== label.id) : [...prev, label]);
+                          }} className="flex flex-1 items-center gap-2 text-left">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: label.color }} />
+                            <span className="text-sm text-foreground">{label.name}</span>
+                            {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Image className="w-4 h-4 text-muted-foreground" />
+              Images
+            </h3>
+            <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+              <div className="flex flex-col items-center justify-center py-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
+                  <Paperclip className="w-4 h-4 text-primary" />
+                </div>
+                <p className="text-xs font-medium text-foreground">Click to upload images</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
+              </div>
+              <input type="file" multiple accept="image/*" onChange={e => {
+                if (!e.target.files) return;
+                setNewTaskImages(prev => [...prev, ...Array.from(e.target.files || [])]);
+                e.target.value = '';
+              }} className="hidden" />
+            </label>
+            {newTaskImages.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {newTaskImages.map((file, idx) => (
+                  <div key={`${file.name}-${idx}`} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
+                    <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0">
+                      <Image className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{file.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button onClick={() => setNewTaskImages(prev => prev.filter((_, i) => i !== idx))} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
