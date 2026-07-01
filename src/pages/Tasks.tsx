@@ -3551,7 +3551,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const insertSubtask = (beforeId: string | null, parentId?: string) => {
-    const newSub: Subtask = { id: crypto.randomUUID(), text: '', completed: false, durationMinutes: 0 };
+    const newSub: Subtask = { id: crypto.randomUUID(), text: 'title', completed: false, durationMinutes: 0 };
     if (parentId) {
       const addToChildren = (list: Subtask[]): Subtask[] =>
         list.map(st => {
@@ -3648,18 +3648,18 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                   )}
                 </Droppable>
-                <div className="h-2 relative group/add z-10">
-                  <button
-                    onClick={() => insertSubtask(null, subtask.id)}
-                    className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                      <Plus className="w-3 h-3 text-primary" />
-                    </div>
-                  </button>
-                </div>
               </div>
             )}
+            <div className="h-2 relative group/add z-10">
+              <button
+                onClick={() => insertSubtask(null, subtask.id)}
+                className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+              >
+                <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                  <Plus className="w-3 h-3 text-primary" />
+                </div>
+              </button>
+            </div>
           </div>
         )}
       </Draggable>
