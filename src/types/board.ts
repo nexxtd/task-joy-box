@@ -17,6 +17,7 @@ export interface ChecklistItem {
 
 export interface Subtask extends ChecklistItem {
   durationMinutes?: number;
+  children?: Subtask[];
 }
 
 export interface Checklist {

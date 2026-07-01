@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
+import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
 import {
@@ -324,8 +324,10 @@ const Tasks: React.FC = () => {
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
-  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const tier = user?.subscriptionTier || 'free';
+  const isPremium = tier === 'premium';
+  const isPro = tier === 'pro';
+  const mediaLimit = tier === 'free' ? 5 : tier === 'premium' ? 10 : 20;
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
@@ -1316,14 +1318,13 @@ const Tasks: React.FC = () => {
                   </span>
                 );
               })()}
-              {taskTags.length === 0 && task.labels.length === 0 && (
-                <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground"
-                >
-                  Tags
-                </button>
-              )}
+              <button
+                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
+              >
+                <Tag className="w-2.5 h-2.5" />
+                Tags
+              </button>
               {taskTags.map(label => (
                 <button
                   key={label.id}
@@ -3012,84 +3013,6 @@ const Tasks: React.FC = () => {
         );
       })()}
 
-      {tagPopupTaskId && (() => {
-        const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
-        if (!popupTask) return null;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-muted-foreground" />
-                Tags
-              </h3>
-              <div className="max-h-44 overflow-y-auto space-y-1 pr-1 mb-3">
-                {allTags.map(label => {
-                  const active = popupTask.labels.some(item => item.id === label.id);
-                  return (
-                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                      <button
-                        onClick={() => toggleTaskTag(popupTask.id, label)}
-                        className="flex flex-1 items-center gap-2 text-left"
-                      >
-                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                        <span className="text-sm text-foreground">{label.name}</span>
-                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                      </button>
-                      <button
-                        onClick={() => setTagDeleteConfirm(label.id)}
-                        className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Delete tag everywhere"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2 mb-3">
-                <input
-                  value={newTagName}
-                  onChange={e => setNewTagName(e.target.value)}
-                  placeholder="Create tag"
-                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={() => setNewTagColor(randomTagColor())}
-                  className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
-                  title="Random color"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    const name = normalizeTagName(newTagName);
-                    if (!name) return;
-                    try {
-                      const label = await createSharedTaskLabel(name, newTagColor);
-                      updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
-                      setNewTagName('');
-                      setNewTagColor(randomTagColor());
-                    } catch (error) {
-                      console.error('Failed to create task tag:', error);
-                    }
-                  }}
-                  disabled={!newTagName.trim()}
-                  className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  Add tag
-                </button>
-                <button
-                  onClick={() => setTagPopupTaskId(null)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
       {tagDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
@@ -3103,6 +3026,59 @@ const Tasks: React.FC = () => {
           </div>
         </div>
       )}
+
+      {tagPopupTaskId && (() => {
+        const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
+        if (!popupTask) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-foreground">Tags</h3>
+                <button onClick={() => setTagPopupTaskId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+                {allTags.map(label => {
+                  const active = popupTask.labels.some(item => item.id === label.id);
+                  return (
+                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                      <button onClick={() => toggleTaskTag(popupTask.id, label)} className="flex flex-1 items-center gap-2 text-left">
+                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
+                        <span className="text-sm text-foreground">{label.name}</span>
+                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                      </button>
+                      <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-border pt-4">
+                <div className="flex gap-2 mb-2">
+                  <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
+                    className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                  <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={async () => {
+                    const name = normalizeTagName(newTagName);
+                    if (!name) return;
+                    try {
+                      const label = await createSharedTaskLabel(name, newTagColor);
+                      updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+                      setNewTagName('');
+                      setNewTagColor(randomTagColor());
+                    } catch (error) {
+                      console.error('Failed to create task tag:', error);
+                    }
+                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add tag</button>
+                  <button onClick={() => setTagPopupTaskId(null)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
@@ -3496,6 +3472,11 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
+  const [collapsedSubtasks, setCollapsedSubtasks] = useState<Set<string>>(new Set());
+  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(new Set());
+  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
@@ -3533,8 +3514,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     onUpdateTask(task.id, { subtasks: nextSubtasks, checklists: nextChecklists });
   };
 
-  const updateSubtask = (subtaskId: string, updates: Partial<Task['subtasks'][number]>) => {
-    persistSubtasks(effectiveSubtasks.map(st => st.id === subtaskId ? { ...st, ...updates } : st));
+  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
+    const updateRecursive = (list: Subtask[]): Subtask[] =>
+      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
+    persistSubtasks(updateRecursive(effectiveSubtasks));
   };
 
   const addSubtask = () => {
@@ -3548,7 +3531,89 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const removeSubtask = (subtaskId: string) => {
-    persistSubtasks(effectiveSubtasks.filter(st => st.id !== subtaskId));
+    const removeRecursive = (list: Subtask[]): Subtask[] =>
+      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
+    persistSubtasks(removeRecursive(effectiveSubtasks));
+  };
+
+  const insertSubtask = (index: number) => {
+    const newSub: Subtask = { id: crypto.randomUUID(), text: '', completed: false, durationMinutes: 0 };
+    const next = [...effectiveSubtasks];
+    next.splice(index, 0, newSub);
+    persistSubtasks(next);
+  };
+
+  const renderSubtaskItem = (subtask: Subtask, index: number, depth: number): React.ReactNode => {
+    const hasChildren = subtask.children && subtask.children.length > 0;
+    const isCollapsed = collapsedSubtasks.has(subtask.id);
+    return (
+      <div style={{ marginLeft: depth > 0 ? `${depth * 1.5}rem` : undefined }}>
+        <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+          <div className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <GripVertical className="w-4 h-4" />
+          </div>
+          <CircleToggle
+            completed={subtask.completed}
+            onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+            size="sm"
+          />
+          {editingSubtaskId === subtask.id ? (
+            <input
+              autoFocus
+              className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+              value={editingSubtaskText}
+              onChange={e => setEditingSubtaskText(e.target.value)}
+              onBlur={() => saveSubtaskEdit(subtask.id)}
+              onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+            />
+          ) : (
+            <span
+              onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+              className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+            >
+              {subtask.text}
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+              value={subtask.durationMinutes || 0}
+              onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+            />
+            <span className="text-[10px] text-muted-foreground">min</span>
+            <button
+              onClick={() => removeSubtask(subtask.id)}
+              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            {hasChildren && (
+              <button
+                onClick={() => {
+                  const next = new Set(collapsedSubtasks);
+                  if (isCollapsed) next.delete(subtask.id); else next.add(subtask.id);
+                  setCollapsedSubtasks(next);
+                }}
+                className="p-1 text-muted-foreground hover:text-foreground"
+              >
+                {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+        </div>
+        {hasChildren && !isCollapsed && (
+          <div className="space-y-1 mt-1">
+            {subtask.children!.map((child, ci) => (
+              <div key={child.id}>
+                {renderSubtaskItem(child, ci, depth + 1)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const saveSubtaskEdit = (subtaskId: string) => {
@@ -3572,6 +3637,12 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       return;
     }
     onAddChecklistItem(task.id, primaryChecklist.id, newChecklistText.trim());
+    setNewChecklistText('');
+  };
+
+  const addChecklistItemToList = (checklistId: string) => {
+    if (!newChecklistText.trim()) return;
+    onAddChecklistItem(task.id, checklistId, newChecklistText.trim());
     setNewChecklistText('');
   };
 
@@ -3866,58 +3937,39 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
 
           {tagPickerOpen && (
-            <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-3">
-              <div className="max-h-44 overflow-y-auto space-y-1 pr-1">
-                {allTags.map(label => {
-                  const active = task.labels.some(item => item.id === label.id);
-                  return (
-                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                      <button
-                        onClick={() => onToggleTag(task.id, label)}
-                        className="flex flex-1 items-center gap-2 text-left"
-                      >
-                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                        <span className="text-sm text-foreground">{label.name}</span>
-                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                      </button>
-                      <button
-                        onClick={() => setTagDeleteConfirm(label.id)}
-                        className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        title="Delete tag everywhere"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  value={newTagName}
-                  onChange={e => setNewTagName(e.target.value)}
-                  placeholder="Create tag"
-                  className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={() => setNewTagColor(randomTagColor())}
-                  className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
-                  title="Random color"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={createTagForTask}
-                  disabled={!newTagName.trim()}
-                  className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  Add tag
-                </button>
-                <button
-                  onClick={() => setTagPickerOpen(false)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
-                >
-                  Done
-                </button>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPickerOpen(false)}>
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+              <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-foreground">Tags</h3>
+                  <button onClick={() => setTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+                </div>
+                <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+                  {allTags.map(label => {
+                    const active = task.labels.some(item => item.id === label.id);
+                    return (
+                      <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                        <button onClick={() => onToggleTag(task.id, label)} className="flex flex-1 items-center gap-2 text-left">
+                          <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
+                          <span className="text-sm text-foreground">{label.name}</span>
+                          {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                        </button>
+                        <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="border-t border-border pt-4">
+                  <div className="flex gap-2 mb-2">
+                    <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
+                      className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                    <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={createTagForTask} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add tag</button>
+                    <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -3959,64 +4011,35 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
           )}
 
-          <DragDropContext onDragEnd={handleFullViewReorder}>
-            <Droppable droppableId="fullview-subtasks">
-              {(provided) => (
-                <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                  {effectiveSubtasks.map((subtask, index) => (
-                    <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                      {(provided) => (
-                        <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                            <GripVertical className="w-4 h-4" />
-                          </div>
-                          <CircleToggle
-                            completed={subtask.completed}
-                            onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                            size="sm"
-                          />
-                          {editingSubtaskId === subtask.id ? (
-                            <input
-                              autoFocus
-                              className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                              value={editingSubtaskText}
-                              onChange={e => setEditingSubtaskText(e.target.value)}
-                              onBlur={() => saveSubtaskEdit(subtask.id)}
-                              onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                            />
-                          ) : (
-                            <span
-                              onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                              className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                            >
-                              {subtask.text}
-                            </span>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              value={subtask.durationMinutes || 0}
-                              onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                            />
-                            <span className="text-[10px] text-muted-foreground">min</span>
-                            <button
-                              onClick={() => removeSubtask(subtask.id)}
-                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
+          <div className="space-y-1">
+            {(task.subtasks || []).map((subtask, index) => (
+              <div key={subtask.id}>
+                <div className="h-2 -my-1 relative group/add z-10">
+                  <button
+                    onClick={e => { e.stopPropagation(); insertSubtask(index); }}
+                    className="absolute inset-x-0 top-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                      <Plus className="w-3 h-3 text-primary" />
+                    </div>
+                  </button>
                 </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+                {renderSubtaskItem(subtask, index, 0)}
+              </div>
+            ))}
+            {((task.subtasks || []).length > 0) && (
+              <div className="h-2 -my-1 relative group/add z-10">
+                <button
+                  onClick={e => { e.stopPropagation(); insertSubtask((task.subtasks || []).length); }}
+                  className="absolute inset-x-0 top-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+                >
+                  <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                    <Plus className="w-3 h-3 text-primary" />
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-[1fr_120px_auto] gap-2">
             <input
@@ -4041,74 +4064,102 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
           {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-          {checklistLists.length > 0 && (
-            <div className="space-y-1.5">
-              {checklistLists.map(list => (
-                <div key={list.id} className="space-y-1.5">
-                  {checklistLists.length > 1 && (
-                    <div className="text-[11px] uppercase text-muted-foreground font-semibold">{list.title}</div>
-                  )}
-                  <DragDropContext onDragEnd={handleFullViewReorder}>
-                    <Droppable droppableId={"fullview-checklist-" + list.id}>
-                      {(provided) => (
-                        <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                          {list.items.map((item, index) => (
-                            <Draggable key={item.id} draggableId={item.id} index={index}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-                                  <SquareToggle
-                                    completed={item.completed}
-                                    onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                    size="md"
-                                  />
-                                  {editingChecklistItemId === item.id ? (
-                                    <input
-                                      autoFocus
-                                      className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                      value={editingChecklistText}
-                                      onChange={e => setEditingChecklistText(e.target.value)}
-                                      onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                      onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+          {checklistLists.map(list => {
+            const isCollapsed = collapsedChecklists.has(list.id);
+            return (
+              <div key={list.id} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                <button
+                  onClick={() => {
+                    const next = new Set(collapsedChecklists);
+                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                    setCollapsedChecklists(next);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-all"
+                >
+                  <span className="text-xs font-semibold text-foreground">{list.title}</span>
+                  {isCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
+                </button>
+                {!isCollapsed && (
+                  <div className="px-3 pb-2 space-y-1.5">
+                    <DragDropContext onDragEnd={handleFullViewReorder}>
+                      <Droppable droppableId={"fullview-checklist-" + list.id}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                            {list.items.map((item, index) => (
+                              <Draggable key={item.id} draggableId={item.id} index={index}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <SquareToggle
+                                      completed={item.completed}
+                                      onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                                      size="md"
                                     />
-                                  ) : (
-                                    <span
-                                      onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                      className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                    {editingChecklistItemId === item.id ? (
+                                      <input
+                                        autoFocus
+                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                        value={editingChecklistText}
+                                        onChange={e => setEditingChecklistText(e.target.value)}
+                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                      />
+                                    ) : (
+                                      <span
+                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                      >
+                                        {item.text}
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                                     >
-                                      {item.text}
-                                    </span>
-                                  )}
-                                  <button
-                                    onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                </div>
-              ))}
-            </div>
-          )}
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        value={perChecklistInput[list.id] ?? ''}
+                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                        placeholder="Add checklist item"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                      />
+                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <div className="flex gap-2">
             <input
-              value={newChecklistText}
-              onChange={e => setNewChecklistText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addChecklistItemToTask()}
-              placeholder="Checklist item"
+              value={newChecklistTitle}
+              onChange={e => setNewChecklistTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+              placeholder="New checklist name"
               className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
             />
-            <button onClick={addChecklistItemToTask} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+            <button
+              onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+              disabled={!newChecklistTitle.trim()}
+              className="px-3 py-2 text-xs bg-foreground text-background rounded-lg disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5 inline-block mr-1" />
+              Add checklist
+            </button>
           </div>
         </div>
 
@@ -4180,10 +4231,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className="rounded-2xl border border-border bg-muted/20">
           <button
             onClick={() => setImagesCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-1 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
+            className="w-full flex items-center justify-between px-4 py-3"
           >
             <div className="flex items-center gap-2">
               <Image className="w-4 h-4 text-muted-foreground" />
@@ -4195,52 +4246,54 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
           </button>
           {!imagesCollapsed && (
-            <div className="space-y-3">
-              <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                <div className="flex flex-col items-center justify-center py-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-1.5">
-                    <Paperclip className="w-4 h-4 text-primary" />
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
+                <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                      <Image className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Click to upload</p>
+                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
-                  <p className="text-xs font-medium text-foreground">Click to upload images</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">PNG, JPG, GIF (max 10MB)</p>
-                </div>
-                <input type="file" multiple accept="image/*" onChange={async e => {
-                  if (!e.target.files) return;
-                  const files = Array.from(e.target.files);
-                  const newImages: Attachment[] = [];
-                  for (const file of files) {
-                    newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType: file.type || 'image/*', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-                  }
-                  onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
-                  e.target.value = '';
-                }} className="hidden" />
-              </label>
+                  <input type="file" multiple accept="image/*" onChange={async e => {
+                    if (!e.target.files) return;
+                    const files = Array.from(e.target.files);
+                    const newImages: Attachment[] = [];
+                    for (const file of files) {
+                      newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType: file.type || 'image/*', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+                    }
+                    onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
+                    e.target.value = '';
+                  }} className="hidden" />
+                </label>
+              )}
               {task.images && task.images.length > 0 && (
-                <div className="space-y-2">
-                  {task.images.map((img, idx) => (
-                    <div key={img.id} className="relative group/img flex items-center gap-2 p-2 rounded-xl border border-border bg-muted/30">
-                      <div className="flex flex-col gap-0.5 flex-shrink-0">
-                        <button onClick={() => {
-                          const imgs = [...(task.images || [])];
-                          const i = imgs.findIndex(x => x.id === img.id);
-                          if (i > 0) { [imgs[i-1], imgs[i]] = [imgs[i], imgs[i-1]]; onUpdateTask(task.id, { images: imgs }); }
-                        }} disabled={idx === 0} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronUp className="w-3 h-3" /></button>
-                        <button onClick={() => {
-                          const imgs = [...(task.images || [])];
-                          const i = imgs.findIndex(x => x.id === img.id);
-                          if (i < imgs.length - 1) { [imgs[i], imgs[i+1]] = [imgs[i+1], imgs[i]]; onUpdateTask(task.id, { images: imgs }); }
-                        }} disabled={idx === task.images!.length - 1} className="p-0.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:cursor-not-allowed"><ChevronDown className="w-3 h-3" /></button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {task.images.map(img => (
+                    <div key={img.id} className="relative group/img">
+                      <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all">
+                        <div className="absolute top-1 left-1 p-1 rounded-md text-muted-foreground opacity-0 group-hover/img:opacity-100 transition-all">
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </div>
+                        {img.fileUrl.match(/^data:image/) ? (
+                          <img src={img.fileUrl} alt={img.fileName} className="w-10 h-10 rounded-lg object-cover border border-border flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Image className="w-5 h-5 text-muted-foreground" /></div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{img.fileName}</p>
+                          <p className="text-xs text-muted-foreground">{img.fileSize ? `${(img.fileSize / 1024).toFixed(1)} KB` : 'Image'}</p>
+                        </div>
                       </div>
-                      {img.fileUrl.match(/^data:image/) ? (
-                        <img src={img.fileUrl} alt={img.fileName} className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">{img.fileName}</p>
-                        <p className="text-[10px] text-muted-foreground">{(img.fileSize / 1024).toFixed(1)} KB</p>
-                      </div>
-                      <button onClick={() => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== img.id) })} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/img:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button
+                        onClick={() => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== img.id) })}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
