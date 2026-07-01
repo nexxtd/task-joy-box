@@ -3122,6 +3122,7 @@ const TaskDropdownExpanded: React.FC<{
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -3235,106 +3236,118 @@ const TaskDropdownExpanded: React.FC<{
         />
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-          {taskDuration > 0 && (
-            <span className={`text-xs font-medium ${
-              subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-              subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-            }`}>
-              {subtaskTimeRemaining > 0
-                ? `${subtaskTimeRemaining} mins left`
-                : subtaskTimeRemaining < 0
-                ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                : '0 mins left ✓'}
-            </span>
-          )}
-        </div>
-
-        {allSubtasksDone && (
-          <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-            All sub-tasks are done ✓
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setSubtasksCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+            {effectiveSubtasks.length > 0 && (
+              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
+            )}
+            {taskDuration > 0 && (
+              <span className={`text-xs font-medium ${
+                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
+                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+              }`}>
+                {subtaskTimeRemaining > 0
+                  ? `${subtaskTimeRemaining} mins left`
+                  : subtaskTimeRemaining < 0
+                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
+                  : '0 mins left ✓'}
+              </span>
+            )}
           </div>
-        )}
-
-        <DragDropContext onDragEnd={handleDropdownReorder}>
-          <Droppable droppableId={`dropdown-subtasks-${task.id}`}>
-            {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                {effectiveSubtasks.map((subtask, index) => (
-                  <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                          <GripVertical className="w-4 h-4" />
-                        </div>
-                        <CircleToggle
-                          completed={subtask.completed}
-                          onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                          size="sm"
-                        />
-                        {editingSubtaskId === subtask.id ? (
-                          <input
-                            autoFocus
-                            className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                            value={editingSubtaskText}
-                            onChange={e => setEditingSubtaskText(e.target.value)}
-                            onBlur={() => saveSubtaskEdit(subtask.id)}
-                            onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                          />
-                        ) : (
-                          <span
-                            onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                            className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                          >
-                            {subtask.text}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={0}
-                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                            value={subtask.durationMinutes || 0}
-                            onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                          />
-                          <span className="text-[10px] text-muted-foreground">min</span>
-                          <button
-                            onClick={() => removeSubtask(subtask.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
+          {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!subtasksCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {allSubtasksDone && (
+              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                All sub-tasks are done ✓
               </div>
             )}
-          </Droppable>
-        </DragDropContext>
 
-        <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-          <input
-            value={newSubtaskText}
-            onChange={e => setNewSubtaskText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addSubtask()}
-            placeholder="Add sub-task"
-            className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-          />
-          <input
-            type="number"
-            min={0}
-            value={newSubtaskDuration}
-            onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-            placeholder="min"
-            className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-          />
-          <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-        </div>
+            <DragDropContext onDragEnd={handleDropdownReorder}>
+              <Droppable droppableId={`dropdown-subtasks-${task.id}`}>
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                    {effectiveSubtasks.map((subtask, index) => (
+                      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <CircleToggle
+                              completed={subtask.completed}
+                              onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                              size="sm"
+                            />
+                            {editingSubtaskId === subtask.id ? (
+                              <input
+                                autoFocus
+                                className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                value={editingSubtaskText}
+                                onChange={e => setEditingSubtaskText(e.target.value)}
+                                onBlur={() => saveSubtaskEdit(subtask.id)}
+                                onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                              />
+                            ) : (
+                              <span
+                                onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                                className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                              >
+                                {subtask.text}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={0}
+                                className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                value={subtask.durationMinutes || 0}
+                                onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                              />
+                              <span className="text-[10px] text-muted-foreground">min</span>
+                              <button
+                                onClick={() => removeSubtask(subtask.id)}
+                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+
+            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+              <input
+                value={newSubtaskText}
+                onChange={e => setNewSubtaskText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                placeholder="Add sub-task"
+                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                min={0}
+                value={newSubtaskDuration}
+                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="min"
+                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+              />
+              <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -3470,6 +3483,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
   const [collapsedSubtasks, setCollapsedSubtasks] = useState<Set<string>>(new Set());
@@ -3536,83 +3550,119 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     persistSubtasks(removeRecursive(effectiveSubtasks));
   };
 
-  const insertSubtask = (index: number) => {
+  const insertSubtask = (beforeId: string | null, parentId?: string) => {
     const newSub: Subtask = { id: crypto.randomUUID(), text: '', completed: false, durationMinutes: 0 };
-    const next = [...effectiveSubtasks];
-    next.splice(index, 0, newSub);
-    persistSubtasks(next);
+    if (parentId) {
+      const addToChildren = (list: Subtask[]): Subtask[] =>
+        list.map(st => {
+          if (st.id === parentId) return { ...st, children: [...(st.children || []), newSub] };
+          if (st.children) return { ...st, children: addToChildren(st.children) };
+          return st;
+        });
+      persistSubtasks(addToChildren(effectiveSubtasks));
+    } else if (beforeId) {
+      const insertBeforeInTree = (list: Subtask[]): Subtask[] => {
+        const idx = list.findIndex(st => st.id === beforeId);
+        if (idx >= 0) {
+          const next = [...list];
+          next.splice(idx, 0, newSub);
+          return next;
+        }
+        return list.map(st => st.children ? { ...st, children: insertBeforeInTree(st.children) } : st);
+      };
+      persistSubtasks(insertBeforeInTree(effectiveSubtasks));
+    } else {
+      persistSubtasks([...effectiveSubtasks, newSub]);
+    }
   };
 
-  const renderSubtaskItem = (subtask: Subtask, index: number, depth: number): React.ReactNode => {
+  const renderSubtaskItem = (subtask: Subtask, depth: number, index: number): React.ReactNode => {
     const hasChildren = subtask.children && subtask.children.length > 0;
     const isCollapsed = collapsedSubtasks.has(subtask.id);
     return (
-      <div style={{ marginLeft: depth > 0 ? `${depth * 1.5}rem` : undefined }}>
-        <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-          <div className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-            <GripVertical className="w-4 h-4" />
-          </div>
-          <CircleToggle
-            completed={subtask.completed}
-            onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-            size="sm"
-          />
-          {editingSubtaskId === subtask.id ? (
-            <input
-              autoFocus
-              className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-              value={editingSubtaskText}
-              onChange={e => setEditingSubtaskText(e.target.value)}
-              onBlur={() => saveSubtaskEdit(subtask.id)}
-              onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-            />
-          ) : (
-            <span
-              onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-              className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-            >
-              {subtask.text}
-            </span>
-          )}
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-              value={subtask.durationMinutes || 0}
-              onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-            />
-            <span className="text-[10px] text-muted-foreground">min</span>
-            <button
-              onClick={() => removeSubtask(subtask.id)}
-              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-            {hasChildren && (
-              <button
-                onClick={() => {
-                  const next = new Set(collapsedSubtasks);
-                  if (isCollapsed) next.delete(subtask.id); else next.add(subtask.id);
-                  setCollapsedSubtasks(next);
-                }}
-                className="p-1 text-muted-foreground hover:text-foreground"
-              >
-                {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              </button>
+      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+        {(provided, snapshot) => (
+          <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, marginLeft: depth > 0 ? `${depth * 1.5}rem` : undefined }}>
+            <div className={`grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border px-3 py-2 group ${snapshot.isDragging ? 'border-primary/40 bg-muted shadow-lg' : 'border-border'}`}>
+              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                <GripVertical className="w-4 h-4" />
+              </div>
+              <CircleToggle
+                completed={subtask.completed}
+                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                size="sm"
+              />
+              {editingSubtaskId === subtask.id ? (
+                <input
+                  autoFocus
+                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                  value={editingSubtaskText}
+                  onChange={e => setEditingSubtaskText(e.target.value)}
+                  onBlur={() => saveSubtaskEdit(subtask.id)}
+                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                />
+              ) : (
+                <span
+                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                  className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                >
+                  {subtask.text}
+                </span>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  value={subtask.durationMinutes || 0}
+                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                />
+                <span className="text-[10px] text-muted-foreground">min</span>
+                <button
+                  onClick={() => removeSubtask(subtask.id)}
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                {hasChildren && (
+                  <button
+                    onClick={() => {
+                      const next = new Set(collapsedSubtasks);
+                      if (isCollapsed) next.delete(subtask.id); else next.add(subtask.id);
+                      setCollapsedSubtasks(next);
+                    }}
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
+            </div>
+            {hasChildren && !isCollapsed && (
+              <div className="space-y-1 mt-1">
+                <Droppable droppableId={`fullview-subtasks-children-${subtask.id}`} type="subtask">
+                  {(childProvided) => (
+                    <div ref={childProvided.innerRef} {...childProvided.droppableProps}>
+                      {subtask.children!.map((child, ci) => renderSubtaskItem(child, depth + 1, ci))}
+                      {childProvided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+                <div className="h-2 relative group/add z-10">
+                  <button
+                    onClick={() => insertSubtask(null, subtask.id)}
+                    className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                      <Plus className="w-3 h-3 text-primary" />
+                    </div>
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-        </div>
-        {hasChildren && !isCollapsed && (
-          <div className="space-y-1 mt-1">
-            {subtask.children!.map((child, ci) => (
-              <div key={child.id}>
-                {renderSubtaskItem(child, ci, depth + 1)}
-              </div>
-            ))}
-          </div>
         )}
-      </div>
+      </Draggable>
     );
   };
 
@@ -3664,11 +3714,59 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
   const handleFullViewReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
-    if (result.source.droppableId === 'fullview-subtasks') {
-      const items = Array.from(effectiveSubtasks);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      persistSubtasks(items);
+
+    const removeFromTree = (list: Subtask[], id: string): { removed: Subtask | null; updated: Subtask[] } => {
+      let removed: Subtask | null = null;
+      const updated = list.filter(st => {
+        if (st.id === id) { removed = st; return false; }
+        return true;
+      }).map(st => {
+        if (st.children && st.children.length > 0) {
+          const res = removeFromTree(st.children, id);
+          if (res.removed) removed = res.removed;
+          return { ...st, children: res.updated.length > 0 ? res.updated : undefined };
+        }
+        return st;
+      });
+      return { removed, updated };
+    };
+
+    const insertIntoList = (list: Subtask[], index: number, item: Subtask): Subtask[] => {
+      const next = [...list];
+      next.splice(index, 0, item);
+      return next;
+    };
+
+    const insertAsChild = (list: Subtask[], parentId: string, item: Subtask): Subtask[] =>
+      list.map(st => {
+        if (st.id === parentId) return { ...st, children: [...(st.children || []), item] };
+        if (st.children) return { ...st, children: insertAsChild(st.children, parentId, item) };
+        return st;
+      });
+
+    const insertIntoChildList = (list: Subtask[], parentId: string, index: number, item: Subtask): Subtask[] =>
+      list.map(st => {
+        if (st.id === parentId) {
+          const children = st.children || [];
+          return { ...st, children: insertIntoList(children, index, item) };
+        }
+        if (st.children) return { ...st, children: insertIntoChildList(st.children, parentId, index, item) };
+        return st;
+      });
+
+    if (result.source.droppableId.startsWith('fullview-subtasks')) {
+      const { removed, updated } = removeFromTree(effectiveSubtasks, result.draggableId);
+      if (!removed) return;
+
+      const destId = result.destination.droppableId;
+
+      if (destId === 'fullview-subtasks') {
+        persistSubtasks(insertIntoList(updated, result.destination.index, removed));
+      } else if (destId.startsWith('fullview-subtasks-children-')) {
+        const parentId = destId.replace('fullview-subtasks-children-', '');
+        const withChild = insertIntoChildList(updated, parentId, result.destination.index, removed);
+        persistSubtasks(withChild);
+      }
     } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
       const checklistId = result.source.droppableId.replace('fullview-checklist-', '');
       onUpdateTask(task.id, {
@@ -3988,77 +4086,80 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-            {taskDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-          </div>
-
-          {allSubtasksDone && (
-            <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-              All sub-tasks are done ✓
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setSubtasksCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+              {(task.subtasks ?? []).length > 0 && (
+                <span className="text-xs text-muted-foreground">({(task.subtasks ?? []).length})</span>
+              )}
+              {taskDuration > 0 && (
+                <span className={`text-xs font-medium ${
+                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
+                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+                }`}>
+                  {subtaskTimeRemaining > 0
+                    ? `${subtaskTimeRemaining} mins left`
+                    : subtaskTimeRemaining < 0
+                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
+                    : '0 mins left ✓'}
+                </span>
+              )}
             </div>
-          )}
-
-          <div className="space-y-1">
-            {(task.subtasks || []).map((subtask, index) => (
-              <div key={subtask.id}>
-                <div className="h-2 -my-1 relative group/add z-10">
-                  <button
-                    onClick={e => { e.stopPropagation(); insertSubtask(index); }}
-                    className="absolute inset-x-0 top-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                      <Plus className="w-3 h-3 text-primary" />
-                    </div>
-                  </button>
+            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!subtasksCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {allSubtasksDone && (
+                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                  All sub-tasks are done ✓
                 </div>
-                {renderSubtaskItem(subtask, index, 0)}
-              </div>
-            ))}
-            {((task.subtasks || []).length > 0) && (
-              <div className="h-2 -my-1 relative group/add z-10">
+              )}
+
+              <DragDropContext onDragEnd={handleFullViewReorder}>
+                <Droppable droppableId="fullview-subtasks" type="subtask">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                      {(task.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, 0, si))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+              <div className="h-2 relative group/add z-10">
                 <button
-                  onClick={e => { e.stopPropagation(); insertSubtask((task.subtasks || []).length); }}
-                  className="absolute inset-x-0 top-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+                  onClick={() => insertSubtask(null)}
+                  className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
                 >
                   <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
                     <Plus className="w-3 h-3 text-primary" />
                   </div>
                 </button>
               </div>
-            )}
-          </div>
 
-          <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-            <input
-              value={newSubtaskText}
-              onChange={e => setNewSubtaskText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addSubtask()}
-              placeholder="Add sub-task"
-              className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min={0}
-              value={newSubtaskDuration}
-              onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-              placeholder="min"
-              className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-            />
-            <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-          </div>
+              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <input
+                  value={newSubtaskText}
+                  onChange={e => setNewSubtaskText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                  placeholder="Add sub-task"
+                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newSubtaskDuration}
+                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="min"
+                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                />
+                <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
