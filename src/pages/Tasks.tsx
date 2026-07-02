@@ -3484,6 +3484,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
   const [collapsedSubtasks, setCollapsedSubtasks] = useState<Set<string>>(new Set());
@@ -3582,7 +3585,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     return (
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided, snapshot) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, marginLeft: depth > 0 ? `${depth * 1.5}rem` : undefined }}>
+          <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, marginLeft: depth > 0 ? `${depth * 0.75}rem` : undefined }} className={depth > 0 ? 'min-w-0' : ''}>
             <div className={`grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border px-3 py-2 group ${snapshot.isDragging ? 'border-primary/40 bg-muted shadow-lg' : 'border-border'}`}>
               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
@@ -3604,7 +3607,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               ) : (
                 <span
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  className={`text-sm cursor-text truncate min-w-0 ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                 >
                   {subtask.text}
                 </span>
@@ -3625,18 +3628,31 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 {hasChildren && (
-                  <button
-                    onClick={() => {
-                      const next = new Set(collapsedSubtasks);
-                      if (isCollapsed) next.delete(subtask.id); else next.add(subtask.id);
-                      setCollapsedSubtasks(next);
-                    }}
-                    className="p-1 text-muted-foreground hover:text-foreground"
-                  >
-                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground font-medium">{subtask.children!.length}</span>
+                    <button
+                      onClick={() => {
+                        const next = new Set(collapsedSubtasks);
+                        if (isCollapsed) next.delete(subtask.id); else next.add(subtask.id);
+                        setCollapsedSubtasks(next);
+                      }}
+                      className="p-1 text-muted-foreground hover:text-foreground"
+                    >
+                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 )}
               </div>
+            </div>
+            <div className="h-2 relative group/add z-10">
+              <button
+                onClick={() => insertSubtask(null, subtask.id)}
+                className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
+              >
+                <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
+                  <Plus className="w-3 h-3 text-primary" />
+                </div>
+              </button>
             </div>
             {hasChildren && !isCollapsed && (
               <div className="space-y-1 mt-1">
@@ -3650,16 +3666,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </Droppable>
               </div>
             )}
-            <div className="h-2 relative group/add z-10">
-              <button
-                onClick={() => insertSubtask(null, subtask.id)}
-                className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
-              >
-                <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                  <Plus className="w-3 h-3 text-primary" />
-                </div>
-              </button>
-            </div>
           </div>
         )}
       </Draggable>
@@ -3711,6 +3717,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     setEditingChecklistItemId(null);
     setEditingChecklistText('');
   };
+
+  const handleChecklistListReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(task.checklists);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    onUpdateTask(task.id, { checklists: items });
+  }, [task.checklists, onUpdateTask]);
 
   const handleFullViewReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
@@ -4096,6 +4110,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
               {(task.subtasks ?? []).length > 0 && (
                 <span className="text-xs text-muted-foreground">({(task.subtasks ?? []).length})</span>
               )}
+            </div>
+            <div className="flex items-center gap-2">
               {taskDuration > 0 && (
                 <span className={`text-xs font-medium ${
                   subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
@@ -4108,8 +4124,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     : '0 mins left ✓'}
                 </span>
               )}
+              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
             </div>
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
           </button>
           {!subtasksCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
@@ -4162,106 +4178,186 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-          {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-          {checklistLists.map(list => {
-            const isCollapsed = collapsedChecklists.has(list.id);
-            return (
-              <div key={list.id} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                <button
-                  onClick={() => {
-                    const next = new Set(collapsedChecklists);
-                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                    setCollapsedChecklists(next);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 transition-all"
-                >
-                  <span className="text-xs font-semibold text-foreground">{list.title}</span>
-                  {isCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
-                </button>
-                {!isCollapsed && (
-                  <div className="px-3 pb-2 space-y-1.5">
-                    <DragDropContext onDragEnd={handleFullViewReorder}>
-                      <Droppable droppableId={"fullview-checklist-" + list.id}>
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                            {list.items.map((item, index) => (
-                              <Draggable key={item.id} draggableId={item.id} index={index}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    <SquareToggle
-                                      completed={item.completed}
-                                      onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                      size="md"
-                                    />
-                                    {editingChecklistItemId === item.id ? (
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+              {checklistLists.length > 0 && (
+                <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
+              )}
+            </div>
+            {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!checklistsSectionCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+              <DragDropContext onDragEnd={handleChecklistListReorder}>
+                <Droppable droppableId="fullview-checklist-lists" type="checklistList">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                      {checklistLists.map((list, listIndex) => {
+                        const isCollapsed = collapsedChecklists.has(list.id);
+                        return (
+                          <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      const next = new Set(collapsedChecklists);
+                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                      setCollapsedChecklists(next);
+                                    }}
+                                    className="flex-1 flex items-center gap-2 text-left"
+                                  >
+                                    {editingChecklistId === list.id ? (
                                       <input
                                         autoFocus
-                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                        value={editingChecklistText}
-                                        onChange={e => setEditingChecklistText(e.target.value)}
-                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                        className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                        value={editingChecklistTitle}
+                                        onChange={e => setEditingChecklistTitle(e.target.value)}
+                                        onBlur={() => {
+                                          if (editingChecklistTitle.trim()) {
+                                            onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                          }
+                                          setEditingChecklistId(null);
+                                          setEditingChecklistTitle('');
+                                        }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') {
+                                            if (editingChecklistTitle.trim()) {
+                                              onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                            }
+                                            setEditingChecklistId(null);
+                                            setEditingChecklistTitle('');
+                                          }
+                                        }}
                                       />
                                     ) : (
                                       <span
-                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                        onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
+                                        className="text-xs font-semibold text-foreground cursor-text"
                                       >
-                                        {item.text}
+                                        {list.title}
                                       </span>
                                     )}
+                                  </button>
+                                  <div className="flex items-center gap-1">
                                     <button
-                                      onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                      onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
+                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
+                                    <button
+                                      onClick={() => {
+                                        const next = new Set(collapsedChecklists);
+                                        if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                        setCollapsedChecklists(next);
+                                      }}
+                                      className="p-1 text-muted-foreground hover:text-foreground"
+                                    >
+                                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                {!isCollapsed && (
+                                  <div className="px-3 pb-2 space-y-1.5">
+                                    <DragDropContext onDragEnd={handleFullViewReorder}>
+                                      <Droppable droppableId={"fullview-checklist-" + list.id}>
+                                        {(provided) => (
+                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                            {list.items.map((item, index) => (
+                                              <Draggable key={item.id} draggableId={item.id} index={index}>
+                                                {(provided) => (
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                      <GripVertical className="w-4 h-4" />
+                                                    </div>
+                                                    <SquareToggle
+                                                      completed={item.completed}
+                                                      onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
+                                                      size="md"
+                                                    />
+                                                    {editingChecklistItemId === item.id ? (
+                                                      <input
+                                                        autoFocus
+                                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                        value={editingChecklistText}
+                                                        onChange={e => setEditingChecklistText(e.target.value)}
+                                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                      />
+                                                    ) : (
+                                                      <span
+                                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                      >
+                                                        {item.text}
+                                                      </span>
+                                                    )}
+                                                    <button
+                                                      onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
+                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                    </DragDropContext>
+                                    <div className="flex gap-2 pt-1">
+                                      <input
+                                        value={perChecklistInput[list.id] ?? ''}
+                                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                                        placeholder="Add checklist item"
+                                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                      />
+                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                                    </div>
                                   </div>
                                 )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                    <div className="flex gap-2 pt-1">
-                      <input
-                        value={perChecklistInput[list.id] ?? ''}
-                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                        placeholder="Add checklist item"
-                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                      />
-                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                      {provided.placeholder}
                     </div>
-                  </div>
-                )}
+                  )}
+                </Droppable>
+              </DragDropContext>
+              <div className="flex gap-2">
+                <input
+                  value={newChecklistTitle}
+                  onChange={e => setNewChecklistTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                  placeholder="New checklist name"
+                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                  disabled={!newChecklistTitle.trim()}
+                  className="px-3 py-2 text-xs bg-foreground text-background rounded-lg disabled:opacity-50"
+                >
+                  <Plus className="w-3.5 h-3.5 inline-block mr-1" />
+                  Add checklist
+                </button>
               </div>
-            );
-          })}
-          <div className="flex gap-2">
-            <input
-              value={newChecklistTitle}
-              onChange={e => setNewChecklistTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-              placeholder="New checklist name"
-              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-              disabled={!newChecklistTitle.trim()}
-              className="px-3 py-2 text-xs bg-foreground text-background rounded-lg disabled:opacity-50"
-            >
-              <Plus className="w-3.5 h-3.5 inline-block mr-1" />
-              Add checklist
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
