@@ -2366,7 +2366,7 @@ const Tasks: React.FC = () => {
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     placeholder="Checklist item"
                   />
-                  <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                  <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                 </div>
               </div>
 
@@ -4362,7 +4362,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         placeholder="Add checklist item"
                                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                       />
-                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                                     </div>
                                   </div>
                                 )}
