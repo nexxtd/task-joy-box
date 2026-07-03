@@ -345,7 +345,7 @@ const Tasks: React.FC = () => {
   const { open: openDeepFocus } = useDeepFocus();
 
   const tier = user?.subscriptionTier || 'free';
-  const isPremium = tier === 'premium';
+  const isPremium = tier === 'premium' || tier === 'pro';
   const isPro = tier === 'pro';
   const mediaLimit = tier === 'free' ? 5 : tier === 'premium' ? 10 : 20;
 
@@ -3577,6 +3577,9 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const insertSubtask = (beforeId: string | null, parentId?: string) => {
     const newSub: Subtask = { id: crypto.randomUUID(), text: 'title', completed: false, durationMinutes: 0 };
     if (parentId) {
+      const next = new Set(collapsedSubtasks);
+      next.delete(parentId);
+      setCollapsedSubtasks(next);
       const addToChildren = (list: Subtask[]): Subtask[] =>
         list.map(st => {
           if (st.id === parentId) return { ...st, children: [...(st.children || []), newSub] };
@@ -3600,14 +3603,29 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     }
   };
 
-  const renderSubtaskItem = (subtask: Subtask, depth: number, index: number): React.ReactNode => {
-    const isLeaf = depth > 0;
-    const hasChildren = !isLeaf && subtask.children && subtask.children.length > 0;
+  const flatSubtaskList = useMemo(() => {
+    const flat: ({ subtask: Subtask; depth: number })[] = [];
+    for (const st of effectiveSubtasks as Subtask[]) {
+      flat.push({ subtask: st, depth: 0 });
+      if (st.children && !collapsedSubtasks.has(st.id)) {
+        for (const child of st.children) {
+          flat.push({ subtask: child, depth: 1 });
+        }
+      }
+    }
+    return flat;
+  }, [effectiveSubtasks, collapsedSubtasks]);
+
+  const renderSubtaskRow = (item: { subtask: Subtask; depth: number }, index: number): React.ReactNode => {
+    const subtask = item.subtask;
+    const depth = item.depth;
+    const isParent = depth === 0;
+    const hasChildren = isParent && subtask.children && subtask.children.length > 0;
     const isCollapsed = collapsedSubtasks.has(subtask.id);
     return (
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} style={{ marginLeft: depth > 0 ? '0.75rem' : undefined }} className="min-w-0">
+          <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, marginLeft: depth > 0 ? '0.75rem' : undefined }} className="min-w-0">
             <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
@@ -3666,7 +3684,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 )}
               </div>
             </div>
-            {!isLeaf && (
+            {isParent && (
               <div className="h-2 relative group/add z-10">
                 <button
                   onClick={() => insertSubtask(null, subtask.id)}
@@ -3676,18 +3694,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <Plus className="w-3 h-3 text-primary" />
                   </div>
                 </button>
-              </div>
-            )}
-            {hasChildren && !isCollapsed && (
-              <div className="space-y-1 mt-1">
-                <Droppable droppableId={`fullview-subtasks-children-${subtask.id}`} type="subtask">
-                  {(childProvided) => (
-                    <div ref={childProvided.innerRef} {...childProvided.droppableProps}>
-                      {subtask.children!.map((child, ci) => renderSubtaskItem(child, 1, ci))}
-                      {childProvided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
               </div>
             )}
           </div>
@@ -3769,42 +3775,41 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       return { removed, updated };
     };
 
-    const insertIntoList = (list: Subtask[], index: number, item: Subtask): Subtask[] => {
-      const next = [...list];
-      next.splice(index, 0, item);
-      return next;
+    const flatten = (list: Subtask[]): { subtask: Subtask; depth: number }[] => {
+      const flat: { subtask: Subtask; depth: number }[] = [];
+      for (const st of list) {
+        flat.push({ subtask: st, depth: 0 });
+        if (st.children && st.children.length > 0) {
+          for (const child of st.children) {
+            flat.push({ subtask: child, depth: 1 });
+          }
+        }
+      }
+      return flat;
     };
 
-    const insertAsChild = (list: Subtask[], parentId: string, item: Subtask): Subtask[] =>
-      list.map(st => {
-        if (st.id === parentId) return { ...st, children: [...(st.children || []), item] };
-        if (st.children) return { ...st, children: insertAsChild(st.children, parentId, item) };
-        return st;
-      });
-
-    const insertIntoChildList = (list: Subtask[], parentId: string, index: number, item: Subtask): Subtask[] =>
-      list.map(st => {
-        if (st.id === parentId) {
-          const children = st.children || [];
-          return { ...st, children: insertIntoList(children, index, item) };
+    const rebuildTree = (flat: { subtask: Subtask; depth: number }[]): Subtask[] => {
+      const result: Subtask[] = [];
+      let currentParent: Subtask | null = null;
+      for (const entry of flat) {
+        const st = { ...entry.subtask, children: undefined };
+        if (entry.depth === 0) {
+          result.push(st);
+          currentParent = st;
+        } else if (entry.depth === 1 && currentParent) {
+          if (!currentParent.children) currentParent.children = [];
+          currentParent.children.push(st);
         }
-        if (st.children) return { ...st, children: insertIntoChildList(st.children, parentId, index, item) };
-        return st;
-      });
+      }
+      return result;
+    };
 
     if (result.source.droppableId.startsWith('fullview-subtasks')) {
       const { removed, updated } = removeFromTree(effectiveSubtasks, result.draggableId);
       if (!removed) return;
-
-      const destId = result.destination.droppableId;
-
-      if (destId === 'fullview-subtasks') {
-        persistSubtasks(insertIntoList(updated, result.destination.index, removed));
-      } else if (destId.startsWith('fullview-subtasks-children-')) {
-        const parentId = destId.replace('fullview-subtasks-children-', '');
-        const withChild = insertIntoChildList(updated, parentId, result.destination.index, removed);
-        persistSubtasks(withChild);
-      }
+      const flat = flatten(updated);
+      flat.splice(result.destination.index, 0, { subtask: removed, depth: 0 });
+      persistSubtasks(rebuildTree(flat));
     } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
       const checklistId = result.source.droppableId.replace('fullview-checklist-', '');
       onUpdateTask(task.id, {
@@ -3821,6 +3826,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       });
     }
   }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
+
+  const handleImageReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(task.images || []);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    onUpdateTask(task.id, { images: items });
+  }, [task.images, onUpdateTask]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -4163,7 +4176,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <Droppable droppableId="fullview-subtasks" type="subtask">
                   {(provided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                      {(task.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, 0, si))}
+                      {flatSubtaskList.map((item, idx) => renderSubtaskRow(item, idx))}
                       {provided.placeholder}
                     </div>
                   )}
@@ -4517,32 +4530,41 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </label>
               )}
               {task.images && task.images.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {task.images.map(img => (
-                    <div key={img.id} className="relative group/img">
-                      <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all">
-                        <div className="absolute top-1 left-1 p-1 rounded-md text-muted-foreground opacity-0 group-hover/img:opacity-100 transition-all">
-                          <GripVertical className="w-3.5 h-3.5" />
-                        </div>
-                        {img.fileUrl.match(/^data:image/) ? (
-                          <img src={img.fileUrl} alt={img.fileName} className="w-10 h-10 rounded-lg object-cover border border-border flex-shrink-0" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0"><Image className="w-5 h-5 text-muted-foreground" /></div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{img.fileName}</p>
-                          <p className="text-xs text-muted-foreground">{img.fileSize ? `${(img.fileSize / 1024).toFixed(1)} KB` : 'Image'}</p>
-                        </div>
+                <DragDropContext onDragEnd={handleImageReorder}>
+                  <Droppable droppableId="fullview-images" direction="horizontal">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {task.images.map((img, idx) => (
+                          <Draggable key={img.id} draggableId={img.id} index={idx}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                                {img.fileUrl.match(/^data:image/) ? (
+                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                                </div>
+                                <div {...provided.dragHandleProps} className="absolute top-1.5 left-1.5 p-1 rounded-md bg-background/80 border border-border text-muted-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10">
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </div>
+                                <button
+                                  onClick={() => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== img.id) })}
+                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
                       </div>
-                      <button
-                        onClick={() => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== img.id) })}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
               )}
                 </>
               )}
