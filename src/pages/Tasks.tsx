@@ -4481,6 +4481,16 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
           {!imagesCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {!isPremium ? (
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate
+                    title="Image Attachments"
+                    description="Upload images directly to your tasks."
+                    icon={<Image className="w-6 h-6 text-primary" />}
+                  />
+                </div>
+              ) : (
+                <>
               {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
                 <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
               ) : (
@@ -4533,6 +4543,8 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                   ))}
                 </div>
+              )}
+                </>
               )}
             </div>
           )}
