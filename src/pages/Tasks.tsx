@@ -285,7 +285,7 @@ const PremiumGate: React.FC<{
     <h4 className="text-sm font-semibold text-foreground mb-1">{title}</h4>
     <p className="text-xs text-muted-foreground mb-4 max-w-xs">{description}</p>
     <button
-      onClick={() => window.location.hash = '#settings'}
+      onClick={() => window.location.href = '/pricing'}
       className="px-4 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
     >
       Subscribe to Unlock
