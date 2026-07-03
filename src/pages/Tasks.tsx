@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
+import heic2any from 'heic2any';
 import {
   ArrowDown,
   ArrowUp,
@@ -96,6 +97,25 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+
+const imageToDataUrl = async (file: File): Promise<string> => {
+  const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+  if (isHeic) {
+    try {
+      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
+      const converted = Array.isArray(blob) ? blob[0] : blob;
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(converted);
+      });
+    } catch {
+      return fileToDataUrl(file);
+    }
+  }
+  return fileToDataUrl(file);
+};
 
 const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
@@ -4472,12 +4492,14 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <p className="text-sm font-medium text-foreground">Click to upload</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
-                  <input type="file" multiple accept="image/*" onChange={async e => {
+                   <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                     if (!e.target.files) return;
                     const files = Array.from(e.target.files);
                     const newImages: Attachment[] = [];
                     for (const file of files) {
-                      newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType: file.type || 'image/*', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+                      const fileUrl = await imageToDataUrl(file);
+                      const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                      newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
                     }
                     onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
                     e.target.value = '';
