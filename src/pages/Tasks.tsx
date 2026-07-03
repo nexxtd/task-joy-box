@@ -4109,16 +4109,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   )}
                 </Droppable>
               </DragDropContext>
-              <div className="h-2 relative group/add z-10">
-                <button
-                  onClick={() => insertSubtask(null)}
-                  className="absolute inset-x-0 h-2 opacity-0 group-hover/add:opacity-100 flex items-center justify-center transition-opacity"
-                >
-                  <div className="w-6 h-6 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-                    <Plus className="w-3 h-3 text-primary" />
-                  </div>
-                </button>
-              </div>
 
               <div className="grid grid-cols-[1fr_120px_auto] gap-2">
                 <input
