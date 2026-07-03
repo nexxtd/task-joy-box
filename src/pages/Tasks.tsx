@@ -3484,6 +3484,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
@@ -4362,71 +4363,85 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-          {!isPremium ? (
-            <div className="border border-dashed border-border rounded-xl">
-              <PremiumGate
-                title="File Attachments"
-                description="Attach files, images, and documents directly to your tasks."
-                icon={<Paperclip className="w-6 h-6 text-primary" />}
-              />
-            </div>
-          ) : (
-            <>
-              <div className="relative mt-1">
-                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      <Paperclip className="w-5 h-5 text-primary" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                    <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                  </div>
-                  <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
-                </label>
-                {uploading && (
-                  <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {(task.attachments || []).length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                  {(task.attachments || []).map(attachment => {
-                    const isServerAtt = /^\d+$/.test(String(attachment.id));
-                    const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
-                    return (
-                      <div key={attachment.id} className="relative group/att">
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                            <Paperclip className="w-5 h-5 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{attachment.fileName}</p>
-                            <p className="text-xs text-muted-foreground">{attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
-                          </div>
-                        </a>
-                        <button
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAttachment(attachment.id); }}
-                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setAttachmentsCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <Paperclip className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+              {(task.attachments ?? []).length > 0 && (
+                <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
               )}
-            </>
+            </div>
+            {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!attachmentsCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {!isPremium ? (
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate
+                    title="File Attachments"
+                    description="Attach files, images, and documents directly to your tasks."
+                    icon={<Paperclip className="w-6 h-6 text-primary" />}
+                  />
+                </div>
+              ) : (
+                <>
+                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                    <div className="flex flex-col items-center justify-center py-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                        <Paperclip className="w-5 h-5 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                      <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                    </div>
+                    <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
+                  </label>
+                  {uploading && (
+                    <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm font-medium">Uploading...</span>
+                      </div>
+                    </div>
+                  )}
+                  {(task.attachments || []).length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(task.attachments || []).map(attachment => {
+                        const isServerAtt = /^\d+$/.test(String(attachment.id));
+                        const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
+                        return (
+                          <div key={attachment.id} className="relative group/att">
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all"
+                            >
+                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                <Paperclip className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{attachment.fileName}</p>
+                                <p className="text-xs text-muted-foreground">{attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
+                              </div>
+                            </a>
+                            <button
+                              onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAttachment(attachment.id); }}
+                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
         </div>
 
