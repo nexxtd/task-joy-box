@@ -3584,13 +3584,10 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     const hasChildren = !isLeaf && subtask.children && subtask.children.length > 0;
     const isCollapsed = collapsedSubtasks.has(subtask.id);
     const row = (
-      <div className={`grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border px-3 py-2 group ${isLeaf ? 'bg-muted/30 border-border/50' : 'border-border'}`}>
-        {!isLeaf && (
-          <div className="cursor-default p-0.5 text-muted-foreground/30 flex-shrink-0">
-            <GripVertical className="w-4 h-4" />
-          </div>
-        )}
-        {isLeaf && <div className="w-5" />}
+      <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+        <div className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+          <GripVertical className="w-4 h-4" />
+        </div>
         <CircleToggle
           completed={subtask.completed}
           onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
@@ -3648,14 +3645,22 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
     );
 
     if (isLeaf) {
-      return <div style={{ marginLeft: '0.75rem' }} className="min-w-0">{row}</div>;
+      return (
+        <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+          {(provided) => (
+            <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, marginLeft: '0.75rem' }}>
+              <div {...provided.dragHandleProps}>{row}</div>
+            </div>
+          )}
+        </Draggable>
+      );
     }
 
     return (
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided, snapshot) => (
           <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style }}>
-            <div className={`${snapshot.isDragging ? 'opacity-50' : ''}`}>
+            <div {...provided.dragHandleProps} className={`${snapshot.isDragging ? 'opacity-50' : ''}`}>
               {row}
             </div>
             <div className="h-2 relative group/add z-10">
