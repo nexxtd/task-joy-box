@@ -1240,9 +1240,9 @@ const AdminDashboard = () => {
 
       {activeTab === 'tickets' && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-xl font-bold">Support Tickets ({adminTickets.length})</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Select value={ticketTypeFilter} onValueChange={setTicketTypeFilter}>
                 <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
                   <SelectValue placeholder="Type" />
@@ -1286,7 +1286,7 @@ const AdminDashboard = () => {
               <p className="text-sm">No tickets submitted yet.</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
               {adminTickets
                 .filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
                 .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter)
@@ -1342,6 +1342,58 @@ const AdminDashboard = () => {
           onSendMessage={handleAdminSendMessage}
           onUserNameClick={() => activePanelTicket?.userId && handleViewUserData(activePanelTicket.userId)}
           sending={sendingAdminMessage}
+          leftPanel={
+            <div className="flex flex-col h-full max-h-[85vh]">
+              <div className="px-4 py-3 border-b border-border flex-shrink-0">
+                <h3 className="text-sm font-bold">Quick Actions</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-3 border-b border-border">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Scripts</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'Acknowledgement', text: `Hi ${activePanelTicket.userName || 'there'},\n\nThank you for reaching out! We've received your ${activePanelTicket.type || 'support'} ticket and our team is reviewing it now.\n\nWe'll get back to you as soon as possible.\n\nBest regards,\nSupport Team` },
+                      { label: 'Need More Info', text: `Hi ${activePanelTicket.userName || 'there'},\n\nCould you please provide a bit more detail about the issue you're experiencing? Screenshots or steps to reproduce the problem would be very helpful.\n\nThank you!` },
+                      { label: 'Issue Acknowledged', text: `Hi ${activePanelTicket.userName || 'there'},\n\nWe've identified the issue you reported and our engineering team is actively working on a fix. We'll keep you updated on the progress.\n\nThank you for your patience!` },
+                      { label: 'Mark as Resolved', text: `Hi ${activePanelTicket.userName || 'there'},\n\nThis issue has been resolved in our latest update. Please refresh your browser and let us know if you're still experiencing any problems.\n\nBest regards,\nSupport Team` },
+                      { label: 'Closing Ticket', text: `Hi ${activePanelTicket.userName || 'there'},\n\nSince we haven't heard back, we're closing this ticket. If you need further assistance, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team` },
+                    ].map((script, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleAdminSendMessage(script.text)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-xs"
+                      >
+                        {script.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-3">
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Guide</p>
+                  <div className="space-y-3">
+                    {[
+                      { title: 'Handling Bug Reports', items: ['Reproduce the issue first', 'Check if it\'s a known bug', 'Escalate to engineering if needed', 'Update user with timeline'] },
+                      { title: 'Processing Refunds', items: ['Verify subscription status', 'Check payment history', 'Process via Stripe dashboard', 'Confirm with user'] },
+                      { title: 'Account Issues', items: ['Verify user identity', 'Check account status', 'Review recent changes', 'Apply fix or escalate'] },
+                      { title: 'Feature Requests', items: ['Log in feedback tracker', 'Check if already planned', 'Respond with roadmap info', 'Tag product team'] },
+                    ].map((section, i) => (
+                      <div key={i}>
+                        <p className="text-xs font-semibold mb-1">{section.title}</p>
+                        <ul className="space-y-0.5">
+                          {section.items.map((item, j) => (
+                            <li key={j} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                              <span className="mt-1 w-1 h-1 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
         />
       )}
 

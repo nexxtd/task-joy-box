@@ -35,6 +35,7 @@ interface Props {
   onSendMessage: (text: string) => Promise<void>;
   onUserNameClick?: () => void;
   sending?: boolean;
+  leftPanel?: React.ReactNode;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -54,6 +55,7 @@ export const TicketConversation: React.FC<Props> = ({
   onSendMessage,
   onUserNameClick,
   sending = false,
+  leftPanel,
 }) => {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -84,9 +86,14 @@ export const TicketConversation: React.FC<Props> = ({
   const headerLabel = viewAs === 'admin' ? ticket.userName || 'User' : 'Support Team';
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[400px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col"
-      style={{ maxHeight: '520px' }}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+    <div className="fixed bottom-4 right-4 z-50 flex gap-3" style={{ maxHeight: '85vh' }}>
+      {leftPanel && (
+        <div className="w-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          {leftPanel}
+        </div>
+      )}
+      <div className={`${leftPanel ? 'w-[420px]' : 'w-[400px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col`}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-mono text-muted-foreground flex-shrink-0">#{ticket.id}</span>
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>
@@ -172,6 +179,7 @@ export const TicketConversation: React.FC<Props> = ({
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
