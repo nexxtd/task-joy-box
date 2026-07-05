@@ -580,7 +580,7 @@ const Tasks: React.FC = () => {
   }, [filtered.active, projects, board.columns]);
 
   const matchingCount = filtered.active.length + filtered.completed.length;
-  const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
+  const openTask = useMemo(() => openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null, [openTaskId, board.tasks]);
 
   const templateEditTask = useMemo(() => {
     if (!editingTemplateMeta) return null;
@@ -1219,6 +1219,9 @@ const Tasks: React.FC = () => {
     const subtaskCount = task.subtasks?.length || 0;
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+    const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+    const dueTimeWarning = task.dueDate ? getDueTimeWarning(task) : null;
+    const dueDateClass = dueTimeWarning === 'overdue' ? 'bg-destructive/10 text-destructive' : dueTimeWarning === 'imminent' || dueTimeWarning === 'soon' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-muted text-muted-foreground';
     const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
     return (
@@ -1310,16 +1313,7 @@ const Tasks: React.FC = () => {
                   setDateEditField(prev => prev === 'due' ? null : 'due');
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  task.dueDate
-                    ? (() => {
-                        const warning = getDueTimeWarning(task);
-                        return warning === 'overdue'
-                          ? 'bg-destructive/10 text-destructive'
-                          : warning === 'imminent' || warning === 'soon'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            : 'bg-muted text-muted-foreground';
-                      })()
-                    : 'bg-muted text-muted-foreground'
+                  task.dueDate ? dueDateClass : 'bg-muted text-muted-foreground'
                 }`}
               >
                 <Calendar className="w-2.5 h-2.5" />
@@ -1330,14 +1324,11 @@ const Tasks: React.FC = () => {
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
-              {subtaskCount > 0 && (() => {
-                const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
-                return (
+              {subtaskCount > 0 && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                     {subtaskDone}/{subtaskCount} sub task
                   </span>
-                );
-              })()}
+              )}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
