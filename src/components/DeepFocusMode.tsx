@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -819,6 +819,62 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
           {selectedTask && (
             <div className="space-y-5">
+              <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Priority</span>
+                    <p className="font-medium text-foreground capitalize">{selectedTask.priority || 'None'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Duration</span>
+                    <p className="font-medium text-foreground">{selectedTask.duration || 0} min</p>
+                  </div>
+                  {selectedTask.projectName && (
+                    <div>
+                      <span className="text-muted-foreground">Project</span>
+                      <p className="font-medium text-foreground">{selectedTask.projectName}</p>
+                    </div>
+                  )}
+                  {selectedTask.columnId && (
+                    <div>
+                      <span className="text-muted-foreground">Column</span>
+                      <p className="font-medium text-foreground">{selectedTask.columnId}</p>
+                    </div>
+                  )}
+                </div>
+                {(selectedTask.startDate || selectedTask.dueDate) && (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {selectedTask.startDate && (
+                      <div>
+                        <span className="text-muted-foreground">Start</span>
+                        <p className="font-medium text-foreground">{selectedTask.startDate}{selectedTask.startTime ? ` ${selectedTask.startTime}` : ''}</p>
+                      </div>
+                    )}
+                    {selectedTask.dueDate && (
+                      <div>
+                        <span className="text-muted-foreground">Due</span>
+                        <p className="font-medium text-foreground">{selectedTask.dueDate}{selectedTask.dueTime ? ` ${selectedTask.dueTime}` : ''}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {selectedTask.description && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Description</span>
+                    <p className="font-medium text-foreground whitespace-pre-line mt-0.5">{selectedTask.description}</p>
+                  </div>
+                )}
+                {selectedTask.labels && selectedTask.labels.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTask.labels.map((label: any) => (
+                      <span key={label.id} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                        {label.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
@@ -975,6 +1031,45 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                 </div>
               </div>
+
+              {(selectedTask.attachments?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {(selectedTask.attachments || []).map((att: any) => {
+                      const isServerAtt = /^\d+$/.test(String(att.id));
+                      const href = isServerAtt ? `/api/attachments/file/${att.id}` : att.fileUrl;
+                      return (
+                        <a key={att.id} href={href} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors text-xs">
+                          <Paperclip className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate text-foreground">{att.fileName}</span>
+                          {att.fileSize && <span className="text-muted-foreground ml-auto flex-shrink-0">{(att.fileSize / 1024).toFixed(1)} KB</span>}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(selectedTask.images?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(selectedTask.images || []).map((img: any) => (
+                      <div key={img.id} className="relative aspect-square rounded-lg border border-border bg-muted/40 overflow-hidden">
+                        {img.fileUrl?.match(/^data:image/) ? (
+                          <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><Image className="w-6 h-6 text-muted-foreground" /></div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4">
+                          <p className="text-[10px] font-medium text-white truncate">{img.fileName}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

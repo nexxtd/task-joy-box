@@ -395,6 +395,7 @@ const Tasks: React.FC = () => {
   const [newChecklistItems, setNewChecklistItems] = useState<{id: string; text: string}[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null; moveType: 'column' | 'project' } | null>(null);
@@ -985,6 +986,7 @@ const Tasks: React.FC = () => {
     setNewChecklistText('');
     setNewFiles([]);
     setNewTaskLabels([]);
+    setNewTaskImages([]);
   };
 
   const createTask = async () => {
@@ -1034,6 +1036,7 @@ const Tasks: React.FC = () => {
         fileUrl: attachmentUrls[i],
         createdAt: new Date().toISOString(),
       })),
+      images: newTaskImages,
       completed: false,
       completedAt: undefined,
     });
@@ -2359,6 +2362,68 @@ const Tasks: React.FC = () => {
                   />
                   <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Images</label>
+                {!isPremium ? (
+                  <div className="border border-dashed border-border rounded-xl">
+                    <PremiumGate
+                      title="Image Attachments"
+                      description="Upload images directly to your tasks."
+                      icon={<Image className="w-6 h-6 text-primary" />}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="group relative mt-1">
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                            <Image className="w-5 h-5 text-primary" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground">Click to upload</p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                        </div>
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                          if (!e.target.files) return;
+                          const files = Array.from(e.target.files);
+                          const newImgs: Attachment[] = [];
+                          for (const file of files) {
+                            const fileUrl = await imageToDataUrl(file);
+                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                            newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          }
+                          setNewTaskImages(prev => [...prev, ...newImgs]);
+                          e.target.value = '';
+                        }} className="hidden" />
+                      </label>
+                    </div>
+                    {newTaskImages.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+                        {newTaskImages.map(img => (
+                          <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                            {img.fileUrl.match(/^data:image/) ? (
+                              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                              <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                              {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                            </div>
+                            <button
+                              onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
+                              className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="space-y-2">

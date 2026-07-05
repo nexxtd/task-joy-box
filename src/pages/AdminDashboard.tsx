@@ -21,8 +21,13 @@ import {
   Bell,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Send,
-  Loader2
+  Loader2,
+  BookOpen,
+  FileText,
+  Zap,
+  User
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -324,6 +329,12 @@ const AdminDashboard = () => {
   const [ticketFilter, setTicketFilter] = useState<string>('all');
   const [ticketSort, setTicketSort] = useState<string>('newest');
   const [ticketTypeFilter, setTicketTypeFilter] = useState<string>('all');
+  const [adminPanelTab, setAdminPanelTab] = useState<'guide' | 'auto-messages' | 'user-profile'>('guide');
+  const [guideExpandedCats, setGuideExpandedCats] = useState<Set<string>>(new Set(['handling-tickets']));
+  const [selectedGuide, setSelectedGuide] = useState<{ catId: string; guideId: string } | null>({ catId: 'handling-tickets', guideId: 'ht-overview' });
+  const [autoMsgExpandedCats, setAutoMsgExpandedCats] = useState<Set<string>>(new Set(['acknowledgement']));
+  const [selectedAutoMsg, setSelectedAutoMsg] = useState<{ catId: string; msgId: string } | null>({ catId: 'acknowledgement', msgId: 'ack-welcome' });
+  const [profileExpandedCats, setProfileExpandedCats] = useState<Set<string>>(new Set(['overview']));
 
   const fetchTickets = async () => {
     try {
@@ -1344,53 +1355,401 @@ const AdminDashboard = () => {
           sending={sendingAdminMessage}
           leftPanel={
             <div className="flex flex-col h-full max-h-[85vh]">
-              <div className="px-4 py-3 border-b border-border flex-shrink-0">
-                <h3 className="text-sm font-bold">Quick Actions</h3>
+              <div className="flex border-b border-border flex-shrink-0">
+                {[
+                  { id: 'guide' as const, label: 'Guide', icon: BookOpen },
+                  { id: 'auto-messages' as const, label: 'Auto Messages', icon: Zap },
+                  { id: 'user-profile' as const, label: 'User Profile', icon: User },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setAdminPanelTab(tab.id);
+                      if (tab.id === 'user-profile' && activePanelTicket?.userId && !userFullDetails) {
+                        handleViewUserData(activePanelTicket.userId);
+                      }
+                    }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-3 text-xs font-semibold transition-colors border-b-2 ${
+                      adminPanelTab === tab.id
+                        ? 'border-primary text-primary bg-primary/5'
+                        : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-3 border-b border-border">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Scripts</p>
-                  <div className="space-y-1.5">
-                    {[
-                      { label: 'Acknowledgement', text: `Hi ${activePanelTicket.userName || 'there'},\n\nThank you for reaching out! We've received your ${activePanelTicket.type || 'support'} ticket and our team is reviewing it now.\n\nWe'll get back to you as soon as possible.\n\nBest regards,\nSupport Team` },
-                      { label: 'Need More Info', text: `Hi ${activePanelTicket.userName || 'there'},\n\nCould you please provide a bit more detail about the issue you're experiencing? Screenshots or steps to reproduce the problem would be very helpful.\n\nThank you!` },
-                      { label: 'Issue Acknowledged', text: `Hi ${activePanelTicket.userName || 'there'},\n\nWe've identified the issue you reported and our engineering team is actively working on a fix. We'll keep you updated on the progress.\n\nThank you for your patience!` },
-                      { label: 'Mark as Resolved', text: `Hi ${activePanelTicket.userName || 'there'},\n\nThis issue has been resolved in our latest update. Please refresh your browser and let us know if you're still experiencing any problems.\n\nBest regards,\nSupport Team` },
-                      { label: 'Closing Ticket', text: `Hi ${activePanelTicket.userName || 'there'},\n\nSince we haven't heard back, we're closing this ticket. If you need further assistance, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team` },
-                    ].map((script, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleAdminSendMessage(script.text)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors text-xs"
-                      >
-                        {script.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="p-3">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground mb-2">Guide</p>
-                  <div className="space-y-3">
-                    {[
-                      { title: 'Handling Bug Reports', items: ['Reproduce the issue first', 'Check if it\'s a known bug', 'Escalate to engineering if needed', 'Update user with timeline'] },
-                      { title: 'Processing Refunds', items: ['Verify subscription status', 'Check payment history', 'Process via Stripe dashboard', 'Confirm with user'] },
-                      { title: 'Account Issues', items: ['Verify user identity', 'Check account status', 'Review recent changes', 'Apply fix or escalate'] },
-                      { title: 'Feature Requests', items: ['Log in feedback tracker', 'Check if already planned', 'Respond with roadmap info', 'Tag product team'] },
-                    ].map((section, i) => (
-                      <div key={i}>
-                        <p className="text-xs font-semibold mb-1">{section.title}</p>
-                        <ul className="space-y-0.5">
-                          {section.items.map((item, j) => (
-                            <li key={j} className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-                              <span className="mt-1 w-1 h-1 rounded-full bg-muted-foreground/40 flex-shrink-0" />
-                              {item}
-                            </li>
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {adminPanelTab === 'guide' && (
+                  <div className="flex flex-1 overflow-hidden">
+                    <div className="w-56 border-r border-border overflow-y-auto flex-shrink-0">
+                      {[
+                        { id: 'handling-tickets', label: 'Handling Tickets', guides: [
+                          { id: 'ht-overview', title: 'Overview' },
+                          { id: 'ht-response-time', title: 'Response Time' },
+                          { id: 'ht-escalation', title: 'Escalation Process' },
+                          { id: 'ht-priorities', title: 'Ticket Priorities' },
+                        ]},
+                        { id: 'bug-reports', label: 'Bug Reports', guides: [
+                          { id: 'br-triage', title: 'Triage Steps' },
+                          { id: 'br-reproduce', title: 'Reproducing Issues' },
+                          { id: 'br-communication', title: 'User Communication' },
+                        ]},
+                        { id: 'account-issues', label: 'Account Issues', guides: [
+                          { id: 'ai-verification', title: 'Identity Verification' },
+                          { id: 'ai-subscription', title: 'Subscription Issues' },
+                          { id: 'ai-billing', title: 'Billing Problems' },
+                          { id: 'ai-data-request', title: 'Data Requests' },
+                        ]},
+                        { id: 'feature-requests', label: 'Feature Requests', guides: [
+                          { id: 'fr-evaluation', title: 'Evaluating Requests' },
+                          { id: 'fr-roadmap', title: 'Roadmap Communication' },
+                          { id: 'fr-feedback', title: 'Collecting Feedback' },
+                        ]},
+                        { id: 'refund-policy', label: 'Refund Policy', guides: [
+                          { id: 'rp-eligibility', title: 'Eligibility Criteria' },
+                          { id: 'rp-process', title: 'Processing Refunds' },
+                          { id: 'rp-disputes', title: 'Handling Disputes' },
+                        ]},
+                      ].map(cat => (
+                        <div key={cat.id}>
+                          <button
+                            onClick={() => setGuideExpandedCats(prev => { const next = new Set(prev); next.has(cat.id) ? next.delete(cat.id) : next.add(cat.id); return next; })}
+                            className="w-full text-left px-3 py-2.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            {cat.label}
+                            {guideExpandedCats.has(cat.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {guideExpandedCats.has(cat.id) && cat.guides.map(guide => (
+                            <button
+                              key={guide.id}
+                              onClick={() => setSelectedGuide({ catId: cat.id, guideId: guide.id })}
+                              className={`w-full text-left px-4 py-2 text-xs border-b border-border/30 transition-colors flex items-center gap-1.5 ${
+                                selectedGuide?.guideId === guide.id
+                                  ? 'bg-primary/10 text-primary font-medium'
+                                  : 'text-foreground hover:bg-muted'
+                              }`}
+                            >
+                              <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-50" />
+                              {guide.title}
+                            </button>
                           ))}
-                        </ul>
-                      </div>
-                    ))}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      {selectedGuide ? (
+                        <div>
+                          <h3 className="text-sm font-bold text-foreground mb-3">
+                            {(() => {
+                              const cats = [
+                                { id: 'handling-tickets', guides: [{ id: 'ht-overview', title: 'Overview' }, { id: 'ht-response-time', title: 'Response Time' }, { id: 'ht-escalation', title: 'Escalation Process' }, { id: 'ht-priorities', title: 'Ticket Priorities' }] },
+                                { id: 'bug-reports', guides: [{ id: 'br-triage', title: 'Triage Steps' }, { id: 'br-reproduce', title: 'Reproducing Issues' }, { id: 'br-communication', title: 'User Communication' }] },
+                                { id: 'account-issues', guides: [{ id: 'ai-verification', title: 'Identity Verification' }, { id: 'ai-subscription', title: 'Subscription Issues' }, { id: 'ai-billing', title: 'Billing Problems' }, { id: 'ai-data-request', title: 'Data Requests' }] },
+                                { id: 'feature-requests', guides: [{ id: 'fr-evaluation', title: 'Evaluating Requests' }, { id: 'fr-roadmap', title: 'Roadmap Communication' }, { id: 'fr-feedback', title: 'Collecting Feedback' }] },
+                                { id: 'refund-policy', guides: [{ id: 'rp-eligibility', title: 'Eligibility Criteria' }, { id: 'rp-process', title: 'Processing Refunds' }, { id: 'rp-disputes', title: 'Handling Disputes' }] },
+                              ];
+                              return cats.find(c => c.id === selectedGuide.catId)?.guides.find(g => g.id === selectedGuide.guideId)?.title || '';
+                            })()}
+                          </h3>
+                          <div className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                            {(() => {
+                              const guideContent: Record<string, string> = {
+                                'ht-overview': 'When a user submits a ticket, respond within 24 hours. Always acknowledge their issue first before diving into troubleshooting.\n\nKey principles:\n- Be empathetic and professional\n- Ask clarifying questions early\n- Set clear expectations about resolution time\n- Document everything in the ticket',
+                                'ht-response-time': 'Target response times:\n\n• Urgent (app down): 2 hours\n• High (feature broken): 4 hours\n• Medium (workaround exists): 24 hours\n• Low (enhancement): 48 hours\n\nAlways update the ticket status if you need more time. Users appreciate transparency.',
+                                'ht-escalation': 'Escalate to engineering when:\n\n1. You cannot reproduce the issue\n2. The bug is in core functionality\n3. Data loss is involved\n4. Security vulnerability is reported\n\nUse the #support-escalations Slack channel. Include the ticket ID, steps to reproduce, and your findings.',
+                                'ht-priorities': 'Priority levels:\n\n🔴 Urgent: App unusable, data loss, security issue\n🟠 High: Key feature broken, no workaround\n🟡 Medium: Feature impaired but workaround exists\n🟢 Low: Enhancement, cosmetic issue\n\nAlways match the user\'s perceived severity with appropriate priority.',
+                                'br-triage': 'Bug report triage steps:\n\n1. Read the full ticket carefully\n2. Check if it\'s a known issue (search bug tracker)\n3. Try to reproduce the bug\n4. Note browser, OS, and device info\n5. Assign priority level\n6. Tag the relevant team',
+                                'br-reproduce': 'To reproduce a bug:\n\n1. Ask for specific steps if not provided\n2. Test on the same browser/OS if possible\n3. Check if it happens with different accounts\n4. Try clearing cache/cookies\n5. Test in incognito mode\n6. Document exact steps that trigger the bug',
+                                'br-communication': 'When communicating about bugs:\n\n• Thank the user for reporting\n• Explain what you\'re doing to investigate\n• Give a timeline if possible\n• Don\'t promise a fix date unless confirmed\n• Update them when there\'s progress\n• Close with next steps',
+                                'ai-verification': 'Before making account changes:\n\n1. Verify user identity via email\n2. Confirm the email on file\n3. Ask for recent activity details\n4. Check account creation date\n5. Verify subscription status\n\nNever share one user\'s data with another.',
+                                'ai-subscription': 'Common subscription issues:\n\n• Cancelled but still charged → Check billing cycle\n• Can\'t upgrade → Clear cache, try different browser\n• Missing features → Verify tier, refresh app\n• Proration questions → Explain billing logic',
+                                'ai-billing': 'Billing problem resolution:\n\n1. Check payment history in Stripe\n2. Verify the charge amount and date\n3. Look for failed payment retries\n4. Check if coupons were applied\n5. Escalate to finance if needed\n\nAlways provide the transaction ID.',
+                                'ai-data-request': 'Data requests (GDPR/CCPA):\n\n• Data export: Process within 30 days\n• Account deletion: Confirm with user first\n• Data correction: Verify and update\n• Portability: Provide in JSON format\n\nLog all requests in the compliance tracker.',
+                                'fr-evaluation': 'When evaluating feature requests:\n\n1. Check if it\'s already planned\n2. Assess the number of users who want it\n3. Consider implementation complexity\n4. Look at competitor offerings\n5. Tag product team for review',
+                                'fr-roadmap': 'Communicating roadmap:\n\n• Never share specific dates\n• Mention if it\'s planned, exploring, or not planned\n• Offer workarounds when available\n• Thank them for the suggestion\n• Add them to the update list if appropriate',
+                                'fr-feedback': 'Collecting quality feedback:\n\n• Ask "what problem does this solve?"\n• Get specific use cases\n• Understand their current workflow\n• Check if it aligns with product vision\n• Document for product team review',
+                                'rp-eligibility': 'Refund eligibility:\n\n• Within 14 days of purchase: Full refund\n• Annual plan (first 30 days): Full refund\n• Annual plan (after 30 days): Prorated\n• Monthly plan: Refund for current month\n• Violation of terms: No refund',
+                                'rp-process': 'Processing a refund:\n\n1. Verify eligibility criteria\n2. Process via Stripe dashboard\n3. Send confirmation email\n4. Update ticket status\n5. Note the refund in the ticket\n6. Follow up in 3-5 business days',
+                                'rp-disputes': 'Handling refund disputes:\n\n• Listen to the user\'s concern\n• Review the case objectively\n• Offer alternatives (credit, downgrade)\n• Escalate to management if needed\n• Document the resolution\n• Update policies if needed',
+                              };
+                              return guideContent[selectedGuide.guideId] || 'Select a guide topic from the left sidebar to view detailed instructions and best practices.';
+                            })()}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Select a topic from the left.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {adminPanelTab === 'auto-messages' && (
+                  <div className="flex flex-1 overflow-hidden">
+                    <div className="w-56 border-r border-border overflow-y-auto flex-shrink-0">
+                      {[
+                        { id: 'acknowledgement', label: 'Acknowledgement', messages: [
+                          { id: 'ack-welcome', title: 'Welcome Message' },
+                          { id: 'ack-received', title: 'Ticket Received' },
+                          { id: 'ack-followup', title: 'Follow Up' },
+                        ]},
+                        { id: 'investigation', label: 'Investigation', messages: [
+                          { id: 'inv-more-info', title: 'Need More Info' },
+                          { id: 'inv-status', title: 'Status Update' },
+                          { id: 'inv-escalated', title: 'Escalated' },
+                        ]},
+                        { id: 'resolution', label: 'Resolution', messages: [
+                          { id: 'res-fixed', title: 'Issue Fixed' },
+                          { id: 'res-workaround', title: 'Workaround Provided' },
+                          { id: 'res-by design', title: 'By Design' },
+                        ]},
+                        { id: 'closing', label: 'Closing', messages: [
+                          { id: 'close-resolved', title: 'Mark as Resolved' },
+                          { id: 'close-no-reply', title: 'No Reply Close' },
+                          { id: 'close-thank', title: 'Thank You' },
+                        ]},
+                      ].map(cat => (
+                        <div key={cat.id}>
+                          <button
+                            onClick={() => setAutoMsgExpandedCats(prev => { const next = new Set(prev); next.has(cat.id) ? next.delete(cat.id) : next.add(cat.id); return next; })}
+                            className="w-full text-left px-3 py-2.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            {cat.label}
+                            {autoMsgExpandedCats.has(cat.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {autoMsgExpandedCats.has(cat.id) && cat.messages.map(msg => (
+                            <button
+                              key={msg.id}
+                              onClick={() => setSelectedAutoMsg({ catId: cat.id, msgId: msg.id })}
+                              className={`w-full text-left px-4 py-2 text-xs border-b border-border/30 transition-colors flex items-center gap-1.5 ${
+                                selectedAutoMsg?.msgId === msg.id
+                                  ? 'bg-primary/10 text-primary font-medium'
+                                  : 'text-foreground hover:bg-muted'
+                              }`}
+                            >
+                              <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-50" />
+                              {msg.title}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+                      {selectedAutoMsg ? (
+                        <>
+                          <div className="flex-1">
+                            <h3 className="text-sm font-bold text-foreground mb-3">
+                              {(() => {
+                                const cats = [
+                                  { id: 'acknowledgement', messages: [{ id: 'ack-welcome', title: 'Welcome Message' }, { id: 'ack-received', title: 'Ticket Received' }, { id: 'ack-followup', title: 'Follow Up' }] },
+                                  { id: 'investigation', messages: [{ id: 'inv-more-info', title: 'Need More Info' }, { id: 'inv-status', title: 'Status Update' }, { id: 'inv-escalated', title: 'Escalated' }] },
+                                  { id: 'resolution', messages: [{ id: 'res-fixed', title: 'Issue Fixed' }, { id: 'res-workaround', title: 'Workaround Provided' }, { id: 'res-by design', title: 'By Design' }] },
+                                  { id: 'closing', messages: [{ id: 'close-resolved', title: 'Mark as Resolved' }, { id: 'close-no-reply', title: 'No Reply Close' }, { id: 'close-thank', title: 'Thank You' }] },
+                                ];
+                                return cats.find(c => c.id === selectedAutoMsg.catId)?.messages.find(m => m.id === selectedAutoMsg.msgId)?.title || '';
+                              })()}
+                            </h3>
+                            <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs text-muted-foreground leading-relaxed whitespace-pre-line">
+                              {(() => {
+                                const userName = activePanelTicket?.userName || 'there';
+                                const msgTemplates: Record<string, string> = {
+                                  'ack-welcome': `Hi ${userName},\n\nWelcome to our support! We've received your ticket and our team is reviewing it now.\n\nWe typically respond within 24 hours. If your issue is urgent, please reply with "URGENT" and we'll prioritize your case.\n\nBest regards,\nSupport Team`,
+                                  'ack-received': `Hi ${userName},\n\nThank you for reaching out! We've received your ${activePanelTicket?.type || 'support'} ticket and our team is reviewing it now.\n\nWe'll get back to you as soon as possible.\n\nBest regards,\nSupport Team`,
+                                  'ack-followup': `Hi ${userName},\n\nJust checking in on your recent ticket. Have you been able to try the suggestions we provided?\n\nLet us know if you need any further assistance!\n\nBest regards,\nSupport Team`,
+                                  'inv-more-info': `Hi ${userName},\n\nCould you please provide a bit more detail about the issue you're experiencing? Screenshots or steps to reproduce the problem would be very helpful.\n\nThank you!`,
+                                  'inv-status': `Hi ${userName},\n\nWe wanted to give you a quick update on your ticket. Our team is actively investigating the issue and we'll have more information for you soon.\n\nThank you for your patience!`,
+                                  'inv-escalated': `Hi ${userName},\n\nWe've identified the issue you reported and our engineering team is actively working on a fix. We'll keep you updated on the progress.\n\nThank you for your patience!`,
+                                  'res-fixed': `Hi ${userName},\n\nThis issue has been resolved in our latest update. Please refresh your browser and let us know if you're still experiencing any problems.\n\nBest regards,\nSupport Team`,
+                                  'res-workaround': `Hi ${userName},\n\nWe've found a temporary workaround for your issue:\n\n[Describe workaround here]\n\nOur engineering team is working on a permanent fix. We'll notify you once it's available.\n\nBest regards,\nSupport Team`,
+                                  'res-by design': `Hi ${userName},\n\nThank you for your feedback! After reviewing your request, we found that this behavior is working as designed.\n\nHowever, we've logged your suggestion for future consideration. Thank you for helping us improve!\n\nBest regards,\nSupport Team`,
+                                  'close-resolved': `Hi ${userName},\n\nSince this issue has been resolved, we're closing this ticket. If you experience any further problems, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team`,
+                                  'close-no-reply': `Hi ${userName},\n\nSince we haven't heard back, we're closing this ticket. If you need further assistance, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team`,
+                                  'close-thank': `Hi ${userName},\n\nThank you for using our support! We're glad we could help resolve your issue.\n\nIf you have any other questions, don't hesitate to reach out.\n\nBest regards,\nSupport Team`,
+                                };
+                                return msgTemplates[selectedAutoMsg.msgId] || 'Select a message template to preview it here.';
+                              })()}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const userName = activePanelTicket?.userName || 'there';
+                              const msgTemplates: Record<string, string> = {
+                                'ack-welcome': `Hi ${userName},\n\nWelcome to our support! We've received your ticket and our team is reviewing it now.\n\nWe typically respond within 24 hours. If your issue is urgent, please reply with "URGENT" and we'll prioritize your case.\n\nBest regards,\nSupport Team`,
+                                'ack-received': `Hi ${userName},\n\nThank you for reaching out! We've received your ${activePanelTicket?.type || 'support'} ticket and our team is reviewing it now.\n\nWe'll get back to you as soon as possible.\n\nBest regards,\nSupport Team`,
+                                'ack-followup': `Hi ${userName},\n\nJust checking in on your recent ticket. Have you been able to try the suggestions we provided?\n\nLet us know if you need any further assistance!\n\nBest regards,\nSupport Team`,
+                                'inv-more-info': `Hi ${userName},\n\nCould you please provide a bit more detail about the issue you're experiencing? Screenshots or steps to reproduce the problem would be very helpful.\n\nThank you!`,
+                                'inv-status': `Hi ${userName},\n\nWe wanted to give you a quick update on your ticket. Our team is actively investigating the issue and we'll have more information for you soon.\n\nThank you for your patience!`,
+                                'inv-escalated': `Hi ${userName},\n\nWe've identified the issue you reported and our engineering team is actively working on a fix. We'll keep you updated on the progress.\n\nThank you for your patience!`,
+                                'res-fixed': `Hi ${userName},\n\nThis issue has been resolved in our latest update. Please refresh your browser and let us know if you're still experiencing any problems.\n\nBest regards,\nSupport Team`,
+                                'res-workaround': `Hi ${userName},\n\nWe've found a temporary workaround for your issue:\n\n[Describe workaround here]\n\nOur engineering team is working on a permanent fix. We'll notify you once it's available.\n\nBest regards,\nSupport Team`,
+                                'res-by design': `Hi ${userName},\n\nThank you for your feedback! After reviewing your request, we found that this behavior is working as designed.\n\nHowever, we've logged your suggestion for future consideration. Thank you for helping us improve!\n\nBest regards,\nSupport Team`,
+                                'close-resolved': `Hi ${userName},\n\nSince this issue has been resolved, we're closing this ticket. If you experience any further problems, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team`,
+                                'close-no-reply': `Hi ${userName},\n\nSince we haven't heard back, we're closing this ticket. If you need further assistance, feel free to open a new ticket anytime.\n\nBest regards,\nSupport Team`,
+                                'close-thank': `Hi ${userName},\n\nThank you for using our support! We're glad we could help resolve your issue.\n\nIf you have any other questions, don't hesitate to reach out.\n\nBest regards,\nSupport Team`,
+                              };
+                              const text = msgTemplates[selectedAutoMsg.msgId];
+                              if (text) handleAdminSendMessage(text);
+                            }}
+                            className="mt-3 w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-xs font-semibold hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            Send Message
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Select a message template from the left.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {adminPanelTab === 'user-profile' && (
+                  <div className="flex flex-1 overflow-hidden">
+                    {!userFullDetails ? (
+                      <div className="flex-1 flex items-center justify-center">
+                        <div className="text-center">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mx-auto mb-2" />
+                          <p className="text-xs text-muted-foreground">Loading user data...</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-56 border-r border-border overflow-y-auto flex-shrink-0">
+                          {[
+                            { id: 'overview', label: 'Overview', items: [
+                              { id: 'ov-summary', title: 'Account Summary' },
+                              { id: 'ov-tier', title: 'Subscription Tier' },
+                            ]},
+                            { id: 'tasks-stats', label: 'Tasks', items: [
+                              { id: 'ts-total', title: 'Total Tasks' },
+                              { id: 'ts-completed', title: 'Completed' },
+                              { id: 'ts-checklists', title: 'Checklists Used' },
+                              { id: 'ts-attachments', title: 'Attachments' },
+                              { id: 'ts-deep-focus', title: 'Deep Focus Sessions' },
+                            ]},
+                            { id: 'projects-stats', label: 'Projects', items: [
+                              { id: 'ps-boards', title: 'Boards Created' },
+                              { id: 'ps-whiteboards', title: 'Whiteboards' },
+                            ]},
+                            { id: 'goals-stats', label: 'Goals', items: [
+                              { id: 'gs-total', title: 'Goals Created' },
+                              { id: 'gs-completed', title: 'Goals Completed' },
+                            ]},
+                            { id: 'habits-stats', label: 'Habits', items: [
+                              { id: 'hs-total', title: 'Habits Created' },
+                              { id: 'hs-completions', title: 'Total Completions' },
+                              { id: 'hs-streak', title: 'Highest Streak' },
+                            ]},
+                            { id: 'notes-stats', label: 'Notes', items: [
+                              { id: 'ns-total', title: 'Notes Created' },
+                              { id: 'ns-tags', title: 'Tags Created' },
+                              { id: 'ns-pinned', title: 'Pinned Notes' },
+                            ]},
+                            { id: 'ai-stats', label: 'AI Assistant', items: [
+                              { id: 'as-messages', title: 'Total Messages' },
+                            ]},
+                          ].map(cat => (
+                            <div key={cat.id}>
+                              <button
+                                onClick={() => setProfileExpandedCats(prev => { const next = new Set(prev); next.has(cat.id) ? next.delete(cat.id) : next.add(cat.id); return next; })}
+                                className="w-full text-left px-3 py-2.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              >
+                                {cat.label}
+                                {profileExpandedCats.has(cat.id) ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                              {profileExpandedCats.has(cat.id) && cat.items.map(item => (
+                                <button
+                                  key={item.id}
+                                  onClick={() => {}}
+                                  className="w-full text-left px-4 py-2 text-xs border-b border-border/30 transition-colors flex items-center gap-1.5 text-foreground hover:bg-muted"
+                                >
+                                  <ChevronRight className="w-3 h-3 flex-shrink-0 opacity-50" />
+                                  {item.title}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                {(userFullDetails.user?.name || '?')[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-foreground">{userFullDetails.user?.name}</p>
+                                <p className="text-xs text-muted-foreground">{userFullDetails.user?.email}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { label: 'Tasks', value: userFullDetails.stats?.tasks },
+                                { label: 'Goals', value: userFullDetails.stats?.goals },
+                                { label: 'Habits', value: userFullDetails.stats?.habits },
+                              ].map(s => (
+                                <div key={s.label} className="bg-muted/50 rounded-xl p-2.5 text-center">
+                                  <p className="text-lg font-bold text-foreground">{s.value ?? 0}</p>
+                                  <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {[
+                              { id: 'tasks', label: 'Tasks', items: [
+                                { label: 'Total tasks', value: userFullDetails.featureUsage?.tasks?.total },
+                                { label: 'Completed', value: userFullDetails.featureUsage?.tasks?.completed },
+                                { label: 'Checklists', value: userFullDetails.featureUsage?.tasks?.checklists },
+                                { label: 'Attachments', value: userFullDetails.featureUsage?.tasks?.attachments },
+                                { label: 'Deep focus sessions', value: userFullDetails.featureUsage?.tasks?.deepFocusSessions },
+                              ]},
+                              { id: 'projects', label: 'Projects', items: [
+                                { label: 'Boards', value: userFullDetails.featureUsage?.projects?.boards },
+                                { label: 'Whiteboards', value: userFullDetails.featureUsage?.projects?.whiteboards },
+                              ]},
+                              { id: 'goals', label: 'Goals', items: [
+                                { label: 'Goals created', value: userFullDetails.featureUsage?.goals?.total },
+                                { label: 'Goals completed', value: userFullDetails.featureUsage?.goals?.completed },
+                              ]},
+                              { id: 'habits', label: 'Habits', items: [
+                                { label: 'Habits created', value: userFullDetails.featureUsage?.habits?.total },
+                                { label: 'Total completions', value: userFullDetails.featureUsage?.habits?.totalCompletions },
+                                { label: 'Highest streak', value: userFullDetails.featureUsage?.habits?.highestStreak },
+                              ]},
+                              { id: 'notes', label: 'Notes', items: [
+                                { label: 'Notes created', value: userFullDetails.featureUsage?.notes?.total },
+                                { label: 'Tags created', value: userFullDetails.featureUsage?.notes?.tags },
+                                { label: 'Pinned notes', value: userFullDetails.featureUsage?.notes?.pinned },
+                              ]},
+                              { id: 'ai', label: 'AI Assistant', items: [
+                                { label: 'Total AI messages', value: userFullDetails.featureUsage?.ai?.totalMessages },
+                              ]},
+                            ].map(section => (
+                              <div key={section.id} className="border border-border rounded-xl overflow-hidden">
+                                <button
+                                  onClick={() => setExpandedUsage(prev => { const next = new Set(prev); next.has(section.id) ? next.delete(section.id) : next.add(section.id); return next; })}
+                                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold hover:bg-muted transition-colors"
+                                >
+                                  {section.label}
+                                  {expandedUsage.has(section.id) ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                                </button>
+                                {expandedUsage.has(section.id) && (
+                                  <div className="border-t border-border divide-y divide-border/50">
+                                    {section.items.map((item, i) => (
+                                      <div key={i} className="flex items-center justify-between px-3 py-1.5">
+                                        <span className="text-[11px] text-muted-foreground">{item.label}</span>
+                                        <span className="text-[11px] font-bold text-foreground">{item.value ?? 0}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           }
