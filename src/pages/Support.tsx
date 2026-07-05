@@ -20,6 +20,24 @@ const TYPE_TOASTS: Record<string, string> = {
 const FAQsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [selected, setSelected] = useState(FAQS[0].id);
   const current = FAQS.find(f => f.id === selected)!;
+
+  const FAQ_ICONS: Record<string, string> = {
+    'create-task': '📋',
+    'use-calendar': '📅',
+    'set-goal': '🎯',
+    'deep-focus': '🧠',
+    'how-habits-work': '🔄',
+    'free-vs-premium': '💎',
+    'delete-row': '🗑️',
+    'create-whiteboard': '🎨',
+    'ai-assistant': '🤖',
+    'track-habit': '✅',
+    'connect-tasks-goals': '🔗',
+    'deep-focus-mode': '🔍',
+    'schedule-calendar': '📆',
+    'create-subtasks': '📑',
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
@@ -34,25 +52,40 @@ const FAQsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </button>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-72 border-r border-border overflow-y-auto flex-shrink-0">
-          {FAQS.map(faq => (
+        <div className="w-80 border-r border-border overflow-y-auto flex-shrink-0 p-3 space-y-1.5">
+          {FAQS.map((faq, index) => (
             <button
               key={faq.id}
               onClick={() => setSelected(faq.id)}
-              className={`w-full text-left px-5 py-3.5 text-sm border-b border-border/50 transition-colors flex items-center justify-between gap-2 ${
+              className={`w-full text-left px-4 py-3.5 rounded-xl text-sm transition-all flex items-center gap-3 ${
                 selected === faq.id
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-foreground hover:bg-muted'
+                  ? 'bg-primary/10 text-primary font-medium shadow-sm border border-primary/20'
+                  : 'text-foreground hover:bg-muted/60 border border-transparent'
               }`}
             >
-              <span className="leading-snug">{faq.question}</span>
-              {selected === faq.id && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
+              <span className="text-lg flex-shrink-0 w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center">
+                {FAQ_ICONS[faq.id] || `${index + 1}`}
+              </span>
+              <span className="leading-snug flex-1">{faq.question}</span>
+              {selected === faq.id && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0 text-primary" />}
             </button>
           ))}
         </div>
         <div className="flex-1 overflow-y-auto p-8">
-          <h2 className="text-xl font-bold text-foreground mb-4">{current.question}</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.answer}</p>
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-3xl">{FAQ_ICONS[current.id] || '❓'}</span>
+              <h2 className="text-2xl font-bold text-foreground">{current.question}</h2>
+            </div>
+            <div className="rounded-2xl border border-border bg-muted/20 p-6">
+              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.answer}</p>
+            </div>
+            <div className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Was this helpful?</span>
+              <button className="px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors font-medium">Yes</button>
+              <button className="px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 transition-colors font-medium">No</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
