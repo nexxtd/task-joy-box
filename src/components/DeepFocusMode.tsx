@@ -200,6 +200,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
+  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
@@ -522,6 +523,14 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     setNewChecklistText('');
   }, [addChecklistItemToBoard, focusChecklists, newChecklistText, selectedTask, taskChecklists, updateTask]);
 
+  const addChecklistItemToList = useCallback((listId: string) => {
+    if (!selectedTask) return;
+    const text = (perChecklistInput[listId] ?? '').trim();
+    if (!text) return;
+    addChecklistItemToBoard(selectedTask.id, listId, text);
+    setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
+  }, [addChecklistItemToBoard, perChecklistInput, selectedTask]);
+
   const handleDeepFocusReorder = useCallback((result: DropResult) => {
     if (!result.destination || !selectedTask) return;
     if (result.source.droppableId === 'deepfocus-subtasks') {
@@ -653,7 +662,28 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
             <div className="mb-4">
               <h4 className="text-xs font-semibold text-foreground mb-2">Checklist</h4>
-              {focusChecklistItems.length > 0 ? (
+              {focusChecklists.length > 0 ? (
+                <div className="space-y-2 mb-2">
+                  {focusChecklists.map(list => (
+                    <div key={list.id} className="rounded-lg border border-border/60 bg-muted/20 p-2">
+                      <p className="text-[11px] font-semibold text-foreground mb-1">{list.title}</p>
+                      {list.items.length === 0 && <p className="text-[10px] text-muted-foreground">No items yet</p>}
+                      {list.items.map(item => (
+                        <div key={item.id} className="flex items-center gap-2 text-sm py-0.5">
+                          <SquareToggle
+                            completed={item.completed}
+                            onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
+                            size="sm"
+                          />
+                          <span className={`flex-1 text-xs ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {item.text}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : focusChecklistItems.length > 0 ? (
                 <div className="space-y-1.5 mb-2">
                   {focusChecklistItems.map(item => (
                     <div key={item.id} className="flex items-center gap-2.5 text-sm py-1">
@@ -982,8 +1012,47 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                {focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-                {focusChecklistItems.length > 0 && (
+                {focusChecklists.length === 0 && focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+                {focusChecklists.map(list => (
+                  <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
+                    <div className="flex items-center px-3 py-2">
+                      <span className="text-xs font-semibold text-foreground">{list.title}</span>
+                      <span className="text-xs text-muted-foreground ml-1.5">({list.items.length})</span>
+                    </div>
+                    <div className="px-3 pb-2 space-y-1.5">
+                      {list.items.length === 0 && <p className="text-xs text-muted-foreground">No items yet</p>}
+                      {list.items.map(item => (
+                        <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                          <SquareToggle
+                            completed={item.completed}
+                            onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
+                            size="md"
+                          />
+                          <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {item.text}
+                          </span>
+                          <button
+                            onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          value={perChecklistInput[list.id] ?? ''}
+                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItemToList(list.id); } }}
+                          placeholder="Add item"
+                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                        />
+                        <button onClick={() => addChecklistItemToList(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {focusChecklistItems.length > 0 && focusChecklists.length === 0 && (
                   <DragDropContext onDragEnd={handleDeepFocusReorder}>
                     <Droppable droppableId="deepfocus-checklist">
                       {(provided) => (
@@ -1000,13 +1069,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                     onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
                                     size="md"
                                   />
-                                  <span className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                  <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                                     {item.text}
                                   </span>
                                   <button
                                     onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
                                     className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                    title="Delete item"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>

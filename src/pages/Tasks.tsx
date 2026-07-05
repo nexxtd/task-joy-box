@@ -394,6 +394,12 @@ const Tasks: React.FC = () => {
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);
   const [newChecklistItems, setNewChecklistItems] = useState<{id: string; text: string}[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
+  const [newChecklistLists, setNewChecklistLists] = useState<{id: string; title: string; items: {id: string; text: string; completed: boolean}[]}[]>([]);
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
+  const [collapsedDraftChecklists, setCollapsedDraftChecklists] = useState<Set<string>>(new Set());
+  const [editingDraftChecklistId, setEditingDraftChecklistId] = useState<string | null>(null);
+  const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
@@ -948,6 +954,19 @@ const Tasks: React.FC = () => {
     setNewChecklistText('');
   };
 
+  const addDraftChecklist = () => {
+    if (!newChecklistTitle.trim()) return;
+    setNewChecklistLists(prev => [...prev, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }]);
+    setNewChecklistTitle('');
+  };
+
+  const addDraftChecklistItem = (listId: string) => {
+    const text = perChecklistInput[listId] ?? '';
+    if (!text.trim()) return;
+    setNewChecklistLists(prev => prev.map(l => l.id === listId ? { ...l, items: [...l.items, { id: crypto.randomUUID(), text: text.trim(), completed: false }] } : l));
+    setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
+  };
+
   const handleDraftReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
     if (result.source.droppableId === 'draft-subtasks') {
@@ -984,6 +1003,10 @@ const Tasks: React.FC = () => {
     setNewSubtaskDuration(10);
     setNewChecklistItems([]);
     setNewChecklistText('');
+    setNewChecklistLists([]);
+    setNewChecklistTitle('');
+    setPerChecklistInput({});
+    setCollapsedDraftChecklists(new Set());
     setNewFiles([]);
     setNewTaskLabels([]);
     setNewTaskImages([]);
@@ -1000,6 +1023,15 @@ const Tasks: React.FC = () => {
       text: item.text,
       completed: false,
     }));
+
+    const allChecklists = [
+      ...(checklistItems.length ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }] : []),
+      ...newChecklistLists.map(l => ({
+        id: l.id,
+        title: l.title,
+        items: l.items.map(it => ({ id: it.id, text: it.text, completed: false })),
+      })),
+    ];
 
     const attachmentUrls = newFiles.length > 0
       ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
@@ -1024,9 +1056,7 @@ const Tasks: React.FC = () => {
         durationMinutes: st.durationMinutes,
       })),
       labels: newTaskLabels,
-      checklists: checklistItems.length
-        ? [{ id: crypto.randomUUID(), title: 'Checklist', items: checklistItems }]
-        : [],
+      checklists: allChecklists,
       attachments: newFiles.map((file, i) => ({
         id: crypto.randomUUID(),
         taskId,
@@ -2314,53 +2344,131 @@ const Tasks: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Checklist</label>
-                <DragDropContext onDragEnd={handleDraftReorder}>
-                  <Droppable droppableId="draft-checklist">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                        {newChecklistItems.map((item, index) => (
-                          <Draggable key={item.id} draggableId={item.id} index={index}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                {editingDraftChecklistIndex === index ? (
-                                  <input
-                                    autoFocus
-                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                    value={editingDraftChecklistText}
-                                    onChange={e => setEditingDraftChecklistText(e.target.value)}
-                                    onBlur={() => { setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText } : it)); setEditingDraftChecklistIndex(null); }}
-                                    onKeyDown={e => { if (e.key === 'Enter') { setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText } : it)); setEditingDraftChecklistIndex(null); } }}
-                                  />
-                                ) : (
-                                  <span onClick={() => { setEditingDraftChecklistIndex(index); setEditingDraftChecklistText(item.text); }} className="flex-1 cursor-text">{item.text}</span>
-                                )}
-                                <button
-                                  onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))}
-                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
+                {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+                {newChecklistItems.length > 0 && (
+                  <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                    <div className="flex items-center px-3 py-2">
+                      <span className="text-xs font-semibold text-foreground">Checklist</span>
+                    </div>
+                    <div className="px-3 pb-2 space-y-1.5">
+                      <DragDropContext onDragEnd={handleDraftReorder}>
+                        <Droppable droppableId="draft-checklist">
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                              {newChecklistItems.map((item, index) => (
+                                <Draggable key={item.id} draggableId={item.id} index={index}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                        <GripVertical className="w-4 h-4" />
+                                      </div>
+                                      <SquareToggle completed={false} onClick={() => {}} size="md" />
+                                      <span className="flex-1">{item.text}</span>
+                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          value={newChecklistText}
+                          onChange={e => setNewChecklistText(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
+                          placeholder="Add checklist item"
+                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                        />
+                        <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                       </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
+                    </div>
+                  </div>
+                )}
+                {newChecklistLists.map(list => {
+                  const isCollapsed = collapsedDraftChecklists.has(list.id);
+                  return (
+                    <div key={list.id} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                      <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                        <button
+                          onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                          className="flex-1 flex items-center gap-2 text-left"
+                        >
+                          {editingDraftChecklistId === list.id ? (
+                            <input
+                              autoFocus
+                              className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                              value={editingDraftChecklistTitle}
+                              onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                              onBlur={() => {
+                                if (editingDraftChecklistTitle.trim()) {
+                                  setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                }
+                                setEditingDraftChecklistId(null);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  if (editingDraftChecklistTitle.trim()) {
+                                    setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                  }
+                                  setEditingDraftChecklistId(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                              {list.title}
+                            </span>
+                          )}
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                            {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                      {!isCollapsed && (
+                        <div className="px-3 pb-2 space-y-1.5">
+                          {list.items.map(item => (
+                            <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                              <SquareToggle completed={item.completed} onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} size="md" />
+                              <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.text}</span>
+                              <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="flex gap-2 pt-1">
+                            <input
+                              value={perChecklistInput[list.id] ?? ''}
+                              onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
+                              placeholder="Add checklist item"
+                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                            />
+                            <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="flex gap-2">
                   <input
-                    value={newChecklistText}
-                    onChange={e => setNewChecklistText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
+                    value={newChecklistTitle}
+                    onChange={e => setNewChecklistTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
+                    placeholder="New checklist name"
                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                    placeholder="Checklist item"
                   />
-                  <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                  <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
                 </div>
               </div>
 
