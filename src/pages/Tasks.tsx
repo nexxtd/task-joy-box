@@ -4269,7 +4269,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <button
                   onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
                   disabled={!newChecklistTitle.trim()}
-                  className="px-4 py-2 text-xs font-semibold bg-foreground text-background rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg disabled:opacity-50"
                 >
                   Add checklist
                 </button>
