@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -177,7 +177,7 @@ function playCompletionBeep(ctx: AudioContext) {
 }
 
 const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
-  const { board, updateTask, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem, deleteChecklistItem } = useBoardContext();
+  const { board, updateTask, addChecklist, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem, deleteChecklistItem } = useBoardContext();
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(propTask || null);
   const [activePill, setActivePill] = useState<Pill>('30');
@@ -200,7 +200,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
+  const [collapsedDraftChecklists, setCollapsedDraftChecklists] = useState<Set<string>>(new Set());
+  const [editingDraftChecklistId, setEditingDraftChecklistId] = useState<string | null>(null);
+  const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
@@ -530,6 +535,49 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     addChecklistItemToBoard(selectedTask.id, listId, text);
     setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
   }, [addChecklistItemToBoard, perChecklistInput, selectedTask]);
+
+  const addNamedChecklist = useCallback(() => {
+    if (!selectedTask || !newChecklistTitle.trim()) return;
+    addChecklist(selectedTask.id, newChecklistTitle.trim());
+    setNewChecklistTitle('');
+  }, [addChecklist, newChecklistTitle, selectedTask]);
+
+  const addNamedChecklistItem = useCallback((listId: string) => {
+    if (!selectedTask) return;
+    const text = (perChecklistInput[listId] ?? '').trim();
+    if (!text) return;
+    addChecklistItemToBoard(selectedTask.id, listId, text);
+    setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
+  }, [addChecklistItemToBoard, perChecklistInput, selectedTask]);
+
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (!selectedTask || files.length === 0) return;
+    const uploaded: any[] = [];
+    for (const file of files) {
+      uploaded.push({
+        id: crypto.randomUUID(),
+        taskId: selectedTask.id,
+        fileName: file.name,
+        fileType: file.type || 'application/octet-stream',
+        fileSize: file.size,
+        fileUrl: await fileToDataUrl(file),
+        createdAt: new Date().toISOString(),
+      });
+    }
+    if (uploaded.length > 0) {
+      updateTask(selectedTask.id, { attachments: [...(selectedTask.attachments || []), ...uploaded] });
+    }
+    e.currentTarget.value = '';
+  }, [selectedTask, updateTask]);
 
   const handleDeepFocusReorder = useCallback((result: DropResult) => {
     if (!result.destination || !selectedTask) return;
@@ -906,6 +954,58 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </div>
 
               <div className="space-y-3">
+                <button
+                  onClick={toggleSound}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
+                    soundEnabled
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  {soundEnabled ? 'Sound On' : 'Sound Off'}
+                </button>
+
+                {soundEnabled && showSoundPicker && (
+                  <div className="flex gap-2 flex-wrap">
+                    {SOUND_OPTIONS.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => selectSound(opt.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                          selectedSound === opt.id
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                {!isRunning ? (
+                  <button
+                    onClick={timeLeft < totalSecs && totalSecs > 0 && timeLeft > 0 ? handleResume : handleStartSession}
+                    className="w-full py-3 bg-foreground text-background rounded-xl font-semibold text-sm hover:opacity-90 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Play className="w-4 h-4" />
+                    {timeLeft < totalSecs && timeLeft > 0 ? 'Resume Session' : 'Start Session'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePause}
+                    className="w-full py-3 bg-muted text-muted-foreground rounded-xl font-semibold text-sm hover:bg-muted/80 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Pause className="w-4 h-4" />
+                    Pause
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
                   {taskDurMins > 0 && (
@@ -965,7 +1065,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   <input
                                     type="number"
                                     min={0}
-                                    className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                    className="w-12 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
                                     value={sub.durationMinutes || 0}
                                     onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
                                   />
@@ -990,7 +1090,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   </Droppable>
                 </DragDropContext>
 
-                <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <div className="grid grid-cols-[1fr_70px_auto] gap-2">
                   <input
                     value={newSubtaskText}
                     onChange={e => setNewSubtaskText(e.target.value)}
@@ -1013,45 +1113,95 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
                 {focusChecklists.length === 0 && focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-                {focusChecklists.map(list => (
-                  <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                    <div className="flex items-center px-3 py-2">
-                      <span className="text-xs font-semibold text-foreground">{list.title}</span>
-                      <span className="text-xs text-muted-foreground ml-1.5">({list.items.length})</span>
-                    </div>
-                    <div className="px-3 pb-2 space-y-1.5">
-                      {list.items.length === 0 && <p className="text-xs text-muted-foreground">No items yet</p>}
-                      {list.items.map(item => (
-                        <div key={item.id} className="flex items-center gap-2.5 text-sm group">
-                          <SquareToggle
-                            completed={item.completed}
-                            onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
-                            size="md"
-                          />
-                          <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                            {item.text}
-                          </span>
+                {focusChecklists.map(list => {
+                  const isCollapsed = collapsedDraftChecklists.has(list.id);
+                  return (
+                    <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                      <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                        <button
+                          onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                          className="flex-1 flex items-center gap-2 text-left"
+                        >
+                          {editingDraftChecklistId === list.id ? (
+                            <input
+                              autoFocus
+                              className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                              value={editingDraftChecklistTitle}
+                              onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                              onBlur={() => {
+                                if (editingDraftChecklistTitle.trim()) {
+                                  updateTask(selectedTask.id, {
+                                    checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                  });
+                                }
+                                setEditingDraftChecklistId(null);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  if (editingDraftChecklistTitle.trim()) {
+                                    updateTask(selectedTask.id, {
+                                      checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                    });
+                                  }
+                                  setEditingDraftChecklistId(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                              {list.title}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">({list.items.length})</span>
+                        </button>
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                            onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                          <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                            {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
-                      ))}
-                      <div className="flex gap-2 pt-1">
-                        <input
-                          value={perChecklistInput[list.id] ?? ''}
-                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addChecklistItemToList(list.id); } }}
-                          placeholder="Add item"
-                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
-                        />
-                        <button onClick={() => addChecklistItemToList(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                       </div>
+                      {!isCollapsed && (
+                        <div className="px-3 pb-2 space-y-1.5">
+                          {list.items.length === 0 && <p className="text-xs text-muted-foreground">No items yet</p>}
+                          {list.items.map(item => (
+                            <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                              <SquareToggle
+                                completed={item.completed}
+                                onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
+                                size="md"
+                              />
+                              <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                {item.text}
+                              </span>
+                              <button
+                                onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
+                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="flex gap-2 pt-1">
+                            <input
+                              value={perChecklistInput[list.id] ?? ''}
+                              onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
+                              placeholder="Add item"
+                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                            />
+                            <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {focusChecklistItems.length > 0 && focusChecklists.length === 0 && (
                   <DragDropContext onDragEnd={handleDeepFocusReorder}>
                     <Droppable droppableId="deepfocus-checklist">
@@ -1098,11 +1248,36 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   />
                   <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                 </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newChecklistTitle}
+                    onChange={e => setNewChecklistTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
+                    placeholder="New checklist name"
+                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                  />
+                  <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                </div>
               </div>
 
-              {(selectedTask.attachments?.length ?? 0) > 0 && (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs font-medium !bg-[#000] !text-white px-3 py-1.5 rounded-lg"
+                  >
+                    Add file
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </div>
+                {(selectedTask.attachments?.length ?? 0) > 0 ? (
                   <div className="grid grid-cols-1 gap-2">
                     {(selectedTask.attachments || []).map((att: any) => {
                       const isServerAtt = /^\d+$/.test(String(att.id));
@@ -1116,8 +1291,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       );
                     })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-muted-foreground">No files attached yet</p>
+                )}
+              </div>
 
               {(selectedTask.images?.length ?? 0) > 0 && (
                 <div className="space-y-2">
@@ -1140,58 +1317,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               )}
             </div>
           )}
-
-          <div>
-            {!isRunning ? (
-              <button
-                onClick={timeLeft < totalSecs && totalSecs > 0 && timeLeft > 0 ? handleResume : handleStartSession}
-                className="w-full py-3 bg-foreground text-background rounded-xl font-semibold text-sm hover:opacity-90 flex items-center justify-center gap-2 transition-all"
-              >
-                <Play className="w-4 h-4" />
-                {timeLeft < totalSecs && timeLeft > 0 ? 'Resume Session' : 'Start Session'}
-              </button>
-            ) : (
-              <button
-                onClick={handlePause}
-                className="w-full py-3 bg-muted text-muted-foreground rounded-xl font-semibold text-sm hover:bg-muted/80 flex items-center justify-center gap-2 transition-all"
-              >
-                <Pause className="w-4 h-4" />
-                Pause
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={toggleSound}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
-                soundEnabled
-                  ? 'bg-primary/10 border-primary/30 text-primary'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              {soundEnabled ? 'Sound On' : 'Sound Off'}
-            </button>
-
-            {soundEnabled && showSoundPicker && (
-              <div className="flex gap-2 flex-wrap">
-                {SOUND_OPTIONS.map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => selectSound(opt.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                      selectedSound === opt.id
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           <div className="rounded-xl p-4 bg-muted/30">
             <h3 className="text-xs font-semibold mb-3 text-foreground">Today's Progress</h3>

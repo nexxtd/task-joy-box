@@ -323,7 +323,6 @@ const AdminDashboard = () => {
   const [activePanelTicket, setActivePanelTicket] = useState<any | null>(null);
   const [panelMessages, setPanelMessages] = useState<any[]>([]);
   const [sendingAdminMessage, setSendingAdminMessage] = useState(false);
-  const [userDataPanel, setUserDataPanel] = useState<any | null>(null);
   const [userFullDetails, setUserFullDetails] = useState<any | null>(null);
   const [expandedUsage, setExpandedUsage] = useState<Set<string>>(new Set());
   const [ticketFilter, setTicketFilter] = useState<string>('all');
@@ -394,14 +393,10 @@ const AdminDashboard = () => {
   };
 
   const handleViewUserData = async (userId: number) => {
-    setUserDataPanel({ loading: true });
     try {
       const res = await fetch(`/api/admin/users/${userId}/full-details`, { credentials: 'include' });
       if (res.ok) setUserFullDetails(await res.json());
-      setUserDataPanel({ open: true });
-    } catch {
-      setUserDataPanel(null);
-    }
+    } catch {}
   };
 
   const TYPE_COLORS: Record<string, string> = {
@@ -1351,7 +1346,12 @@ const AdminDashboard = () => {
           onClose={() => { setActivePanelTicket(null); setPanelMessages([]); }}
           onCloseTicket={handleCloseTicket}
           onSendMessage={handleAdminSendMessage}
-          onUserNameClick={() => activePanelTicket?.userId && handleViewUserData(activePanelTicket.userId)}
+          onUserNameClick={() => {
+            setAdminPanelTab('user-profile');
+            if (activePanelTicket?.userId && !userFullDetails) {
+              handleViewUserData(activePanelTicket.userId);
+            }
+          }}
           sending={sendingAdminMessage}
           leftPanel={
             <div className="flex flex-col h-full max-h-[85vh]">
@@ -1756,101 +1756,6 @@ const AdminDashboard = () => {
         />
       )}
 
-      {userDataPanel?.open && userFullDetails && userFullDetails.user && (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-end" onClick={() => { setUserDataPanel(null); setUserFullDetails(null); }}>
-        <div className="w-[440px] h-full bg-card overflow-y-auto shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-card z-10">
-            <h2 className="text-base font-bold">User Details</h2>
-            <button onClick={() => { setUserDataPanel(null); setUserFullDetails(null); }} className="p-1 hover:bg-muted rounded-lg transition-colors">
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-          <div className="p-6 space-y-5 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                {(userFullDetails.user.name || '?')[0].toUpperCase()}
-              </div>
-              <div>
-                <p className="font-bold text-foreground">{userFullDetails.user.name}</p>
-                <p className="text-sm text-muted-foreground">{userFullDetails.user.email}</p>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${userFullDetails.user.tier === 'premium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : userFullDetails.user.tier === 'pro' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-muted text-muted-foreground'}`}>
-                  {userFullDetails.user.tier}
-                </span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Tasks', value: userFullDetails.stats.tasks },
-                { label: 'Goals', value: userFullDetails.stats.goals },
-                { label: 'Habits', value: userFullDetails.stats.habits },
-              ].map(s => (
-                <div key={s.label} className="bg-muted/50 rounded-xl p-3 text-center">
-                  <p className="text-xl font-bold text-foreground">{s.value}</p>
-                  <p className="text-xs text-muted-foreground">{s.label}</p>
-                </div>
-              ))}
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Feature Usage</p>
-              {[
-                { id: 'tasks', label: 'Tasks', items: [
-                  { label: 'Total tasks', value: userFullDetails.featureUsage.tasks.total },
-                  { label: 'Completed', value: userFullDetails.featureUsage.tasks.completed },
-                  { label: 'Checklists', value: userFullDetails.featureUsage.tasks.checklists },
-                  { label: 'Attachments', value: userFullDetails.featureUsage.tasks.attachments },
-                  { label: 'Deep focus sessions', value: userFullDetails.featureUsage.tasks.deepFocusSessions },
-                ]},
-                { id: 'projects', label: 'Projects', items: [
-                  { label: 'Boards', value: userFullDetails.featureUsage.projects.boards },
-                  { label: 'Whiteboards', value: userFullDetails.featureUsage.projects.whiteboards },
-                ]},
-                { id: 'goals', label: 'Goals', items: [
-                  { label: 'Goals created', value: userFullDetails.featureUsage.goals.total },
-                  { label: 'Goals completed', value: userFullDetails.featureUsage.goals.completed },
-                ]},
-                { id: 'habits', label: 'Habits', items: [
-                  { label: 'Habits created', value: userFullDetails.featureUsage.habits.total },
-                  { label: 'Total completions', value: userFullDetails.featureUsage.habits.totalCompletions },
-                  { label: 'Highest streak', value: userFullDetails.featureUsage.habits.highestStreak },
-                ]},
-                { id: 'notes', label: 'Notes', items: [
-                  { label: 'Notes created', value: userFullDetails.featureUsage.notes.total },
-                  { label: 'Tags created', value: userFullDetails.featureUsage.notes.tags },
-                  { label: 'Pinned notes', value: userFullDetails.featureUsage.notes.pinned },
-                ]},
-                { id: 'whiteboard', label: 'Whiteboard', items: [
-                  { label: 'Whiteboards created', value: userFullDetails.featureUsage.whiteboard.whiteboardsCreated },
-                  ...Object.entries(userFullDetails.featureUsage.whiteboard.items || {}).map(([k, v]) => ({ label: k, value: v as number })),
-                ]},
-                { id: 'ai', label: 'AI Assistant', items: [
-                  { label: 'Total AI messages', value: userFullDetails.featureUsage.ai.totalMessages },
-                ]},
-              ].map(section => (
-                <div key={section.id} className="border border-border rounded-xl overflow-hidden mb-2">
-                  <button
-                    onClick={() => setExpandedUsage(prev => { const next = new Set(prev); next.has(section.id) ? next.delete(section.id) : next.add(section.id); return next; })}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold hover:bg-muted transition-colors"
-                  >
-                    {section.label}
-                    {expandedUsage.has(section.id) ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                  {expandedUsage.has(section.id) && (
-                    <div className="border-t border-border divide-y divide-border/50">
-                      {section.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between px-4 py-2">
-                          <span className="text-xs text-muted-foreground">{item.label}</span>
-                          <span className="text-xs font-bold text-foreground">{item.value ?? 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )}
     </div>
   );
 };
