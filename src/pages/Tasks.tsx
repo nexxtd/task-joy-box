@@ -3721,6 +3721,11 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       const [removed] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, removed);
       persistSubtasks(items);
+    } else if (result.source.droppableId === 'fullview-checklist-lists') {
+      const items = Array.from(task.checklists);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      onUpdateTask(task.id, { checklists: items });
     } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
       const srcChecklistId = result.source.droppableId.replace('fullview-checklist-', '');
       const dstChecklistId = result.destination.droppableId.replace('fullview-checklist-', '');
@@ -4151,7 +4156,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           {!checklistsSectionCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
               {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-              <DragDropContext onDragEnd={handleChecklistListReorder}>
+              <DragDropContext onDragEnd={handleFullViewReorder}>
                 <Droppable droppableId="fullview-checklist-lists" type="checklistList">
                   {(provided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
@@ -4226,7 +4231,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                 </div>
                                 {!isCollapsed && (
                                   <div className="px-3 pb-2 space-y-1.5">
-                                    <DragDropContext onDragEnd={handleFullViewReorder}>
                                       <Droppable droppableId={"fullview-checklist-" + list.id}>
                                         {(provided) => (
                                           <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
@@ -4273,7 +4277,6 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                           </div>
                                         )}
                                       </Droppable>
-                                    </DragDropContext>
                                     <div className="flex gap-2 pt-1">
                                       <input
                                         value={perChecklistInput[list.id] ?? ''}
