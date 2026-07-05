@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
+import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
 import heic2any from 'heic2any';
@@ -3228,19 +3228,38 @@ const TaskDropdownExpanded: React.FC<{
       items.splice(result.destination.index, 0, removed);
       persistSubtasks(items);
     } else if (result.source.droppableId.startsWith(`dropdown-checklist-${task.id}-`)) {
-      const checklistId = result.source.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
-      onUpdateTask(task.id, {
-        checklists: task.checklists.map(cl =>
-          cl.id === checklistId
-            ? { ...cl, items: (() => {
-                const items = Array.from(cl.items);
-                const [removed] = items.splice(result.source.index, 1);
-                items.splice(result.destination.index, 0, removed);
-                return items;
-              })() }
+      const srcChecklistId = result.source.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
+      const dstChecklistId = result.destination.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
+
+      if (srcChecklistId === dstChecklistId) {
+        onUpdateTask(task.id, {
+          checklists: task.checklists.map(cl =>
+            cl.id === srcChecklistId
+              ? { ...cl, items: (() => {
+                  const items = Array.from(cl.items);
+                  const [removed] = items.splice(result.source.index, 1);
+                  items.splice(result.destination.index, 0, removed);
+                  return items;
+                })() }
+              : cl
+          ),
+        });
+      } else {
+        let movedItem: ChecklistItem | null = null;
+        const without = task.checklists.map(cl =>
+          cl.id === srcChecklistId
+            ? (() => { const items = Array.from(cl.items); [movedItem] = items.splice(result.source.index, 1); return { ...cl, items }; })()
             : cl
-        ),
-      });
+        );
+        if (!movedItem) return;
+        onUpdateTask(task.id, {
+          checklists: without.map(cl =>
+            cl.id === dstChecklistId
+              ? { ...cl, items: [...cl.items.slice(0, result.destination!.index), movedItem!, ...cl.items.slice(result.destination!.index)] }
+              : cl
+          ),
+        });
+      }
     }
   }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
 
@@ -3703,19 +3722,38 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
       items.splice(result.destination.index, 0, removed);
       persistSubtasks(items);
     } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
-      const checklistId = result.source.droppableId.replace('fullview-checklist-', '');
-      onUpdateTask(task.id, {
-        checklists: task.checklists.map(cl =>
-          cl.id === checklistId
-            ? { ...cl, items: (() => {
-                const items = Array.from(cl.items);
-                const [removed] = items.splice(result.source.index, 1);
-                items.splice(result.destination.index, 0, removed);
-                return items;
-              })() }
+      const srcChecklistId = result.source.droppableId.replace('fullview-checklist-', '');
+      const dstChecklistId = result.destination.droppableId.replace('fullview-checklist-', '');
+
+      if (srcChecklistId === dstChecklistId) {
+        onUpdateTask(task.id, {
+          checklists: task.checklists.map(cl =>
+            cl.id === srcChecklistId
+              ? { ...cl, items: (() => {
+                  const items = Array.from(cl.items);
+                  const [removed] = items.splice(result.source.index, 1);
+                  items.splice(result.destination.index, 0, removed);
+                  return items;
+                })() }
+              : cl
+          ),
+        });
+      } else {
+        let movedItem: ChecklistItem | null = null;
+        const without = task.checklists.map(cl =>
+          cl.id === srcChecklistId
+            ? (() => { const items = Array.from(cl.items); [movedItem] = items.splice(result.source.index, 1); return { ...cl, items }; })()
             : cl
-        ),
-      });
+        );
+        if (!movedItem) return;
+        onUpdateTask(task.id, {
+          checklists: without.map(cl =>
+            cl.id === dstChecklistId
+              ? { ...cl, items: [...cl.items.slice(0, result.destination!.index), movedItem!, ...cl.items.slice(result.destination!.index)] }
+              : cl
+          ),
+        });
+      }
     }
   }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
 
