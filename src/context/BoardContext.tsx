@@ -113,6 +113,17 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (user) {
       setLoading(true);
       loadBoard(user.id).then(loaded => {
+        if (loaded.columns.length === 0) {
+          loaded = {
+            ...loaded,
+            columns: [
+              { id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' },
+              { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' },
+              { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' },
+            ],
+          };
+          saveBoard(user.id, loaded);
+        }
         setBoard(loaded);
         setLoading(false);
         setLastSyncTime(new Date());
