@@ -233,10 +233,3 @@
 .ta-result-warning {
   @apply border-l-4 border-l-gray-400;
 }
-
-[data-rfd-drag-handle-draggable-id] {
-  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1);
-}
-[data-rfd-droppable-id] {
-  transition: background-color 0.2s ease;
-}
