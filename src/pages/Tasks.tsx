@@ -983,6 +983,46 @@ const Tasks: React.FC = () => {
         items.splice(result.destination.index, 0, removed);
         return items;
       });
+    } else if (result.source.droppableId === 'draft-checklist-lists') {
+      setNewChecklistLists(prev => {
+        const items = Array.from(prev);
+        const [removed] = items.splice(result.source.index, 1);
+        items.splice(result.destination.index, 0, removed);
+        return items;
+      });
+    } else {
+      const srcListId = result.source.droppableId.replace('draft-checklist-items-', '');
+      const dstListId = result.destination.droppableId.replace('draft-checklist-items-', '');
+      if (srcListId === dstListId) {
+        setNewChecklistLists(prev => prev.map(l => {
+          if (l.id !== srcListId) return l;
+          const items = Array.from(l.items);
+          const [removed] = items.splice(result.source.index, 1);
+          items.splice(result.destination.index, 0, removed);
+          return { ...l, items };
+        }));
+      } else {
+        let movedItem: { id: string; text: string; completed: boolean } | null = null;
+        setNewChecklistLists(prev => {
+          const next = prev.map(l => {
+            if (l.id === srcListId) {
+              const items = Array.from(l.items);
+              movedItem = items.splice(result.source.index, 1)[0];
+              return { ...l, items };
+            }
+            return l;
+          });
+          if (!movedItem) return prev;
+          return next.map(l => {
+            if (l.id === dstListId) {
+              const items = Array.from(l.items);
+              items.splice(result.destination.index, 0, movedItem!);
+              return { ...l, items };
+            }
+            return l;
+          });
+        });
+      }
     }
   }, []);
 
@@ -2354,13 +2394,13 @@ const Tasks: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Checklist</label>
                 {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-                {newChecklistItems.length > 0 && (
-                  <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                    <div className="flex items-center px-3 py-2">
-                      <span className="text-xs font-semibold text-foreground">Checklist</span>
-                    </div>
-                    <div className="px-3 pb-2 space-y-1.5">
-                      <DragDropContext onDragEnd={handleDraftReorder}>
+                <DragDropContext onDragEnd={handleDraftReorder}>
+                  {newChecklistItems.length > 0 && (
+                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                      <div className="flex items-center px-3 py-2">
+                        <span className="text-xs font-semibold text-foreground">Checklist</span>
+                      </div>
+                      <div className="px-3 pb-2 space-y-1.5">
                         <Droppable droppableId="draft-checklist">
                           {(provided) => (
                             <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
@@ -2384,91 +2424,119 @@ const Tasks: React.FC = () => {
                             </div>
                           )}
                         </Droppable>
-                      </DragDropContext>
-                      <div className="flex gap-2 pt-1">
-                        <input
-                          value={newChecklistText}
-                          onChange={e => setNewChecklistText(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
-                          placeholder="Add checklist item"
-                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                        />
-                        <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {newChecklistLists.map(list => {
-                  const isCollapsed = collapsedDraftChecklists.has(list.id);
-                  return (
-                    <div key={list.id} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                      <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                        <button
-                          onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                          className="flex-1 flex items-center gap-2 text-left"
-                        >
-                          {editingDraftChecklistId === list.id ? (
-                            <input
-                              autoFocus
-                              className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                              value={editingDraftChecklistTitle}
-                              onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                              onBlur={() => {
-                                if (editingDraftChecklistTitle.trim()) {
-                                  setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                }
-                                setEditingDraftChecklistId(null);
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  if (editingDraftChecklistTitle.trim()) {
-                                    setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                  }
-                                  setEditingDraftChecklistId(null);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
-                              {list.title}
-                            </span>
-                          )}
-                        </button>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
-                            {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                          </button>
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            value={newChecklistText}
+                            onChange={e => setNewChecklistText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
+                            placeholder="Add checklist item"
+                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                          />
+                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                         </div>
                       </div>
-                      {!isCollapsed && (
-                        <div className="px-3 pb-2 space-y-1.5">
-                          {list.items.map(item => (
-                            <div key={item.id} className="flex items-center gap-2.5 text-sm group">
-                              <SquareToggle completed={item.completed} onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} size="md" />
-                              <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.text}</span>
-                              <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                          <div className="flex gap-2 pt-1">
-                            <input
-                              value={perChecklistInput[list.id] ?? ''}
-                              onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
-                              placeholder="Add checklist item"
-                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                            />
-                            <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  );
-                })}
+                  )}
+                  <Droppable droppableId="draft-checklist-lists">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                        {newChecklistLists.map((list, listIndex) => {
+                          const isCollapsed = collapsedDraftChecklists.has(list.id);
+                          return (
+                            <Draggable key={list.id} draggableId={list.id} index={listIndex}>
+                              {(provided) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                  <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mr-1">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <button
+                                      onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                                      className="flex-1 flex items-center gap-2 text-left"
+                                    >
+                                      {editingDraftChecklistId === list.id ? (
+                                        <input
+                                          autoFocus
+                                          className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                          value={editingDraftChecklistTitle}
+                                          onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                          onBlur={() => {
+                                            if (editingDraftChecklistTitle.trim()) {
+                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                            }
+                                            setEditingDraftChecklistId(null);
+                                          }}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                              if (editingDraftChecklistTitle.trim()) {
+                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                              }
+                                              setEditingDraftChecklistId(null);
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                          {list.title}
+                                        </span>
+                                      )}
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                                        {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {!isCollapsed && (
+                                    <div className="px-3 pb-2 space-y-1.5">
+                                      <Droppable droppableId={`draft-checklist-items-${list.id}`}>
+                                        {(provided) => (
+                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                            {list.items.map((item, itemIndex) => (
+                                              <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                {(provided) => (
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                      <GripVertical className="w-4 h-4" />
+                                                    </div>
+                                                    <SquareToggle completed={item.completed} onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} size="md" />
+                                                    <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.text}</span>
+                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                      <div className="flex gap-2 pt-1">
+                                        <input
+                                          value={perChecklistInput[list.id] ?? ''}
+                                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
+                                          placeholder="Add checklist item"
+                                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                        />
+                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
                 <div className="flex gap-2">
                   <input
                     value={newChecklistTitle}
