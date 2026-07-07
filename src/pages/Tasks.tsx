@@ -2411,7 +2411,7 @@ const Tasks: React.FC = () => {
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
-                                      <SquareToggle completed={false} onClick={() => {}} size="md" />
+                                      <div className="w-4 h-4 rounded border-2 border-muted-foreground/40 flex-shrink-0" />
                                       <span className="flex-1">{item.text}</span>
                                       <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -2502,8 +2502,8 @@ const Tasks: React.FC = () => {
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
-                                                    <SquareToggle completed={item.completed} onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, completed: !it.completed } : it) } : l))} size="md" />
-                                                    <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.text}</span>
+                                                    <div className="w-4 h-4 rounded border-2 border-muted-foreground/40 flex-shrink-0" />
+                                                    <span className="flex-1 text-foreground">{item.text}</span>
                                                     <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
