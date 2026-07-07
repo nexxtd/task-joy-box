@@ -2491,7 +2491,7 @@ const Tasks: React.FC = () => {
                                     </div>
                                   </div>
                                   {!isCollapsed && (
-                                    <div className="px-3 pb-2 space-y-1.5">
+                                    <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
                                       <Droppable droppableId={`draft-checklist-items-${list.id}`}>
                                         {(provided) => (
                                           <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
@@ -4471,7 +4471,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   </div>
                                 </div>
                                 {!isCollapsed && (
-                                  <div className="px-3 pb-2 space-y-1.5">
+                                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
                                       <Droppable droppableId={"fullview-checklist-" + list.id}>
                                         {(provided) => (
                                           <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">

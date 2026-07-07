@@ -1166,8 +1166,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                           </button>
                         </div>
                       </div>
-                      {!isCollapsed && (
-                        <div className="px-3 pb-2 space-y-1.5">
+                       {!isCollapsed && (
+                        <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
                           {list.items.length === 0 && <p className="text-xs text-muted-foreground">No items yet</p>}
                           {list.items.map(item => (
                             <div key={item.id} className="flex items-center gap-2.5 text-sm group">
