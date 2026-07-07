@@ -2437,7 +2437,7 @@ const Tasks: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <Droppable droppableId="draft-checklist-lists">
+                  <Droppable droppableId="draft-checklist-lists" type="checklistList">
                     {(provided) => (
                       <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                         {newChecklistLists.map((list, listIndex) => {
@@ -2492,7 +2492,7 @@ const Tasks: React.FC = () => {
                                   </div>
                                   {!isCollapsed && (
                                     <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={`draft-checklist-items-${list.id}`}>
+                                      <Droppable droppableId={`draft-checklist-items-${list.id}`} type="checklistItem">
                                         {(provided) => (
                                           <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
                                             {list.items.map((item, itemIndex) => (
@@ -4472,7 +4472,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                 </div>
                                 {!isCollapsed && (
                                   <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={"fullview-checklist-" + list.id}>
+                                      <Droppable droppableId={"fullview-checklist-" + list.id} type="checklistItem">
                                         {(provided) => (
                                           <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
                                             {list.items.map((item, index) => (
