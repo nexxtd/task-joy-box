@@ -412,6 +412,12 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
+  // Creation modal section collapse states
+  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
+  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
+  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
+  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
+
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(false);
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
   const [columnEditName, setColumnEditName] = useState('');
@@ -1856,7 +1862,7 @@ const Tasks: React.FC = () => {
                 {myTasksCollapsed
                   ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                   : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">My Tasks</span>
+                <span className="text-xs font-bold tracking-wider text-muted-foreground">My Tasks</span>
                 <span className="text-[10px] text-muted-foreground/50 ml-1">({myTasksGroup.length})</span>
               </button>
               {!myTasksCollapsed && (
@@ -1898,7 +1904,7 @@ const Tasks: React.FC = () => {
                     ? <ChevronDown className="w-3.5 h-3.5" style={{ color: project.color }} />
                     : <ChevronUp className="w-3.5 h-3.5" style={{ color: project.color }} />}
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-                  <span className="text-xs font-bold uppercase tracking-wider text-foreground">{project.name}</span>
+                  <span className="text-xs font-bold tracking-wider text-foreground">{project.name}</span>
                   <span className="text-[10px] text-muted-foreground/50 ml-1">({tasks.length})</span>
                 </button>
                 {!isProjectCollapsed && (
@@ -1924,7 +1930,7 @@ const Tasks: React.FC = () => {
                               onClick={() => { setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
                               className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
                             >
-                              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80">{column.title}</span>
+                              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
                               <span className="text-[10px] text-muted-foreground/40">({colTasks.length})</span>
                             </button>
                           </div>
@@ -2078,7 +2084,7 @@ const Tasks: React.FC = () => {
 
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Task title</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Task title</label>
                 <input
                   autoFocus
                   value={newTaskTitle}
@@ -2089,7 +2095,7 @@ const Tasks: React.FC = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
                   <Select value={newTaskPriority} onValueChange={v => setNewTaskPriority(v as Priority)}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select priority" />
@@ -2104,7 +2110,7 @@ const Tasks: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
                   <input
                     type="number"
                     min={0}
@@ -2114,7 +2120,7 @@ const Tasks: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                   <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v)); setNewTaskColumnId(''); }}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                       <SelectValue placeholder="Select project" />
@@ -2129,7 +2135,7 @@ const Tasks: React.FC = () => {
                 </div>
                 {newTaskProjectId !== '' && (
                   <div>
-                    <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1 block">Column</label>
                     <Select value={newTaskColumnId} onValueChange={v => setNewTaskColumnId(v)}>
                       <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                         <SelectValue placeholder="Select column" />
@@ -2151,7 +2157,7 @@ const Tasks: React.FC = () => {
           </div>
 
           <div className="relative">
-            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Tags</label>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
             <div className="mt-1">
               {newTaskLabels.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
@@ -2240,7 +2246,7 @@ const Tasks: React.FC = () => {
           {/* Start Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Start Date</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
               <input
                 type="date"
                 value={newTaskStartDate}
@@ -2249,7 +2255,7 @@ const Tasks: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Start Time</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Time</label>
               <input
                 type="time"
                 value={newTaskStartTime}
@@ -2262,7 +2268,7 @@ const Tasks: React.FC = () => {
           {/* Due Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Due Date</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
               <input
                 type="date"
                 value={newTaskDueDate}
@@ -2271,7 +2277,7 @@ const Tasks: React.FC = () => {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Due Time</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Time</label>
               <input
                 type="time"
                 value={newTaskDueTime}
@@ -2282,7 +2288,7 @@ const Tasks: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
                 <textarea
                   value={newTaskDescription}
                   onChange={e => setNewTaskDescription(e.target.value)}
@@ -2291,111 +2297,141 @@ const Tasks: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Sub-tasks</label>
-                  {newTaskDuration > 0 && (
-                    <span className={`text-[11px] font-medium ${
-                      newSubtaskRemaining > 0 ? 'text-muted-foreground' :
-                      newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                    }`}>
-                      {newSubtaskRemaining > 0
-                        ? `${newSubtaskRemaining} mins left`
-                        : newSubtaskRemaining < 0
-                        ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
-                        : '0 mins left ✓'}
-                    </span>
-                  )}
-                </div>
-                <DragDropContext onDragEnd={handleDraftReorder}>
-                  <Droppable droppableId="draft-subtasks">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                        {newTaskSubtasks.map((subtask, index) => (
-                          <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                {editingDraftSubtaskId === subtask.id ? (
-                                  <>
-                                    <input
-                                      autoFocus
-                                      className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                      value={editingDraftSubtaskText}
-                                      onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                      onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                      onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                    />
-                                    <input
-                                      type="number"
-                                      className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                      value={editingDraftSubtaskDuration}
-                                      onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                    />
-                                  </>
-                                ) : (
-                                  <>
-                                    <span
-                                      onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                      className="text-sm text-foreground font-medium cursor-text"
-                                    >
-                                      {subtask.text}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="number"
-                                        min={0}
-                                        className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                        value={subtask.durationMinutes || 0}
-                                        onChange={e => {
-                                          const val = Math.max(0, Number(e.target.value) || 0);
-                                          setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                        }}
-                                      />
-                                      <span className="text-[10px] text-muted-foreground">min</span>
-                                      <button
-                                        onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
+              {/* Sub-tasks Card */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                    {newTaskSubtasks.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newTaskSubtasks.length})</span>
                     )}
-                  </Droppable>
-                </DragDropContext>
-                <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                  <input
-                    value={newSubtaskText}
-                    onChange={e => setNewSubtaskText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
-                    placeholder="New sub-task"
-                    className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={newSubtaskDuration}
-                    onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                    placeholder="min"
-                    className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                  />
-                  <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-                </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {newTaskDuration > 0 && (
+                      <span className={`text-xs font-medium ${
+                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
+                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+                      }`}>
+                        {newSubtaskRemaining > 0
+                          ? `${newSubtaskRemaining} mins left`
+                          : newSubtaskRemaining < 0
+                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
+                          : '0 mins left ✓'}
+                      </span>
+                    )}
+                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </button>
+                {!draftSubtasksCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <DragDropContext onDragEnd={handleDraftReorder}>
+                      <Droppable droppableId="draft-subtasks">
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                            {newTaskSubtasks.map((subtask, index) => (
+                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    {editingDraftSubtaskId === subtask.id ? (
+                                      <>
+                                        <input
+                                          autoFocus
+                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                          value={editingDraftSubtaskText}
+                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                                          onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
+                                          onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
+                                        />
+                                        <input
+                                          type="number"
+                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                          value={editingDraftSubtaskDuration}
+                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span
+                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
+                                          className="text-sm text-foreground font-medium cursor-text"
+                                        >
+                                          {subtask.text}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                            value={subtask.durationMinutes || 0}
+                                            onChange={e => {
+                                              const val = Math.max(0, Number(e.target.value) || 0);
+                                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                                            }}
+                                          />
+                                          <span className="text-[10px] text-muted-foreground">min</span>
+                                          <button
+                                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                      <input
+                        value={newSubtaskText}
+                        onChange={e => setNewSubtaskText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
+                        placeholder="New sub-task"
+                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={newSubtaskDuration}
+                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="min"
+                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                      />
+                      <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Checklist</label>
-                {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+              {/* Checklist Card */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftChecklistCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+                    {newChecklistLists.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newChecklistLists.length})</span>
+                    )}
+                  </div>
+                  {draftChecklistCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftChecklistCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
                 <DragDropContext onDragEnd={handleDraftReorder}>
                   {newChecklistItems.length > 0 && (
                     <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
@@ -2537,136 +2573,168 @@ const Tasks: React.FC = () => {
                     )}
                   </Droppable>
                 </DragDropContext>
-                <div className="flex gap-2">
-                  <input
-                    value={newChecklistTitle}
-                    onChange={e => setNewChecklistTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
-                    placeholder="New checklist name"
-                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Images</label>
-                {!isPremium ? (
-                  <div className="border border-dashed border-border rounded-xl">
-                    <PremiumGate
-                      title="Image Attachments"
-                      description="Upload images directly to your tasks."
-                      icon={<Image className="w-6 h-6 text-primary" />}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div className="group relative mt-1">
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                        <div className="flex flex-col items-center justify-center py-4">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Image className="w-5 h-5 text-primary" />
-                          </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload</p>
-                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                        </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                          if (!e.target.files) return;
-                          const files = Array.from(e.target.files);
-                          const newImgs: Attachment[] = [];
-                          for (const file of files) {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          }
-                          setNewTaskImages(prev => [...prev, ...newImgs]);
-                          e.target.value = '';
-                        }} className="hidden" />
-                      </label>
+                    <div className="flex gap-2">
+                      <input
+                        value={newChecklistTitle}
+                        onChange={e => setNewChecklistTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
+                        placeholder="New checklist name"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
                     </div>
-                    {newTaskImages.length > 0 && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-                        {newTaskImages.map(img => (
-                          <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
-                            {img.fileUrl.match(/^data:image/) ? (
-                              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                              <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                              {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                            </div>
-                            <button
-                              onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
-                              className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Attachments</label>
-                {!isPremium ? (
-                  <div className="border border-dashed border-border rounded-xl">
-                    <PremiumGate
-                      title="File Attachments"
-                      description="Attach files, images, and documents directly to your tasks."
-                      icon={<Paperclip className="w-6 h-6 text-primary" />}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div className="group relative mt-1">
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                        <div className="flex flex-col items-center justify-center py-4">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Paperclip className="w-5 h-5 text-primary" />
-                          </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                        </div>
-                        <input
-                          type="file"
-                          multiple
-                          onChange={e => {
-                            if (!e.target.files) return;
-                            setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-                    </div>
+              {/* Attachments Card */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftAttachmentsCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
                     {newFiles.length > 0 && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                        {newFiles.map((file, fileIdx) => (
-                          <div key={`${file.name}-${fileIdx}`} className="relative group/att">
-                            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                                <Paperclip className="w-5 h-5 text-muted-foreground" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={e => { e.preventDefault(); e.stopPropagation(); setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
-                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                      <span className="text-xs text-muted-foreground">({newFiles.length})</span>
                     )}
-                  </>
+                  </div>
+                  {draftAttachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftAttachmentsCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {!isPremium ? (
+                      <div className="border border-dashed border-border rounded-xl">
+                        <PremiumGate
+                          title="File Attachments"
+                          description="Attach files, images, and documents directly to your tasks."
+                          icon={<Paperclip className="w-6 h-6 text-primary" />}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                          <div className="flex flex-col items-center justify-center py-4">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                              <Paperclip className="w-5 h-5 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                            <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                          </div>
+                          <input
+                            type="file"
+                            multiple
+                            onChange={e => {
+                              if (!e.target.files) return;
+                              setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {newFiles.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {newFiles.map((file, fileIdx) => (
+                              <div key={`${file.name}-${fileIdx}`} className="relative group/att">
+                                <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                  <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                    <Paperclip className="w-5 h-5 text-muted-foreground" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={e => { e.preventDefault(); e.stopPropagation(); setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
+                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Images Card */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftImagesCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {newTaskImages.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newTaskImages.length})</span>
+                    )}
+                  </div>
+                  {draftImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftImagesCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {!isPremium ? (
+                      <div className="border border-dashed border-border rounded-xl">
+                        <PremiumGate
+                          title="Image Attachments"
+                          description="Upload images directly to your tasks."
+                          icon={<Image className="w-6 h-6 text-primary" />}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                          <div className="flex flex-col items-center justify-center py-4">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                              <Image className="w-5 h-5 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">Click to upload</p>
+                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                          </div>
+                          <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                            if (!e.target.files) return;
+                            const files = Array.from(e.target.files);
+                            const newImgs: Attachment[] = [];
+                            for (const file of files) {
+                              const fileUrl = await imageToDataUrl(file);
+                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                            }
+                            setNewTaskImages(prev => [...prev, ...newImgs]);
+                            e.target.value = '';
+                          }} className="hidden" />
+                        </label>
+                        {newTaskImages.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {newTaskImages.map(img => (
+                              <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                                {img.fileUrl.match(/^data:image/) ? (
+                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                                </div>
+                                <button
+                                  onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
+                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -2756,7 +2824,7 @@ const Tasks: React.FC = () => {
                 </div>
               )}
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
                   placeholder="e.g. Daily Standup Task"
@@ -3138,11 +3206,11 @@ const Tasks: React.FC = () => {
                 <button onClick={() => setColumnEditId(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Name</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Name</label>
                 <input value={columnEditName} onChange={e => setColumnEditName(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Color</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Color</label>
                 <div className="flex flex-wrap gap-2">
                   {COLUMN_COLORS.map(c => (
                     <button key={c} onClick={() => setColumnEditColor(c)} className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${columnEditColor === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`} style={{ backgroundColor: c }} />
@@ -3150,7 +3218,7 @@ const Tasks: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Icon</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Icon</label>
                 <div className="flex gap-2">
                   <input value={columnEditIcon} onChange={e => setColumnEditIcon(e.target.value)} placeholder="e.g. 📋 or 🚀" className="flex-1 bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm" />
                   <button onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">Save</button>
@@ -3614,7 +3682,7 @@ const TaskDropdownExpanded: React.FC<{
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1.5">Description</h4>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-1.5">Description</h4>
         <textarea
           value={task.description}
           onChange={e => onUpdateTask(task.id, { description: e.target.value })}
@@ -4428,7 +4496,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           <div className="flex-1 min-w-0">
             {editingTemplateMeta && (
               <div className="mb-2">
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Template name</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
                 <input
                   className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   value={templateEditName || ''}
@@ -4450,7 +4518,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Priority</label>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
             <Select value={task.priority} onValueChange={v => onUpdateTask(task.id, { priority: v as Priority })}>
               <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                 <SelectValue placeholder="Select priority" />
@@ -4465,7 +4533,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </Select>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
             <input
               type="number"
               min={0}
@@ -4476,7 +4544,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
               <Select value={task.projectId ? String(task.projectId) : 'my-tasks'} onValueChange={v => {
                 const newId = v === 'my-tasks' ? null : Number(v);
                 if (newId !== task.projectId) {
@@ -4496,7 +4564,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
             {task.projectId && (
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Column</label>
                 <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
                   <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="Column" />
@@ -4517,7 +4585,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <Calendar className="w-3 h-3" /> Start
             </label>
             <div className="flex items-center gap-2 mt-1">
@@ -4542,7 +4610,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <Calendar className="w-3 h-3" /> End
             </label>
             <div className="flex items-center gap-2 mt-1">
@@ -4569,7 +4637,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
           <textarea
             value={task.description}
             onChange={e => onUpdateTask(task.id, { description: e.target.value })}
@@ -5258,7 +5326,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
             <div className="px-5 py-5 space-y-4">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
                   placeholder="e.g. Daily Standup Task"
@@ -5457,20 +5525,20 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
             </div>
             <div className="px-5 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Template name</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input value={editingTmplName} onChange={e => setEditingTmplName(e.target.value)} placeholder="Template name" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Title</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Title</label>
                 <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Task title" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
               </div>
               <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Description</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>
                 <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Priority</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Priority</label>
                   <select value={editingTmplPriority} onChange={e => setEditingTmplPriority(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all">
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -5479,27 +5547,27 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Duration (min)</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Duration (min)</label>
                   <input type="number" min={0} value={editingTmplDuration} onChange={e => setEditingTmplDuration(Math.max(0, Number(e.target.value) || 0))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Start date</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Start date</label>
                   <input type="date" value={editingTmplStartDate} onChange={e => setEditingTmplStartDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Start time</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Start time</label>
                   <input type="time" value={editingTmplStartTime} onChange={e => setEditingTmplStartTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Due date</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Due date</label>
                   <input type="date" value={editingTmplDueDate} onChange={e => setEditingTmplDueDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold uppercase text-muted-foreground mb-1.5 block">Due time</label>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Due time</label>
                   <input type="time" value={editingTmplDueTime} onChange={e => setEditingTmplDueTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
                 </div>
               </div>

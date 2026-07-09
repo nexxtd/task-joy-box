@@ -385,7 +385,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
         <div className="p-5 space-y-5">
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Task title</label>
+            <label className="text-xs font-semibold text-muted-foreground">Task title</label>
             <input
               autoFocus
               value={newTaskTitle}
@@ -396,7 +396,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
+              <label className="text-xs font-semibold text-muted-foreground">Priority</label>
               <Select value={newTaskPriority} onValueChange={value => setNewTaskPriority(value as Priority)}>
                 <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                   <SelectValue placeholder="Select priority" />
@@ -412,7 +412,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Estimated duration (minutes)</label>
+              <label className="text-xs font-semibold text-muted-foreground">Estimated duration (minutes)</label>
               <input
                 type="number"
                 min={0}
@@ -423,7 +423,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Project</label>
+              <label className="text-xs font-semibold text-muted-foreground">Project</label>
               <Select
                 value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)}
                 onValueChange={value => setNewTaskProjectId(value === 'my-tasks' ? '' : Number(value))}
@@ -449,7 +449,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           {/* Start Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Date</label>
+              <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
               <input
                 type="date"
                 value={newTaskStartDate}
@@ -458,7 +458,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               />
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Start Time</label>
+              <label className="text-xs font-semibold text-muted-foreground">Start Time</label>
               <input
                 type="time"
                 value={newTaskStartTime}
@@ -471,7 +471,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           {/* Due Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Date</label>
+              <label className="text-xs font-semibold text-muted-foreground">Due Date</label>
               <input
                 type="date"
                 value={newTaskDueDate}
@@ -481,7 +481,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Due Time</label>
+              <label className="text-xs font-semibold text-muted-foreground">Due Time</label>
               <input
                 type="time"
                 value={newTaskDueTime}
@@ -492,7 +492,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Description</label>
+            <label className="text-xs font-semibold text-muted-foreground">Description</label>
             <textarea
               value={newTaskDescription}
               onChange={e => setNewTaskDescription(e.target.value)}
@@ -503,7 +503,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold uppercase text-muted-foreground">Sub-tasks</label>
+              <label className="text-xs font-semibold text-muted-foreground">Sub-tasks</label>
               {newTaskDuration > 0 && (
                 <span
                   className={`text-[11px] font-medium ${
@@ -619,7 +619,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Checklist</label>
+            <label className="text-xs font-semibold text-muted-foreground">Checklist</label>
             <div className="space-y-1">
               {newChecklistItems.map((item, index) => (
                 <div
@@ -681,7 +681,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase text-muted-foreground">Attachments</label>
+            <label className="text-xs font-semibold text-muted-foreground">Attachments</label>
             {!isPremium ? (
               <div className="border border-dashed border-border rounded-xl">
                 <PremiumGate
