@@ -207,6 +207,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
