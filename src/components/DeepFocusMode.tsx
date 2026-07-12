@@ -969,7 +969,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div>
+              <div className="mb-6">
                 {!isRunning ? (
                   <button
                     onClick={timeLeft < totalSecs && totalSecs > 0 && timeLeft > 0 ? handleResume : handleStartSession}
@@ -1369,7 +1369,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             </div>
           )}
 
-          <div className="rounded-xl p-4 bg-muted/30">
+          <div className="rounded-xl p-4 bg-muted/30 mt-6">
             <h3 className="text-xs font-semibold mb-3 text-foreground">Today's Progress</h3>
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
