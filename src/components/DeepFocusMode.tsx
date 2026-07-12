@@ -937,48 +937,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
           {selectedTask && (
             <div className="space-y-5">
-              <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {selectedTask.projectName && (
-                    <div>
-                      <span className="text-muted-foreground">Project</span>
-                      <p className="font-medium text-foreground">{selectedTask.projectName}</p>
-                    </div>
-                  )}
-                </div>
-                {(selectedTask.startDate || selectedTask.dueDate) && (
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {selectedTask.startDate && (
-                      <div>
-                        <span className="text-muted-foreground">Start</span>
-                        <p className="font-medium text-foreground">{selectedTask.startDate}{selectedTask.startTime ? ` ${selectedTask.startTime}` : ''}</p>
-                      </div>
-                    )}
-                    {selectedTask.dueDate && (
-                      <div>
-                        <span className="text-muted-foreground">Due</span>
-                        <p className="font-medium text-foreground">{selectedTask.dueDate}{selectedTask.dueTime ? ` ${selectedTask.dueTime}` : ''}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {selectedTask.description && (
-                  <div className="text-xs">
-                    <span className="text-muted-foreground">Description</span>
-                    <p className="font-medium text-foreground whitespace-pre-line mt-0.5">{selectedTask.description}</p>
-                  </div>
-                )}
-                {selectedTask.labels && selectedTask.labels.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedTask.labels.map((label: any) => (
-                      <span key={label.id} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                        {label.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="space-y-3">
                 <button
                   onClick={toggleSound}
@@ -1291,16 +1249,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     )}
                     <div className="flex gap-2">
                       <input
-                        value={newChecklistText}
-                        onChange={e => setNewChecklistText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
-                        placeholder="Checklist item"
-                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
                         value={newChecklistTitle}
                         onChange={e => setNewChecklistTitle(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
@@ -1361,9 +1309,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center py-2">No files yet</p>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1416,9 +1362,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                           </div>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground text-center py-2">No images yet</p>
-                    )}
+                    ) : null}
                   </div>
                 )}
               </div>
