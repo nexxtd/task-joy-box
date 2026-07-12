@@ -693,7 +693,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
       {showDetailDialog && selectedTask && (
         <div className="absolute inset-0 flex items-center justify-center z-20">
-          <div className="border rounded-2xl p-6 shadow-2xl max-w-md w-full mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
+          <div className="border rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" />
               <div>
@@ -956,7 +956,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           </button>
         </div>
 
-        <div className="p-6 space-y-6 pb-16">
+        <div className="p-8 space-y-8 pb-24">
           <div className="flex flex-col items-center">
             <div className="relative w-44 h-44 mb-4">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 190 190">
@@ -1049,7 +1049,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           </div>
 
           {selectedTask && (
-            <div className="space-y-5">
+            <div className="space-y-7">
               <div className="space-y-3">
                 <button
                   onClick={toggleSound}
@@ -1082,7 +1082,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div className="mb-6">
+              <div className="mb-8">
                 {!isRunning ? (
                   <button
                     onClick={timeLeft < totalSecs && totalSecs > 0 && timeLeft > 0 ? handleResume : handleStartSession}
@@ -1482,7 +1482,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             </div>
           )}
 
-          <div className="rounded-xl p-4 bg-muted/30 mt-6">
+          <div className="rounded-xl p-6 bg-muted/30 mt-8">
             <h3 className="text-xs font-semibold mb-3 text-foreground">Today's Progress</h3>
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
