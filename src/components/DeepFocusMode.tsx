@@ -707,98 +707,211 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               <span className="text-sm font-semibold text-foreground">{Math.round(totalSecs / 60)} min</span>
             </div>
 
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-foreground mb-2">Sub-tasks</h4>
-              {taskSubtasks.length > 0 ? (
-                <div className="space-y-1.5 mb-2">
-                  {taskSubtasks.map(sub => (
-                    <div key={sub.id} className="flex items-center gap-2.5 text-sm py-1">
-                      <CircleToggle
-                        completed={sub.completed}
-                        onClick={() => toggleSubtask(sub.id)}
-                        size="sm"
-                      />
-                      <span className={`flex-1 ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        {sub.text}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{sub.durationMinutes || 0} min</span>
-                    </div>
-                  ))}
+            <div className="rounded-2xl border border-border bg-muted/20 mb-4">
+              <button
+                onClick={() => setSubtasksCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                  {taskSubtasks.length > 0 && (
+                    <span className="text-xs text-muted-foreground">({taskSubtasks.length})</span>
+                  )}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground mb-2">No subtasks yet</p>
-              )}
-              <div className="flex gap-2">
-                <input
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                  placeholder="Add sub-task"
-                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="min"
-                  className="w-16 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
-                />
-                <button onClick={addSubtask} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-foreground mb-2">Checklist</h4>
-              {focusChecklists.length > 0 ? (
-                <div className="space-y-2 mb-2">
-                  {focusChecklists.map(list => (
-                    <div key={list.id} className="rounded-lg border border-border/60 bg-muted/20 p-2">
-                      <p className="text-[11px] font-semibold text-foreground mb-1">{list.title}</p>
-                      {list.items.length === 0 && <p className="text-[10px] text-muted-foreground">No items yet</p>}
-                      {list.items.map(item => (
-                        <div key={item.id} className="flex items-center gap-2 text-sm py-0.5">
-                          <SquareToggle
-                            completed={item.completed}
-                            onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
+                {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {!subtasksCollapsed && (
+                <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                  {allSubtasksDone && (
+                    <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                      All sub-tasks are done ✓
+                    </div>
+                  )}
+                  {taskSubtasks.length > 0 ? (
+                    <div className="space-y-1">
+                      {taskSubtasks.map((sub, index) => (
+                        <div key={sub.id} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                          <CircleToggle
+                            completed={sub.completed}
+                            onClick={() => toggleSubtask(sub.id)}
                             size="sm"
                           />
-                          <span className={`flex-1 text-xs ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                            {item.text}
+                          <span className={`text-xs ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {sub.text}
                           </span>
+                          <span className="text-xs text-muted-foreground">{sub.durationMinutes || 0} min</span>
+                          <button
+                            onClick={() => deleteSubtask(sub.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className="text-xs text-center py-3 text-muted-foreground">No subtasks yet</p>
+                  )}
+                  <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                    <input
+                      value={newSubtaskText}
+                      onChange={e => setNewSubtaskText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                      placeholder="Add sub-task"
+                      className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      value={newSubtaskDuration}
+                      onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                      placeholder="min"
+                      className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                    />
+                    <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                  </div>
                 </div>
-              ) : focusChecklistItems.length > 0 ? (
-                <div className="space-y-1.5 mb-2">
-                  {focusChecklistItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-2.5 text-sm py-1">
-                      <SquareToggle
-                        completed={item.completed}
-                        onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
-                        size="md"
-                      />
-                      <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        {item.text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground mb-2">No checklist items yet</p>
               )}
-              <div className="flex gap-2">
-                <input
-                  value={newChecklistText}
-                  onChange={e => setNewChecklistText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
-                  placeholder="Checklist item"
-                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm"
-                />
-                <button onClick={handleAddChecklistItem} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-muted/20 mb-6">
+              <button
+                onClick={() => setChecklistsCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+                  {(focusChecklists.length + focusChecklistItems.length) > 0 && (
+                    <span className="text-xs text-muted-foreground">({focusChecklists.length + focusChecklistItems.length})</span>
+                  )}
+                </div>
+                {checklistsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {!checklistsCollapsed && (
+                <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                  {focusChecklists.map(list => {
+                    const isCollapsed = collapsedDraftChecklists.has(list.id);
+                    return (
+                      <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                        <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                          <div className="flex-1 flex items-center gap-2">
+                            {editingDraftChecklistId === list.id ? (
+                              <input
+                                autoFocus
+                                className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                value={editingDraftChecklistTitle}
+                                onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                onBlur={() => {
+                                  if (editingDraftChecklistTitle.trim()) {
+                                    updateTask(selectedTask.id, {
+                                      checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                    });
+                                  }
+                                  setEditingDraftChecklistId(null);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    if (editingDraftChecklistTitle.trim()) {
+                                      updateTask(selectedTask.id, {
+                                        checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                      });
+                                    }
+                                    setEditingDraftChecklistId(null);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                {list.title}
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground">({list.items.length})</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
+                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                              {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                        {!isCollapsed && (
+                          <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                            {list.items.length === 0 && <p className="text-xs text-muted-foreground px-3 pb-1">No items yet</p>}
+                            {list.items.map(item => (
+                              <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                                <SquareToggle
+                                  completed={item.completed}
+                                  onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
+                                  size="md"
+                                />
+                                <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                  {item.text}
+                                </span>
+                                <button
+                                  onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex gap-2 pt-1">
+                              <input
+                                value={perChecklistInput[list.id] ?? ''}
+                                onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
+                                placeholder="Add item"
+                                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                              />
+                              <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {focusChecklistItems.length > 0 && focusChecklists.length === 0 && (
+                    <div className="space-y-1.5">
+                      {focusChecklistItems.map(item => (
+                        <div key={item.id} className="flex items-center gap-2.5 text-sm group">
+                          <SquareToggle
+                            completed={item.completed}
+                            onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                            size="md"
+                          />
+                          <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {item.text}
+                          </span>
+                          <button
+                            onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {focusChecklists.length === 0 && focusChecklistItems.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      value={newChecklistTitle}
+                      onChange={e => setNewChecklistTitle(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
+                      placeholder="New checklist name"
+                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                    />
+                    <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
