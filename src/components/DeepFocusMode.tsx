@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
-import { Task, Subtask } from '@/types/board';
+import { Task, Subtask, PRIORITY_CONFIG } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -206,6 +206,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [editingDraftChecklistId, setEditingDraftChecklistId] = useState<string | null>(null);
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
@@ -579,6 +580,41 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     e.currentTarget.value = '';
   }, [selectedTask, updateTask]);
 
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (!selectedTask || files.length === 0) return;
+    const uploaded: any[] = [];
+    for (const file of files) {
+      uploaded.push({
+        id: crypto.randomUUID(),
+        taskId: selectedTask.id,
+        fileName: file.name,
+        fileType: file.type || 'image/jpeg',
+        fileSize: file.size,
+        fileUrl: await fileToDataUrl(file),
+        createdAt: new Date().toISOString(),
+      });
+    }
+    if (uploaded.length > 0) {
+      updateTask(selectedTask.id, { images: [...(selectedTask.images || []), ...uploaded] });
+    }
+    e.currentTarget.value = '';
+  }, [selectedTask, updateTask]);
+
+  const deleteAttachment = useCallback((id: string) => {
+    if (!selectedTask) return;
+    updateTask(selectedTask.id, {
+      attachments: (selectedTask.attachments || []).filter(a => a.id !== id),
+    });
+  }, [selectedTask, updateTask]);
+
+  const deleteImage = useCallback((id: string) => {
+    if (!selectedTask) return;
+    updateTask(selectedTask.id, {
+      images: (selectedTask.images || []).filter(i => i.id !== id),
+    });
+  }, [selectedTask, updateTask]);
+
   const handleDeepFocusReorder = useCallback((result: DropResult) => {
     if (!result.destination || !selectedTask) return;
     if (result.source.droppableId === 'deepfocus-subtasks') {
@@ -606,6 +642,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const taskSubtasks = selectedTask?.subtasks ?? [];
   const subtaskTotalMins = taskSubtasks.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
   const taskDurMins = selectedTask?.duration ?? 0;
+  const currentColumn = selectedTask ? board.columns.find(c => c.id === selectedTask.columnId) : null;
   const remainingMins = taskDurMins - subtaskTotalMins;
   const allSubtasksDone = taskSubtasks.length > 0 && taskSubtasks.every(st => st.completed);
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
@@ -780,7 +817,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       <div
-        className="relative z-10 w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
+        className="relative z-10 w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -913,12 +950,30 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       <p className="font-medium text-foreground">{selectedTask.projectName}</p>
                     </div>
                   )}
-                  {selectedTask.columnId && (
+                  {currentColumn && (
                     <div>
                       <span className="text-muted-foreground">Column</span>
-                      <p className="font-medium text-foreground">{selectedTask.columnId}</p>
+                      <p className="font-medium text-foreground">{currentColumn.title}</p>
                     </div>
                   )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {selectedTask.priority !== 'none' && (
+                    <div>
+                      <span className="text-muted-foreground">Priority</span>
+                      <p className="font-medium text-foreground">
+                        <span className={`${PRIORITY_CONFIG[selectedTask.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
+                          {PRIORITY_CONFIG[selectedTask.priority].label}
+                        </span>
+                      </p>
+                    </div>
+                  )}
+                  {selectedTask.duration ? (
+                    <div>
+                      <span className="text-muted-foreground">Duration</span>
+                      <p className="font-medium text-foreground">{selectedTask.duration} min</p>
+                    </div>
+                  ) : null}
                 </div>
                 {(selectedTask.startDate || selectedTask.dueDate) && (
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1261,60 +1316,108 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-xs font-medium !bg-[#000] !text-white px-3 py-1.5 rounded-lg"
-                  >
-                    Add file
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-                </div>
-                {(selectedTask.attachments?.length ?? 0) > 0 ? (
-                  <div className="grid grid-cols-1 gap-2">
-                    {(selectedTask.attachments || []).map((att: any) => {
-                      const isServerAtt = /^\d+$/.test(String(att.id));
-                      const href = isServerAtt ? `/api/attachments/file/${att.id}` : att.fileUrl;
-                      return (
-                        <a key={att.id} href={href} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors text-xs">
-                          <Paperclip className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate text-foreground">{att.fileName}</span>
-                          {att.fileSize && <span className="text-muted-foreground ml-auto flex-shrink-0">{(att.fileSize / 1024).toFixed(1)} KB</span>}
-                        </a>
-                      );
-                    })}
+                <button
+                  onClick={() => setAttachmentsCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                    {(selectedTask.attachments?.length ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">({(selectedTask.attachments ?? []).length})</span>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">No files attached yet</p>
+                  {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!attachmentsCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-2">
+                        <Paperclip className="w-5 h-5 text-primary mb-1" />
+                        <p className="text-[10px] font-medium text-foreground">Click to upload files</p>
+                      </div>
+                      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} multiple />
+                    </label>
+                    {(selectedTask.attachments?.length ?? 0) > 0 ? (
+                      <div className="grid grid-cols-1 gap-2">
+                        {(selectedTask.attachments || []).map((att: any) => (
+                          <div key={att.id} className="relative group/att">
+                            <a href={att.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all">
+                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                <Paperclip className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{att.fileName}</p>
+                                <p className="text-xs text-muted-foreground">{att.fileSize ? `${(att.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
+                              </div>
+                            </a>
+                            <button
+                              onClick={() => deleteAttachment(att.id)}
+                              className="absolute top-2 right-2 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-2">No files yet</p>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {(selectedTask.images?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-foreground">Images</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(selectedTask.images || []).map((img: any) => (
-                      <div key={img.id} className="relative aspect-square rounded-lg border border-border bg-muted/40 overflow-hidden">
-                        {img.fileUrl?.match(/^data:image/) ? (
-                          <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center"><Image className="w-6 h-6 text-muted-foreground" /></div>
-                        )}
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4">
-                          <p className="text-[10px] font-medium text-white truncate">{img.fileName}</p>
-                        </div>
-                      </div>
-                    ))}
+              <div className="space-y-2">
+                <button
+                  onClick={() => setImagesCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {(selectedTask.images?.length ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">({(selectedTask.images ?? []).length})</span>
+                    )}
                   </div>
-                </div>
-              )}
+                  {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!imagesCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-2">
+                        <Image className="w-5 h-5 text-primary mb-1" />
+                        <p className="text-[10px] font-medium text-foreground">Click to upload images</p>
+                      </div>
+                      <input ref={imageInputRef} type="file" className="hidden" onChange={handleImageUpload} multiple accept="image/*" />
+                    </label>
+                    {(selectedTask.images?.length ?? 0) > 0 ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {(selectedTask.images || []).map((img: any) => (
+                          <div key={img.id} className="relative aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden group/img">
+                            {img.fileUrl?.match(/^data:image/) ? (
+                              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Image className="w-6 h-6 text-muted-foreground" /></div>
+                            )}
+                            <button
+                              onClick={() => deleteImage(img.id)}
+                              className="absolute top-2 right-2 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all z-10"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                              <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                              {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-2">No images yet</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
