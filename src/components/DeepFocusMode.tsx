@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
-import { Task, Subtask, PRIORITY_CONFIG } from '@/types/board';
+import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -207,6 +207,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [checklistsCollapsed, setChecklistsCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
@@ -644,7 +646,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const taskSubtasks = selectedTask?.subtasks ?? [];
   const subtaskTotalMins = taskSubtasks.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
   const taskDurMins = selectedTask?.duration ?? 0;
-  const currentColumn = selectedTask ? board.columns.find(c => c.id === selectedTask.columnId) : null;
   const remainingMins = taskDurMins - subtaskTotalMins;
   const allSubtasksDone = taskSubtasks.length > 0 && taskSubtasks.every(st => st.completed);
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
@@ -938,44 +939,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             <div className="space-y-5">
               <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Priority</span>
-                    <p className="font-medium text-foreground capitalize">{selectedTask.priority || 'None'}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Duration</span>
-                    <p className="font-medium text-foreground">{selectedTask.duration || 0} min</p>
-                  </div>
                   {selectedTask.projectName && (
                     <div>
                       <span className="text-muted-foreground">Project</span>
                       <p className="font-medium text-foreground">{selectedTask.projectName}</p>
                     </div>
                   )}
-                  {currentColumn && (
-                    <div>
-                      <span className="text-muted-foreground">Column</span>
-                      <p className="font-medium text-foreground">{currentColumn.title}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {selectedTask.priority !== 'none' && (
-                    <div>
-                      <span className="text-muted-foreground">Priority</span>
-                      <p className="font-medium text-foreground">
-                        <span className={`${PRIORITY_CONFIG[selectedTask.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
-                          {PRIORITY_CONFIG[selectedTask.priority].label}
-                        </span>
-                      </p>
-                    </div>
-                  )}
-                  {selectedTask.duration ? (
-                    <div>
-                      <span className="text-muted-foreground">Duration</span>
-                      <p className="font-medium text-foreground">{selectedTask.duration} min</p>
-                    </div>
-                  ) : null}
                 </div>
                 {(selectedTask.startDate || selectedTask.dueDate) && (
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1062,269 +1031,296 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-                  {taskDurMins > 0 && (
-                    <span className={`text-xs font-medium ${
-                      remainingMins > 0 ? 'text-muted-foreground' :
-                      remainingMins < 0 ? 'text-orange-500' : 'text-label-green'
-                    }`}>
-                      {remainingMins > 0
-                        ? `${remainingMins} mins left`
-                        : remainingMins < 0
-                        ? `Over by ${Math.abs(remainingMins)} mins`
-                        : '0 mins left ✓'}
-                    </span>
-                  )}
-                </div>
-
-                {allSubtasksDone && (
-                  <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                    All sub-tasks are done ✓
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setSubtasksCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                    {taskSubtasks.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({taskSubtasks.length})</span>
+                    )}
                   </div>
-                )}
-
-                <DragDropContext onDragEnd={handleDeepFocusReorder}>
-                  <Droppable droppableId="deepfocus-subtasks">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                        {taskSubtasks.map((sub, index) => (
-                          <Draggable key={sub.id} draggableId={sub.id} index={index}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                <CircleToggle
-                                  completed={sub.completed}
-                                  onClick={() => toggleSubtask(sub.id)}
-                                  size="sm"
-                                />
-                                {editingSubtaskId === sub.id ? (
-                                  <input
-                                    autoFocus
-                                    className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                    value={editingSubtaskText}
-                                    onChange={e => setEditingSubtaskText(e.target.value)}
-                                    onBlur={() => saveSubtaskEdit(sub.id)}
-                                    onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(sub.id)}
-                                  />
-                                ) : (
-                                  <span
-                                    onClick={() => startEditing(sub)}
-                                    className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                  >
-                                    {sub.text}
-                                  </span>
-                                )}
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    className="w-12 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                    value={sub.durationMinutes || 0}
-                                    onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
-                                  />
-                                  <span className="text-[10px] text-muted-foreground">min</span>
-                                  <button
-                                    onClick={() => deleteSubtask(sub.id)}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {taskSubtasks.length === 0 && (
-                          <p className="text-xs text-center py-2 text-muted-foreground">No subtasks yet</p>
-                        )}
-                        {provided.placeholder}
+                  <div className="flex items-center gap-2">
+                    {taskDurMins > 0 && (
+                      <span className={`text-xs font-medium ${
+                        remainingMins > 0 ? 'text-muted-foreground' :
+                        remainingMins < 0 ? 'text-orange-500' : 'text-label-green'
+                      }`}>
+                        {remainingMins > 0
+                          ? `${remainingMins} mins left`
+                          : remainingMins < 0
+                          ? `Over by ${Math.abs(remainingMins)} mins`
+                          : '0 mins left ✓'}
+                      </span>
+                    )}
+                    {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </button>
+                {!subtasksCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {allSubtasksDone && (
+                      <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                        All sub-tasks are done ✓
                       </div>
                     )}
-                  </Droppable>
-                </DragDropContext>
-
-                <div className="grid grid-cols-[1fr_70px_auto] gap-2">
-                  <input
-                    value={newSubtaskText}
-                    onChange={e => setNewSubtaskText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                    placeholder="Add sub-task"
-                    className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={newSubtaskDuration}
-                    onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                    placeholder="min"
-                    className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                  />
-                  <button onClick={addSubtask} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                </div>
+                    <DragDropContext onDragEnd={handleDeepFocusReorder}>
+                      <Droppable droppableId="deepfocus-subtasks">
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                            {taskSubtasks.map((sub, index) => (
+                              <Draggable key={sub.id} draggableId={sub.id} index={index}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <CircleToggle
+                                      completed={sub.completed}
+                                      onClick={() => toggleSubtask(sub.id)}
+                                      size="sm"
+                                    />
+                                    {editingSubtaskId === sub.id ? (
+                                      <input
+                                        autoFocus
+                                        className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                        value={editingSubtaskText}
+                                        onChange={e => setEditingSubtaskText(e.target.value)}
+                                        onBlur={() => saveSubtaskEdit(sub.id)}
+                                        onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(sub.id)}
+                                      />
+                                    ) : (
+                                      <span
+                                        onClick={() => startEditing(sub)}
+                                        className={`text-sm cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                      >
+                                        {sub.text}
+                                      </span>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        className="w-12 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                        value={sub.durationMinutes || 0}
+                                        onChange={e => updateSubtaskDuration(sub.id, Math.max(0, Number(e.target.value) || 0))}
+                                      />
+                                      <span className="text-[10px] text-muted-foreground">min</span>
+                                      <button
+                                        onClick={() => deleteSubtask(sub.id)}
+                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {taskSubtasks.length === 0 && (
+                              <p className="text-xs text-center py-3 text-muted-foreground">No subtasks yet</p>
+                            )}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                      <input
+                        value={newSubtaskText}
+                        onChange={e => setNewSubtaskText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                        placeholder="Add sub-task"
+                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={newSubtaskDuration}
+                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="min"
+                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                      />
+                      <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                {focusChecklists.length === 0 && focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-                {focusChecklists.map(list => {
-                  const isCollapsed = collapsedDraftChecklists.has(list.id);
-                  return (
-                    <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                      <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                        <button
-                          onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                          className="flex-1 flex items-center gap-2 text-left"
-                        >
-                          {editingDraftChecklistId === list.id ? (
-                            <input
-                              autoFocus
-                              className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                              value={editingDraftChecklistTitle}
-                              onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                              onBlur={() => {
-                                if (editingDraftChecklistTitle.trim()) {
-                                  updateTask(selectedTask.id, {
-                                    checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
-                                  });
-                                }
-                                setEditingDraftChecklistId(null);
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  if (editingDraftChecklistTitle.trim()) {
-                                    updateTask(selectedTask.id, {
-                                      checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
-                                    });
-                                  }
-                                  setEditingDraftChecklistId(null);
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
-                              {list.title}
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">({list.items.length})</span>
-                        </button>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
-                            {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-                       {!isCollapsed && (
-                        <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                          {list.items.length === 0 && <p className="text-xs text-muted-foreground">No items yet</p>}
-                          {list.items.map(item => (
-                            <div key={item.id} className="flex items-center gap-2.5 text-sm group">
-                              <SquareToggle
-                                completed={item.completed}
-                                onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
-                                size="md"
-                              />
-                              <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                                {item.text}
-                              </span>
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setChecklistsCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+                    {(focusChecklists.length + focusChecklistItems.length) > 0 && (
+                      <span className="text-xs text-muted-foreground">({focusChecklists.length + focusChecklistItems.length})</span>
+                    )}
+                  </div>
+                  {checklistsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!checklistsCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {focusChecklists.length === 0 && focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+                    {focusChecklists.map(list => {
+                      const isCollapsed = collapsedDraftChecklists.has(list.id);
+                      return (
+                        <div key={list.id} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                          <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                            <button
+                              onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                              className="flex-1 flex items-center gap-2 text-left"
+                            >
+                              {editingDraftChecklistId === list.id ? (
+                                <input
+                                  autoFocus
+                                  className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                  value={editingDraftChecklistTitle}
+                                  onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                  onBlur={() => {
+                                    if (editingDraftChecklistTitle.trim()) {
+                                      updateTask(selectedTask.id, {
+                                        checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                      });
+                                    }
+                                    setEditingDraftChecklistId(null);
+                                  }}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      if (editingDraftChecklistTitle.trim()) {
+                                        updateTask(selectedTask.id, {
+                                          checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                        });
+                                      }
+                                      setEditingDraftChecklistId(null);
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                  {list.title}
+                                </span>
+                              )}
+                              <span className="text-xs text-muted-foreground">({list.items.length})</span>
+                            </button>
+                            <div className="flex items-center gap-1">
                               <button
-                                onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
-                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
+                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
+                              <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                                {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
-                          ))}
-                          <div className="flex gap-2 pt-1">
-                            <input
-                              value={perChecklistInput[list.id] ?? ''}
-                              onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
-                              placeholder="Add item"
-                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
-                            />
-                            <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {focusChecklistItems.length > 0 && focusChecklists.length === 0 && (
-                  <DragDropContext onDragEnd={handleDeepFocusReorder}>
-                    <Droppable droppableId="deepfocus-checklist">
-                      {(provided) => (
-                        <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                          {focusChecklistItems.map((item, index) => (
-                            <Draggable key={item.id} draggableId={item.id} index={index}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
+                           {!isCollapsed && (
+                            <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                              {list.items.length === 0 && <p className="text-xs text-muted-foreground px-3 pb-1">No items yet</p>}
+                              {list.items.map(item => (
+                                <div key={item.id} className="flex items-center gap-2.5 text-sm group">
                                   <SquareToggle
                                     completed={item.completed}
-                                    onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                                    onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
                                     size="md"
                                   />
                                   <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                                     {item.text}
                                   </span>
                                   <button
-                                    onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                                    onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
                                     className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
+                              ))}
+                              <div className="flex gap-2 pt-1">
+                                <input
+                                  value={perChecklistInput[list.id] ?? ''}
+                                  onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
+                                  placeholder="Add item"
+                                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                                />
+                                <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
+                      );
+                    })}
+                    {focusChecklistItems.length > 0 && focusChecklists.length === 0 && (
+                      <DragDropContext onDragEnd={handleDeepFocusReorder}>
+                        <Droppable droppableId="deepfocus-checklist">
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                              {focusChecklistItems.map((item, index) => (
+                                <Draggable key={item.id} draggableId={item.id} index={index}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                        <GripVertical className="w-4 h-4" />
+                                      </div>
+                                      <SquareToggle
+                                        completed={item.completed}
+                                        onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                                        size="md"
+                                      />
+                                      <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                                        {item.text}
+                                      </span>
+                                      <button
+                                        onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
+                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        value={newChecklistText}
+                        onChange={e => setNewChecklistText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
+                        placeholder="Checklist item"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        value={newChecklistTitle}
+                        onChange={e => setNewChecklistTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
+                        placeholder="New checklist name"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                    </div>
+                  </div>
                 )}
-                <div className="flex gap-2">
-                  <input
-                    value={newChecklistText}
-                    onChange={e => setNewChecklistText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddChecklistItem(); } }}
-                    placeholder="Checklist item"
-                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <button onClick={handleAddChecklistItem} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={newChecklistTitle}
-                    onChange={e => setNewChecklistTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
-                    placeholder="New checklist name"
-                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                  />
-                  <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
-                </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="rounded-2xl border border-border bg-muted/20">
                 <button
                   onClick={() => setAttachmentsCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-all"
+                  className="w-full flex items-center justify-between px-4 py-3"
                 >
                   <div className="flex items-center gap-2">
                     <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
                     {(selectedTask.attachments?.length ?? 0) > 0 && (
                       <span className="text-xs text-muted-foreground">({(selectedTask.attachments ?? []).length})</span>
                     )}
@@ -1333,15 +1329,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 </button>
                 {!attachmentsCollapsed && (
                   <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-2">
-                        <Paperclip className="w-5 h-5 text-primary mb-1" />
-                        <p className="text-[10px] font-medium text-foreground">Click to upload files</p>
+                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <Paperclip className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                        <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
-                      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileUpload} multiple />
+                      <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="hidden" />
                     </label>
                     {(selectedTask.attachments?.length ?? 0) > 0 ? (
-                      <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {(selectedTask.attachments || []).map((att: any) => (
                           <div key={att.id} className="relative group/att">
                             <a href={att.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all">
@@ -1355,9 +1354,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                             </a>
                             <button
                               onClick={() => deleteAttachment(att.id)}
-                              className="absolute top-2 right-2 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all"
+                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
                             >
-                              <X className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ))}
@@ -1369,10 +1368,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="rounded-2xl border border-border bg-muted/20">
                 <button
                   onClick={() => setImagesCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-all"
+                  className="w-full flex items-center justify-between px-4 py-3"
                 >
                   <div className="flex items-center gap-2">
                     <Image className="w-4 h-4 text-muted-foreground" />
@@ -1385,15 +1384,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 </button>
                 {!imagesCollapsed && (
                   <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-2">
-                        <Image className="w-5 h-5 text-primary mb-1" />
-                        <p className="text-[10px] font-medium text-foreground">Click to upload images</p>
+                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <Image className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Click to upload</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
-                      <input ref={imageInputRef} type="file" className="hidden" onChange={handleImageUpload} multiple accept="image/*" />
+                      <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="hidden" />
                     </label>
                     {(selectedTask.images?.length ?? 0) > 0 ? (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {(selectedTask.images || []).map((img: any) => (
                           <div key={img.id} className="relative aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden group/img">
                             {img.fileUrl?.match(/^data:image/) ? (
@@ -1403,9 +1405,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                             )}
                             <button
                               onClick={() => deleteImage(img.id)}
-                              className="absolute top-2 right-2 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all z-10"
+                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all z-10 shadow-sm"
                             >
-                              <X className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
                               <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
