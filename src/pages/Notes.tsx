@@ -1726,6 +1726,7 @@ const Notes: React.FC = () => {
                   </div>
                 )}
               </div>
+            )}
             </div>
 
             <div className="rounded-2xl border border-border bg-muted/20">
