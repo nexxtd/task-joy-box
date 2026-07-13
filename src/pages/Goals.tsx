@@ -1116,6 +1116,7 @@ const Goals: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <button onClick={() => { if (editingGoal) { deleteGoal(editingGoal.id); setEditingGoal(null); } }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium">Delete Goal</button>
