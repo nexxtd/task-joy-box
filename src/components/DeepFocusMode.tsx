@@ -958,18 +958,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
         </div>
 
         <div className="p-4 sm:p-8 space-y-8 pb-24">
-          <div className="rounded-2xl border border-border bg-muted/20">
-            <div className="px-4 py-3 border-b border-border/60">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-lg bg-primary/15 flex items-center justify-center">
-                  <Brain className="w-3 h-3 text-primary" />
-                </div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {selectedTask ? selectedTask.title : 'Focus Session'}
-                </h3>
-              </div>
-            </div>
-            <div className="px-4 py-5 flex flex-col items-center">
+          <div className="flex flex-col items-center">
               <div className="relative w-36 sm:w-44 h-36 sm:h-44 mb-4">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 190 190">
                 <circle
@@ -1059,7 +1048,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </div>
             </div>
           </div>
-          </div>
+
+          <hr className="border-t border-border/60" />
 
           {selectedTask && (
             <div className="space-y-7">
@@ -1114,6 +1104,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   </button>
                 )}
               </div>
+
+              <hr className="border-t border-border/60" />
 
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
