@@ -150,6 +150,7 @@ const Notes: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [myNotesCollapsed, setMyNotesCollapsed] = useState(false);
+  const [tagsCollapsed, setTagsCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
@@ -1634,22 +1635,18 @@ const Notes: React.FC = () => {
             </div>
 
             <div className="rounded-2xl border border-border bg-muted/20">
-              <div className="px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Tags</h3>
-                  </div>
-                  <button
-                    onClick={() => setTagPopupNoteId(tagPopupNoteId === activeNote.id ? null : activeNote.id)}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    {tagPopupNoteId === activeNote.id ? 'Close' : 'Edit'}
-                  </button>
+              <button
+                onClick={() => setTagsCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">Tags</h3>
                 </div>
-              </div>
-
-              <div className="border-t border-border/60 px-4 py-3">
+                {tagsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </button>
+              {!tagsCollapsed && (
+              <div className="border-t border-border/60 px-4 py-3 space-y-3">
                 {activeNote.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {activeNote.tags.map(tag => (
@@ -1663,6 +1660,13 @@ const Notes: React.FC = () => {
                     ))}
                   </div>
                 )}
+
+                <button
+                  onClick={() => setTagPopupNoteId(tagPopupNoteId === activeNote.id ? null : activeNote.id)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {tagPopupNoteId === activeNote.id ? 'Close' : 'Edit tags'}
+                </button>
 
                 {tagPopupNoteId === activeNote.id && (
                   <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-3 mt-2">

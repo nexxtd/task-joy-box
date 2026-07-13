@@ -907,19 +907,24 @@ const Goals: React.FC = () => {
 
       {/* Edit Goal Modal */}
       {editingGoal && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setEditingGoal(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditingGoal(null)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground">Edit Goal</h2>
-              <button onClick={() => setEditingGoal(null)} className="p-1.5 rounded-lg hover:bg-muted">
-                <X className="w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <input
+                  className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+                  value={editGoal.title}
+                  onChange={e => setEditGoal(g => ({ ...g, title: e.target.value }))}
+                />
+              </div>
+              <button onClick={() => setEditingGoal(null)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0">
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-5 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-1.5">
@@ -1112,13 +1117,13 @@ const Goals: React.FC = () => {
                 )}
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-border flex justify-between">
+            <div className="flex items-center justify-between pt-2 border-t border-border">
               <button onClick={() => { if (editingGoal) { deleteGoal(editingGoal.id); setEditingGoal(null); } }}
-                className="px-4 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-all">Delete goal</button>
-              <div className="flex gap-2">
-                <button onClick={() => setEditingGoal(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium">Delete Goal</button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setEditingGoal(null)} className="text-xs text-muted-foreground hover:text-foreground font-medium">Cancel</button>
                 <button onClick={updateGoal} disabled={!editGoal.title.trim()}
-                  className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">Save</button>
+                  className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all">Save</button>
               </div>
             </div>
           </div>
