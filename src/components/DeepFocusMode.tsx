@@ -506,9 +506,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           ? { ...cl, items: cl.items.map(it => it.id === itemId ? { ...it, text: editingChecklistItemText.trim() } : it) }
           : cl
       ),
-      checklistItems: selectedTask.checklistItems.map(it =>
-        it.id === itemId ? { ...it, text: editingChecklistItemText.trim() } : it
-      ),
     });
     setEditingChecklistItemId(null);
   }, [editingChecklistItemText, selectedTask, updateTask]);
