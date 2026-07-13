@@ -751,9 +751,23 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                             onClick={() => toggleSubtask(sub.id)}
                             size="sm"
                           />
-                          <span className={`text-xs ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                            {sub.text}
-                          </span>
+                          {editingSubtaskId === sub.id ? (
+                            <input
+                              autoFocus
+                              className="text-xs bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                              value={editingSubtaskText}
+                              onChange={e => setEditingSubtaskText(e.target.value)}
+                              onBlur={() => saveSubtaskEdit(sub.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(sub.id)}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => startEditing(sub)}
+                              className={`text-xs cursor-text ${sub.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                            >
+                              {sub.text}
+                            </span>
+                          )}
                           <span className="text-xs text-muted-foreground">{sub.durationMinutes || 0} min</span>
                           <button
                             onClick={() => deleteSubtask(sub.id)}
@@ -864,9 +878,23 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   onClick={() => toggleChecklistItem(selectedTask.id, list.id, item.id)}
                                   size="md"
                                 />
-                                <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                                  {item.text}
-                                </span>
+                                {editingChecklistItemId === item.id ? (
+                                  <input
+                                    autoFocus
+                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                    value={editingChecklistItemText}
+                                    onChange={e => setEditingChecklistItemText(e.target.value)}
+                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                  />
+                                ) : (
+                                  <span
+                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
+                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                  >
+                                    {item.text}
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
                                   className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
@@ -899,9 +927,23 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                             onClick={() => toggleChecklistItem(selectedTask.id, item.checklistId, item.id)}
                             size="md"
                           />
-                          <span className={`flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                            {item.text}
-                          </span>
+                          {editingChecklistItemId === item.id ? (
+                            <input
+                              autoFocus
+                              className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                              value={editingChecklistItemText}
+                              onChange={e => setEditingChecklistItemText(e.target.value)}
+                              onBlur={() => saveChecklistItemEdit(item.checklistId, item.id)}
+                              onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(item.checklistId, item.id)}
+                            />
+                          ) : (
+                            <span
+                              onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
+                              className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                            >
+                              {item.text}
+                            </span>
+                          )}
                           <button
                             onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
                             className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
