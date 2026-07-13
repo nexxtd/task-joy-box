@@ -659,7 +659,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   }, [stopSound]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div
         className={`absolute inset-0 transition-colors duration-500 ${isRunning ? 'bg-black/70' : 'bg-black/30'} backdrop-blur-sm`}
         onClick={() => { if (!isRunning) close(); }}
@@ -667,7 +667,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
       {showCompletionDialog && (
         <div className="absolute inset-0 flex items-center justify-center z-20">
-          <div className="border rounded-2xl p-8 shadow-2xl max-w-sm w-full mx-4 text-center bg-card border-border">
+          <div className="border rounded-2xl p-8 shadow-2xl w-[90vw] sm:max-w-sm mx-4 text-center bg-card border-border">
             <CheckCircle2 className="w-8 h-8 text-primary mx-auto mb-4" />
             <h3 className="text-lg font-bold text-foreground">Session Complete!</h3>
             <p className="text-sm text-muted-foreground mb-6">
@@ -693,7 +693,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
       {showDetailDialog && selectedTask && (
         <div className="absolute inset-0 flex items-center justify-center z-20">
-          <div className="border rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
+          <div className="border rounded-2xl p-8 shadow-2xl w-[90vw] sm:max-w-md mx-4 bg-card border-border max-h-[80vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <CheckCircle2 className="w-6 h-6 text-primary flex-shrink-0" />
               <div>
@@ -752,7 +752,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   ) : (
                     <p className="text-xs text-center py-3 text-muted-foreground">No subtasks yet</p>
                   )}
-                  <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-2">
                     <input
                       value={newSubtaskText}
                       onChange={e => setNewSubtaskText(e.target.value)}
@@ -933,10 +933,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       <div
-        className="relative z-10 w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
+        className="relative z-10 w-[95vw] sm:w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
               <Brain className="w-4.5 h-4.5 text-primary" />
@@ -956,9 +956,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           </button>
         </div>
 
-        <div className="p-8 space-y-8 pb-24">
+        <div className="p-4 sm:p-8 space-y-8 pb-24">
           <div className="flex flex-col items-center">
-            <div className="relative w-44 h-44 mb-4">
+            <div className="relative w-36 sm:w-44 h-36 sm:h-44 mb-4">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 190 190">
                 <circle
                   cx="95"
@@ -1197,7 +1197,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         )}
                       </Droppable>
                     </DragDropContext>
-                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-2">
                       <input
                         value={newSubtaskText}
                         onChange={e => setNewSubtaskText(e.target.value)}
