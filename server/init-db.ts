@@ -157,12 +157,21 @@ export async function initDatabase() {
     await addColumnIfNotExists('goals', 'category', "TEXT DEFAULT 'Personal'");
     await addColumnIfNotExists('goals', 'completed', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('goals', 'completed_at', 'TEXT');
+    await addColumnIfNotExists('goals', 'checklists', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('goals', 'subtasks', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('goals', 'status', "TEXT DEFAULT 'to_do'");
 
     // Columns table new columns
     await addColumnIfNotExists('columns', 'icon', 'TEXT');
     await addColumnIfNotExists('notes', 'pinned', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('notes', 'checklists', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('notes', 'subtasks', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('notes', 'status', "TEXT DEFAULT 'to_do'");
     await addColumnIfNotExists('goals', 'pinned', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('habits', 'pinned', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('habits', 'checklists', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('habits', 'subtasks', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('habits', 'status', "TEXT DEFAULT 'to_do'");
 
     // User settings table new columns
     await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
