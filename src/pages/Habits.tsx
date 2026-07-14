@@ -3,6 +3,8 @@ import { CheckCircle2, ChevronDown, ChevronUp, Flame, Plus, Search, Trash2, X, T
 import { cn } from '@/lib/utils';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ChecklistSubtaskEditor, { StatusSelector } from '@/components/ChecklistSubtaskEditor';
+import type { Checklist, Subtask, TaskStatus } from '@/types/board';
 
 interface HabitTag {
   id: number;
@@ -22,6 +24,9 @@ interface Habit {
   tags: HabitTag[];
   pinned: boolean;
   images?: { id: string; fileName: string; fileUrl: string; fileSize: number; }[];
+  checklists: Checklist[];
+  subtasks: Subtask[];
+  status: TaskStatus;
 }
 
 interface Project {
@@ -137,6 +142,9 @@ const Habits: React.FC = () => {
 
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [editHabit, setEditHabit] = useState({ title: '', category: 'Personal', projectId: '' as string, columnId: '' as string });
+  const [editChecklists, setEditChecklists] = useState<Checklist[]>([]);
+  const [editSubtasks, setEditSubtasks] = useState<Subtask[]>([]);
+  const [editStatus, setEditStatus] = useState<TaskStatus>('to_do');
   
   const [projects, setProjects] = useState<Project[]>([]);
   const [habitTags, setHabitTags] = useState<HabitTag[]>([]);
@@ -176,19 +184,30 @@ const Habits: React.FC = () => {
       const habitsList = data.habits || data;
       const tagsList = data.tags || [];
       setHabitTags(tagsList);
-      setHabits(habitsList.map((h: any) => ({
-        id: h.id,
-        title: h.title,
-        streak: h.streak || 0,
-        completedDays: h.completedDays || [],
-        color: h.color || 'primary',
-        category: h.category || 'Personal',
-        projectId: h.projectId,
-        columnId: h.columnId,
-        tags: h.tags || [],
-        pinned: h.pinned || false,
-        images: h.images || [],
-      })));
+      setHabits(habitsList.map((h: any) => {
+        let checklists: Checklist[] = [];
+        let subtasks: Subtask[] = [];
+        let status: TaskStatus = 'to_do';
+        try { checklists = JSON.parse(h.checklists || '[]'); } catch { checklists = []; }
+        try { subtasks = JSON.parse(h.subtasks || '[]'); } catch { subtasks = []; }
+        try { status = (h.status as TaskStatus) || 'to_do'; } catch { status = 'to_do'; }
+        return {
+          id: h.id,
+          title: h.title,
+          streak: h.streak || 0,
+          completedDays: h.completedDays || [],
+          color: h.color || 'primary',
+          category: h.category || 'Personal',
+          projectId: h.projectId,
+          columnId: h.columnId,
+          tags: h.tags || [],
+          pinned: h.pinned || false,
+          images: h.images || [],
+          checklists,
+          subtasks,
+          status,
+        };
+      }));
     } catch (err) {
       setError('Failed to load habits');
     } finally {
@@ -239,7 +258,7 @@ const Habits: React.FC = () => {
         id: created.id, title: created.title, streak: 0, completedDays: [],
         category: created.category || 'Personal', color: created.color || 'primary',
         projectId: created.projectId, columnId: created.columnId, tags: [],
-        pinned: false, images: [],
+        pinned: false, images: [], checklists: [], subtasks: [], status: 'to_do' as TaskStatus,
       }]);
       setNewHabit({ title: '', category: 'Personal', projectId: '', columnId: '' });
       setAdding(false);
@@ -261,7 +280,16 @@ const Habits: React.FC = () => {
   const updateHabit = async () => {
     if (!editingHabit || !editHabit.title.trim()) return;
     const prev = editingHabit;
-    setHabits(prev_ => prev_.map(h => h.id === editingHabit.id ? { ...h, title: editHabit.title, category: editHabit.category, projectId: editHabit.projectId ? Number(editHabit.projectId) : null, columnId: editHabit.columnId ? Number(editHabit.columnId) : null } : h));
+    setHabits(prev_ => prev_.map(h => h.id === editingHabit.id ? {
+      ...h,
+      title: editHabit.title,
+      category: editHabit.category,
+      projectId: editHabit.projectId ? Number(editHabit.projectId) : null,
+      columnId: editHabit.columnId ? Number(editHabit.columnId) : null,
+      checklists: editChecklists,
+      subtasks: editSubtasks,
+      status: editStatus,
+    } : h));
     setEditingHabit(null);
     try {
       const res = await fetch(`/api/habits/${editingHabit.id}`, {
@@ -272,6 +300,9 @@ const Habits: React.FC = () => {
           title: editHabit.title, category: editHabit.category,
           projectId: editHabit.projectId ? Number(editHabit.projectId) : null,
           columnId: editHabit.columnId ? Number(editHabit.columnId) : null,
+          checklists: JSON.stringify(editChecklists),
+          subtasks: JSON.stringify(editSubtasks),
+          status: editStatus,
         }),
       });
       if (!res.ok) throw new Error('Failed to update habit');
@@ -285,6 +316,9 @@ const Habits: React.FC = () => {
   const openEditHabit = (habit: Habit) => {
     setEditingHabit(habit);
     setEditHabit({ title: habit.title, category: habit.category, projectId: habit.projectId ? String(habit.projectId) : '', columnId: habit.columnId ? String(habit.columnId) : '' });
+    setEditChecklists(habit.checklists || []);
+    setEditSubtasks(habit.subtasks || []);
+    setEditStatus(habit.status || 'to_do');
     fetchActivity(habit.id);
   };
 
@@ -807,6 +841,23 @@ const Habits: React.FC = () => {
                   <button onClick={() => setTagPopupHabitId(editingHabit.id)} className="text-xs text-primary hover:underline">+ Add tag</button>
                 </div>
               </div>
+
+              {/* Status Section */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <div className="px-4 py-3">
+                  <h3 className="text-sm font-semibold text-foreground mb-2">Status</h3>
+                  <StatusSelector status={editStatus} onChange={setEditStatus} />
+                </div>
+              </div>
+
+              {/* Checklists & Sub-tasks Section */}
+              <ChecklistSubtaskEditor
+                entityId={String(editingHabit.id)}
+                checklists={editChecklists}
+                subtasks={editSubtasks}
+                onChecklistsChange={setEditChecklists}
+                onSubtasksChange={setEditSubtasks}
+              />
 
               {/* Activity Section */}
               <div className="rounded-2xl border border-border bg-muted/20">

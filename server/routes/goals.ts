@@ -48,13 +48,14 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, target, unit, color, timeframe, subGoals, projectId, columnId } = req.body;
+    const { title, description, target, unit, color, timeframe, subGoals, checklists, subtasks, status, projectId, columnId } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
     const [newGoal] = await db.insert(goals).values({
       userId: req.userId!, title: encrypt(title) ?? title, description: encrypt(description || '') ?? '',
       target: target || 100, unit: unit || 'units', color: color || 'hsl(var(--primary))',
       progress: 0, timeframe: timeframe || '1month', subGoals: subGoals || '[]',
+      checklists: checklists || '[]', subtasks: subtasks || '[]', status: status || 'to_do',
       projectId: projectId || null, columnId: columnId || null,
     } as InsertGoal).returning();
 
@@ -72,7 +73,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const goalId = parseInt(req.params.id);
-    const allowedFields = ['title', 'description', 'target', 'unit', 'color', 'progress', 'timeframe', 'subGoals', 'projectId', 'columnId', 'pinned'];
+    const allowedFields = ['title', 'description', 'target', 'unit', 'color', 'progress', 'timeframe', 'subGoals', 'checklists', 'subtasks', 'status', 'projectId', 'columnId', 'pinned'];
     const updates: Record<string, any> = {};
     
     for (const field of allowedFields) {

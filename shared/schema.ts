@@ -218,6 +218,9 @@ export const notes = pgTable('notes', {
   content: text('content').notNull(),
   color: text('color').notNull(),
   pinned: boolean('pinned').default(false).notNull(),
+  checklists: text('checklists').default('[]'),
+  subtasks: text('subtasks').default('[]'),
+  status: text('status').default('to_do'),
   projectId: integer('project_id').references(() => projects.id),
   columnId: integer('column_id'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
@@ -275,6 +278,9 @@ export const goals = pgTable('goals', {
   category: text('category').default('Personal'),
   timeframe: text('timeframe').default('1month'),
   subGoals: text('sub_goals').default('[]'),
+  checklists: text('checklists').default('[]'),
+  subtasks: text('subtasks').default('[]'),
+  status: text('status').default('to_do'),
   completed: boolean('completed').default(false),
   completedAt: text('completed_at'),
   projectId: integer('project_id').references(() => projects.id),
@@ -299,6 +305,9 @@ export const habits = pgTable('habits', {
   pinned: boolean('pinned').default(false).notNull(),
   streak: integer('streak').default(0).notNull(),
   completedDays: text('completed_days').default('[]').notNull(), // JSON array of ISO dates
+  checklists: text('checklists').default('[]'),
+  subtasks: text('subtasks').default('[]'),
+  status: text('status').default('to_do'),
   dailyTime: integer('daily_time'), // minutes per day required
   durationDays: integer('duration_days'), // e.g. 30, 60, 90 days
   displayOrder: integer('display_order').default(0),

@@ -74,12 +74,13 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, category, color, projectId, columnId } = req.body;
+    const { title, category, color, checklists, subtasks, status, projectId, columnId } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
     const [newHabit] = await db.insert(habits).values({
       userId: req.userId!, title, category: category || 'Personal', color: color || 'primary',
-      streak: 0, completedDays: '[]', projectId: projectId || null, columnId: columnId || null,
+      streak: 0, completedDays: '[]', checklists: checklists || '[]', subtasks: subtasks || '[]',
+      status: status || 'to_do', projectId: projectId || null, columnId: columnId || null,
     } as InsertHabit).returning();
 
     await logActivity(req.userId!, 'habit', newHabit.id, 'created');
@@ -93,13 +94,16 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const habitId = parseInt(req.params.id);
-    const { completedDays, title, category, color, projectId, columnId, pinned } = req.body;
+    const { completedDays, title, category, color, checklists, subtasks, status, projectId, columnId, pinned } = req.body;
 
     const updates: any = {};
     if (completedDays !== undefined) { updates.completedDays = JSON.stringify(completedDays); updates.streak = calculateStreak(completedDays); }
     if (title !== undefined) updates.title = title;
     if (category !== undefined) updates.category = category;
     if (color !== undefined) updates.color = color;
+    if (checklists !== undefined) updates.checklists = checklists;
+    if (subtasks !== undefined) updates.subtasks = subtasks;
+    if (status !== undefined) updates.status = status;
     if (projectId !== undefined) updates.projectId = projectId;
     if (columnId !== undefined) updates.columnId = columnId;
     if (pinned !== undefined) updates.pinned = pinned;

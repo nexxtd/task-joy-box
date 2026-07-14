@@ -9,7 +9,6 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
-  Brain,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -32,7 +31,6 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -342,7 +340,6 @@ const Tasks: React.FC = () => {
     updateColumn,
   } = useBoardContext();
   const { user } = useAuth();
-  const { open: openDeepFocus } = useDeepFocus();
 
   const tier = user?.subscriptionTier || 'free';
   const isPremium = tier === 'premium' || tier === 'pro';
@@ -1451,13 +1448,6 @@ const Tasks: React.FC = () => {
                 title={isExpanded ? 'Collapse' : 'Expand'}
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                title="Open Deep Focus"
-              >
-                <Brain className="w-3.5 h-3.5" />
               </button>
             </div>
           )}

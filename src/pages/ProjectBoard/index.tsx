@@ -6,14 +6,12 @@ import { Task, LABEL_COLORS, PRIORITY_CONFIG, TaskStatus, Checklist, Subtask } f
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select as RadixSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ProjectBoard = () => {
   const { board, addTask, updateTask, deleteTask, addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const { user } = useAuth();
-  const { open: openDeepFocus } = useDeepFocus();
   const navigate = useNavigate();
   
   const [form] = Form.useForm();
@@ -177,10 +175,6 @@ const ProjectBoard = () => {
     setSelectedTask(null);
   };
 
-  const handleDeepFocusClick = (task: Task) => {
-    openDeepFocus(task);
-  };
-
   const totalItems = selectedTask?.checklists.reduce((s, c) => s + c.items.length, 0) || 0;
   const doneItems = selectedTask?.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0;
   const isOverdue = selectedTask?.dueDate && new Date(selectedTask.dueDate) < new Date();
@@ -221,16 +215,6 @@ const ProjectBoard = () => {
                         <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
                       )}
                       <p className={`text-sm font-bold leading-snug truncate ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.title}</p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeepFocusClick(task);
-                        }}
-                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-100 rounded text-gray-500 hover:text-blue-600"
-                        title="Start Deep Focus"
-                      >
-                        <BrainIcon className="w-3.5 h-3.5" />
-                      </button>
                       {task.icon && <span className="text-xs opacity-70">{task.icon}</span>}
                     </div>
 
@@ -906,12 +890,6 @@ const CheckSquareIcon = ({ className }: { className?: string }) => (
 const AlertTriangleIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-  </svg>
-);
-
-const BrainIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9c0 1.105 3.134 2 7 2s7-.895 7-2M3 9c0-1.105 3.134-2 7-2s7 .895 7 2M3 9v6c0 1.105 3.134 2 7 2s7-.895 7-2V9M10 15c0-.552-.448-1-1-1s-1 .448-1 1 .448 1 1 1 1-.448 1-1z" />
   </svg>
 );
 

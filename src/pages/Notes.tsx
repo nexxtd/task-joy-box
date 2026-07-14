@@ -21,6 +21,8 @@ import {
   ChevronLeft,
   Paperclip,
 } from 'lucide-react';
+import ChecklistSubtaskEditor, { StatusSelector } from '@/components/ChecklistSubtaskEditor';
+import type { Checklist, Subtask, TaskStatus } from '@/types/board';
 import { fetchNoteTemplates, createNoteTemplate, updateNoteTemplate, deleteNoteTemplate as deleteNoteTemplateApi } from '@/services/noteTemplateService';
 import type { NoteTemplate } from '@/services/noteTemplateService';
 import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
@@ -54,6 +56,9 @@ interface Note {
   updatedAt: string;
   tags: NoteTag[];
   images?: NoteImage[];
+  checklists: Checklist[];
+  subtasks: Subtask[];
+  status: TaskStatus;
 }
 
 interface Project {
@@ -119,6 +124,9 @@ const Notes: React.FC = () => {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftProjectId, setDraftProjectId] = useState<string>('');
+  const [draftChecklists, setDraftChecklists] = useState<Checklist[]>([]);
+  const [draftSubtasks, setDraftSubtasks] = useState<Subtask[]>([]);
+  const [draftStatus, setDraftStatus] = useState<TaskStatus>('to_do');
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<number[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -204,6 +212,9 @@ const Notes: React.FC = () => {
       tags: tmpl.tags || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      checklists: [],
+      subtasks: [],
+      status: 'to_do',
     };
     return noteTemplateEditOverrides ? { ...base, ...noteTemplateEditOverrides } : base;
   }, [editingNoteTemplateMeta, noteTemplateEditOverrides]);
@@ -229,18 +240,29 @@ const Notes: React.FC = () => {
       const res = await fetch('/api/notes', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to fetch notes');
       const data = await res.json();
-      setNotes((data.notes || []).map((note: any) => ({
-        id: note.id,
-        title: note.title || '',
-        content: note.content || '',
-        color: note.color || NOTE_COLORS[0],
-        pinned: Boolean(note.pinned),
-        projectId: note.projectId,
-        columnId: note.columnId,
-        createdAt: note.createdAt || new Date().toISOString(),
-        updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
-        tags: Array.isArray(note.tags) ? note.tags : [],
-      })));
+      setNotes((data.notes || []).map((note: any) => {
+        let checklists: Checklist[] = [];
+        let subtasks: Subtask[] = [];
+        let status: TaskStatus = 'to_do';
+        try { checklists = Array.isArray(note.checklists) ? note.checklists : JSON.parse(note.checklists || '[]'); } catch { checklists = []; }
+        try { subtasks = Array.isArray(note.subtasks) ? note.subtasks : JSON.parse(note.subtasks || '[]'); } catch { subtasks = []; }
+        try { status = (note.status as TaskStatus) || 'to_do'; } catch { status = 'to_do'; }
+        return {
+          id: note.id,
+          title: note.title || '',
+          content: note.content || '',
+          color: note.color || NOTE_COLORS[0],
+          pinned: Boolean(note.pinned),
+          projectId: note.projectId,
+          columnId: note.columnId,
+          createdAt: note.createdAt || new Date().toISOString(),
+          updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
+          tags: Array.isArray(note.tags) ? note.tags : [],
+          checklists,
+          subtasks,
+          status,
+        };
+      }));
       setTags((data.tags || []).map((tag: any) => ({ id: tag.id, name: tag.name, color: tag.color })));
       setError(null);
     } catch {
@@ -261,7 +283,9 @@ const Notes: React.FC = () => {
     setDraftTitle(activeNote.title);
     setDraftContent(activeNote.content);
     setDraftProjectId(activeNote.projectId ? String(activeNote.projectId) : '');
-
+    setDraftChecklists(activeNote.checklists ?? []);
+    setDraftSubtasks(activeNote.subtasks ?? []);
+    setDraftStatus(activeNote.status ?? 'to_do');
   }, [activeNote?.id]);
 
   const fetchProjects = async () => {
@@ -310,6 +334,9 @@ const Notes: React.FC = () => {
         createdAt: created.createdAt || new Date().toISOString(),
         updatedAt: created.updatedAt || created.createdAt || new Date().toISOString(),
         tags: Array.isArray(created.tags) ? created.tags : [],
+        checklists: [],
+        subtasks: [],
+        status: 'to_do',
       };
       setNotes(prev => [next, ...prev]);
       setShowCreateModal(false);
@@ -319,14 +346,25 @@ const Notes: React.FC = () => {
       const tagRes = await fetch('/api/notes', { credentials: 'include' });
       if (tagRes.ok) {
         const data = await tagRes.json();
-        setNotes((data.notes || []).map((note: any) => ({
-          id: note.id, title: note.title || '', content: note.content || '',
-          color: note.color || NOTE_COLORS[0], pinned: Boolean(note.pinned),
-          projectId: note.projectId, columnId: note.columnId,
-          createdAt: note.createdAt || new Date().toISOString(),
-          updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
-          tags: Array.isArray(note.tags) ? note.tags : [],
-        })));
+        setNotes((data.notes || []).map((note: any) => {
+          let checklists: Checklist[] = [];
+          let subtasks: Subtask[] = [];
+          let status: TaskStatus = 'to_do';
+          try { checklists = Array.isArray(note.checklists) ? note.checklists : JSON.parse(note.checklists || '[]'); } catch { checklists = []; }
+          try { subtasks = Array.isArray(note.subtasks) ? note.subtasks : JSON.parse(note.subtasks || '[]'); } catch { subtasks = []; }
+          try { status = (note.status as TaskStatus) || 'to_do'; } catch { status = 'to_do'; }
+          return {
+            id: note.id, title: note.title || '', content: note.content || '',
+            color: note.color || NOTE_COLORS[0], pinned: Boolean(note.pinned),
+            projectId: note.projectId, columnId: note.columnId,
+            createdAt: note.createdAt || new Date().toISOString(),
+            updatedAt: note.updatedAt || note.createdAt || new Date().toISOString(),
+            tags: Array.isArray(note.tags) ? note.tags : [],
+            checklists,
+            subtasks,
+            status,
+          };
+        }));
       }
       setOpenNoteId(next.id);
     } catch { alert('Failed to save note. Please try again.'); }
@@ -1782,6 +1820,39 @@ const Notes: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Status Section */}
+            <div className="rounded-2xl border border-border bg-muted/20">
+              <div className="px-4 py-3">
+                <h3 className="text-sm font-semibold text-foreground mb-3">Status</h3>
+                <StatusSelector
+                  status={draftStatus}
+                  onChange={newStatus => {
+                    setDraftStatus(newStatus);
+                    if (activeNote && !editingNoteTemplateMeta) {
+                      applyNoteUpdate(activeNote.id, { status: newStatus });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Checklists & Sub-tasks Section */}
+            {activeNote && !editingNoteTemplateMeta && (
+              <ChecklistSubtaskEditor
+                entityId={String(activeNote.id)}
+                checklists={draftChecklists}
+                subtasks={draftSubtasks}
+                onChecklistsChange={newChecklists => {
+                  setDraftChecklists(newChecklists);
+                  applyNoteUpdate(activeNote.id, { checklists: JSON.stringify(newChecklists) as any });
+                }}
+                onSubtasksChange={newSubtasks => {
+                  setDraftSubtasks(newSubtasks);
+                  applyNoteUpdate(activeNote.id, { subtasks: JSON.stringify(newSubtasks) as any });
+                }}
+              />
+            )}
 
             <div className="flex items-center justify-between pt-2 border-t border-border">
               <div className="flex items-center gap-2">

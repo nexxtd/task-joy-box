@@ -1,7 +1,6 @@
 import React from 'react';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG } from '@/types/board';
-import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2, User } from 'lucide-react';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { Calendar, CheckSquare, AlertTriangle, CheckCircle2, User } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -12,17 +11,11 @@ interface TaskCardProps {
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggleComplete, canEdit = true }) => {
-  const { open: openDeepFocus } = useDeepFocus();
   const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
   const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
   const subtaskTotal = (task.subtasks || []).length;
   const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
-
-  const handleDeepFocusClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    openDeepFocus(task);
-  };
 
   return (
     <div
@@ -48,13 +41,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
           <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
         )}
         <p className={`text-sm font-bold text-foreground leading-snug truncate flex-1 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
-        <button
-          onClick={handleDeepFocusClick}
-          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary"
-          title="Start Deep Focus"
-        >
-          <Brain className="w-3.5 h-3.5" />
-        </button>
         {task.icon && <span className="text-xs opacity-70">{task.icon}</span>}
       </div>
 

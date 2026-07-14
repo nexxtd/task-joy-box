@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Target, Plus, Trash2, X, Tag, BarChart3, ChevronDown, ChevronUp, Search, FolderKanban, Pin, GripVertical, Image, Paperclip, Edit3, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ChecklistSubtaskEditor, { StatusSelector } from '@/components/ChecklistSubtaskEditor';
+import type { Checklist, Subtask, TaskStatus } from '@/types/board';
 
 interface GoalTag {
   id: number;
@@ -30,6 +32,9 @@ interface Goal {
   tags: GoalTag[];
   pinned: boolean;
   images?: { id: string; fileName: string; fileUrl: string; fileSize: number; }[];
+  checklists: Checklist[];
+  subtasks: Subtask[];
+  status: TaskStatus;
 }
 
 interface Project {
@@ -65,7 +70,7 @@ const Goals: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [editGoal, setEditGoal] = useState({ title: '', description: '', target: 10, unit: 'tasks', timeframe: '1month', category: 'Personal', subGoals: [] as SubGoal[], projectId: '' as string, columnId: '' as string });
+  const [editGoal, setEditGoal] = useState({ title: '', description: '', target: 10, unit: 'tasks', timeframe: '1month', category: 'Personal', subGoals: [] as SubGoal[], projectId: '' as string, columnId: '' as string, checklists: [] as Checklist[], subtasks: [] as Subtask[], status: 'to_do' as TaskStatus });
   const [editSubGoalTitle, setEditSubGoalTitle] = useState('');
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -128,6 +133,9 @@ const Goals: React.FC = () => {
         tags: g.tags || [],
         pinned: g.pinned || false,
         images: g.images || [],
+        checklists: (() => { try { return g.checklists ? (typeof g.checklists === 'string' ? JSON.parse(g.checklists) : g.checklists) : []; } catch { return []; } })(),
+        subtasks: (() => { try { return g.subtasks ? (typeof g.subtasks === 'string' ? JSON.parse(g.subtasks) : g.subtasks) : []; } catch { return []; } })(),
+        status: (g.status as TaskStatus) || 'to_do',
       })));
     } catch (err) {
       setError('Failed to load goals');
@@ -165,6 +173,9 @@ const Goals: React.FC = () => {
         category: created.category || 'Personal', timeframe: created.timeframe || '1month',
         subGoals: created.subGoals ? (typeof created.subGoals === 'string' ? JSON.parse(created.subGoals) : created.subGoals) : [],
         projectId: created.projectId, columnId: created.columnId, tags: [], pinned: false, images: [],
+        checklists: (() => { try { return created.checklists ? (typeof created.checklists === 'string' ? JSON.parse(created.checklists) : created.checklists) : []; } catch { return []; } })(),
+        subtasks: (() => { try { return created.subtasks ? (typeof created.subtasks === 'string' ? JSON.parse(created.subtasks) : created.subtasks) : []; } catch { return []; } })(),
+        status: (created.status as TaskStatus) || 'to_do',
       };
 
       setGoals(prev => [...prev, goal]);
@@ -227,6 +238,9 @@ const Goals: React.FC = () => {
       unit: goal.unit, timeframe: goal.timeframe, category: goal.category,
       subGoals: [...goal.subGoals], projectId: goal.projectId ? String(goal.projectId) : '',
       columnId: goal.columnId ? String(goal.columnId) : '',
+      checklists: goal.checklists ? [...goal.checklists] : [],
+      subtasks: goal.subtasks ? [...goal.subtasks] : [],
+      status: goal.status || 'to_do',
     });
     setEditSubGoalTitle('');
     fetchActivity(goal.id);
@@ -239,10 +253,13 @@ const Goals: React.FC = () => {
       title: editGoal.title, description: editGoal.description, target: editGoal.target,
       unit: editGoal.unit, timeframe: editGoal.timeframe, category: editGoal.category,
       subGoals: JSON.stringify(editGoal.subGoals),
+      checklists: JSON.stringify(editGoal.checklists),
+      subtasks: JSON.stringify(editGoal.subtasks),
+      status: editGoal.status,
       projectId: editGoal.projectId ? Number(editGoal.projectId) : null,
       columnId: editGoal.columnId ? Number(editGoal.columnId) : null,
     };
-    setGoals(goals.map(g => g.id === editingGoal.id ? { ...g, ...editGoal, projectId: editGoal.projectId ? Number(editGoal.projectId) : null, columnId: editGoal.columnId ? Number(editGoal.columnId) : null, subGoals: editGoal.subGoals } : g));
+    setGoals(goals.map(g => g.id === editingGoal.id ? { ...g, ...editGoal, projectId: editGoal.projectId ? Number(editGoal.projectId) : null, columnId: editGoal.columnId ? Number(editGoal.columnId) : null, subGoals: editGoal.subGoals, checklists: editGoal.checklists, subtasks: editGoal.subtasks, status: editGoal.status } : g));
     setEditingGoal(null);
     try {
       const res = await fetch(`/api/goals/${editingGoal.id}`, {
@@ -1014,6 +1031,28 @@ const Goals: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Status Section */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <div className="px-4 py-3">
+                  <h3 className="text-sm font-semibold text-foreground">Status</h3>
+                </div>
+                <div className="border-t border-border/60 px-4 py-3">
+                  <StatusSelector
+                    status={editGoal.status}
+                    onChange={status => setEditGoal(g => ({ ...g, status }))}
+                  />
+                </div>
+              </div>
+
+              {/* Checklists & Sub-tasks Section */}
+              <ChecklistSubtaskEditor
+                entityId={String(editingGoal.id)}
+                checklists={editGoal.checklists}
+                subtasks={editGoal.subtasks}
+                onChecklistsChange={checklists => setEditGoal(g => ({ ...g, checklists }))}
+                onSubtasksChange={subtasks => setEditGoal(g => ({ ...g, subtasks }))}
+              />
 
               {/* Tags Section */}
               <div className="rounded-2xl border border-border bg-muted/20">

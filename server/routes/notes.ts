@@ -70,13 +70,16 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, content, color, pinned, projectId, columnId } = req.body;
+    const { title, content, color, pinned, checklists, subtasks, status, projectId, columnId } = req.body;
     const [newNote] = await db.insert(notes).values({
       userId: req.userId!,
       title: encrypt(title || '') ?? '',
       content: encrypt(content || '') ?? '',
       color: color || 'hsl(var(--card))',
       pinned: Boolean(pinned),
+      checklists: checklists || '[]',
+      subtasks: subtasks || '[]',
+      status: status || 'to_do',
       projectId: projectId || null,
       columnId: columnId || null,
     }).returning();
@@ -100,7 +103,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const noteId = parseInt(req.params.id);
-    const allowedFields = ['title', 'content', 'color', 'pinned', 'projectId', 'columnId'];
+    const allowedFields = ['title', 'content', 'color', 'pinned', 'checklists', 'subtasks', 'status', 'projectId', 'columnId'];
     const updates: Record<string, any> = {};
     
     for (const field of allowedFields) {
