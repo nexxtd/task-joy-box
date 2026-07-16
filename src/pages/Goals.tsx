@@ -115,6 +115,7 @@ const Goals: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [tagFilterIds, setTagFilterIds] = useState<number[]>([]);
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [sortByTarget, setSortByTarget] = useState(false);
   const [sortTargetDesc, setSortTargetDesc] = useState(false);
   const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
@@ -922,6 +923,56 @@ const Goals: React.FC = () => {
               >
                 Clear tags
               </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setTagPickerOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              Tags
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            {tagPickerOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
+                <div className="absolute left-0 mt-1.5 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Tag filter</p>
+                      <p className="text-xs text-muted-foreground">Filter goals by tag.</p>
+                    </div>
+                    <button onClick={() => setTagPickerOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                    {goalTags.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">No tags yet.</p>
+                    )}
+                    {goalTags.map(tag => {
+                      const isActive = tagFilterIds.includes(tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          onClick={() => toggleGoalTagFilter(tag.id)}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
+                            isActive
+                              ? 'border-primary/30 bg-primary/5 shadow-sm'
+                              : 'border-border/60 hover:bg-muted/40'
+                          }`}
+                        >
+                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: tag.color }} />
+                          <span className="text-sm text-foreground flex-1">{tag.name}</span>
+                          {isActive && <span className="text-[10px] text-primary font-bold">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
