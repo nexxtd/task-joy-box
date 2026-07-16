@@ -30,6 +30,8 @@ import { useEffect } from "react";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
+import DeepFocusMode from "@/components/DeepFocusMode";
+import { useDeepFocus } from "@/hooks/useDeepFocus";
 
 const Notifier = () => {
   const { board } = useBoardContext();
@@ -73,6 +75,7 @@ const queryClient = new QueryClient();
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
+  const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
 
   if (loading) {
     return (
@@ -92,6 +95,7 @@ function ProtectedRoutes() {
       <Notifier />
       <EnergyPopup />
       {shouldShowTutorial && <Tutorial />}
+      {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<Dashboard />} />

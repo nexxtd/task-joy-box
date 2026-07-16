@@ -161,6 +161,11 @@ app.use(cors({
     if (!isProduction && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
       return callback(null, true);
     }
+
+    // Allow Replit dev/preview domains in development only
+    if (!isProduction && (/\.replit\.dev$/.test(origin) || /\.riker\.replit\.dev$/.test(origin))) {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.has(origin)) {
       return callback(null, true);

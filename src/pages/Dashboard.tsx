@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useDeepFocus } from '@/hooks/useDeepFocus';
 import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import {
-  CheckSquare, Target, Flame, Plus, ArrowRight,
-  TrendingUp, Cloud, Bot, Calendar, X
+  CheckSquare, Target, Clock, Flame, Plus, ArrowRight,
+  TrendingUp, Cloud, Bot, Calendar, Zap, X
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,6 +15,7 @@ const Dashboard: React.FC = () => {
   const { board, addTask } = useBoardContext();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -121,9 +123,24 @@ const Dashboard: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  // Calculate deep work hours from localStorage
+  const deepWorkHours = (() => {
+    try {
+      const stored = localStorage.getItem('deepFocusSessions');
+      if (!stored) return 0;
+      const sessions = JSON.parse(stored);
+      const todayDate = new Date().toDateString();
+      const todaySessions = sessions.filter((s: any) => 
+        new Date(s.startTime).toDateString() === todayDate && s.completed
+      );
+      return todaySessions.reduce((acc: number, s: any) => acc + (s.duration || 0) / 3600, 0);
+    } catch { return 0; }
+  })();
+
   const stats = [
     { label: 'Tasks Active', value: activeTasks.length, icon: CheckSquare, color: 'text-primary' },
     { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, color: 'text-label-green' },
+    { label: 'Deep Work', value: `${deepWorkHours.toFixed(1)}h`, icon: Clock, color: 'text-label-blue' },
     { label: 'Daily Streak', value: habitStreak, icon: Flame, color: 'text-label-orange' },
   ];
 
@@ -251,6 +268,13 @@ const Dashboard: React.FC = () => {
                 })}
               </div>
             )}
+            <button
+              className="w-full mt-4 py-2.5 text-sm font-medium text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.01]"
+              onClick={() => openDeepFocus()}
+            >
+              <Zap className="w-4 h-4" />
+              Start Deep Work
+            </button>
           </div>
 
           {/* Right Column */}

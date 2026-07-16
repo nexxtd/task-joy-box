@@ -304,7 +304,14 @@ const Notes: React.FC = () => {
       });
       if (!res.ok) throw new Error('Failed to update note');
       const data = await res.json();
-      if (data?.id) setNotes(prev => prev.map(n => (n.id === data.id ? { ...n, ...data } : n)));
+      if (data?.id) {
+        let checklists: Checklist[] = [];
+        let subtasks: Subtask[] = [];
+        try { checklists = Array.isArray(data.checklists) ? data.checklists : JSON.parse(data.checklists || '[]'); } catch { checklists = []; }
+        try { subtasks = Array.isArray(data.subtasks) ? data.subtasks : JSON.parse(data.subtasks || '[]'); } catch { subtasks = []; }
+        const status: TaskStatus = (data.status as TaskStatus) || 'to_do';
+        setNotes(prev => prev.map(n => (n.id === data.id ? { ...n, ...data, checklists, subtasks, status } : n)));
+      }
     } catch { fetchNotes(); }
   };
 

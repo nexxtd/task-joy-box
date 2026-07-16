@@ -82,6 +82,9 @@ export async function initDatabase() {
         daily_time INTEGER,
         duration_days INTEGER,
         display_order INTEGER DEFAULT 0,
+        checklists TEXT NOT NULL DEFAULT '[]',
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'to_do',
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
@@ -295,6 +298,7 @@ export async function initDatabase() {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS tags_user_name_idx ON tags(user_id, lower(name));`);
 
     // One-time migration: copy old note_tags, goal_tags, habit_tags into unified tags table
+    // (These legacy tables may not exist on fresh installs — skip silently if absent)
     for (const oldTable of ['note_tags', 'goal_tags', 'habit_tags']) {
       await pool.query(`
         INSERT INTO tags (user_id, name, color, created_at, updated_at)
@@ -303,7 +307,7 @@ export async function initDatabase() {
         WHERE NOT EXISTS (
           SELECT 1 FROM tags t WHERE t.user_id = nt.user_id AND lower(t.name) = lower(nt.name)
         );
-      `);
+      `).catch(() => {/* legacy table absent — no migration needed */});
     }
 
     // Drop old FK constraints if they still reference the legacy tag tables
@@ -330,7 +334,7 @@ export async function initDatabase() {
         FROM ${oldTagTable} nt
         INNER JOIN tags t ON t.user_id = nt.user_id AND lower(t.name) = lower(nt.name)
         WHERE nta.tag_id = nt.id;
-      `);
+      `).catch(() => {/* legacy table absent — no migration needed */});
 
       // Re-add FK constraint pointing to the unified tags table
       await pool.query(`
@@ -447,6 +451,18 @@ export async function initDatabase() {
     await addColumnIfNotExists('habits', 'project_id', 'INTEGER REFERENCES projects(id) ON DELETE SET NULL');
     await addColumnIfNotExists('habits', 'column_id', 'INTEGER');
     console.log('Project/column columns added to notes, goals, habits');
+
+    // --- CHECKLIST / SUBTASK / STATUS COLUMNS (goals, habits, notes) ---
+    await addColumnIfNotExists('goals',  'checklists', "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('goals',  'subtasks',   "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('goals',  'status',     "TEXT NOT NULL DEFAULT 'to_do'");
+    await addColumnIfNotExists('habits', 'checklists', "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('habits', 'subtasks',   "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('habits', 'status',     "TEXT NOT NULL DEFAULT 'to_do'");
+    await addColumnIfNotExists('notes',  'checklists', "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('notes',  'subtasks',   "TEXT NOT NULL DEFAULT '[]'");
+    await addColumnIfNotExists('notes',  'status',     "TEXT NOT NULL DEFAULT 'to_do'");
+    console.log('Checklist/subtask/status columns verified for goals, habits, notes');
 
     // --- JUNCTION TABLES (habit + goal assignments reference unified tags) ---
     await pool.query(`

@@ -11,6 +11,7 @@ import {
   TaskStatus,
 } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical } from 'lucide-react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -101,6 +102,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   } = useBoardContext();
 
   const { user } = useAuth();
+  const { open: openDeepFocus } = useDeepFocus();
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';

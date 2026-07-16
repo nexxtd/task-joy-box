@@ -2,7 +2,7 @@ export const FAQS = [
   {
     id: 'create-task',
     question: 'How do I create a task?',
-    answer: 'Click the "+ Add task" button on any column of your board, or open the Tasks page and use the quick-add bar at the top. Give your task a title, set a priority level (Low, Medium, High, or Urgent), add a due date, and write an optional description. You can also open the task card to add sub-tasks, checklists, labels, and attachments.',
+    answer: 'Click the "+ Add task" button on any column of your board, or open the Tasks page and use the quick-add bar at the top. Give your task a title, set a priority level (Low, Medium, High, or Urgent), add a due date, and write an optional description. You can also open the task card to add sub-tasks, checklists, labels, attachments, and a deep focus timer.',
   },
   {
     id: 'use-calendar',
@@ -13,6 +13,11 @@ export const FAQS = [
     id: 'set-goal',
     question: 'How do I set a goal?',
     answer: 'Go to the Goals page and click "New Goal". Fill in the title, a short description, your numeric target (e.g. 100), the unit (e.g. pages, km, sessions), a category, and a timeframe. Once created, you can add sub-goals to break the objective down, link board tasks to it, and update your progress manually as you work towards it.',
+  },
+  {
+    id: 'deep-focus',
+    question: 'What is deep focus?',
+    answer: 'Deep Focus is a distraction-free work mode tied to a specific task. Open any task card and click "Start Deep Focus" to enter a full-screen timer session. The screen clears of all other distractions and counts your focused time. When you finish or pause, the session is automatically saved to your History under Settings so you can review your focused work over time.',
   },
   {
     id: 'how-habits-work',
@@ -48,6 +53,11 @@ export const FAQS = [
     id: 'connect-tasks-goals',
     question: 'How do I connect tasks to goals?',
     answer: 'Open the Goals page and click on a goal to expand it. In the goal detail panel, scroll to the "Linked Tasks" section and click "Link a task". A search panel will appear where you can find and attach tasks from any of your boards. Completing a linked task can count towards your goal progress automatically depending on your settings.',
+  },
+  {
+    id: 'deep-focus-mode',
+    question: 'How do I use deep focus mode?',
+    answer: 'Click "Start Deep Focus" on any task card. A full-screen overlay will launch showing the task name and a timer. Press the play button to begin your session. You can pause at any time using the pause button, or end the session early with the stop button. All completed sessions are stored in Settings > History > Deep Focus so you can review your total focused time.',
   },
   {
     id: 'schedule-calendar',
@@ -91,7 +101,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'gs-first-task',
         title: 'Creating your first task',
-        content: 'Go to the Tasks page or open any board. Click the "+ Add task" button at the bottom of any column.\n\nGive your task a clear title. Set a priority — Urgent, High, Medium, or Low. Add a due date if it has a deadline. Write a description with any extra details.\n\nOnce saved the task appears on the board. You can drag it between columns to change its status. Click the task card to open the full detail view where you can add sub-tasks, checklists, attachments, and labels.',
+        content: 'Go to the Tasks page or open any board. Click the "+ Add task" button at the bottom of any column.\n\nGive your task a clear title. Set a priority — Urgent, High, Medium, or Low. Add a due date if it has a deadline. Write a description with any extra details.\n\nOnce saved the task appears on the board. You can drag it between columns to change its status. Click the task card to open the full detail view where you can add sub-tasks, checklists, attachments, labels, and start a Deep Focus session.',
       },
       {
         id: 'gs-navigate',
@@ -118,6 +128,11 @@ export const RESOURCES: ResourceCategory[] = [
         id: 'tasks-priority',
         title: 'Setting priorities and due dates',
         content: 'Every task has a priority level: Urgent, High, Medium, Low, or None. Urgent tasks are highlighted in red on the board. High priority tasks show an orange indicator.\n\nSet a due date by clicking the calendar icon in the task editor. You can also set a specific due time if needed. Tasks with due dates appear on the Calendar page.\n\nThe board can be sorted automatically by priority. Enable Auto-sort in Settings > Appearance to keep your most urgent tasks always visible at the top of each column.',
+      },
+      {
+        id: 'tasks-deepfocus',
+        title: 'Using Deep Focus mode',
+        content: 'Deep Focus is a built-in Pomodoro-style work session tied to a single task. Open any task card and click the "Start Deep Focus" button.\n\nThe screen shifts to a full-screen focus view showing only the task name and a timer. Click the play button to start the timer. Use pause to take a break and resume to continue.\n\nWhen you click Stop the session is saved automatically. You can review all your past focus sessions in Settings > History > Deep Focus, where you can see total time focused and which tasks you worked on.',
       },
       {
         id: 'tasks-attachments',
