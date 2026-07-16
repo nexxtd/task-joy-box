@@ -21,8 +21,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const [newItemTexts, setNewItemTexts] = useState<Record<string, string>>({});
   const [editingItem, setEditingItem] = useState<{ checklistId: string; itemId: string; text: string } | null>(null);
   const { user } = useAuth();
-  const isPremium = user?.subscriptionTier === 'premium';
-  const isPro = user?.subscriptionTier === 'pro' || isPremium;
+  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const isPro = user?.subscriptionTier === 'pro';
   const [uploading, setUploading] = useState(false);
 
   const currentColumn = board.columns.find(c => c.id === task.columnId);

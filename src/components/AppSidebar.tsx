@@ -18,7 +18,7 @@ const AppSidebar: React.FC = () => {
   const { T } = useLanguage();
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
 
-  const isPremium = user?.subscriptionTier === 'premium';
+  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
   const navItems = [
     { icon: LayoutDashboard, label: T.nav_dashboard, path: '/' },

@@ -36,7 +36,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [showRowUpgradePrompt, setShowRowUpgradePrompt] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isPremium = user?.subscriptionTier === 'premium';
+  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
   const [showMenu, setShowMenu] = useState(false);
   const [editingColumnName, setEditingColumnName] = useState(false);

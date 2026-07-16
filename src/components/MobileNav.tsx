@@ -28,7 +28,7 @@ const MobileNav: React.FC = () => {
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free' 
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
-    ...(user?.subscriptionTier === 'premium'
+    ...(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium'
       ? [{ icon: LifeBuoy, label: 'Support', path: '/support' }]
       : []),
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' }] : []),
