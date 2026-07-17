@@ -32,7 +32,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
+
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -342,7 +342,7 @@ const Goals: React.FC = () => {
     updateColumn,
   } = useGoalsContext();
   const { user } = useAuth();
-  const { open: openDeepFocus } = useDeepFocus();
+
 
   const tier = user?.subscriptionTier || 'free';
   const isPremium = tier === 'premium' || tier === 'pro';
@@ -1452,13 +1452,7 @@ const Goals: React.FC = () => {
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-              <button
-                onClick={e => { e.stopPropagation(); openDeepFocus(goal); }}
-                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                title="Open Deep Focus"
-              >
-                <Brain className="w-3.5 h-3.5" />
-              </button>
+
             </div>
           )}
         </div>
