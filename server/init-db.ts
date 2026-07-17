@@ -506,6 +506,32 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS activity_logs_entity_idx ON activity_logs(entity_type, entity_id);`);
     console.log('Activity logs table verified');
 
+    // --- NOTE AND GOAL SNAPSHOTS TABLES ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS note_snapshots (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        snapshot TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS note_snapshots_user_id_idx ON note_snapshots(user_id);
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS goal_snapshots (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        snapshot TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS goal_snapshots_user_id_idx ON goal_snapshots(user_id);
+    `);
+    console.log('Note and goal snapshot tables verified');
+
     // Task Templates
     await pool.query(`
       CREATE TABLE IF NOT EXISTS task_templates (
