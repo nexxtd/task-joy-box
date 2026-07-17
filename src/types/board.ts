@@ -139,3 +139,13 @@ export const LABEL_COLORS: Record<LabelColor, string> = {
   purple: 'bg-label-purple',
   pink: 'bg-label-pink',
 };
+
+// Aliases for Notes and Goals Kanban Boards
+export type Note = Task;
+export type Goal = Task;
+export type NoteStatus = TaskStatus;
+export type GoalStatus = TaskStatus;
+export type NoteTemplate = TaskTemplate;
+export type GoalTemplate = TaskTemplate;
+export type NoteActivity = TaskActivity;
+export type GoalActivity = TaskActivity;
