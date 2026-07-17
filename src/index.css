@@ -152,6 +152,11 @@
   background: hsl(var(--muted-foreground));
 }
 
+/* Prevent content shift when scrollbar appears/disappears */
+* {
+  scrollbar-gutter: stable;
+}
+
 /* Drag styles */
 .task-dragging {
   opacity: 0.9;

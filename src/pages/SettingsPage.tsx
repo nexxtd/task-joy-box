@@ -614,7 +614,7 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto relative">
-      <header className="px-6 py-3 border-b border-border flex items-center justify-between">
+      <header className="px-6 py-4 border-b border-border flex items-center justify-between">
         <h1 className="text-base font-bold text-foreground">Settings</h1>
         {saved && (
           <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 animate-fade-in">

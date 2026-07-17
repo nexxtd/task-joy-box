@@ -283,7 +283,7 @@ const CalendarPage: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-background/80 backdrop-blur-sm relative">
         {/* Top Navigation Bar */}
-        <header className="px-6 py-3 flex items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
+        <header className="px-6 py-4 flex items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
               <h1 className="text-lg font-bold text-foreground tracking-tight">{headerTitle()}</h1>

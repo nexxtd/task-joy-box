@@ -278,7 +278,7 @@ const AIChat: React.FC = () => {
     <div className="flex-1 flex flex-col h-full overflow-hidden">
 
       {/* ── Header ── */}
-      <header className="px-6 py-3.5 border-b border-border bg-card shrink-0">
+      <header className="px-6 py-4 border-b border-border bg-card shrink-0">
         <div className="flex items-center justify-between gap-4">
           {/* Left: Logo + Name + Tagline */}
           <div className="flex items-center gap-3">
