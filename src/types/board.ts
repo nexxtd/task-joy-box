@@ -149,3 +149,7 @@ export type NoteTemplate = TaskTemplate;
 export type GoalTemplate = TaskTemplate;
 export type NoteActivity = TaskActivity;
 export type GoalActivity = TaskActivity;
+export type Habit = Task;
+export type HabitStatus = TaskStatus;
+export type HabitTemplate = TaskTemplate;
+export type HabitActivity = TaskActivity;

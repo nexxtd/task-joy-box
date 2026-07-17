@@ -96,6 +96,13 @@ export const goalSnapshots = pgTable('goal_snapshots', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const habitSnapshots = pgTable('habit_snapshots', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  snapshot: text('snapshot').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const labels = pgTable('labels', {
   id: serial('id').primaryKey(),
   taskId: integer('task_id').references(() => tasks.id).notNull(),

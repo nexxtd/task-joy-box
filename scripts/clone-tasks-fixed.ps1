@@ -42,3 +42,6 @@ Set-Content -Path "src/pages/Notes.tsx" -Value $notes -Encoding UTF8
 
 $goals = Process-Content -text $source -SingularTitle 'Goal' -PluralTitle 'Goals' -SingularLower 'goal' -PluralLower 'goals'
 Set-Content -Path "src/pages/Goals.tsx" -Value $goals -Encoding UTF8
+
+$habits = Process-Content -text $source -SingularTitle 'Habit' -PluralTitle 'Habits' -SingularLower 'habit' -PluralLower 'habits'
+Set-Content -Path "src/pages/Habits.tsx" -Value $habits -Encoding UTF8

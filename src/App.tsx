@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BoardProvider } from "@/context/BoardContext";
 import { NotesProvider } from "@/context/NotesContext";
 import { GoalsProvider } from "@/context/GoalsContext";
+import { HabitsProvider } from "@/context/HabitsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -96,30 +97,32 @@ function ProtectedRoutes() {
     <BoardProvider>
       <NotesProvider>
         <GoalsProvider>
-          <Notifier />
-          <EnergyPopup />
-          {shouldShowTutorial && <Tutorial />}
-          {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/tasks" element={<Tasks />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/insights" element={<Insights />} />
-              <Route path="/notes" element={<Notes />} />
-              <Route path="/goals" element={<Goals />} />
-              <Route path="/habits" element={<Habits />} />
-              <Route path="/support" element={<Support />} />
-              <Route path="/collaboration" element={<Collaboration />} />
-              <Route path="/ai-chat" element={<AIChat />} />
-              <Route path="/pricing" element={<Pricing />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-            </Route>
-            <Route path="/whiteboard/:id" element={<WhiteboardPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <HabitsProvider>
+            <Notifier />
+            <EnergyPopup />
+            {shouldShowTutorial && <Tutorial />}
+            {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/projects" element={<Projects />} />
+                <Route path="/tasks" element={<Tasks />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/insights" element={<Insights />} />
+                <Route path="/notes" element={<Notes />} />
+                <Route path="/goals" element={<Goals />} />
+                <Route path="/habits" element={<Habits />} />
+                <Route path="/support" element={<Support />} />
+                <Route path="/collaboration" element={<Collaboration />} />
+                <Route path="/ai-chat" element={<AIChat />} />
+                <Route path="/pricing" element={<Pricing />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+              </Route>
+              <Route path="/whiteboard/:id" element={<WhiteboardPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </HabitsProvider>
         </GoalsProvider>
       </NotesProvider>
     </BoardProvider>
