@@ -776,7 +776,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   {taskSubtasks.length > 0 ? (
                     <div className="space-y-1">
                       {taskSubtasks.map((sub, index) => (
-                         <div key={sub.id} className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group min-w-0">
+                         <div key={sub.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group min-w-0">
                            <CircleToggle
                              completed={sub.completed}
                              onClick={() => toggleSubtask(sub.id)}
@@ -799,7 +799,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                {sub.text}
                              </span>
                            )}
-                          <span className="text-xs text-muted-foreground">{sub.durationMinutes || 0} min</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{sub.durationMinutes || 0} min</span>
                           <button
                             onClick={() => deleteSubtask(sub.id)}
                             className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all shrink-0"
