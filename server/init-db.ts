@@ -530,7 +530,18 @@ export async function initDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS goal_snapshots_user_id_idx ON goal_snapshots(user_id);
     `);
-    console.log('Note and goal snapshot tables verified');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS habit_snapshots (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        snapshot TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS habit_snapshots_user_id_idx ON habit_snapshots(user_id);
+    `);
+    console.log('Note, goal, and habit snapshot tables verified');
 
     // Task Templates
     await pool.query(`
