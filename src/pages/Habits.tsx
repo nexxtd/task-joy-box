@@ -2328,7 +2328,7 @@ const Habits: React.FC = () => {
                             {newHabitSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
@@ -2353,11 +2353,11 @@ const Habits: React.FC = () => {
                                       <>
                                         <span
                                           onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text"
+                                          className="text-sm text-foreground font-medium cursor-text truncate"
                                         >
                                           {subtask.text}
                                         </span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 shrink-0">
                                           <input
                                             type="number"
                                             min={0}
@@ -3645,7 +3645,7 @@ const HabitDropdownExpanded: React.FC<{
               ) : (
                 <span
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                 >
                   {subtask.text}
                 </span>
@@ -4281,7 +4281,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
               ) : (
                 <span
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                 >
                   {subtask.text}
                 </span>
