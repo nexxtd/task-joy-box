@@ -660,20 +660,34 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
           grouped[cl.id] ? { ...cl, items: grouped[cl.id] } : cl
         ),
       });
-    } else if (result.source.droppableId.startsWith('deepfocus-checklist-')) {
-      const listId = result.source.droppableId.replace('deepfocus-checklist-', '');
-      const checklist = (selectedTask.checklists ?? []).find(cl => cl.id === listId);
-      if (!checklist) return;
-      const items = Array.from(checklist.items);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      updateTask(selectedTask.id, {
-        checklists: (selectedTask.checklists ?? []).map(cl =>
-          cl.id === listId ? { ...cl, items } : cl
-        ),
-      });
+    } else if (result.source.droppableId.startsWith('deepfocus-checklist-') && result.destination.droppableId.startsWith('deepfocus-checklist-')) {
+      const srcListId = result.source.droppableId.replace('deepfocus-checklist-', '');
+      const dstListId = result.destination.droppableId.replace('deepfocus-checklist-', '');
+      const srcChecklist = (selectedTask.checklists ?? []).find(cl => cl.id === srcListId);
+      const dstChecklist = (selectedTask.checklists ?? []).find(cl => cl.id === dstListId);
+      if (!srcChecklist || !dstChecklist) return;
+      const srcItems = Array.from(srcChecklist.items);
+      const [removed] = srcItems.splice(result.source.index, 1);
+      if (srcListId === dstListId) {
+        srcItems.splice(result.destination.index, 0, removed);
+        updateTask(selectedTask.id, {
+          checklists: (selectedTask.checklists ?? []).map(cl =>
+            cl.id === srcListId ? { ...cl, items: srcItems } : cl
+          ),
+        });
+      } else {
+        const dstItems = Array.from(dstChecklist.items);
+        dstItems.splice(result.destination.index, 0, removed);
+        updateTask(selectedTask.id, {
+          checklists: (selectedTask.checklists ?? []).map(cl => {
+            if (cl.id === srcListId) return { ...cl, items: srcItems };
+            if (cl.id === dstListId) return { ...cl, items: dstItems };
+            return cl;
+          }),
+        });
+      }
     }
-  }, [selectedTask, updateTask, focusChecklistItems]);
+  }, [selectedTask, updateTask]);
 
   const taskSubtasks = selectedTask?.subtasks ?? [];
   const subtaskTotalMins = taskSubtasks.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
