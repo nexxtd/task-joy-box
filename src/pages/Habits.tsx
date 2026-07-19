@@ -11,6 +11,7 @@ import {
   BarChart3,
   Brain,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -27,6 +28,7 @@ import {
   Tag,
   Sparkles,
   Star,
+  Target,
   Trash2,
   Users,
   X,
@@ -388,6 +390,7 @@ const Habits: React.FC = () => {
   const [newHabitDueTime, setNewHabitDueTime] = useState('');
   const [newHabitDuration, setNewHabitDuration] = useState<number>(60);
   const [newHabitColumnId, setNewHabitColumnId] = useState<string>('');
+  const [newDailyTarget, setNewDailyTarget] = useState(1);
   const [newHabitProjectId, setNewHabitProjectId] = useState<number | ''>('');
   const [newHabitSubtasks, setNewHabitSubtasks] = useState<NewHabitSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -1047,6 +1050,7 @@ const Habits: React.FC = () => {
     setNewHabitSubtasks([]);
     setNewSubtaskText('');
     setNewSubtaskDuration(10);
+    setNewDailyTarget(1);
     setNewChecklistItems([]);
     setNewChecklistText('');
     setNewChecklistLists([]);
@@ -1102,6 +1106,8 @@ const Habits: React.FC = () => {
         durationMinutes: st.durationMinutes,
       })),
       labels: newHabitLabels,
+      dailyTarget: newDailyTarget,
+      dailyLogs: '{}',
       checklists: allChecklists,
       attachments: newFiles.map((file, i) => ({
         id: crypto.randomUUID(),
@@ -1293,6 +1299,28 @@ const Habits: React.FC = () => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
   };
 
+  const toggleDailyUnit = useCallback((habitId: string, action: 'add' | 'remove') => {
+    const habit = board.tasks.find(t => t.id === habitId);
+    if (!habit) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+    const current = logs[todayStr] || 0;
+    const newValue = action === 'add' ? current + 1 : Math.max(0, current - 1);
+    logs[todayStr] = newValue;
+    const completedDays = habit.completedDays ? [...habit.completedDays] : [];
+    const completedSet = new Set(completedDays);
+    const target = habit.dailyTarget || 1;
+    if (newValue >= target) {
+      completedSet.add(todayStr);
+    } else {
+      completedSet.delete(todayStr);
+    }
+    updateTask(habitId, {
+      dailyLogs: JSON.stringify(logs),
+      completedDays: Array.from(completedSet),
+    });
+  }, [board.tasks, updateTask]);
+
   const renderHabitRow = (habit: Habit, dragHandleProps?: any, isDragging?: boolean) => {
     const isExpanded = expandedTaskIds.includes(habit.id);
     const subtaskCount = habit.subtasks?.length || 0;
@@ -1409,11 +1437,14 @@ const Habits: React.FC = () => {
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
-              {subtaskCount > 0 && (() => {
-                const subtaskDone = (habit.subtasks || []).filter(s => s.completed).length;
+              {(() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+                const todayDone = logs[todayStr] || 0;
+                const target = habit.dailyTarget || 1;
                 return (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                    {subtaskDone}/{subtaskCount} sub habit
+                    {todayDone}/{target} today
                   </span>
                 );
               })()}
@@ -1533,6 +1564,7 @@ const Habits: React.FC = () => {
               onDeleteChecklistItem={deleteChecklistItem}
               isPremium={isPremium}
               isPro={isPro}
+              onToggleDailyUnit={toggleDailyUnit}
             />
             <div className="flex justify-end pt-1">
               <button
@@ -2291,294 +2323,25 @@ const Habits: React.FC = () => {
                 />
               </div>
 
-              {/* Sub-habits Card */}
+              {/* Daily Target */}
               <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Sub-habits</h3>
-                    {newHabitSubtasks.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newHabitSubtasks.length})</span>
-                    )}
+                <div className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Daily Target</h3>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {newHabitDuration > 0 && (
-                      <span className={`text-xs font-medium ${
-                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
-                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                      }`}>
-                        {newSubtaskRemaining > 0
-                          ? `${newSubtaskRemaining} mins left`
-                          : newSubtaskRemaining < 0
-                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
-                          : '0 mins left ✓'}
-                      </span>
-                    )}
-                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={1}
+                      value={newDailyTarget}
+                      onChange={e => setNewDailyTarget(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-24 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      placeholder="5"
+                    />
+                    <span className="text-xs text-muted-foreground">units per day (e.g. 5 for 5 liters)</span>
                   </div>
-                </button>
-                {!draftSubtasksCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <DragDropContext onDragEnd={handleDraftReorder}>
-                      <Droppable droppableId="draft-subtasks">
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                            {newHabitSubtasks.map((subtask, index) => (
-                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    {editingDraftSubtaskId === subtask.id ? (
-                                      <>
-                                        <input
-                                          autoFocus
-                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskText}
-                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                          onBlur={() => { setNewHabitSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') { setNewHabitSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                        />
-                                        <input
-                                          type="number"
-                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskDuration}
-                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span
-                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text truncate"
-                                        >
-                                          {subtask.text}
-                                        </span>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                            value={subtask.durationMinutes || 0}
-                                            onChange={e => {
-                                              const val = Math.max(0, Number(e.target.value) || 0);
-                                              setNewHabitSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                            }}
-                                          />
-                                          <span className="text-[10px] text-muted-foreground">min</span>
-                                          <button
-                                            onClick={() => setNewHabitSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                      <input
-                        value={newSubtaskText}
-                        onChange={e => setNewSubtaskText(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
-                        placeholder="New sub-habit"
-                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={newSubtaskDuration}
-                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="min"
-                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                      />
-                      <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Checklist Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftChecklistCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                    {newChecklistLists.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newChecklistLists.length})</span>
-                    )}
-                  </div>
-                  {draftChecklistCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftChecklistCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
-                <DragDropContext onDragEnd={handleDraftReorder}>
-                  {newChecklistItems.length > 0 && (
-                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                      <div className="flex items-center px-3 py-2">
-                        <span className="text-xs font-semibold text-foreground">Checklist</span>
-                      </div>
-                      <div className="px-3 pb-2 space-y-1.5">
-                        <Droppable droppableId="draft-checklist">
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                              {newChecklistItems.map((item, index) => (
-                                <Draggable key={item.id} draggableId={item.id} index={index}>
-                                  {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                        <GripVertical className="w-4 h-4" />
-                                      </div>
-                                      <span className="flex-1">{item.text}</span>
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-                        <div className="flex gap-2 pt-1">
-                          <input
-                            value={newChecklistText}
-                            onChange={e => setNewChecklistText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
-                            placeholder="Add checklist item"
-                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                          />
-                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <Droppable droppableId="draft-checklist-lists" type="checklistList">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                        {newChecklistLists.map((list, listIndex) => {
-                          const isCollapsed = collapsedDraftChecklists.has(list.id);
-                          return (
-                            <Draggable key={list.id} draggableId={list.id} index={listIndex}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                  <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mr-1">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    <button
-                                      onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                                      className="flex-1 flex items-center gap-2 text-left"
-                                    >
-                                      {editingDraftChecklistId === list.id ? (
-                                        <input
-                                          autoFocus
-                                          className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                          value={editingDraftChecklistTitle}
-                                          onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                                          onBlur={() => {
-                                            if (editingDraftChecklistTitle.trim()) {
-                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                            }
-                                            setEditingDraftChecklistId(null);
-                                          }}
-                                          onKeyDown={e => {
-                                            if (e.key === 'Enter') {
-                                              if (editingDraftChecklistTitle.trim()) {
-                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                              }
-                                              setEditingDraftChecklistId(null);
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
-                                          {list.title}
-                                        </span>
-                                      )}
-                                    </button>
-                                    <div className="flex items-center gap-1">
-                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
-                                        {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {!isCollapsed && (
-                                    <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={`draft-checklist-items-${list.id}`} type="checklistItem">
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                            {list.items.map((item, itemIndex) => (
-                                              <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
-                                                {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                      <GripVertical className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="flex-1 text-foreground">{item.text}</span>
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                          </div>
-                                        )}
-                                      </Droppable>
-                                      <div className="flex gap-2 pt-1">
-                                        <input
-                                          value={perChecklistInput[list.id] ?? ''}
-                                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
-                                          placeholder="Add checklist item"
-                                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                        />
-                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-                    <div className="flex gap-2">
-                      <input
-                        value={newChecklistTitle}
-                        onChange={e => setNewChecklistTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
-                        placeholder="New checklist name"
-                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* Attachments Card */}
@@ -3131,6 +2894,7 @@ const Habits: React.FC = () => {
           isPremium={isPremium}
           isPro={isPro}
           onJumpToHabit={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
+          onToggleDailyUnit={toggleDailyUnit}
           onEditTemplate={handleEditTemplate}
           onSaveTemplate={handleSaveTemplate}
           editingTemplateMeta={editingTemplateMeta}
@@ -3429,6 +3193,7 @@ interface HabitFullViewProps {
   editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
   templateEditName?: string;
   onTemplateEditNameChange?: (name: string) => void;
+  onToggleDailyUnit?: (habitId: string, action: 'add' | 'remove') => void;
 }
 
 const HabitDropdownExpanded: React.FC<{
@@ -3439,7 +3204,8 @@ const HabitDropdownExpanded: React.FC<{
   onDeleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   isPremium: boolean;
   isPro: boolean;
-}> = ({ habit, onUpdateHabit, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro }) => {
+  onToggleDailyUnit: (habitId: string, action: 'add' | 'remove') => void;
+}> = ({ habit, onUpdateHabit, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro, onToggleDailyUnit }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
@@ -3685,253 +3451,47 @@ const HabitDropdownExpanded: React.FC<{
         />
       </div>
 
-      {/* Sub-habits Section */}
+      {/* Daily Progress */}
       <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setSubtasksCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Sub-habits</h3>
-            {effectiveSubtasks.length > 0 && (
-              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {habitDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </button>
-        {!subtasksCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {allSubtasksDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All sub-habits are done ✓
-              </div>
-            )}
-
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-subtasks-${habit.id}`} type="subtask">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
-                    {provided.placeholder}
+        <div className="px-4 py-3">
+          {(() => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+            const todayDone = logs[todayStr] || 0;
+            const target = habit.dailyTarget || 1;
+            return (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Today's Progress</h3>
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{todayDone}/{target}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: target }, (_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => onToggleDailyUnit(habit.id, i < todayDone ? 'remove' : 'add')}
+                      className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
+                        i < todayDone
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-border bg-muted/40 hover:border-muted-foreground/30'
+                      }`}
+                    >
+                      {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
+                    </button>
+                  ))}
+                </div>
+                {target > 0 && todayDone >= target && (
+                  <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
+                    ✓ Daily goal completed!
                   </div>
                 )}
-              </Droppable>
-            </DragDropContext>
-
-            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
-                value={newSubtaskText}
-                onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                placeholder="Add sub-habit"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newSubtaskDuration}
-                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="min"
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Checklist Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-            {checklistLists.length > 0 && (
-              <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
-            )}
-          </div>
-          {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!checklistsSectionCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-checklist-lists-${habit.id}`} type="checklistList">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                    {checklistLists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
-                      return (
-                        <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                              <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const next = new Set(collapsedChecklists);
-                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                    setCollapsedChecklists(next);
-                                  }}
-                                  className="flex-1 flex items-center gap-2 text-left"
-                                >
-                                  {editingChecklistId === list.id ? (
-                                    <input
-                                      autoFocus
-                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                      value={editingChecklistTitle}
-                                      onChange={e => setEditingChecklistTitle(e.target.value)}
-                                      onBlur={() => {
-                                        if (editingChecklistTitle.trim()) {
-                                          onUpdateHabit(habit.id, { checklists: habit.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                        }
-                                        setEditingChecklistId(null);
-                                        setEditingChecklistTitle('');
-                                      }}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                          if (editingChecklistTitle.trim()) {
-                                            onUpdateHabit(habit.id, { checklists: habit.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                          }
-                                          setEditingChecklistId(null);
-                                          setEditingChecklistTitle('');
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                      className="text-xs font-semibold text-foreground cursor-text"
-                                    >
-                                      {list.title}
-                                    </span>
-                                  )}
-                                </button>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => onUpdateHabit(habit.id, { checklists: habit.checklists.filter(cl => cl.id !== list.id) })}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
-                                    }}
-                                    className="p-1 text-muted-foreground hover:text-foreground"
-                                  >
-                                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                  </button>
-                                </div>
-                              </div>
-                              {!isCollapsed && (
-                                <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                  <Droppable droppableId={`dropdown-checklist-${habit.id}-${list.id}`} type="checklistItem">
-                                    {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                        {list.items.map((item, index) => (
-                                          <Draggable key={item.id} draggableId={item.id} index={index}>
-                                            {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                  <GripVertical className="w-4 h-4" />
-                                                </div>
-                                                <SquareToggle
-                                                  completed={item.completed}
-                                                  onClick={() => onToggleChecklistItem(habit.id, list.id, item.id)}
-                                                  size="md"
-                                                />
-                                                {editingChecklistItemId === item.id ? (
-                                                  <input
-                                                    autoFocus
-                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                                    value={editingChecklistText}
-                                                    onChange={e => setEditingChecklistText(e.target.value)}
-                                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                                                  />
-                                                ) : (
-                                                  <span
-                                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                  >
-                                                    {item.text}
-                                                  </span>
-                                                )}
-                                                <button
-                                                  onClick={() => onDeleteChecklistItem(habit.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              </div>
-                                            )}
-                                          </Draggable>
-                                        ))}
-                                        {provided.placeholder}
-                                      </div>
-                                    )}
-                                  </Droppable>
-                                  <div className="flex gap-2 pt-1">
-                                    <input
-                                      value={perChecklistInput[list.id] ?? ''}
-                                      onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(habit.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                                      placeholder="Add checklist item"
-                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                    />
-                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(habit.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      );
-                    })}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-            <div className="flex gap-2">
-              <input
-                value={newChecklistTitle}
-                onChange={e => setNewChecklistTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateHabit(habit.id, { checklists: [...habit.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                placeholder="New checklist name"
-                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button
-                onClick={() => { if (newChecklistTitle.trim()) { onUpdateHabit(habit.id, { checklists: [...habit.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
-              >
-                Add checklist
-              </button>
-            </div>
-          </div>
-        )}
+              </>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Attachments Section */}
@@ -4137,6 +3697,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
   editingTemplateMeta,
   templateEditName,
   onTemplateEditNameChange,
+  onToggleDailyUnit,
 }) => {
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
@@ -4722,250 +4283,45 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
         </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setSubtasksCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Sub-habits</h3>
-              {(habit.subtasks ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(habit.subtasks ?? []).length})</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {habitDuration > 0 && (
-                <span className={`text-xs font-medium ${
-                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                }`}>
-                  {subtaskTimeRemaining > 0
-                    ? `${subtaskTimeRemaining} mins left`
-                    : subtaskTimeRemaining < 0
-                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                    : '0 mins left ✓'}
-                </span>
-              )}
-              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-            </div>
-          </button>
-          {!subtasksCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {allSubtasksDone && (
-                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                  All sub-habits are done ✓
-                </div>
-              )}
-
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-subtasks" type="subtask">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                      {(habit.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, si))}
-                      {provided.placeholder}
+          <div className="px-4 py-3">
+            {(() => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+              const todayDone = logs[todayStr] || 0;
+              const target = habit.dailyTarget || 1;
+              return (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Today's Progress</h3>
+                    </div>
+                    <span className="text-sm font-medium text-foreground">{todayDone}/{target}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: target }, (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => onToggleDailyUnit?.(habit.id, i < todayDone ? 'remove' : 'add')}
+                        className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          i < todayDone
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'border-border bg-muted/40 hover:border-muted-foreground/30'
+                        }`}
+                      >
+                        {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {target > 0 && todayDone >= target && (
+                    <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
+                      ✓ Daily goal completed!
                     </div>
                   )}
-                </Droppable>
-              </DragDropContext>
-
-              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                  placeholder="Add sub-habit"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="min"
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-              {checklistLists.length > 0 && (
-                <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
-              )}
-            </div>
-            {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!checklistsSectionCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-checklist-lists" type="checklistList">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                      {checklistLists.map((list, listIndex) => {
-                        const isCollapsed = collapsedChecklists.has(list.id);
-                        return (
-                          <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
-                                    }}
-                                    className="flex-1 flex items-center gap-2 text-left"
-                                  >
-                                    {editingChecklistId === list.id ? (
-                                      <input
-                                        autoFocus
-                                        className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                        value={editingChecklistTitle}
-                                        onChange={e => setEditingChecklistTitle(e.target.value)}
-                                        onBlur={() => {
-                                          if (editingChecklistTitle.trim()) {
-                                            onUpdateHabit(habit.id, { checklists: habit.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                          }
-                                          setEditingChecklistId(null);
-                                          setEditingChecklistTitle('');
-                                        }}
-                                        onKeyDown={e => {
-                                          if (e.key === 'Enter') {
-                                            if (editingChecklistTitle.trim()) {
-                                              onUpdateHabit(habit.id, { checklists: habit.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                            }
-                                            setEditingChecklistId(null);
-                                            setEditingChecklistTitle('');
-                                          }
-                                        }}
-                                      />
-                                    ) : (
-                                      <span
-                                        onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                        className="text-xs font-semibold text-foreground cursor-text"
-                                      >
-                                        {list.title}
-                                      </span>
-                                    )}
-                                  </button>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => onUpdateHabit(habit.id, { checklists: habit.checklists.filter(cl => cl.id !== list.id) })}
-                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        const next = new Set(collapsedChecklists);
-                                        if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                        setCollapsedChecklists(next);
-                                      }}
-                                      className="p-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                    </button>
-                                  </div>
-                                </div>
-                                {!isCollapsed && (
-                                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={"fullview-checklist-" + list.id} type="checklistItem">
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                            {list.items.map((item, index) => (
-                                              <Draggable key={item.id} draggableId={item.id} index={index}>
-                                                {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                      <GripVertical className="w-4 h-4" />
-                                                    </div>
-                                                    <SquareToggle
-                                                      completed={item.completed}
-                                                      onClick={() => onToggleChecklistItem(habit.id, list.id, item.id)}
-                                                      size="md"
-                                                    />
-                                                    {editingChecklistItemId === item.id ? (
-                                                      <input
-                                                        autoFocus
-                                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                                        value={editingChecklistText}
-                                                        onChange={e => setEditingChecklistText(e.target.value)}
-                                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                                                      />
-                                                    ) : (
-                                                      <span
-                                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                      >
-                                                        {item.text}
-                                                      </span>
-                                                    )}
-                                                    <button
-                                                      onClick={() => onDeleteChecklistItem(habit.id, list.id, item.id)}
-                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                          </div>
-                                        )}
-                                      </Droppable>
-                                    <div className="flex gap-2 pt-1">
-                                      <input
-                                        value={perChecklistInput[list.id] ?? ''}
-                                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(habit.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                                        placeholder="Add checklist item"
-                                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                      />
-                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(habit.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-              <div className="flex gap-2">
-                <input
-                  value={newChecklistTitle}
-                  onChange={e => setNewChecklistTitle(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateHabit(habit.id, { checklists: [...habit.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                  placeholder="New checklist name"
-                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <button
-                  onClick={() => { if (newChecklistTitle.trim()) { onUpdateHabit(habit.id, { checklists: [...habit.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                  disabled={!newChecklistTitle.trim()}
-                  className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
-                >
-                  Add checklist
-                </button>
-              </div>
-            </div>
-          )}
+                </>
+              );
+            })()}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">

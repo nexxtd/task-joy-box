@@ -74,6 +74,9 @@ export interface Task {
   order: number;
   completed?: boolean;
   completedAt?: string;
+  completedDays?: string[];
+  dailyTarget?: number;
+  dailyLogs?: string;
   recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
   nextOccurrence?: string | null;
   attachments?: Attachment[];
