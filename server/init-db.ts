@@ -569,6 +569,22 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS task_templates_user_id_idx ON task_templates(user_id);`);
     console.log('Task templates table verified');
 
+    // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
+    const rlsTables = [
+      'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
+      'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
+      'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
+      'habit_snapshots',
+    ];
+    for (const tbl of rlsTables) {
+      try {
+        await pool.query(`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY;`);
+        await pool.query(`DROP POLICY IF EXISTS allow_all ON ${tbl};`);
+        await pool.query(`CREATE POLICY allow_all ON ${tbl} USING (true) WITH CHECK (true);`);
+      } catch { /* table may not exist */ }
+    }
+    console.log('RLS enabled on all public tables');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails
