@@ -870,7 +870,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
-                                                className="flex-1 text-xs text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                className="text-xs text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                 value={editingDraftChecklistTitle}
                                                 onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                                 onBlur={() => {
@@ -893,7 +893,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-xs text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
@@ -1394,7 +1394,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
-                                                className="flex-1 text-sm text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                className="text-sm text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                 value={editingDraftChecklistTitle}
                                                 onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                                 onBlur={() => {
@@ -1417,7 +1417,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
