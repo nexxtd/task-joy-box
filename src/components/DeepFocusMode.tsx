@@ -841,8 +841,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               >
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                  {(focusChecklists.length + focusChecklistItems.length) > 0 && (
-                    <span className="text-xs text-muted-foreground">({focusChecklists.length + focusChecklistItems.length})</span>
+                  {focusChecklistItems.length > 0 && (
+                    <span className="text-xs text-muted-foreground">({focusChecklistItems.length})</span>
                   )}
                 </div>
                 {checklistsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -870,7 +870,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
-                                                className="flex-1 text-sm font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                className="flex-1 text-xs text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                 value={editingDraftChecklistTitle}
                                                 onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                                 onBlur={() => {
@@ -893,7 +893,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-xs text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
@@ -1362,8 +1362,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 >
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                    {(focusChecklists.length + focusChecklistItems.length) > 0 && (
-                      <span className="text-xs text-muted-foreground">({focusChecklists.length + focusChecklistItems.length})</span>
+                    {focusChecklistItems.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({focusChecklistItems.length})</span>
                     )}
                   </div>
                   {checklistsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -1394,7 +1394,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
-                                                className="flex-1 text-sm font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                className="flex-1 text-sm text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                 value={editingDraftChecklistTitle}
                                                 onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                                 onBlur={() => {
@@ -1417,11 +1417,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
-                                            <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                            <span className="text-sm text-muted-foreground shrink-0">({list.items.length})</span>
                                           </button>
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
