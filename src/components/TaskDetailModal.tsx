@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User, GripVertical } from 'lucide-react';
+import { SquareToggle } from '@/components/ToggleComponents';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -108,6 +110,30 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
       updateTask(task.id, { checklists: updatedChecklists });
     }
   };
+
+  const handleChecklistReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const { source, destination } = result;
+
+    if (source.droppableId === 'checklists') {
+      const items = Array.from(task.checklists);
+      const [removed] = items.splice(source.index, 1);
+      items.splice(destination.index, 0, removed);
+      updateTask(task.id, { checklists: items });
+    } else if (source.droppableId.startsWith('checklist-')) {
+      const listId = source.droppableId.replace('checklist-', '');
+      const checklist = task.checklists.find(cl => cl.id === listId);
+      if (!checklist) return;
+      const items = Array.from(checklist.items);
+      const [removed] = items.splice(source.index, 1);
+      items.splice(destination.index, 0, removed);
+      updateTask(task.id, {
+        checklists: task.checklists.map(cl =>
+          cl.id === listId ? { ...cl, items } : cl
+        ),
+      });
+    }
+  }, [task, updateTask]);
 
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
@@ -518,76 +544,109 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               </div>
             )}
 
-            {task.checklists.map(cl => {
-              const done = cl.items.filter(i => i.completed).length;
-              const total = cl.items.length;
-              const pct = total > 0 ? (done / total) * 100 : 0;
-              return (
-                <div key={cl.id} className="mb-4 last:mb-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{cl.title}</span>
-                      {total > 0 && <span className="text-[11px] text-muted-foreground">{done}/{total}</span>}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteChecklist(cl.id)}
-                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {total > 0 && (
-                    <div className="w-full h-1.5 bg-muted rounded-full mb-2 overflow-hidden">
-                      <div className="h-full bg-label-green rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+            {task.checklists.length > 0 && (
+              <DragDropContext onDragEnd={handleChecklistReorder}>
+                <Droppable droppableId="checklists">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3">
+                      {task.checklists.map((cl, index) => {
+                        const done = cl.items.filter(i => i.completed).length;
+                        const total = cl.items.length;
+                        const pct = total > 0 ? (done / total) * 100 : 0;
+                        return (
+                          <Draggable key={cl.id} draggableId={cl.id} index={index}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                                    <span className="text-sm font-medium text-foreground truncate">{cl.title}</span>
+                                    {total > 0 && <span className="text-[11px] text-muted-foreground shrink-0">{done}/{total}</span>}
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteChecklist(cl.id)}
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all shrink-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                {total > 0 && (
+                                  <div className="px-3 pb-1">
+                                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-label-green rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                )}
+                                <Droppable droppableId={`checklist-${cl.id}`}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className="px-3 pb-2 space-y-1">
+                                      {cl.items.length === 0 && <p className="text-xs text-muted-foreground py-1">No items yet</p>}
+                                      {cl.items.map((item, idx) => (
+                                        <Draggable key={item.id} draggableId={item.id} index={idx}>
+                                          {(provided) => (
+                                            <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group min-w-0">
+                                              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                <GripVertical className="w-3.5 h-3.5" />
+                                              </div>
+                                              <SquareToggle
+                                                completed={item.completed}
+                                                onClick={() => toggleChecklistItem(task.id, cl.id, item.id)}
+                                                size="sm"
+                                              />
+                                              {editingItem?.checklistId === cl.id && editingItem?.itemId === item.id ? (
+                                                <input
+                                                  autoFocus
+                                                  className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5 min-w-0"
+                                                  value={editingItem.text}
+                                                  onChange={(e) => setEditingItem({ ...editingItem, text: e.target.value })}
+                                                  onBlur={() => handleEditItem(cl.id, item.id, editingItem.text)}
+                                                  onKeyDown={(e) => e.key === 'Enter' && handleEditItem(cl.id, item.id, editingItem.text)}
+                                                />
+                                              ) : (
+                                                <span
+                                                  onClick={() => setEditingItem({ checklistId: cl.id, itemId: item.id, text: item.text })}
+                                                  className={`text-sm flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                >
+                                                  {item.text}
+                                                </span>
+                                              )}
+                                              <button
+                                                onClick={() => deleteChecklistItem(task.id, cl.id, item.id)}
+                                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </Draggable>
+                                      ))}
+                                      {provided.placeholder}
+                                    </div>
+                                  )}
+                                </Droppable>
+                                <div className="flex gap-2 px-3 pb-2">
+                                  <input
+                                    value={newItemTexts[cl.id] || ''}
+                                    onChange={e => setNewItemTexts(p => ({ ...p, [cl.id]: e.target.value }))}
+                                    onKeyDown={e => e.key === 'Enter' && handleAddItem(cl.id)}
+                                    placeholder="Add item..."
+                                    className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                                  />
+                                  <button onClick={() => handleAddItem(cl.id)} className="px-3 py-1.5 text-xs bg-foreground text-background rounded-lg shrink-0">Add</button>
+                                </div>
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                      {provided.placeholder}
                     </div>
                   )}
-                  <div className="space-y-1">
-                    {cl.items.map(item => {
-                      return (
-                        <div key={item.id} className="flex items-center gap-2 group">
-                          <input type="checkbox" checked={item.completed} onChange={() => toggleChecklistItem(task.id, cl.id, item.id)} className="w-4 h-4 rounded border-border accent-primary" />
-                          
-                          {editingItem?.checklistId === cl.id && editingItem?.itemId === item.id ? (
-                            <input
-                              autoFocus
-                              className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                              value={editingItem.text}
-                              onChange={(e) => setEditingItem({ ...editingItem, text: e.target.value })}
-                              onBlur={() => handleEditItem(cl.id, item.id, editingItem.text)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleEditItem(cl.id, item.id, editingItem.text)}
-                            />
-                          ) : (
-                            <span 
-                              onClick={() => setEditingItem({ checklistId: cl.id, itemId: item.id, text: item.text })}
-                              className={`text-sm flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                            >
-                              {item.text}
-                            </span>
-                          )}
-
-                          <button
-                            onClick={() => deleteChecklistItem(task.id, cl.id, item.id)}
-                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      value={newItemTexts[cl.id] || ''}
-                      onChange={e => setNewItemTexts(p => ({ ...p, [cl.id]: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && handleAddItem(cl.id)}
-                      placeholder="Add item..."
-                      className="flex-1 bg-transparent border-b border-border text-sm text-foreground placeholder:text-muted-foreground py-1 focus:outline-none focus:border-primary transition-colors"
-                    />
-                    <button onClick={() => handleAddItem(cl.id)} className="text-xs text-primary hover:underline">Add</button>
-                  </div>
-                </div>
-              );
-            })}
+                </Droppable>
+              </DragDropContext>
+            )}
           </div>
 
           {/* Delete */}
