@@ -133,7 +133,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       style={{ backgroundColor: board.columns.find(c => c.id === task.columnId)?.color || 'hsl(var(--primary))' }} 
                     />
                     <div>
-                      <h3 className="text-lg font-bold text-foreground mb-1 group-hover:text-primary transition-colors">{task.title}</h3>
+                      <h3 className="text-lg font-bold text-foreground mb-1 group-hover:text-primary transition-colors truncate">{task.title}</h3>
                       <div className="flex items-center gap-3">
                         <span className={cn(
                           "text-[10px] font-black px-2 py-0.5 rounded uppercase",

@@ -26,7 +26,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
             <div key={column.id}>
               <div className="flex items-center gap-2 mb-3 px-1">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: column.color }} />
-                <h3 className="text-sm font-semibold text-foreground">{column.title}</h3>
+                <h3 className="text-sm font-semibold text-foreground truncate">{column.title}</h3>
                 <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{tasks.length}</span>
               </div>
 

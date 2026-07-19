@@ -45,7 +45,7 @@ const KanbanBoard: React.FC = () => {
         {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-3 border-b border-border">
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-foreground">{board.title}</h1>
+            <h1 className="text-base font-bold text-foreground truncate">{board.title}</h1>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>{board.tasks.length} tasks</span>

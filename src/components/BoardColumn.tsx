@@ -160,7 +160,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   className="text-sm font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               ) : (
-                <h3 className="text-sm font-bold text-foreground tracking-tight">{column.title}</h3>
+                <h3 className="text-sm font-bold text-foreground tracking-tight truncate">{column.title}</h3>
               )}
               <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-bold">{tasks.length}</span>
             </div>

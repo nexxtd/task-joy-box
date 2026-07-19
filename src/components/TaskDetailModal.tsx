@@ -179,10 +179,10 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 onBlur={saveTitle}
               />
             ) : (
-              <h2 className="text-lg font-semibold text-foreground">{task.title}</h2>
+              <h2 className="text-lg font-semibold text-foreground truncate">{task.title}</h2>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              in column: <span className="text-foreground font-medium">{currentColumn?.title}</span>
+              in column: <span className="text-foreground font-medium truncate">{currentColumn?.title}</span>
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">

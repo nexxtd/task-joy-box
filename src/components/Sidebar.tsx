@@ -47,8 +47,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
             key={item.id}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
           >
-            <item.icon className="w-4 h-4" />
-            {item.label}
+            <item.icon className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{item.label}</span>
           </button>
         ))}
 
@@ -65,8 +65,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <item.icon className="w-4 h-4" />
-            {item.label}
+            <item.icon className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{item.label}</span>
           </button>
         ))}
 
@@ -79,8 +79,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors opacity-50 cursor-not-allowed"
             title="Coming soon"
           >
-            <item.icon className="w-4 h-4" />
-            {item.label}
+            <item.icon className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">{item.label}</span>
           </button>
         ))}
       </nav>

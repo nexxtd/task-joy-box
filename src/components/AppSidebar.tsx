@@ -101,7 +101,7 @@ const AppSidebar: React.FC = () => {
               }`}
             >
               <item.icon className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-105'}`} />
-              {!collapsed && <span className="whitespace-nowrap overflow-hidden">{item.label}</span>}
+              {!collapsed && <span className="truncate">{item.label}</span>}
               {active && !collapsed && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
             </button>
           );
@@ -125,7 +125,7 @@ const AppSidebar: React.FC = () => {
               }`}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </button>
           );
         })}

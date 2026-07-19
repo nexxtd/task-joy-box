@@ -95,7 +95,7 @@ const MobileNav: React.FC = () => {
                     }`}
                   >
                     <item.icon className={`w-4 h-4 flex-shrink-0 ${active ? 'scale-110' : ''}`} />
-                    <span className="whitespace-nowrap">{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                     {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
                   </button>
                 );
@@ -120,7 +120,7 @@ const MobileNav: React.FC = () => {
                     }`}
                   >
                     <item.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="whitespace-nowrap">{item.label}</span>
+                    <span className="truncate">{item.label}</span>
                     {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
                   </button>
                 );

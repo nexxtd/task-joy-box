@@ -210,7 +210,7 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
                   })}
                   className="group p-3 bg-gradient-to-br from-card to-muted/20 border border-border/60 rounded-xl hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/5 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-grab active:cursor-grabbing"
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-2 min-w-0">
                     <p className="text-xs font-bold text-foreground truncate flex-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{goal.title}</p>
                     <span className="text-[11px] font-bold ml-2 px-2 py-0.5 rounded-md" style={{ color: goal.color, backgroundColor: goal.color + '15' }}>
                       {Math.round((goal.progress / goal.target) * 100)}%

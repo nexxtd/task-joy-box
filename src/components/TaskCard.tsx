@@ -29,7 +29,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
       onClick={onClick}
       className={`group rounded-lg bg-task p-3 cursor-pointer border border-transparent hover:border-border transition-all duration-150 hover:bg-task-hover ${isDragging ? 'task-dragging' : ''} ${task.completed ? 'opacity-60' : ''}`}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 min-w-0">
         {/* Completion checkbox */}
         {onToggleComplete && (
           <button
