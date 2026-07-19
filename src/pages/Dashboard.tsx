@@ -180,14 +180,14 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={() => navigate('/projects')}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all duration-200 hover:scale-105"
-            >
-              <Calendar className="w-4 h-4" />
-              View Schedule
-            </button>
-            <button
-              onClick={() => setShowAddTask(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all duration-200 hover:scale-105"
+        className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold bg-muted/50 border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+      >
+        <Calendar className="w-4 h-4" />
+        View Schedule
+      </button>
+      <button
+        onClick={() => setShowAddTask(true)}
+        className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
             >
               <Plus className="w-4 h-4" />
               Add Task
