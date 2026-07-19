@@ -862,15 +862,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   <Draggable key={list.id} draggableId={list.id} index={index}>
                                     {(provided) => (
                                       <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                                        <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                        <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                             <GripVertical className="w-4 h-4" />
                                           </div>
-                                          <div className="flex-1 flex items-center gap-2 min-w-0">
+                                          <div className="flex-1 flex items-center gap-2 min-w-0 pl-4">
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
-                                                className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                                className="flex-1 text-sm font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                 value={editingDraftChecklistTitle}
                                                 onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                                 onBlur={() => {
@@ -893,7 +893,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
@@ -1382,47 +1382,47 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   return (
                                     <Draggable key={list.id} draggableId={list.id} index={index}>
                                       {(provided) => (
-                                        <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                                          <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
-                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                              <GripVertical className="w-4 h-4" />
-                                            </div>
-                                            <button
-                                              onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                                              className="flex-1 flex items-center gap-2 text-left min-w-0"
-                                            >
-                                              {editingDraftChecklistId === list.id ? (
-                                                <input
-                                                  autoFocus
-                                                  className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                                  value={editingDraftChecklistTitle}
-                                                  onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                                                  onBlur={() => {
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                                        <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                          <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                            <GripVertical className="w-4 h-4" />
+                                          </div>
+                                          <button
+                                            onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                                            className="flex-1 flex items-center gap-2 text-left min-w-0 pl-4"
+                                          >
+                                            {editingDraftChecklistId === list.id ? (
+                                              <input
+                                                autoFocus
+                                                className="flex-1 text-sm font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                value={editingDraftChecklistTitle}
+                                                onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                                onBlur={() => {
+                                                  if (editingDraftChecklistTitle.trim()) {
+                                                    updateTask(selectedTask.id, {
+                                                      checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
+                                                    });
+                                                  }
+                                                  setEditingDraftChecklistId(null);
+                                                }}
+                                                onKeyDown={e => {
+                                                  if (e.key === 'Enter') {
                                                     if (editingDraftChecklistTitle.trim()) {
                                                       updateTask(selectedTask.id, {
                                                         checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
                                                       });
                                                     }
                                                     setEditingDraftChecklistId(null);
-                                                  }}
-                                                  onKeyDown={e => {
-                                                    if (e.key === 'Enter') {
-                                                      if (editingDraftChecklistTitle.trim()) {
-                                                        updateTask(selectedTask.id, {
-                                                          checklists: selectedTask.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingDraftChecklistTitle.trim() } : cl),
-                                                        });
-                                                      }
-                                                      setEditingDraftChecklistId(null);
-                                                    }
-                                                  }}
-                                                />
-                                              ) : (
-                                                <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text truncate">
-                                                  {list.title}
-                                                </span>
-                                              )}
-                                              <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
-                                            </button>
+                                                  }
+                                                }}
+                                              />
+                                            ) : (
+                                              <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
+                                                {list.title}
+                                              </span>
+                                            )}
+                                            <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                          </button>
                                             <div className="flex items-center gap-1 shrink-0">
                                               <button
                                                 onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}

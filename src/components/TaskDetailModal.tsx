@@ -557,12 +557,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                           <Draggable key={cl.id} draggableId={cl.id} index={index}>
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
-                                  <div className="flex-1 flex items-center gap-2 min-w-0">
-                                    <span className="text-sm font-medium text-foreground truncate">{cl.title}</span>
+                                  <div className="flex-1 flex items-center gap-2 min-w-0 pl-4">
+                                    <span className="flex-1 text-sm font-semibold text-foreground truncate">{cl.title}</span>
                                     {total > 0 && <span className="text-[11px] text-muted-foreground shrink-0">{done}/{total}</span>}
                                   </div>
                                   <button
