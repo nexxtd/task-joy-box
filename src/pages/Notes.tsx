@@ -190,12 +190,6 @@ interface ProjectMeta {
   description: string;
 }
 
-interface NewNoteSubtaskDraft {
-  id: string;
-  text: string;
-  durationMinutes: number;
-}
-
 interface AIGeneratedNote {
   title: string;
   description: string;
@@ -207,7 +201,6 @@ interface AIGeneratedNote {
   duration: number | null;
   group: string | null;
   status: TaskStatus;
-  subtasks: Array<{ text: string; durationMinutes: number }>;
   checklistItems: string[];
   tags: string[];
 }
@@ -389,9 +382,6 @@ const Notes: React.FC = () => {
   const [newNoteDuration, setNewNoteDuration] = useState<number>(60);
   const [newNoteColumnId, setNewNoteColumnId] = useState<string>('');
   const [newNoteProjectId, setNewNoteProjectId] = useState<number | ''>('');
-  const [newNoteSubtasks, setNewNoteSubtasks] = useState<NewNoteSubtaskDraft[]>([]);
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);
   const [newChecklistItems, setNewChecklistItems] = useState<{id: string; text: string}[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newChecklistLists, setNewChecklistLists] = useState<{id: string; title: string; items: {id: string; text: string; completed: boolean}[]}[]>([]);
@@ -406,14 +396,10 @@ const Notes: React.FC = () => {
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-notes' | null; moveType: 'column' | 'project' } | null>(null);
   const [dontAsk, setDontAsk] = useState(false);
-  const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
-  const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
-  const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
   // Creation modal section collapse states
-  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
   const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
   const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
   const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
@@ -653,7 +639,6 @@ const Notes: React.FC = () => {
         projectId: (edited.projectId !== undefined ? edited.projectId : editingTemplateMeta.template.projectId) ?? null,
         columnId: (edited.columnId ?? editingTemplateMeta.template.columnId) || undefined,
         labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
-        subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
       });
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
@@ -944,16 +929,6 @@ const Notes: React.FC = () => {
     );
   };
 
-  const addSubtaskDraft = () => {
-    if (!newSubtaskText.trim()) return;
-    setNewNoteSubtasks(prev => [
-      ...prev,
-      { id: crypto.randomUUID(), text: newSubtaskText.trim(), durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
-    ]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
-  };
-
   const addChecklistDraft = () => {
     if (!newChecklistText.trim()) return;
     setNewChecklistItems(prev => [...prev, { id: crypto.randomUUID(), text: newChecklistText.trim() }]);
@@ -975,14 +950,7 @@ const Notes: React.FC = () => {
 
   const handleDraftReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
-    if (result.source.droppableId === 'draft-subtasks') {
-      setNewNoteSubtasks(prev => {
-        const items = Array.from(prev);
-        const [removed] = items.splice(result.source.index, 1);
-        items.splice(result.destination.index, 0, removed);
-        return items;
-      });
-    } else if (result.source.droppableId === 'draft-checklist') {
+    if (result.source.droppableId === 'draft-checklist') {
       setNewChecklistItems(prev => {
         const items = Array.from(prev);
         const [removed] = items.splice(result.source.index, 1);
@@ -1044,9 +1012,6 @@ const Notes: React.FC = () => {
     setNewNoteDuration(60);
     setNewNoteColumnId('');
     setNewNoteProjectId('');
-    setNewNoteSubtasks([]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
     setNewChecklistItems([]);
     setNewChecklistText('');
     setNewChecklistLists([]);
@@ -1095,12 +1060,6 @@ const Notes: React.FC = () => {
       dueTime: newNoteDueTime || undefined,
       projectId: newNoteProjectId === '' ? null : Number(newNoteProjectId),
       projectName: newNoteProjectId === '' ? undefined : (projects.find(project => project.id === Number(newNoteProjectId))?.name || undefined),
-      subtasks: newNoteSubtasks.map(st => ({
-        id: st.id,
-        text: st.text,
-        completed: false,
-        durationMinutes: st.durationMinutes,
-      })),
       labels: newNoteLabels,
       checklists: allChecklists,
       attachments: newFiles.map((file, i) => ({
@@ -1176,13 +1135,6 @@ const Notes: React.FC = () => {
         if (matchedCol) setNewNoteColumnId(matchedCol.id);
       }
 
-      setNewNoteSubtasks(
-        (data.subtasks || []).map(st => ({
-          id: crypto.randomUUID(),
-          text: st.text,
-          durationMinutes: st.durationMinutes || 0,
-        }))
-      );
       setNewChecklistItems((data.checklistItems || []).map(text => ({ id: crypto.randomUUID(), text })));
 
       if (data.tags && data.tags.length > 0) {
@@ -1201,9 +1153,6 @@ const Notes: React.FC = () => {
       setAiBuilderLoading(false);
     }
   };
-
-  const newSubtaskTotal = newNoteSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
-  const newSubtaskRemaining = newNoteDuration - newSubtaskTotal;
 
   const openQuickEdit = (note: Note, field: 'duration' | 'project') => {
     setQuickEditTaskId(note.id);
@@ -1295,7 +1244,6 @@ const Notes: React.FC = () => {
 
   const renderNoteRow = (note: Note, dragHandleProps?: any, isDragging?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
-    const subtaskCount = note.subtasks?.length || 0;
     const checklistTotal = note.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = note.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     const noteDurFmt = formatDuration(note.duration || 0);
@@ -1409,14 +1357,6 @@ const Notes: React.FC = () => {
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
-              {subtaskCount > 0 && (() => {
-                const subtaskDone = (note.subtasks || []).filter(s => s.completed).length;
-                return (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                    {subtaskDone}/{subtaskCount} sub note
-                  </span>
-                );
-              })()}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
@@ -2291,124 +2231,6 @@ const Notes: React.FC = () => {
                 />
               </div>
 
-              {/* Sub-notes Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Sub-notes</h3>
-                    {newNoteSubtasks.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newNoteSubtasks.length})</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {newNoteDuration > 0 && (
-                      <span className={`text-xs font-medium ${
-                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
-                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                      }`}>
-                        {newSubtaskRemaining > 0
-                          ? `${newSubtaskRemaining} mins left`
-                          : newSubtaskRemaining < 0
-                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
-                          : '0 mins left ✓'}
-                      </span>
-                    )}
-                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </button>
-                {!draftSubtasksCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <DragDropContext onDragEnd={handleDraftReorder}>
-                      <Droppable droppableId="draft-subtasks">
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                            {newNoteSubtasks.map((subtask, index) => (
-                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    {editingDraftSubtaskId === subtask.id ? (
-                                      <>
-                                        <input
-                                          autoFocus
-                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskText}
-                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                          onBlur={() => { setNewNoteSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') { setNewNoteSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                        />
-                                        <input
-                                          type="number"
-                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskDuration}
-                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span
-                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text truncate"
-                                        >
-                                          {subtask.text}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                            value={subtask.durationMinutes || 0}
-                                            onChange={e => {
-                                              const val = Math.max(0, Number(e.target.value) || 0);
-                                              setNewNoteSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                            }}
-                                          />
-                                          <span className="text-[10px] text-muted-foreground">min</span>
-                                          <button
-                                            onClick={() => setNewNoteSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                      <input
-                        value={newSubtaskText}
-                        onChange={e => setNewSubtaskText(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
-                        placeholder="New sub-note"
-                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={newSubtaskDuration}
-                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="min"
-                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                      />
-                      <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Checklist Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
@@ -2850,8 +2672,8 @@ const Notes: React.FC = () => {
                       projectId: newNoteProjectId ? Number(newNoteProjectId) : null,
                       columnId: newNoteColumnId || undefined,
                       labels: newNoteLabels || [],
-                      subtasks: (newNoteSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
                       checklists: newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                      subtasks: [],
                     });
                     setSaveTemplateOpen(false);
                     setTemplateName('');
@@ -2917,7 +2739,6 @@ const Notes: React.FC = () => {
                           setNewNoteProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
                           setNewNoteColumnId(tmpl.columnId || '');
                           setNewNoteLabels(tmpl.labels || []);
-                          setNewNoteSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
                           setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
                           setLoadTemplateOpen(false);
                         }}
@@ -3440,16 +3261,10 @@ const NoteDropdownExpanded: React.FC<{
   isPremium: boolean;
   isPro: boolean;
 }> = ({ note, onUpdateNote, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro }) => {
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
 
-  // Added checklist states
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
   const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(new Set());
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
@@ -3465,52 +3280,8 @@ const NoteDropdownExpanded: React.FC<{
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(note.id));
 
-  const legacySubtasksChecklist = note.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
-  const checklistLists = note.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
-  const effectiveSubtasks = (note.subtasks && note.subtasks.length > 0)
-    ? note.subtasks
-    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
-  const primaryChecklist = checklistLists[0];
+  const checklistLists = note.checklists;
   const noteDuration = Math.max(0, Number(note.duration) || 0);
-  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
-  const subtaskTimeRemaining = noteDuration - subtaskTotal;
-  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
-
-  const persistSubtasks = (nextSubtasks: Note['subtasks']) => {
-    const nextChecklists = legacySubtasksChecklist
-      ? note.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
-      : note.checklists;
-    onUpdateNote(note.id, { subtasks: nextSubtasks as any, checklists: nextChecklists });
-  };
-
-  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
-    const updateRecursive = (list: Subtask[]): Subtask[] =>
-      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
-    persistSubtasks(updateRecursive(effectiveSubtasks as any) as any);
-  };
-
-  const addSubtask = () => {
-    if (!newSubtaskText.trim()) return;
-    persistSubtasks([
-      ...effectiveSubtasks,
-      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
-    ]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
-  };
-
-  const removeSubtask = (subtaskId: string) => {
-    const removeRecursive = (list: Subtask[]): Subtask[] =>
-      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
-    persistSubtasks(removeRecursive(effectiveSubtasks as any) as any);
-  };
-
-  const saveSubtaskEdit = (subtaskId: string) => {
-    const next = editingSubtaskText.trim();
-    if (next) updateSubtask(subtaskId, { text: next });
-    setEditingSubtaskId(null);
-    setEditingSubtaskText('');
-  };
 
   const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
     const next = editingChecklistText.trim();
@@ -3530,12 +3301,7 @@ const NoteDropdownExpanded: React.FC<{
 
   const handleDropdownReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
-    if (result.source.droppableId === `dropdown-subtasks-${note.id}`) {
-      const items = Array.from(effectiveSubtasks);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      persistSubtasks(items);
-    } else if (result.source.droppableId === `dropdown-checklist-lists-${note.id}`) {
+    if (result.source.droppableId === `dropdown-checklist-lists-${note.id}`) {
       const items = Array.from(note.checklists);
       const [removed] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, removed);
@@ -3574,7 +3340,7 @@ const NoteDropdownExpanded: React.FC<{
         });
       }
     }
-  }, [effectiveSubtasks, persistSubtasks, note.checklists, onUpdateNote]);
+  }, [note.checklists, onUpdateNote]);
 
   const handleImageReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
@@ -3619,60 +3385,6 @@ const NoteDropdownExpanded: React.FC<{
     }
   };
 
-  const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
-    return (
-      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <CircleToggle
-                completed={subtask.completed}
-                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                size="sm"
-              />
-              {editingSubtaskId === subtask.id ? (
-                <input
-                  autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                  value={editingSubtaskText}
-                  onChange={e => setEditingSubtaskText(e.target.value)}
-                  onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                />
-              ) : (
-                <span
-                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                >
-                  {subtask.text}
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={subtask.durationMinutes || 0}
-                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                />
-                <span className="text-[10px] text-muted-foreground">min</span>
-                <button
-                  onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Draggable>
-    );
-  };
-
   return (
     <div className="space-y-4">
       <div>
@@ -3683,75 +3395,6 @@ const NoteDropdownExpanded: React.FC<{
           rows={3}
           className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
         />
-      </div>
-
-      {/* Sub-notes Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setSubtasksCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Sub-notes</h3>
-            {effectiveSubtasks.length > 0 && (
-              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {noteDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </button>
-        {!subtasksCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {allSubtasksDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All sub-notes are done ✓
-              </div>
-            )}
-
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-subtasks-${note.id}`} type="subtask">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-
-            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
-                value={newSubtaskText}
-                onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                placeholder="Add sub-note"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newSubtaskDuration}
-                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="min"
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Checklist Section */}
@@ -4138,14 +3781,10 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   templateEditName,
   onTemplateEditNameChange,
 }) => {
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newCommentText, setNewCommentText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -4171,7 +3810,6 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
@@ -4184,17 +3822,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(note.id));
 
-  const legacySubtasksChecklist = note.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
-  const checklistLists = note.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
-  const effectiveSubtasks = (note.subtasks && note.subtasks.length > 0)
-    ? note.subtasks
-    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
-  const primaryChecklist = checklistLists[0];
-  const noteDuration = Math.max(0, Number(note.duration) || 0);
-  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
-  const subtaskTimeRemaining = noteDuration - subtaskTotal;
-  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
-
+  const checklistLists = note.checklists;
   const noteProject = note.projectId ? projects.find(project => project.id === note.projectId) || null : null;
 
   const activityEntries = useMemo(() => {
@@ -4212,115 +3840,12 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
     return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [note.activityLog, note.createdAt, note.projectId, note.updatedAt, noteProject?.name, note.comments]);
 
-  const persistSubtasks = (nextSubtasks: Note['subtasks']) => {
-    const nextChecklists = legacySubtasksChecklist
-      ? note.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
-      : note.checklists;
-    onUpdateNote(note.id, { subtasks: nextSubtasks, checklists: nextChecklists });
-  };
-
-  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
-    const updateRecursive = (list: Subtask[]): Subtask[] =>
-      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
-    persistSubtasks(updateRecursive(effectiveSubtasks));
-  };
-
-  const addSubtask = () => {
-    if (!newSubtaskText.trim()) return;
-    persistSubtasks([
-      ...effectiveSubtasks,
-      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
-    ]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
-  };
-
-  const removeSubtask = (subtaskId: string) => {
-    const removeRecursive = (list: Subtask[]): Subtask[] =>
-      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
-    persistSubtasks(removeRecursive(effectiveSubtasks));
-  };
-
-  const insertSubtask = (beforeId: string | null) => {
-    const newSub: Subtask = { id: crypto.randomUUID(), text: 'title', completed: false, durationMinutes: 0 };
-    if (beforeId) {
-      const idx = effectiveSubtasks.findIndex(st => st.id === beforeId);
-      if (idx >= 0) {
-        const next = [...effectiveSubtasks];
-        next.splice(idx, 0, newSub);
-        persistSubtasks(next);
-        return;
-      }
-    }
-    persistSubtasks([...effectiveSubtasks, newSub]);
-  };
-
-  const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
-    return (
-      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <CircleToggle
-                completed={subtask.completed}
-                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                size="sm"
-              />
-              {editingSubtaskId === subtask.id ? (
-                <input
-                  autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                  value={editingSubtaskText}
-                  onChange={e => setEditingSubtaskText(e.target.value)}
-                  onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                />
-              ) : (
-                <span
-                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                >
-                  {subtask.text}
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={subtask.durationMinutes || 0}
-                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                />
-                <span className="text-[10px] text-muted-foreground">min</span>
-                <button
-                  onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Draggable>
-    );
-  };
-
-  const saveSubtaskEdit = (subtaskId: string) => {
-    const next = editingSubtaskText.trim();
-    if (next) updateSubtask(subtaskId, { text: next });
-    setEditingSubtaskId(null);
-    setEditingSubtaskText('');
-  };
-
   const addChecklistItemToNote = () => {
     if (!newChecklistText.trim()) return;
-    if (!primaryChecklist) {
+    const firstChecklist = note.checklists[0];
+    if (!firstChecklist) {
       onUpdateNote(note.id, {
-        checklists: [...checklistLists, {
+        checklists: [...note.checklists, {
           id: crypto.randomUUID(),
           title: 'Checklist',
           items: [{ id: crypto.randomUUID(), text: newChecklistText.trim(), completed: false }],
@@ -4329,7 +3854,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
       setNewChecklistText('');
       return;
     }
-    onAddChecklistItem(note.id, primaryChecklist.id, newChecklistText.trim());
+    onAddChecklistItem(note.id, firstChecklist.id, newChecklistText.trim());
     setNewChecklistText('');
   };
 
@@ -4365,12 +3890,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
 
   const handleFullViewReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
-    if (result.source.droppableId === 'fullview-subtasks') {
-      const items = Array.from(effectiveSubtasks);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      persistSubtasks(items);
-    } else if (result.source.droppableId === 'fullview-checklist-lists') {
+    if (result.source.droppableId === 'fullview-checklist-lists') {
       const items = Array.from(note.checklists);
       const [removed] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, removed);
@@ -4409,7 +3929,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
         });
       }
     }
-  }, [effectiveSubtasks, persistSubtasks, note.checklists, onUpdateNote]);
+  }, [note.checklists, onUpdateNote]);
 
   const handleImageReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
@@ -4716,74 +4236,6 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                   <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
                   <button onClick={() => { onDeleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setSubtasksCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Sub-notes</h3>
-              {(note.subtasks ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(note.subtasks ?? []).length})</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {noteDuration > 0 && (
-                <span className={`text-xs font-medium ${
-                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                }`}>
-                  {subtaskTimeRemaining > 0
-                    ? `${subtaskTimeRemaining} mins left`
-                    : subtaskTimeRemaining < 0
-                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                    : '0 mins left ✓'}
-                </span>
-              )}
-              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-            </div>
-          </button>
-          {!subtasksCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {allSubtasksDone && (
-                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                  All sub-notes are done ✓
-                </div>
-              )}
-
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-subtasks" type="subtask">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                      {(note.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, si))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-
-              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                  placeholder="Add sub-note"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="min"
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
               </div>
             </div>
           )}
@@ -5341,8 +4793,8 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                         projectId: note.projectId ?? null,
                         columnId: note.columnId || undefined,
                         labels: note.labels || [],
-                        subtasks: (note.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
                         checklists: note.checklists || [],
+                        subtasks: note.subtasks || [],
                       });
                       setFullViewSaveTmplOpen(false);
                       setFullViewTmplName('');
@@ -5373,8 +4825,8 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                       projectId: note.projectId ?? null,
                       columnId: note.columnId || undefined,
                       labels: note.labels || [],
-                      subtasks: (note.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
                       checklists: note.checklists || [],
+                      subtasks: note.subtasks || [],
                     });
                     setFullViewSaveTmplOpen(false);
                     setFullViewTmplName('');

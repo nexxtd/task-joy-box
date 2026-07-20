@@ -74,14 +74,14 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, category, color, checklists, subtasks, status, projectId, columnId, dailyTarget, dailyLogs } = req.body;
+    const { title, category, color, checklists, subtasks, status, projectId, columnId, dailyTarget, dailyLogs, targetPeriod } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 
     const [newHabit] = await db.insert(habits).values({
       userId: req.userId!, title, category: category || 'Personal', color: color || 'primary',
       streak: 0, completedDays: '[]', checklists: checklists || '[]', subtasks: subtasks || '[]',
       status: status || 'to_do', projectId: projectId || null, columnId: columnId || null,
-      dailyTarget: dailyTarget ?? 1, dailyLogs: dailyLogs || '{}',
+      dailyTarget: dailyTarget ?? 1, dailyLogs: dailyLogs || '{}', targetPeriod: targetPeriod || 'daily',
     } as InsertHabit).returning();
 
     await logActivity(req.userId!, 'habit', newHabit.id, 'created');
@@ -95,7 +95,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const habitId = parseInt(req.params.id);
-    const { completedDays, title, category, color, checklists, subtasks, status, projectId, columnId, pinned, dailyTarget, dailyLogs } = req.body;
+    const { completedDays, title, category, color, checklists, subtasks, status, projectId, columnId, pinned, dailyTarget, dailyLogs, targetPeriod } = req.body;
 
     const updates: any = {};
     if (completedDays !== undefined) { updates.completedDays = JSON.stringify(completedDays); updates.streak = calculateStreak(completedDays); }
@@ -110,6 +110,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (pinned !== undefined) updates.pinned = pinned;
     if (dailyTarget !== undefined) updates.dailyTarget = dailyTarget;
     if (dailyLogs !== undefined) updates.dailyLogs = dailyLogs;
+    if (targetPeriod !== undefined) updates.targetPeriod = targetPeriod;
     updates.updatedAt = new Date().toISOString();
 
     const [updated] = await db.update(habits).set(updates)

@@ -77,6 +77,7 @@ export interface Task {
   completedDays?: string[];
   dailyTarget?: number;
   dailyLogs?: string;
+  targetPeriod?: 'daily' | 'weekly' | 'monthly';
   recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
   nextOccurrence?: string | null;
   attachments?: Attachment[];

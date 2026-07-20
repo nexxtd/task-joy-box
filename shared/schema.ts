@@ -329,8 +329,9 @@ export const habits = pgTable('habits', {
   checklists: text('checklists').default('[]'),
   subtasks: text('subtasks').default('[]'),
   status: text('status').default('to_do'),
-  dailyTarget: integer('daily_target').default(1), // units per day (e.g., 5 for 5 liters)
+  dailyTarget: integer('daily_target').default(1), // units per period
   dailyLogs: text('daily_logs').default('{}'), // JSON map of date -> completed units
+  targetPeriod: text('target_period').default('daily'), // 'daily', 'weekly', 'monthly'
   dailyTime: integer('daily_time'), // minutes per day required
   durationDays: integer('duration_days'), // e.g. 30, 60, 90 days
   displayOrder: integer('display_order').default(0),

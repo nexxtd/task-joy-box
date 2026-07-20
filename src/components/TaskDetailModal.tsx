@@ -21,7 +21,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [addingChecklist, setAddingChecklist] = useState(false);
   const [newItemTexts, setNewItemTexts] = useState<Record<string, string>>({});
-  const [editingItem, setEditingItem] = useState<{ checklistId: string; itemId: string; text: string } | null>(null);
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [editingChecklistItemText, setEditingChecklistItemText] = useState('');
   const { user } = useAuth();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';
@@ -86,22 +87,24 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
     }
   };
 
-  const handleEditItem = (checklistId: string, itemId: string, newText: string) => {
-    if (newText.trim()) {
+  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
+    const next = editingChecklistItemText.trim();
+    if (next) {
       const updatedChecklists = task.checklists.map(cl => {
         if (cl.id === checklistId) {
           return {
             ...cl,
             items: cl.items.map(item => 
-              item.id === itemId ? { ...item, text: newText.trim() } : item
+              item.id === itemId ? { ...item, text: next } : item
             )
           };
         }
         return cl;
       });
       updateTask(task.id, { checklists: updatedChecklists });
-      setEditingItem(null);
     }
+    setEditingChecklistItemId(null);
+    setEditingChecklistItemText('');
   };
 
   const handleDeleteChecklist = (checklistId: string) => {
@@ -557,13 +560,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                           <Draggable key={cl.id} draggableId={cl.id} index={index}>
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                                <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
-                                  <div className="flex-1 flex items-center gap-2 min-w-0 pl-4">
+                                  <div className="flex-1 flex items-center gap-2 min-w-0">
                                     <span className="flex-1 text-sm font-semibold text-foreground truncate">{cl.title}</span>
-                                    {total > 0 && <span className="text-[11px] text-muted-foreground shrink-0">{done}/{total}</span>}
+                                    {total > 0 && <span className="text-xs text-muted-foreground shrink-0">({total})</span>}
                                   </div>
                                   <button
                                     onClick={() => handleDeleteChecklist(cl.id)}
@@ -595,18 +598,18 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                                 onClick={() => toggleChecklistItem(task.id, cl.id, item.id)}
                                                 size="sm"
                                               />
-                                              {editingItem?.checklistId === cl.id && editingItem?.itemId === item.id ? (
+                                              {editingChecklistItemId === item.id ? (
                                                 <input
                                                   autoFocus
-                                                  className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5 min-w-0"
-                                                  value={editingItem.text}
-                                                  onChange={(e) => setEditingItem({ ...editingItem, text: e.target.value })}
-                                                  onBlur={() => handleEditItem(cl.id, item.id, editingItem.text)}
-                                                  onKeyDown={(e) => e.key === 'Enter' && handleEditItem(cl.id, item.id, editingItem.text)}
+                                                  className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                  value={editingChecklistItemText}
+                                                  onChange={e => setEditingChecklistItemText(e.target.value)}
+                                                  onBlur={() => saveChecklistItemEdit(cl.id, item.id)}
+                                                  onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(cl.id, item.id)}
                                                 />
                                               ) : (
                                                 <span
-                                                  onClick={() => setEditingItem({ checklistId: cl.id, itemId: item.id, text: item.text })}
+                                                  onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
                                                   className={`text-sm flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                                 >
                                                   {item.text}

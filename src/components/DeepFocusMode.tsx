@@ -893,7 +893,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-xs font-semibold text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
@@ -1417,7 +1417,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}

@@ -391,6 +391,7 @@ const Habits: React.FC = () => {
   const [newHabitDuration, setNewHabitDuration] = useState<number>(60);
   const [newHabitColumnId, setNewHabitColumnId] = useState<string>('');
   const [newDailyTarget, setNewDailyTarget] = useState(1);
+  const [newTargetPeriod, setNewTargetPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [newHabitProjectId, setNewHabitProjectId] = useState<number | ''>('');
   const [newHabitSubtasks, setNewHabitSubtasks] = useState<NewHabitSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -1051,6 +1052,7 @@ const Habits: React.FC = () => {
     setNewSubtaskText('');
     setNewSubtaskDuration(10);
     setNewDailyTarget(1);
+    setNewTargetPeriod('daily');
     setNewChecklistItems([]);
     setNewChecklistText('');
     setNewChecklistLists([]);
@@ -1108,6 +1110,7 @@ const Habits: React.FC = () => {
       labels: newHabitLabels,
       dailyTarget: newDailyTarget,
       dailyLogs: '{}',
+      targetPeriod: newTargetPeriod,
       checklists: allChecklists,
       attachments: newFiles.map((file, i) => ({
         id: crypto.randomUUID(),
@@ -2323,12 +2326,12 @@ const Habits: React.FC = () => {
                 />
               </div>
 
-              {/* Daily Target */}
+              {/* Target */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-3">
                     <Target className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Daily Target</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Target</h3>
                   </div>
                   <div className="flex items-center gap-3">
                     <input
@@ -2339,7 +2342,16 @@ const Habits: React.FC = () => {
                       className="w-24 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                       placeholder="5"
                     />
-                    <span className="text-xs text-muted-foreground">units per day (e.g. 5 for 5 liters)</span>
+                    <span className="text-xs text-muted-foreground">units</span>
+                    <select
+                      value={newTargetPeriod}
+                      onChange={e => setNewTargetPeriod(e.target.value as any)}
+                      className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                    >
+                      <option value="daily">per day</option>
+                      <option value="weekly">per week</option>
+                      <option value="monthly">per month</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -3206,6 +3218,7 @@ const HabitDropdownExpanded: React.FC<{
   isPro: boolean;
   onToggleDailyUnit: (habitId: string, action: 'add' | 'remove') => void;
 }> = ({ habit, onUpdateHabit, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro, onToggleDailyUnit }) => {
+  const [dailyProgressCollapsed, setDailyProgressCollapsed] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
@@ -3453,45 +3466,56 @@ const HabitDropdownExpanded: React.FC<{
 
       {/* Daily Progress */}
       <div className="rounded-2xl border border-border bg-muted/20">
-        <div className="px-4 py-3">
-          {(() => {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
-            const todayDone = logs[todayStr] || 0;
-            const target = habit.dailyTarget || 1;
-            return (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Today's Progress</h3>
-                  </div>
+        {(() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+          const todayDone = logs[todayStr] || 0;
+          const target = habit.dailyTarget || 1;
+          const period = habit.targetPeriod || 'daily';
+          const periodLabel = period === 'weekly' ? "This Week's Progress" : period === 'monthly' ? "This Month's Progress" : "Today's Progress";
+          const goalLabel = period === 'daily' ? 'Daily' : period === 'weekly' ? 'Weekly' : 'Monthly';
+          return (
+            <>
+              <button
+                onClick={() => setDailyProgressCollapsed(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3"
+              >
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold text-foreground">{periodLabel}</h3>
+                </div>
+                <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{todayDone}/{target}</span>
+                  {dailyProgressCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: target }, (_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => onToggleDailyUnit(habit.id, i < todayDone ? 'remove' : 'add')}
-                      className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
-                        i < todayDone
-                          ? 'bg-primary border-primary text-primary-foreground'
-                          : 'border-border bg-muted/40 hover:border-muted-foreground/30'
-                      }`}
-                    >
-                      {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
-                    </button>
-                  ))}
-                </div>
-                {target > 0 && todayDone >= target && (
-                  <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
-                    ✓ Daily goal completed!
+              </button>
+              {!dailyProgressCollapsed && (
+                <div className="border-t border-border/60 px-4 py-3">
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from({ length: target }, (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => onToggleDailyUnit(habit.id, i < todayDone ? 'remove' : 'add')}
+                        className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          i < todayDone
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'border-border bg-muted/40 hover:border-muted-foreground/30'
+                        }`}
+                      >
+                        {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
+                      </button>
+                    ))}
                   </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
+                  {target > 0 && todayDone >= target && (
+                    <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
+                      ✓ {goalLabel} goal completed!
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Attachments Section */}
@@ -3699,6 +3723,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
   onTemplateEditNameChange,
   onToggleDailyUnit,
 }) => {
+  const [dailyProgressCollapsed, setDailyProgressCollapsed] = useState(false);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
@@ -4283,45 +4308,56 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
         </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">
-          <div className="px-4 py-3">
-            {(() => {
-              const todayStr = new Date().toISOString().split('T')[0];
-              const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
-              const todayDone = logs[todayStr] || 0;
-              const target = habit.dailyTarget || 1;
-              return (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Target className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">Today's Progress</h3>
-                    </div>
+          {(() => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const logs = habit.dailyLogs ? JSON.parse(habit.dailyLogs) : {};
+            const todayDone = logs[todayStr] || 0;
+            const target = habit.dailyTarget || 1;
+            const period = habit.targetPeriod || 'daily';
+            const periodLabel = period === 'weekly' ? "This Week's Progress" : period === 'monthly' ? "This Month's Progress" : "Today's Progress";
+            const goalLabel = period === 'daily' ? 'Daily' : period === 'weekly' ? 'Weekly' : 'Monthly';
+            return (
+              <>
+                <button
+                  onClick={() => setDailyProgressCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">{periodLabel}</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-foreground">{todayDone}/{target}</span>
+                    {dailyProgressCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {Array.from({ length: target }, (_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => onToggleDailyUnit?.(habit.id, i < todayDone ? 'remove' : 'add')}
-                        className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
-                          i < todayDone
-                            ? 'bg-primary border-primary text-primary-foreground'
-                            : 'border-border bg-muted/40 hover:border-muted-foreground/30'
-                        }`}
-                      >
-                        {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
-                      </button>
-                    ))}
-                  </div>
-                  {target > 0 && todayDone >= target && (
-                    <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
-                      ✓ Daily goal completed!
+                </button>
+                {!dailyProgressCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from({ length: target }, (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => onToggleDailyUnit?.(habit.id, i < todayDone ? 'remove' : 'add')}
+                          className={`w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
+                            i < todayDone
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-border bg-muted/40 hover:border-muted-foreground/30'
+                          }`}
+                        >
+                          {i < todayDone ? <Check className="w-5 h-5" /> : <span className="text-sm text-muted-foreground">{i + 1}</span>}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+                    {target > 0 && todayDone >= target && (
+                      <div className="mt-3 text-xs text-label-green bg-label-green/10 px-2.5 py-1 rounded-md inline-block">
+                        ✓ {goalLabel} goal completed!
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">

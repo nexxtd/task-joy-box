@@ -3824,12 +3824,13 @@ const TaskDropdownExpanded: React.FC<{
                                     />
                                   ) : (
                                     <span
-                                      onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                      className="text-xs font-semibold text-foreground cursor-text"
+                                      onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
+                                      className="text-sm font-semibold text-foreground cursor-text"
                                     >
                                       {list.title}
                                     </span>
                                   )}
+                                  <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                 </button>
                                 <div className="flex items-center gap-1">
                                   <button
@@ -3878,7 +3879,7 @@ const TaskDropdownExpanded: React.FC<{
                                                   />
                                                 ) : (
                                                   <span
-                                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                                    onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
                                                     className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                                   >
                                                     {item.text}
@@ -4858,12 +4859,13 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                       />
                                     ) : (
                                       <span
-                                        onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                        className="text-xs font-semibold text-foreground cursor-text"
+                                        onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
+                                        className="text-sm font-semibold text-foreground cursor-text"
                                       >
                                         {list.title}
                                       </span>
                                     )}
+                                    <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                   </button>
                                   <div className="flex items-center gap-1">
                                     <button
@@ -4912,7 +4914,7 @@ const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                       />
                                                     ) : (
                                                       <span
-                                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                                        onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
                                                         className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                                       >
                                                         {item.text}
