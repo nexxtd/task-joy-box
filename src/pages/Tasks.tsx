@@ -2513,7 +2513,7 @@ const Tasks: React.FC = () => {
                                           }}
                                         />
                                       ) : (
-                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
                                           {list.title}
                                         </span>
                                       )}

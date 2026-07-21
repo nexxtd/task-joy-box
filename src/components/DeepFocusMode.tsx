@@ -893,11 +893,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 }}
                                               />
                                             ) : (
-                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-xs font-semibold text-foreground cursor-text truncate">
+                                              <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="flex-1 text-sm font-semibold text-foreground cursor-text truncate">
                                                 {list.title}
                                               </span>
                                             )}
-                                            <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                            <span className="text-sm text-muted-foreground shrink-0">({list.items.length})</span>
                                           </div>
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
