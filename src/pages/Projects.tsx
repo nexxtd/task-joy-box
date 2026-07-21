@@ -26,6 +26,8 @@ import {
   Trash2,
   Users,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
@@ -131,6 +133,16 @@ const Projects: React.FC = () => {
   const [chatSending, setChatSending] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // Board pan/zoom state
+  const [boardZoom, setBoardZoom] = useState(1);
+  const [boardOffset, setBoardOffset] = useState({ x: 0, y: 0 });
+  const [isBoardPanning, setIsBoardPanning] = useState(false);
+  const boardPanStart = useRef({ x: 0, y: 0 });
+  const boardCanvasRef = useRef<HTMLDivElement>(null);
+  const MIN_ZOOM = 0.25;
+  const MAX_ZOOM = 2;
+  const ZOOM_STEP = 0.1;
+
   useEffect(() => {
     if (user?.id) {
       try {
@@ -149,6 +161,38 @@ const Projects: React.FC = () => {
       .catch(() => setMilestones([]))
       .finally(() => setMilestonesLoading(false));
   }, [selectedProjectId]);
+
+  // Board zoom with wheel
+  useEffect(() => {
+    const el = boardCanvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - e.deltaY * 0.001).toFixed(3))));
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  const handleBoardPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('[data-no-pan="true"]')) return;
+    setIsBoardPanning(true);
+    boardPanStart.current = { x: e.clientX - boardOffset.x, y: e.clientY - boardOffset.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleBoardPointerMove = (e: React.PointerEvent) => {
+    if (isBoardPanning) {
+      setBoardOffset({ x: e.clientX - boardPanStart.current.x, y: e.clientY - boardPanStart.current.y });
+    }
+  };
+
+  const handleBoardPointerUp = () => {
+    setIsBoardPanning(false);
+  };
 
   const handleAddColumn = () => {
     if (newColTitle.trim() && selectedProjectId) {
@@ -876,79 +920,110 @@ const Projects: React.FC = () => {
     const projectColumns = [...board.columns]
       .filter(col => col.projectId === selectedProject?.id)
       .sort((a, b) => a.order - b.order);
+    const boardZoomPercent = Math.round(boardZoom * 100);
 
     return (
-      <div className="min-w-0 flex-1 overflow-auto rounded-3xl border border-border bg-background shadow-sm h-full flex flex-col">
+      <div className="min-w-0 flex-1 rounded-3xl border border-border bg-background shadow-sm h-full flex flex-col">
         <div className="flex items-center justify-between border-b border-border/70 bg-card/60 px-5 py-4 backdrop-blur-sm">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Board View</h3>
             <p className="text-xs text-muted-foreground">Drag tasks between columns to reorganize the project.</p>
           </div>
-          <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
+            <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-1.5 py-1">
+              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
+                <ZoomOut className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <button onClick={() => { setBoardZoom(1); setBoardOffset({ x: 0, y: 0 }); }} className="px-2 py-1 text-xs font-bold tabular-nums text-foreground hover:text-primary min-w-[44px] text-center">
+                {boardZoomPercent}%
+              </button>
+              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z + ZOOM_STEP).toFixed(2))))} disabled={boardZoom >= MAX_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
+                <ZoomIn className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="flex-1 overflow-auto p-6 min-h-[60vh]">
-          <DragDropContext
-            onDragEnd={(result) => {
-              document.body.classList.remove('is-dragging');
-              handleDragEnd(result);
-            }}
-            onDragStart={handleBoardDragStart}
-            onDragUpdate={handleBoardDragUpdate}
+        <div
+          ref={boardCanvasRef}
+          className="flex-1 relative overflow-hidden"
+          onPointerDown={handleBoardPointerDown}
+          onPointerMove={handleBoardPointerMove}
+          onPointerUp={handleBoardPointerUp}
+          style={{
+            backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
+            backgroundSize: `${24 * boardZoom}px ${24 * boardZoom}px`,
+            backgroundPosition: `${boardOffset.x}px ${boardOffset.y}px`,
+            cursor: isBoardPanning ? 'grabbing' : 'grab',
+          }}
+        >
+          <div
+            style={{ transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
+            className="min-w-max min-h-max"
           >
-            <Droppable droppableId="board" type="column" direction="horizontal">
-              {(provided) => (
-                <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start h-full" data-no-pan="true">
-                  {projectColumns.map((column, index) => {
-                    const tasks = projectTasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
-                    return (
-                      <BoardColumn
-                        key={column.id}
-                        column={column}
-                        tasks={tasks}
-                        index={index}
-                        onTaskClick={setSelectedTask}
-                        canCreateTasks={canCreateTasks}
-                        canEdit={canEdit}
-                        onAddClick={canCreateTasks ? () => {
-                          setAddTaskPopupColumnId(column.id);
-                          setAssignSearch('');
-                        } : undefined}
-                      />
-                    );
-                  })}
-                  {provided.placeholder}
+            <DragDropContext
+              onDragEnd={(result) => {
+                document.body.classList.remove('is-dragging');
+                handleDragEnd(result);
+              }}
+              onDragStart={handleBoardDragStart}
+              onDragUpdate={handleBoardDragUpdate}
+            >
+              <Droppable droppableId="board" type="column" direction="horizontal">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start" data-no-pan="true">
+                    {projectColumns.map((column, index) => {
+                      const tasks = projectTasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
+                      return (
+                        <BoardColumn
+                          key={column.id}
+                          column={column}
+                          tasks={tasks}
+                          index={index}
+                          onTaskClick={setSelectedTask}
+                          canCreateTasks={canCreateTasks}
+                          canEdit={canEdit}
+                          onAddClick={canCreateTasks ? () => {
+                            setAddTaskPopupColumnId(column.id);
+                            setAssignSearch('');
+                          } : undefined}
+                        />
+                      );
+                    })}
+                    {provided.placeholder}
 
-                  {addingColumn ? (
-                    <div className="flex-shrink-0 w-72 animate-fade-in bg-card border border-border rounded-2xl p-4">
-                      <input
-                        autoFocus
-                        value={newColTitle}
-                        onChange={e => setNewColTitle(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleAddColumn();
-                          if (e.key === 'Escape') setAddingColumn(false);
-                        }}
-                        placeholder="Column name..."
-                        className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                      />
-                      <div className="flex gap-2 mt-2">
-                        <button onClick={handleAddColumn} className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1.5 rounded-lg">Add</button>
-                        <button onClick={() => setAddingColumn(false)} className="text-xs text-muted-foreground px-3 py-1.5 hover:bg-muted rounded-lg">Cancel</button>
+                    {addingColumn ? (
+                      <div className="flex-shrink-0 w-72 animate-fade-in bg-card border border-border rounded-2xl p-4">
+                        <input
+                          autoFocus
+                          value={newColTitle}
+                          onChange={e => setNewColTitle(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleAddColumn();
+                            if (e.key === 'Escape') setAddingColumn(false);
+                          }}
+                          placeholder="Column name..."
+                          className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button onClick={handleAddColumn} className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1.5 rounded-lg">Add</button>
+                          <button onClick={() => setAddingColumn(false)} className="text-xs text-muted-foreground px-3 py-1.5 hover:bg-muted rounded-lg">Cancel</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingColumn(true)}
-                      className="flex-shrink-0 w-72 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Column
-                    </button>
-                  )}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
+                    ) : (
+                      <button
+                        onClick={() => setAddingColumn(true)}
+                        className="flex-shrink-0 w-72 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Column
+                      </button>
+                    )}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          </div>
         </div>
       </div>
     );
