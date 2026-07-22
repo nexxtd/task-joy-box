@@ -90,7 +90,7 @@ const getTaskStatus = (task: Task): TaskStatus => {
 const getStatusLabel = (status: TaskStatus) =>
   STATUS_OPTIONS.find(o => o.value === status)?.label || 'To Do';
 
-const fileToDataUrl = (file: File): Promise<string> =>
+export const fileToDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -3437,7 +3437,7 @@ interface TaskFullViewProps {
   onTemplateEditNameChange?: (name: string) => void;
 }
 
-const TaskDropdownExpanded: React.FC<{
+export const TaskDropdownExpanded: React.FC<{
   task: Task;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
   onToggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;

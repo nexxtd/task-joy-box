@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, PRIORITY_CONFIG, LABEL_COLORS } from '@/types/board';
-import { Calendar, CheckSquare, ChevronDown, ChevronUp, ChevronRight, Brain, Trash2, Plus, X, GripVertical } from 'lucide-react';
-import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import { Calendar, CheckSquare, ChevronDown, ChevronUp, ChevronRight, Brain, Plus } from 'lucide-react';
+import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import { Draggable, Droppable } from '@hello-pangea/dnd';
+import { useAuth } from '@/context/AuthContext';
+import { TaskDropdownExpanded } from '@/pages/Tasks';
 
 interface ListViewProps {
   onTaskClick: (task: Task) => void;
@@ -13,7 +14,10 @@ interface ListViewProps {
 
 const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
   const { board, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
+  const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
+  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const isPro = user?.subscriptionTier === 'pro';
 
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
   const toggleExpand = (taskId: string) => {
@@ -121,7 +125,19 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                           </button>
                         </div>
 
-                        {isExpanded && <TaskDropdownExpanded task={task} />}
+                        {isExpanded && (
+                          <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
+                            <TaskDropdownExpanded
+                              task={task}
+                              onUpdateTask={updateTask}
+                              onToggleChecklistItem={toggleChecklistItem}
+                              onAddChecklistItem={addChecklistItem}
+                              onDeleteChecklistItem={deleteChecklistItem}
+                              isPremium={isPremium}
+                              isPro={isPro}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -130,136 +146,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
             </div>
           );
         })}
-      </div>
-    </div>
-  );
-};
-
-const TaskDropdownExpanded: React.FC<{ task: Task }> = ({ task }) => {
-  const { updateTask, addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
-  const [description, setDescription] = useState(task.description || '');
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newChecklistText, setNewChecklistText] = useState('');
-  const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
-
-  return (
-    <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
-      {task.description !== undefined && (
-        <div>
-          <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5 block">Description</label>
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            onBlur={() => { if (description !== (task.description || '')) updateTask(task.id, { description }); }}
-            placeholder="Add a description..."
-            className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-            rows={2}
-          />
-        </div>
-      )}
-
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-[10px] font-bold text-muted-foreground uppercase">Subtasks</label>
-        </div>
-        <div className="space-y-1 mb-2">
-          {(task.subtasks || []).map(st => (
-            <div key={st.id} className="flex items-center gap-2 bg-background px-2 py-1.5 rounded-lg border border-border/60">
-              <SquareToggle
-                completed={st.completed}
-                onClick={() => updateTask(task.id, { subtasks: (task.subtasks || []).map(s => s.id === st.id ? { ...s, completed: !s.completed } : s) })}
-                size="sm"
-              />
-              <span className={`flex-1 text-xs truncate ${st.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{st.text}</span>
-              <button
-                onClick={() => updateTask(task.id, { subtasks: (task.subtasks || []).filter(s => s.id !== st.id) })}
-                className="p-0.5 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-1">
-          <input
-            value={newSubtaskText}
-            onChange={e => setNewSubtaskText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && newSubtaskText.trim()) { updateTask(task.id, { subtasks: [...(task.subtasks || []), { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, children: [] }] }); setNewSubtaskText(''); } }}
-            placeholder="Add subtask..."
-            className="flex-1 bg-background border border-border rounded-lg p-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <button
-            onClick={() => { if (newSubtaskText.trim()) { updateTask(task.id, { subtasks: [...(task.subtasks || []), { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, children: [] }] }); setNewSubtaskText(''); } }}
-            className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="text-[10px] font-bold text-muted-foreground uppercase">Checklists</label>
-        </div>
-        <div className="space-y-3">
-          {task.checklists.map(cl => (
-            <div key={cl.id} className="bg-background border border-border/60 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40">
-                <span className="flex-1 text-xs font-semibold text-foreground truncate">{cl.title}</span>
-                <span className="text-[10px] text-muted-foreground shrink-0">({cl.items.filter(i => i.completed).length}/{cl.items.length})</span>
-              </div>
-              <div className="p-2 space-y-1">
-                {cl.items.map(item => (
-                  <div key={item.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-muted/50 transition-colors">
-                    <SquareToggle
-                      completed={item.completed}
-                      onClick={() => toggleChecklistItem(task.id, cl.id, item.id)}
-                      size="sm"
-                    />
-                    <span className={`flex-1 text-xs truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.text}</span>
-                    <button
-                      onClick={() => deleteChecklistItem(task.id, cl.id, item.id)}
-                      className="p-0.5 text-muted-foreground hover:text-destructive opacity-0 hover:opacity-100 transition-all"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex gap-1 pt-1">
-                  <input
-                    value={perChecklistInput[cl.id] || ''}
-                    onChange={e => setPerChecklistInput(prev => ({ ...prev, [cl.id]: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter' && (perChecklistInput[cl.id] || '').trim()) { addChecklistItem(task.id, cl.id, (perChecklistInput[cl.id] || '').trim()); setPerChecklistInput(prev => ({ ...prev, [cl.id]: '' })); } }}
-                    placeholder="Add item..."
-                    className="flex-1 bg-muted/30 border border-border rounded-lg p-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <button
-                    onClick={() => { if ((perChecklistInput[cl.id] || '').trim()) { addChecklistItem(task.id, cl.id, (perChecklistInput[cl.id] || '').trim()); setPerChecklistInput(prev => ({ ...prev, [cl.id]: '' })); } }}
-                    className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-all"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-          <div className="flex gap-1">
-            <input
-              value={newChecklistTitle}
-              onChange={e => setNewChecklistTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addChecklist(task.id, newChecklistTitle.trim()); setNewChecklistTitle(''); } }}
-              placeholder="New checklist name..."
-              className="flex-1 bg-background border border-border rounded-lg p-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            <button
-              onClick={() => { if (newChecklistTitle.trim()) { addChecklist(task.id, newChecklistTitle.trim()); setNewChecklistTitle(''); } }}
-              className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
