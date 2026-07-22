@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
-import { Column as ColumnType, Task, PRIORITY_CONFIG, LABEL_COLORS } from '@/types/board';
+import { Column as ColumnType, Task, LABEL_COLORS } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import TaskCard from './TaskCard';
 import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Calendar, CheckSquare, Brain } from 'lucide-react';
@@ -8,6 +8,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
+
+const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
+  urgent: { bg: '#dc2626', label: 'Urgent' },
+  high: { bg: '#ea580c', label: 'High' },
+  medium: { bg: '#ca8a04', label: 'Medium' },
+  low: { bg: '#2563eb', label: 'Low' },
+  none: { bg: '#9ca3af', label: 'None' },
+};
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
 
@@ -286,11 +294,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                   {task.title}
                                 </span>
                                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                  {task.priority !== 'none' && (
-                                    <span className={`${PRIORITY_CONFIG[task.priority].className} text-[9px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
-                                      {PRIORITY_CONFIG[task.priority].label}
-                                    </span>
-                                  )}
+                                  {task.priority !== 'none' && (() => {
+                                    const pc = PRIORITY_COLORS[task.priority];
+                                    return (
+                                      <span style={{ backgroundColor: pc?.bg }} className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white inline-flex items-center">
+                                        {pc?.label}
+                                      </span>
+                                    );
+                                  })()}
                                   {task.dueDate && (
                                     <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
                                       <Calendar className="w-2.5 h-2.5" />
@@ -365,11 +376,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                       {task.title}
                                     </span>
                                     <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                      {task.priority !== 'none' && (
-                                        <span className={`${PRIORITY_CONFIG[task.priority].className} text-[9px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
-                                          {PRIORITY_CONFIG[task.priority].label}
-                                        </span>
-                                      )}
+                                      {task.priority !== 'none' && (() => {
+                                        const pc = PRIORITY_COLORS[task.priority];
+                                        return (
+                                          <span style={{ backgroundColor: pc?.bg }} className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white inline-flex items-center">
+                                            {pc?.label}
+                                          </span>
+                                        );
+                                      })()}
                                       {task.dueDate && (
                                         <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
                                           <Calendar className="w-2.5 h-2.5" />

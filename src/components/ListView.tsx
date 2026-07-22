@@ -12,6 +12,14 @@ interface ListViewProps {
   projectId?: number | null;
 }
 
+const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
+  urgent: { bg: '#dc2626', label: 'Urgent' },
+  high: { bg: '#ea580c', label: 'High' },
+  medium: { bg: '#ca8a04', label: 'Medium' },
+  low: { bg: '#2563eb', label: 'Low' },
+  none: { bg: '#9ca3af', label: 'None' },
+};
+
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return null;
   if (minutes < 60) return `${minutes} min`;
@@ -102,11 +110,14 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                              {(task.priority !== 'none') && (
-                                <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded`}>
-                                  {PRIORITY_CONFIG[task.priority].label}
-                                </span>
-                              )}
+                              {(task.priority !== 'none') && (() => {
+                                const pc = PRIORITY_COLORS[task.priority];
+                                return (
+                                  <span style={{ backgroundColor: pc?.bg }} className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white inline-flex items-center">
+                                    {pc?.label}
+                                  </span>
+                                );
+                              })()}
                               {taskDurFmt && (
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1">
                                   <Clock className="w-2.5 h-2.5" />
