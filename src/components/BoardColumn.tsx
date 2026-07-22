@@ -3,7 +3,7 @@ import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import TaskCard from './TaskCard';
-import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,6 +44,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [columnIcon, setColumnIcon] = useState(column.icon || '');
+
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
 
   const COLUMN_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
@@ -164,7 +166,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               )}
               <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-bold">{tasks.length}</span>
             </div>
-            {canEdit && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => setTasksCollapsed(!tasksCollapsed)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" title={tasksCollapsed ? 'Show tasks' : 'Hide tasks'}>
+                {tasksCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              {canEdit && (
               <div className="relative">
                 <button onClick={() => setShowMenu(!showMenu)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all">
                   <MoreHorizontal className="w-4 h-4" />
@@ -235,6 +241,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 )}
               </div>
             )}
+            </div>
           </div>
 
           <Droppable droppableId={column.id} type="task">
@@ -245,7 +252,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 className={`min-h-[100px] space-y-3 p-2 rounded-xl transition-all duration-300 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
               >
                 {/* Uncompleted tasks */}
-                {uncompletedTasks.map((task, taskIndex) => (
+                {!tasksCollapsed && uncompletedTasks.map((task, taskIndex) => (
                   <Draggable key={task.id} draggableId={task.id} index={taskIndex} isDragDisabled={!canEdit}>
                     {(taskProvided, taskSnapshot) => (
                       <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} {...taskProvided.dragHandleProps}>
@@ -262,7 +269,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 ))}
                 
                 {/* Completed tasks section */}
-                {completedTasks.length > 0 && (
+                {!tasksCollapsed && completedTasks.length > 0 && (
                   <div className="pt-2 border-t border-border/50">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2 px-1">Completed ({completedTasks.length})</p>
                     {completedTasks.map((task, taskIndex) => (

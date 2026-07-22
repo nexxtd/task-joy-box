@@ -585,6 +585,19 @@ export async function initDatabase() {
     }
     console.log('RLS enabled on all public tables');
 
+    // Project chat messages
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_chat_messages (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS project_chat_messages_project_id_idx ON project_chat_messages(project_id);`);
+    console.log('Project chat messages table verified');
+
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't throw - let the server start even if init fails

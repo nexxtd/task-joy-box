@@ -135,7 +135,7 @@ const Projects: React.FC = () => {
 
   // Board pan/zoom state
   const [boardZoom, setBoardZoom] = useState(1);
-  const [boardOffset, setBoardOffset] = useState({ x: 0, y: 0 });
+  const [boardOffset, setBoardOffset] = useState({ x: 48, y: 32 });
   const [isBoardPanning, setIsBoardPanning] = useState(false);
   const boardPanStart = useRef({ x: 0, y: 0 });
   const boardCanvasRef = useRef<HTMLDivElement>(null);
@@ -283,33 +283,41 @@ const Projects: React.FC = () => {
   // Load/save chat messages per project
   useEffect(() => {
     if (!selectedProjectId) return;
-    try {
-      const saved = localStorage.getItem(`project_chat_${selectedProjectId}`);
-      setChatMessages(saved ? JSON.parse(saved) : []);
-    } catch {
-      setChatMessages([]);
-    }
+    const fetchMessages = async () => {
+      try {
+        const res = await fetch(`/api/projects/${selectedProjectId}/chat`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setChatMessages((data.messages || []).map((m: any) => ({ id: String(m.id), text: m.message, authorName: m.authorName, authorId: m.userId, createdAt: m.createdAt })));
+        }
+      } catch {}
+    };
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 5000);
+    return () => clearInterval(interval);
   }, [selectedProjectId]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const handleSendChatMessage = () => {
+  const handleSendChatMessage = async () => {
     const text = chatInput.trim();
     if (!text || chatSending || !selectedProjectId || !user) return;
     setChatSending(true);
-    const msg: ChatMessage = {
-      id: crypto.randomUUID(),
-      text,
-      authorName: user.name,
-      authorId: user.id,
-      createdAt: new Date().toISOString(),
-    };
-    const next = [...chatMessages, msg];
-    setChatMessages(next);
-    localStorage.setItem(`project_chat_${selectedProjectId}`, JSON.stringify(next));
-    setChatInput('');
+    try {
+      const res = await fetch(`/api/projects/${selectedProjectId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ message: text }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, { id: String(data.message.id), text: data.message.message, authorName: data.message.authorName, authorId: data.message.userId, createdAt: data.message.createdAt }]);
+        setChatInput('');
+      }
+    } catch {}
     setChatSending(false);
   };
 
@@ -1110,7 +1118,7 @@ const Projects: React.FC = () => {
             {chatSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-2 text-center">Messages are stored locally for this project.</p>
+        <p className="text-[10px] text-muted-foreground mt-2 text-center">Messages are shared with all project members.</p>
       </div>
     </div>
   );

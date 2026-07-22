@@ -1312,7 +1312,7 @@ const Tasks: React.FC = () => {
             setOpenTaskId(task.id);
           }
         }}
-        className={`group border rounded-xl bg-card transition-all duration-200 cursor-pointer ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDeleteMode
             ? selectedDeleteTaskIds.includes(task.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -1842,7 +1842,7 @@ const Tasks: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 relative">
+      <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (

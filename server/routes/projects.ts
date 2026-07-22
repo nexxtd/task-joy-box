@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { and, eq } from 'drizzle-orm';
-import { db } from '../db';
+import { db, pool } from '../db';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { projectMembers, projects, users } from '../../shared/schema';
 
@@ -347,6 +347,48 @@ router.post('/:projectId/leave', requireAuth, async (req: AuthRequest, res: Resp
   } catch (error) {
     console.error('Leave project error:', error);
     res.status(500).json({ error: 'Failed to leave project' });
+  }
+});
+
+// Project chat - get messages
+router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const result = await pool.query(
+      `SELECT pcm.id, pcm.user_id as "userId", pcm.message, pcm.created_at as "createdAt", u.name as "authorName"
+       FROM project_chat_messages pcm
+       INNER JOIN users u ON u.id = pcm.user_id
+       WHERE pcm.project_id = $1
+       ORDER BY pcm.created_at ASC`,
+      [projectId]
+    );
+    res.json({ messages: result.rows });
+  } catch (error) {
+    console.error('Get project chat error:', error);
+    res.status(500).json({ error: 'Failed to get messages' });
+  }
+});
+
+// Project chat - send a message
+router.post('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const { message } = req.body;
+    if (!message || String(message).trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    const result = await pool.query(
+      `INSERT INTO project_chat_messages (project_id, user_id, message)
+       VALUES ($1, $2, $3)
+       RETURNING id, user_id as "userId", message, created_at as "createdAt"`,
+      [projectId, req.userId!, String(message).trim()]
+    );
+    const msg = result.rows[0];
+    const userResult = await pool.query(`SELECT name FROM users WHERE id = $1`, [req.userId!]);
+    res.json({ message: { ...msg, authorName: userResult.rows[0]?.name || 'Unknown' } });
+  } catch (error) {
+    console.error('Send project chat error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
   }
 });
 
