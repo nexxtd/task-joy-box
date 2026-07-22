@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
-import { Column as ColumnType, Task } from '@/types/board';
+import { Column as ColumnType, Task, PRIORITY_CONFIG, LABEL_COLORS } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import TaskCard from './TaskCard';
-import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Calendar, CheckSquare, Brain } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CircleToggle } from '@/components/ToggleComponents';
+import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { TaskDropdownExpanded } from '@/pages/Tasks';
 
 interface BoardColumnProps {
   column: ColumnType;
@@ -19,7 +22,7 @@ interface BoardColumnProps {
 }
 
 const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true }) => {
-  const { addTask, deleteColumn, updateColumn, updateTask, moveTask } = useBoardContext();
+  const { addTask, deleteColumn, updateColumn, updateTask, moveTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,6 +40,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const { user } = useAuth();
   const navigate = useNavigate();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const isPro = user?.subscriptionTier === 'pro';
   const isFree = !user?.subscriptionTier || user.subscriptionTier === 'free';
   const [showMenu, setShowMenu] = useState(false);
   const [editingColumnName, setEditingColumnName] = useState(false);
@@ -46,6 +50,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [columnIcon, setColumnIcon] = useState(column.icon || '');
 
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const { open: openDeepFocus } = useDeepFocus();
+
+  const toggleExpand = (taskId: string) => {
+    setExpandedTaskIds(prev =>
+      prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
+    );
+  };
 
   const COLUMN_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
@@ -254,17 +266,76 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 {/* Uncompleted tasks */}
                 {!tasksCollapsed && uncompletedTasks.map((task, taskIndex) => (
                   <Draggable key={task.id} draggableId={task.id} index={taskIndex} isDragDisabled={!canEdit}>
-                    {(taskProvided, taskSnapshot) => (
-                      <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} {...taskProvided.dragHandleProps}>
-                        <TaskCard 
-                          task={task} 
-                          onClick={() => onTaskClick(task)} 
-                          isDragging={taskSnapshot.isDragging}
-                          onToggleComplete={(e) => handleToggleComplete(e, task)}
-                          canEdit={canEdit}
-                        />
-                      </div>
-                    )}
+                    {(taskProvided, taskSnapshot) => {
+                      const isExpanded = expandedTaskIds.includes(task.id);
+                      const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
+                      const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
+                      const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+                      return (
+                        <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                          <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
+                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => toggleExpand(task.id)}>
+                              <CircleToggle
+                                completed={task.completed || false}
+                                onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
+                                size="sm"
+                              />
+                              {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
+                              <div className="flex-1 min-w-0">
+                                <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                  {task.title}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                  {task.priority !== 'none' && (
+                                    <span className={`${PRIORITY_CONFIG[task.priority].className} text-[9px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
+                                      {PRIORITY_CONFIG[task.priority].label}
+                                    </span>
+                                  )}
+                                  {task.dueDate && (
+                                    <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                                      <Calendar className="w-2.5 h-2.5" />
+                                      {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </span>
+                                  )}
+                                  {totalItems > 0 && (
+                                    <span className={`flex items-center gap-1 text-[10px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
+                                      <CheckSquare className="w-2.5 h-2.5" />
+                                      {doneItems}/{totalItems}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
+                                className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
+                                title="Deep Focus"
+                              >
+                                <Brain className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                                className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                            {isExpanded && (
+                              <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg">
+                                <TaskDropdownExpanded
+                                  task={task}
+                                  onUpdateTask={updateTask}
+                                  onToggleChecklistItem={toggleChecklistItem}
+                                  onAddChecklistItem={addChecklistItem}
+                                  onDeleteChecklistItem={deleteChecklistItem}
+                                  isPremium={isPremium}
+                                  isPro={isPro}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }}
                   </Draggable>
                 ))}
                 
@@ -274,17 +345,76 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2 px-1">Completed ({completedTasks.length})</p>
                     {completedTasks.map((task, taskIndex) => (
                       <Draggable key={task.id} draggableId={task.id} index={uncompletedTasks.length + taskIndex} isDragDisabled={!canEdit}>
-                        {(taskProvided, taskSnapshot) => (
-                          <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} {...taskProvided.dragHandleProps}>
-                            <TaskCard 
-                              task={task} 
-                              onClick={() => onTaskClick(task)} 
-                              isDragging={taskSnapshot.isDragging}
-                              onToggleComplete={(e) => handleToggleComplete(e, task)}
-                              canEdit={canEdit}
-                            />
-                          </div>
-                        )}
+                        {(taskProvided, taskSnapshot) => {
+                          const isExpanded = expandedTaskIds.includes(task.id);
+                          const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
+                          const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
+                          const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+                          return (
+                            <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                              <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
+                                <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => toggleExpand(task.id)}>
+                                  <CircleToggle
+                                    completed={task.completed || false}
+                                    onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
+                                    size="sm"
+                                  />
+                                  {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
+                                  <div className="flex-1 min-w-0">
+                                    <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                      {task.title}
+                                    </span>
+                                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                      {task.priority !== 'none' && (
+                                        <span className={`${PRIORITY_CONFIG[task.priority].className} text-[9px] font-bold px-1.5 py-0.5 rounded text-primary-foreground`}>
+                                          {PRIORITY_CONFIG[task.priority].label}
+                                        </span>
+                                      )}
+                                      {task.dueDate && (
+                                        <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                                          <Calendar className="w-2.5 h-2.5" />
+                                          {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      )}
+                                      {totalItems > 0 && (
+                                        <span className={`flex items-center gap-1 text-[10px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
+                                          <CheckSquare className="w-2.5 h-2.5" />
+                                          {doneItems}/{totalItems}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
+                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
+                                    title="Deep Focus"
+                                  >
+                                    <Brain className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                                  >
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                                {isExpanded && (
+                                  <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg">
+                                    <TaskDropdownExpanded
+                                      task={task}
+                                      onUpdateTask={updateTask}
+                                      onToggleChecklistItem={toggleChecklistItem}
+                                      onAddChecklistItem={addChecklistItem}
+                                      onDeleteChecklistItem={deleteChecklistItem}
+                                      isPremium={isPremium}
+                                      isPro={isPro}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        }}
                       </Draggable>
                     ))}
                   </div>
