@@ -77,14 +77,20 @@ export async function initDatabase() {
         title TEXT NOT NULL,
         category TEXT NOT NULL DEFAULT 'Personal',
         color TEXT NOT NULL DEFAULT 'primary',
+        pinned BOOLEAN DEFAULT FALSE,
         streak INTEGER NOT NULL DEFAULT 0,
         completed_days TEXT NOT NULL DEFAULT '[]',
+        daily_target INTEGER DEFAULT 1,
+        daily_logs TEXT DEFAULT '{}',
+        target_period TEXT DEFAULT 'daily',
         daily_time INTEGER,
         duration_days INTEGER,
         display_order INTEGER DEFAULT 0,
         checklists TEXT NOT NULL DEFAULT '[]',
         subtasks TEXT NOT NULL DEFAULT '[]',
         status TEXT NOT NULL DEFAULT 'to_do',
+        project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        column_id INTEGER,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
@@ -175,6 +181,9 @@ export async function initDatabase() {
     await addColumnIfNotExists('habits', 'checklists', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('habits', 'subtasks', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('habits', 'status', "TEXT DEFAULT 'to_do'");
+    await addColumnIfNotExists('habits', 'daily_target', 'INTEGER DEFAULT 1');
+    await addColumnIfNotExists('habits', 'daily_logs', "TEXT DEFAULT '{}'");
+    await addColumnIfNotExists('habits', 'target_period', "TEXT DEFAULT 'daily'");
 
     // User settings table new columns
     await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
