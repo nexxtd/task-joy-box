@@ -353,7 +353,7 @@ const Projects: React.FC = () => {
       }
     };
     load();
-  }, [selectedProjectId]);
+  }, []);
 
   useEffect(() => {
     const joinCode = searchParams.get('join');

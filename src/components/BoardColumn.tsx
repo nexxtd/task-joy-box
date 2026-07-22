@@ -249,7 +249,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               <div
                 ref={dropProvided.innerRef}
                 {...dropProvided.droppableProps}
-                className={`min-h-[100px] space-y-3 p-2 rounded-xl transition-all duration-300 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
+                className={`${tasksCollapsed ? 'min-h-0 p-0' : 'min-h-[100px] p-2'} space-y-3 rounded-xl transition-all duration-300 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
               >
                 {/* Uncompleted tasks */}
                 {!tasksCollapsed && uncompletedTasks.map((task, taskIndex) => (
@@ -290,13 +290,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   </div>
                 )}
                 
-                {dropProvided.placeholder}
+                {!tasksCollapsed && dropProvided.placeholder}
               </div>
             )}
           </Droppable>
 
           {isAdding ? (
-            <div className="mt-3 p-4 bg-card border-2 border-primary/20 rounded-2xl shadow-xl animate-in slide-in-from-top-2 duration-300 overflow-hidden">
+            <div className={`${tasksCollapsed ? 'mt-0' : 'mt-3'} p-4 bg-card border-2 border-primary/20 rounded-2xl shadow-xl animate-in slide-in-from-top-2 duration-300 overflow-hidden`}>
 
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -500,7 +500,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 setIsAdding(true);
               }}
               disabled={!onAddClick && !canCreateTasks}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              className={`${tasksCollapsed ? 'mt-0' : 'mt-3'} w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
             >
               <Plus className="w-4 h-4" />
               Add Task
