@@ -274,7 +274,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                       return (
                         <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
                           <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => toggleExpand(task.id)}>
+                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => onTaskClick(task)}>
                               <CircleToggle
                                 completed={task.completed || false}
                                 onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
@@ -353,7 +353,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                           return (
                             <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
                               <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                                <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => toggleExpand(task.id)}>
+                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => onTaskClick(task)}>
                                   <CircleToggle
                                     completed={task.completed || false}
                                     onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
