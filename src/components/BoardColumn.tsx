@@ -282,14 +282,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                       return (
                         <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
                           <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => onTaskClick(task)}>
+                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 min-w-0">
                               <CircleToggle
                                 completed={task.completed || false}
                                 onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
                                 size="sm"
                               />
                               {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
                                 <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                   {task.title}
                                 </span>
@@ -364,14 +364,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                           return (
                             <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
                               <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 cursor-pointer min-w-0" onClick={() => onTaskClick(task)}>
-                                  <CircleToggle
-                                    completed={task.completed || false}
-                                    onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
-                                    size="sm"
-                                  />
-                                  {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                                  <div className="flex-1 min-w-0">
+                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 min-w-0">
+                              <CircleToggle
+                                completed={task.completed || false}
+                                onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
+                                size="sm"
+                              />
+                              {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
+                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
                                     <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                       {task.title}
                                     </span>
