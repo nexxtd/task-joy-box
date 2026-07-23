@@ -354,6 +354,7 @@ const Tasks: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
+  const [assignedToMeFilter, setAssignedToMeFilter] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -519,9 +520,10 @@ const Tasks: React.FC = () => {
       const matchesTags = tagFilterIds.length === 0
         ? true
         : tagFilterIds.every(tagId => task.labels.some(label => label.id === tagId));
-      return matchesSearch && matchesPriority && matchesProject && matchesTags;
+      const matchesAssigned = assignedToMeFilter ? task.assignedToUserId === user?.id : true;
+      return matchesSearch && matchesPriority && matchesProject && matchesTags && matchesAssigned;
     });
-  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds]);
+  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds, assignedToMeFilter, user?.id]);
 
   const filtered = useMemo(() => {
     const byGroup = filteredTasksByBase.filter(task =>
@@ -1811,6 +1813,18 @@ const Tasks: React.FC = () => {
               </>
             )}
           </div>
+
+          <button
+            onClick={() => setAssignedToMeFilter(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+              assignedToMeFilter
+                ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Assigned to me</span>
+          </button>
 
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -3467,6 +3481,18 @@ export const TaskDropdownExpanded: React.FC<{
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const { user: currentUser } = useAuth();
+  const [assignableUsers, setAssignableUsers] = useState<{id: number; name: string; email: string}[]>([]);
+  useEffect(() => {
+    if (!task.projectId) return;
+    fetch('/api/projects', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { projects: [] })
+      .then(data => {
+        const project = (data.projects || []).find((p: any) => p.id === task.projectId);
+        if (project?.members) setAssignableUsers(project.members);
+      })
+      .catch(() => {});
+  }, [task.projectId]);
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
@@ -3690,6 +3716,46 @@ export const TaskDropdownExpanded: React.FC<{
           className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
         />
       </div>
+
+      {task.projectId && (
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Assigned To</h3>
+            </div>
+            <Select
+              value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
+              onValueChange={(val) => {
+                if (val === 'unassigned') {
+                  onUpdateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
+                } else {
+                  const u = assignableUsers.find(au => au.id === Number(val));
+                  onUpdateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: u?.name });
+                }
+              }}
+            >
+              <SelectTrigger className="w-40 bg-muted/40 border border-border text-sm h-8">
+                <SelectValue placeholder="Assign to..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">
+                  <span className="text-muted-foreground">Unassigned</span>
+                </SelectItem>
+                {assignableUsers.map(u => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
+                        {u.name.slice(0, 1).toUpperCase()}
+                      </div>
+                      <span>{u.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
       {/* Sub-tasks Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
