@@ -117,7 +117,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                                       onClick={(e) => { e.stopPropagation(); updateTask(task.id, { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : undefined }); }}
                                       size="sm"
                                     />
-                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
+                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}>
                                       <div className="flex items-center gap-1.5">
                                         <span className={`text-sm font-medium text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                           {task.title}

@@ -33,7 +33,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import BoardColumn from '@/components/BoardColumn';
 import ListView from '@/components/ListView';
-import TaskDetailModal from '@/components/TaskDetailModal';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
@@ -1701,8 +1700,6 @@ const Projects: React.FC = () => {
           defaultProjectId={selectedProject?.id}
         />
       )}
-
-      {currentTask && <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} canEdit={canEdit} />}
     </div>
   );
 };
