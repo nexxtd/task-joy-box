@@ -151,7 +151,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-80">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[28rem]">
           <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
               {column.icon && <span className="text-sm">{column.icon}</span>}
