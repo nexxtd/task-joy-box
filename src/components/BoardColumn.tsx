@@ -331,7 +331,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                               </button>
                             </div>
                             {isExpanded && (
-                              <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg">
+                              <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg" data-pan-enabled="true">
                                 <TaskDropdownExpanded
                                   task={task}
                                   onUpdateTask={updateTask}
@@ -413,7 +413,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                   </button>
                                 </div>
                                 {isExpanded && (
-                                  <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg">
+                                  <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg" data-pan-enabled="true">
                                     <TaskDropdownExpanded
                                       task={task}
                                       onUpdateTask={updateTask}

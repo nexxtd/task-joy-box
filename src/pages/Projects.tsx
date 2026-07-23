@@ -163,21 +163,23 @@ const Projects: React.FC = () => {
 
   // Board zoom with wheel
   useEffect(() => {
-    const el = boardCanvasRef.current;
-    if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - e.deltaY * 0.001).toFixed(3))));
       }
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel);
   }, []);
 
   const handleBoardPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('[data-no-pan="true"]')) return;
+    if ((e.target as HTMLElement).closest('[data-pan-enabled="true"]')) {
+      // Allow panning on expanded content
+    } else if ((e.target as HTMLElement).closest('[data-no-pan="true"]')) {
+      return;
+    }
     setIsBoardPanning(true);
     boardPanStart.current = { x: e.clientX - boardOffset.x, y: e.clientY - boardOffset.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
