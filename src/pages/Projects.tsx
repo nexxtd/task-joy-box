@@ -1038,9 +1038,7 @@ const Projects: React.FC = () => {
   };
 
   const renderList = () => (
-    <div className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-      <ListView onTaskClick={setSelectedTask} projectId={selectedProject?.id} />
-    </div>
+    <ListView onTaskClick={setSelectedTask} projectId={selectedProject?.id} />
   );
 
   const renderChat = () => (

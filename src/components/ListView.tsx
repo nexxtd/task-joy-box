@@ -124,18 +124,24 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                                   {taskDurFmt}
                                 </span>
                               )}
-                              {task.dueDate && (() => {
+                              <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground">
+                                <Calendar className="w-2.5 h-2.5" />
+                                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+                              </span>
+                              {(() => {
                                 const warning = getDueTimeWarning(task);
                                 return (
                                   <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                                    warning === 'overdue'
-                                      ? 'bg-destructive/10 text-destructive'
-                                      : warning === 'imminent' || warning === 'soon'
-                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                        : 'bg-muted text-muted-foreground'
+                                    task.dueDate
+                                      ? warning === 'overdue'
+                                        ? 'bg-destructive/10 text-destructive'
+                                        : warning === 'imminent' || warning === 'soon'
+                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                          : 'bg-muted text-muted-foreground'
+                                      : 'bg-muted text-muted-foreground'
                                   }`}>
                                     <Calendar className="w-2.5 h-2.5" />
-                                    {formatDate(task.dueDate)}{task.dueTime ? ` ${task.dueTime}` : ''}
+                                    {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
                                   </span>
                                 );
                               })()}
