@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, LABEL_COLORS } from '@/types/board';
-import { Calendar, CheckSquare, ChevronDown, ChevronUp, Brain, Clock, GripVertical } from 'lucide-react';
+import { Calendar, CheckSquare, ChevronDown, ChevronUp, Brain, Clock, GripVertical, Plus } from 'lucide-react';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAuth } from '@/context/AuthContext';
@@ -11,6 +11,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 interface ListViewProps {
   onTaskClick: (task: Task) => void;
   projectId?: number | null;
+  onAddTask?: () => void;
 }
 
 const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
@@ -49,7 +50,7 @@ const getDueTimeWarning = (task: Task): 'overdue' | 'imminent' | 'soon' | 'norma
   return 'normal';
 };
 
-const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
+const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }) => {
   const { board, updateTask, moveTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
@@ -73,7 +74,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
   };
 
   return (
-    <div className="flex-1 overflow-y-scroll p-6">
+    <div className="flex-1 overflow-y-auto p-6" style={{ scrollbarGutter: 'stable' }}>
       <div className="max-w-4xl mx-auto space-y-6">
         <DragDropContext onDragEnd={handleDragEnd}>
           {sortedColumns.map(column => {
@@ -117,7 +118,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
                                       onClick={(e) => { e.stopPropagation(); updateTask(task.id, { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : undefined }); }}
                                       size="sm"
                                     />
-                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}>
+                                    <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
                                       <div className="flex items-center gap-1.5">
                                         <span className={`text-sm font-medium text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                           {task.title}
@@ -224,8 +225,18 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId }) => {
               </div>
             );
           })}
-        </DragDropContext>
-      </div>
+          </DragDropContext>
+
+          {onAddTask && (
+            <button
+              onClick={onAddTask}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Add Task
+            </button>
+          )}
+        </div>
     </div>
   );
 };

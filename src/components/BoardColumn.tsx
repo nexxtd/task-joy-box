@@ -289,7 +289,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                 size="sm"
                               />
                               {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}>
+                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
                                 <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                   {task.title}
                                 </span>
@@ -371,7 +371,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                 size="sm"
                               />
                               {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}>
+                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
                                     <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                       {task.title}
                                     </span>
