@@ -74,7 +74,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6" style={{ scrollbarGutter: 'stable' }}>
+    <div className="flex-1 overflow-y-scroll overflow-x-hidden p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <DragDropContext onDragEnd={handleDragEnd}>
           {sortedColumns.map(column => {
