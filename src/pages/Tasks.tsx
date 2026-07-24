@@ -3429,7 +3429,7 @@ const Tasks: React.FC = () => {
   );
 };
 
-interface TaskFullViewProps {
+export interface TaskFullViewProps {
   task: Task;
   boardColumns: Array<{ id: string; title: string; color: string; order: number; projectId?: number | null }>;
   projects: ProjectMeta[];
@@ -4192,7 +4192,7 @@ export const TaskDropdownExpanded: React.FC<{
   );
 };
 
-const TaskFullView: React.FC<TaskFullViewProps> = ({
+export const TaskFullView: React.FC<TaskFullViewProps> = ({
   task,
   boardColumns,
   projects,

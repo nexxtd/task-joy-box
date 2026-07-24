@@ -33,12 +33,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import BoardColumn from '@/components/BoardColumn';
 import ListView from '@/components/ListView';
-import TaskDetailModal from '@/components/TaskDetailModal';
+import { TaskFullView } from '@/pages/Tasks';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
-import { Task } from '@/types/board';
+import { Label, LabelColor, DEFAULT_LABELS, Task } from '@/types/board';
+import { fetchTags, createTag, deleteTag } from '@/services/tagService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
 
@@ -76,7 +77,7 @@ const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
 
 const Projects: React.FC = () => {
-  const { board, moveTask, reorderColumns, addColumn, updateTask } = useBoardContext();
+  const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -142,6 +143,42 @@ const Projects: React.FC = () => {
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
+
+  const TAG_COLOR_OPTIONS: LabelColor[] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
+  const randomTagColor = (): LabelColor => TAG_COLOR_OPTIONS[Math.floor(Math.random() * TAG_COLOR_OPTIONS.length)] || 'blue';
+  const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+  const SHARED_TAG_PREFIX = 'shared-tag-';
+  const SHARED_COLOR_MAP: Record<string, LabelColor> = { red: 'red', orange: 'orange', yellow: 'yellow', green: 'green', blue: 'blue', purple: 'purple', pink: 'pink' };
+  const SHARED_COLOR_HEX_MAP: Array<{ hex: string; color: LabelColor }> = [
+    { hex: '#ef4444', color: 'red' },
+    { hex: '#f97316', color: 'orange' },
+    { hex: '#eab308', color: 'yellow' },
+    { hex: '#22c55e', color: 'green' },
+    { hex: '#3b82f6', color: 'blue' },
+    { hex: '#8b5cf6', color: 'purple' },
+    { hex: '#ec4899', color: 'pink' },
+  ];
+  const sharedTagLabelId = (id: number) => `${SHARED_TAG_PREFIX}${id}`;
+  const sharedTagToLabel = (tag: { id: number; name: string; color: string }): Label => ({
+    id: sharedTagLabelId(tag.id),
+    name: tag.name,
+    color: SHARED_COLOR_MAP[tag.color.toLowerCase()]
+      || SHARED_COLOR_HEX_MAP.find(item => item.hex.toLowerCase() === tag.color.toLowerCase())?.color
+      || 'blue',
+  });
+
+  const [sharedTags, setSharedTags] = useState<{ id: number; name: string; color: string }[]>([]);
+
+  useEffect(() => {
+    const loadSharedTags = async () => {
+      try {
+        setSharedTags(await fetchTags());
+      } catch {
+        setSharedTags([]);
+      }
+    };
+    loadSharedTags();
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
@@ -260,6 +297,50 @@ const Projects: React.FC = () => {
   const projectLimit = PLAN_LIMITS[planTier];
   const activeCount = projects.filter(project => !project.archived).length;
   const canAddProject = activeCount < projectLimit;
+  const isPremium = user?.subscriptionTier === 'premium' || user?.subscriptionTier === 'pro';
+  const isPro = user?.subscriptionTier === 'pro';
+
+  const allTags = useMemo(() => {
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
+    board.tasks.forEach(task => task.labels.forEach(label => {
+      const key = normalizeTagName(label.name).toLowerCase();
+      if (!byName.has(key)) byName.set(key, label);
+    }));
+    sharedTags.forEach(tag => {
+      const label = sharedTagToLabel(tag);
+      const key = normalizeTagName(label.name).toLowerCase();
+      byName.set(key, label);
+    });
+    return Array.from(byName.values());
+  }, [board.tasks, sharedTags]);
+
+  const toggleTaskTag = (taskId: string, label: Label) => {
+    const task = board.tasks.find(item => item.id === taskId);
+    if (!task) return;
+    const has = task.labels.some(item => item.id === label.id);
+    const nextLabels = has ? task.labels.filter(item => item.id !== label.id) : [...task.labels, label];
+    updateTask(taskId, { labels: nextLabels });
+  };
+
+  const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
+    const tag = await createTag({ name, color });
+    return sharedTagToLabel(tag);
+  };
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try { await deleteTag(sharedTagId); } catch { return; }
+      }
+    }
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  };
 
   const selectedProject = useMemo(
     () => projects.find(project => project.id === selectedProjectId) || projects[0] || null,
@@ -1704,7 +1785,29 @@ const Projects: React.FC = () => {
         />
       )}
       
-      {currentTask && <TaskDetailModal task={currentTask} onClose={() => setSelectedTask(null)} canEdit={canEdit} />}
+      {currentTask && (
+        <TaskFullView
+          task={currentTask}
+          boardColumns={board.columns}
+          projects={projects.map(p => ({ id: p.id, name: p.name, color: p.color, description: p.description }))}
+          allTags={allTags}
+          onClose={() => setSelectedTask(null)}
+          onUpdateTask={(taskId, updates) => updateTask(taskId, updates)}
+          onToggleChecklistItem={toggleChecklistItem}
+          onAddChecklistItem={addChecklistItem}
+          onDeleteChecklistItem={deleteChecklistItem}
+          onDeleteTask={taskId => { deleteTask(taskId); setSelectedTask(null); }}
+          onToggleTag={toggleTaskTag}
+          onCreateTag={async (taskId, name, color) => {
+            const label = await createSharedTaskLabel(name, color);
+            const task = board.tasks.find(item => item.id === taskId);
+            if (task) updateTask(taskId, { labels: [...task.labels, label] });
+          }}
+          onDeleteTagEverywhere={deleteTagEverywhere}
+          isPremium={isPremium}
+          isPro={isPro}
+        />
+      )}
     </div>
   );
 };
