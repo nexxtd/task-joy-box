@@ -317,17 +317,17 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                 </div>
                               </div>
                               <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                                className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
                                 onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
                                 className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
                                 title="Deep Focus"
                               >
                                 <Brain className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                                className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
-                              >
-                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                               </button>
                             </div>
                             {isExpanded && (
@@ -399,17 +399,17 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                                     </div>
                                   </div>
                                   <button
+                                    onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                                  >
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                  </button>
+                                  <button
                                     onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
                                     className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
                                     title="Deep Focus"
                                   >
                                     <Brain className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
-                                  >
-                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                   </button>
                                 </div>
                                 {isExpanded && (
