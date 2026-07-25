@@ -3822,8 +3822,8 @@ export const TaskDropdownExpanded: React.FC<{
                 placeholder="min"
                 className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
               />
-              <button onClick={addSubtask} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground shrink-0" title="Add sub-task">
-                <Plus className="w-3.5 h-3.5" />
+              <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
+                Add
               </button>
             </div>
           </div>
