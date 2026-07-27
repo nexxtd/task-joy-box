@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import {
   Attachment,
   Label,
   LabelColor,
+  LABEL_COLORS,
   Priority,
   PRIORITY_CONFIG,
   Task,
@@ -15,6 +16,7 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical } from 'lucide-react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 // This component is extracted from the "Create Task" modal flow inside src/pages/Tasks.tsx.
 // It intentionally focuses only on the create-task overlay (not the full Tasks page).
@@ -448,8 +450,27 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </SelectContent>
               </Select>
             </div>
-
-            <div />
+            {newTaskProjectId !== '' && (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Column</label>
+                <Select value={newTaskColumnId} onValueChange={v => setNewTaskColumnId(v)}>
+                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                    <SelectValue placeholder="Select column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {board.columns
+                      .filter(col => col.projectId === Number(newTaskProjectId))
+                      .sort((a, b) => a.order - b.order)
+                      .map(col => (
+                        <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {newTaskColumnId === '' && (
+                  <p className="text-[10px] text-destructive mt-1">Column is required when a project is selected</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Start Date and Time Section */}
@@ -518,82 +539,96 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   <span className="text-xs text-muted-foreground">({newTaskSubtasks.length})</span>
                 )}
               </div>
-              {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              <div className="flex items-center gap-2">
+                {newTaskDuration > 0 && (
+                  <span className={`text-xs font-medium ${
+                    newSubtaskRemaining > 0 ? 'text-muted-foreground' :
+                    newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+                  }`}>
+                    {newSubtaskRemaining > 0
+                      ? `${newSubtaskRemaining} mins left`
+                      : newSubtaskRemaining < 0
+                      ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
+                      : '0 mins left ✓'}
+                  </span>
+                )}
+                {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+              </div>
             </button>
             {!draftSubtasksCollapsed && (
-              <div className="px-4 pb-3 space-y-3">
-                <div className="space-y-2">
-                  {newTaskSubtasks.map(subtask => (
-                    <div
-                      key={subtask.id}
-                      className="grid grid-cols-[1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group"
-                    >
-                      {editingDraftSubtaskId === subtask.id ? (
-                        <>
-                          <input
-                            autoFocus
-                            className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                            value={editingDraftSubtaskText}
-                            onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                          />
-                          <input
-                            type="number"
-                            className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                            value={editingDraftSubtaskDuration}
-                            onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                          />
-                          <button
-                            onClick={() => {
-                              setNewTaskSubtasks(prev =>
-                                prev.map(st =>
-                                  st.id === subtask.id
-                                    ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration }
-                                    : st
-                                )
-                              );
-                              setEditingDraftSubtaskId(null);
-                            }}
-                            className="text-xs text-primary font-bold"
-                          >
-                            Save
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            onClick={() => {
-                              setEditingDraftSubtaskId(subtask.id);
-                              setEditingDraftSubtaskText(subtask.text);
-                              setEditingDraftSubtaskDuration(subtask.durationMinutes);
-                            }}
-                            className="text-sm text-foreground font-medium cursor-text truncate"
-                          >
-                            {subtask.text}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              value={subtask.durationMinutes || 0}
-                              onChange={e => {
-                                const val = Math.max(0, Number(e.target.value) || 0);
-                                setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                              }}
-                            />
-                            <span className="text-[10px] text-muted-foreground">min</span>
-                            <button
-                              onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                <DragDropContext onDragEnd={(result: DropResult) => {
+                  if (!result.destination) return;
+                  const items = Array.from(newTaskSubtasks);
+                  const [removed] = items.splice(result.source.index, 1);
+                  items.splice(result.destination.index, 0, removed);
+                  setNewTaskSubtasks(items);
+                }}>
+                  <Droppable droppableId="draft-subtasks">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                        {newTaskSubtasks.map((subtask, index) => (
+                          <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                {editingDraftSubtaskId === subtask.id ? (
+                                  <>
+                                    <input
+                                      autoFocus
+                                      className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                      value={editingDraftSubtaskText}
+                                      onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                                      onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
+                                      onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
+                                    />
+                                    <input
+                                      type="number"
+                                      className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                      value={editingDraftSubtaskDuration}
+                                      onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <span
+                                      onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
+                                      className="text-sm text-foreground font-medium cursor-text truncate"
+                                    >
+                                      {subtask.text}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                        value={subtask.durationMinutes || 0}
+                                        onChange={e => {
+                                          const val = Math.max(0, Number(e.target.value) || 0);
+                                          setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                                        }}
+                                      />
+                                      <span className="text-[10px] text-muted-foreground">min</span>
+                                      <button
+                                        onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
                 <div className="grid grid-cols-[1fr_120px_auto] gap-2">
                   <input
                     value={newSubtaskText}
@@ -773,12 +808,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             )}
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <Tag className="w-4 h-4 text-muted-foreground" />
-                Tags
-              </h3>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-muted-foreground">Tags</label>
               <button
                 onClick={() => setCreateTagPickerOpen(prev => !prev)}
                 className="text-xs text-primary hover:underline"
@@ -787,40 +819,77 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               </button>
             </div>
             {newTaskTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {newTaskTags.map(label => (
-                  <span key={label.id} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-primary-foreground" style={{ backgroundColor: label.color }}>
+                  <span key={label.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-primary-foreground" style={{ backgroundColor: label.color }}>
                     {label.name}
+                    <button onClick={() => setNewTaskTags(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
+                      <X className="w-3 h-3" />
+                    </button>
                   </span>
                 ))}
               </div>
             )}
+            <button
+              onClick={() => setCreateTagPickerOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              {newTaskTags.length > 0 ? `${newTaskTags.length} tag${newTaskTags.length > 1 ? 's' : ''} selected` : 'Add tags'}
+            </button>
             {createTagPickerOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setCreateTagPickerOpen(false)}>
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-                <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                    <button onClick={() => setCreateTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-                  </div>
-                  <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setCreateTagPickerOpen(false)} />
+                <div className="absolute left-0 mt-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
+                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                    {(board.tasks.flatMap(t => t.labels).filter((l, i, a) => a.findIndex(x => x.id === l.id) === i) || []).length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
+                    )}
                     {(board.tasks.flatMap(t => t.labels).filter((l, i, a) => a.findIndex(x => x.id === l.id) === i) || []).map(label => {
                       const active = newTaskTags.some(t => t.id === label.id);
                       return (
-                        <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                          <button onClick={() => {
-                            setNewTaskTags(prev => active ? prev.filter(t => t.id !== label.id) : [...prev, label]);
-                          }} className="flex flex-1 items-center gap-2 text-left">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: label.color }} />
-                            <span className="text-sm text-foreground">{label.name}</span>
-                            {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                          </button>
-                        </div>
+                        <button
+                          key={label.id}
+                          onClick={() => setNewTaskTags(prev => active ? prev.filter(t => t.id !== label.id) : [...prev, label])}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${active ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-border/60 hover:bg-muted/40'}`}
+                        >
+                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: label.color }} />
+                          <span className="text-sm text-foreground flex-1">{label.name}</span>
+                          {active && <span className="text-[10px] text-primary font-bold">✓</span>}
+                        </button>
                       );
                     })}
                   </div>
+                  <div className="flex gap-2 border-t border-border pt-3">
+                    <input
+                      value={newTagName}
+                      onChange={e => setNewTagName(e.target.value)}
+                      placeholder="Create tag"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      onClick={() => setNewTagColor(randomTagColor())}
+                      className="w-10 h-10 rounded-xl border-2 border-border/50 flex-shrink-0 transition-transform hover:scale-110"
+                      style={{ backgroundColor: newTagColor }}
+                      title="Randomize color"
+                    />
+                    <button
+                      onClick={() => {
+                        const name = normalizeTagName(newTagName);
+                        if (!name) return;
+                        const label: Label = { id: `local-${crypto.randomUUID()}`, name, color: newTagColor };
+                        setNewTaskTags(prev => [...prev, label]);
+                        setNewTagName('');
+                        setNewTagColor(randomTagColor());
+                      }}
+                      disabled={!newTagName.trim()}
+                      className="px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 
