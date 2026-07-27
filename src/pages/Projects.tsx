@@ -220,10 +220,9 @@ const Projects: React.FC = () => {
     }
     setIsBoardPanning(true);
     boardPanStart.current = { x: e.clientX - boardOffset.x, y: e.clientY - boardOffset.y };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handleBoardPointerMove = (e: React.PointerEvent) => {
+  const handleBoardPointerMove = (e: PointerEvent) => {
     if (isBoardPanning) {
       setBoardOffset({ x: e.clientX - boardPanStart.current.x, y: e.clientY - boardPanStart.current.y });
     }
@@ -232,6 +231,21 @@ const Projects: React.FC = () => {
   const handleBoardPointerUp = () => {
     setIsBoardPanning(false);
   };
+
+  // Use window-level pointer events so panning works even when expanded content captures React events
+  useEffect(() => {
+    if (!isBoardPanning) return;
+    const onMove = (e: PointerEvent) => {
+      setBoardOffset({ x: e.clientX - boardPanStart.current.x, y: e.clientY - boardPanStart.current.y });
+    };
+    const onUp = () => setIsBoardPanning(false);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isBoardPanning]);
 
   const handleAddColumn = () => {
     if (newColTitle.trim() && selectedProjectId) {
@@ -1039,8 +1053,6 @@ const Projects: React.FC = () => {
           ref={boardCanvasRef}
           className="flex-1 relative overflow-hidden"
           onPointerDown={handleBoardPointerDown}
-          onPointerMove={handleBoardPointerMove}
-          onPointerUp={handleBoardPointerUp}
           style={{
             backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
             backgroundSize: `${24 * boardZoom}px ${24 * boardZoom}px`,
@@ -1381,11 +1393,11 @@ const Projects: React.FC = () => {
               </div>
             </header>
 
-            <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
+            <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
               {editingProjectId !== null && selectedProject?.id === editingProjectId && (
-                <div className="mb-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Rename project</label>
-                  <div className="flex gap-2">
+                <div className="absolute left-6 top-6 z-50 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rename project</div>
+                  <div className="px-3 py-1.5">
                     <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
                       if (e.key === 'Enter') {
                         persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
@@ -1394,10 +1406,15 @@ const Projects: React.FC = () => {
                         setEditingProjectId(null);
                         setEditingName('');
                       }
-                    }} className="flex-1 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                    <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="rounded-xl bg-foreground px-4 py-2 text-sm font-medium text-background">Save</button>
-                    <button onClick={() => setEditingProjectId(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Cancel</button>
+                    }} className="w-full bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
                   </div>
+                  <div className="border-t border-border my-1" />
+                  <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors">
+                    <CheckCircle2 className="w-4 h-4" /> Save
+                  </button>
+                  <button onClick={() => { setEditingProjectId(null); setEditingName(''); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+                    <X className="w-4 h-4" /> Cancel
+                  </button>
                 </div>
               )}
 
