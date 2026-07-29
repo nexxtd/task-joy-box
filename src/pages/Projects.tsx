@@ -706,7 +706,7 @@ const Projects: React.FC = () => {
                           </div>
 
                           {showProjectMenuId === project.id && (
-                            <div className="mt-3 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                            <div className="mt-3 bg-transparent border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
                               <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
                                 setEditingProjectId(project.id);
                                 setEditingName(project.name);
@@ -781,7 +781,7 @@ const Projects: React.FC = () => {
                 </div>
 
                 {showProjectMenuId === project.id && (
-                  <div className="mt-3 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                  <div className="mt-3 bg-transparent border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
                     <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
                       setEditingProjectId(project.id);
                       setEditingName(project.name);
@@ -1043,7 +1043,7 @@ const Projects: React.FC = () => {
             <p className="text-xs text-muted-foreground">Drag tasks between columns to reorganize the project.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks Â· {projectColumns.length} columns</div>
+            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
             <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-1.5 py-1">
               <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
                 <ZoomOut className="w-4 h-4 text-muted-foreground" />
@@ -1153,7 +1153,7 @@ const Projects: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Project Chat</h3>
-            <p className="text-xs text-muted-foreground">{selectedProject?.name} Â· {chatMessages.length} messages</p>
+            <p className="text-xs text-muted-foreground">{selectedProject?.name} · {chatMessages.length} messages</p>
           </div>
         </div>
         {canManage && (
@@ -1188,7 +1188,7 @@ const Projects: React.FC = () => {
                 </div>
                 <span className="text-[10px] text-muted-foreground px-1">
                   {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {' Â· '}
+                  {' · '}
                   {new Date(msg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                 </span>
               </div>
@@ -1206,7 +1206,7 @@ const Projects: React.FC = () => {
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChatMessage(); }
             }}
-            placeholder="Type a messageâ€¦"
+            placeholder="Type a message…"
             rows={1}
             className="flex-1 bg-muted/50 border border-border rounded-2xl px-4 py-2.5 text-sm resize-none outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
             style={{ minHeight: 40, maxHeight: 120 }}
@@ -1475,7 +1475,7 @@ const Projects: React.FC = () => {
                 <textarea
                   value={newMilestoneDesc}
                   onChange={e => setNewMilestoneDesc(e.target.value)}
-                  placeholder="Describe this milestoneâ€¦"
+                  placeholder="Describe this milestone…"
                   rows={2}
                   className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none resize-none"
                 />
@@ -1518,7 +1518,7 @@ const Projects: React.FC = () => {
                               {member.name.charAt(0).toUpperCase()}
                             </div>
                             <span className="text-sm text-foreground flex-1 truncate">{member.name}</span>
-                            {active && <span className="text-[10px] text-primary font-bold">âœ“</span>}
+                            {active && <span className="text-[10px] text-primary font-bold">?</span>}
                           </button>
                         );
                       })}
@@ -1811,7 +1811,7 @@ const Projects: React.FC = () => {
                   type="text"
                   value={assignSearch}
                   onChange={e => setAssignSearch(e.target.value)}
-                  placeholder="Search tasksâ€¦"
+                  placeholder="Search tasks…"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
               </div>
@@ -1924,3 +1924,4 @@ const EmptyState = ({ title, description }: { title: string; description: string
 );
 
 export default Projects;
+

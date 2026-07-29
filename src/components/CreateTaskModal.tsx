@@ -177,6 +177,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
+  const [editingDraftChecklistItemKey, setEditingDraftChecklistItemKey] = useState<{listId: string; itemId: string} | null>(null);
 
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
@@ -667,29 +668,29 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
             {/* Tags */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {newTaskLabels.length === 0 ? (
-                  <button
-                    onClick={() => setNewTagPickerOpen(true)}
-                    className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
-                  >
-                    <Tag className="w-2.5 h-2.5" />
-                    Tags
-                  </button>
-                ) : (
-                  newTaskLabels.map(label => (
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
+                <button
+                  onClick={() => setNewTagPickerOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                  {newTaskLabels.length > 0 ? `${newTaskLabels.length} tag${newTaskLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
+                </button>
+              </div>
+              {newTaskLabels.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {newTaskLabels.map(label => (
                     <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${LABEL_COLORS[label.color]} text-primary-foreground flex-shrink-0`}>
                       {label.name}
                       <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
-
       {newTagPickerOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setNewTagPickerOpen(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
@@ -800,7 +801,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           {newTaskSubtasks.map((subtask, index) => (
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -917,7 +918,35 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
-                                        <span className="flex-1">{item.text}</span>
+                                        {editingDraftChecklistIndex === index ? (
+                                          <input
+                                            autoFocus
+                                            className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                            value={editingDraftChecklistText}
+                                            onChange={e => setEditingDraftChecklistText(e.target.value)}
+                                            onBlur={() => {
+                                              if (editingDraftChecklistText.trim()) {
+                                                setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText.trim() } : it));
+                                              }
+                                              setEditingDraftChecklistIndex(null);
+                                            }}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') {
+                                                if (editingDraftChecklistText.trim()) {
+                                                  setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText.trim() } : it));
+                                                }
+                                                setEditingDraftChecklistIndex(null);
+                                              }
+                                            }}
+                                          />
+                                        ) : (
+                                          <span
+                                            onClick={() => { setEditingDraftChecklistIndex(index); setEditingDraftChecklistText(item.text); }}
+                                            className="flex-1 cursor-text"
+                                          >
+                                            {item.text}
+                                          </span>
+                                        )}
                                         <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -1007,7 +1036,35 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>
-                                                      <span className="flex-1 text-foreground">{item.text}</span>
+                                                      {editingDraftChecklistItemKey?.listId === list.id && editingDraftChecklistItemKey?.itemId === item.id ? (
+                                                        <input
+                                                          autoFocus
+                                                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                          value={editingDraftChecklistText}
+                                                          onChange={e => setEditingDraftChecklistText(e.target.value)}
+                                                          onBlur={() => {
+                                                            if (editingDraftChecklistText.trim()) {
+                                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: editingDraftChecklistText.trim() } : it) } : l));
+                                                            }
+                                                            setEditingDraftChecklistItemKey(null);
+                                                          }}
+                                                          onKeyDown={e => {
+                                                            if (e.key === 'Enter') {
+                                                              if (editingDraftChecklistText.trim()) {
+                                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: editingDraftChecklistText.trim() } : it) } : l));
+                                                              }
+                                                              setEditingDraftChecklistItemKey(null);
+                                                            }
+                                                          }}
+                                                        />
+                                                      ) : (
+                                                        <span
+                                                          onClick={() => { setEditingDraftChecklistItemKey({ listId: list.id, itemId: item.id }); setEditingDraftChecklistText(item.text); }}
+                                                          className="flex-1 cursor-text text-foreground"
+                                                        >
+                                                          {item.text}
+                                                        </span>
+                                                      )}
                                                       <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                       </button>
@@ -1499,3 +1556,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 };
 
 export default CreateTaskModal;
+
+
+
+
