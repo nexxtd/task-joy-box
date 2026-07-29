@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DragDropContext, Droppable, DropResult, Draggable } from '@hello-pangea/dnd';
 import {
+  Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleDotDashed,
@@ -108,6 +110,8 @@ const Projects: React.FC = () => {
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
+  const [newMilestoneAssignees, setNewMilestoneAssignees] = useState<number[]>([]);
+  const [milestoneAssigneeOpen, setMilestoneAssigneeOpen] = useState(false);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
 
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
@@ -702,32 +706,33 @@ const Projects: React.FC = () => {
                           </div>
 
                           {showProjectMenuId === project.id && (
-                            <div className="mt-3 rounded-2xl border border-border bg-card p-2 shadow-lg z-10 relative">
-                              <MenuItem icon={<SquarePen className="h-3.5 w-3.5" />} label="Rename" onClick={() => {
+                            <div className="mt-3 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                              <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
                                 setEditingProjectId(project.id);
                                 setEditingName(project.name);
                                 setShowProjectMenuId(null);
                               }} />
-                              <MenuItem icon={<CircleDotDashed className="h-3.5 w-3.5" />} label="Recolour" onClick={() => {
+                              <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                                 const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                                 updateSelectedProject({ color: nextColor });
                                 setShowProjectMenuId(null);
                               }} />
-                              <MenuItem icon={<Lock className="h-3.5 w-3.5" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+                              <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
                                 await persistProject(project.id, { archived: !project.archived });
                                 setShowProjectMenuId(null);
                               }} />
-                              <MenuItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+                              <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
                                 await persistProject(project.id, { completed: !project.completed });
                                 setShowProjectMenuId(null);
                               }} />
+                              <div className="border-t border-border my-1" />
                               {project.ownerId === user?.id ? (
-                                <MenuItem icon={<Trash2 className="h-3.5 w-3.5" />} danger label="Delete" onClick={() => {
+                                <MenuItem icon={<Trash2 className="h-4 w-4" />} danger label="Delete" onClick={() => {
                                   setProjectToDelete(project.id);
                                   setShowProjectMenuId(null);
                                 }} />
                               ) : (
-                                <MenuItem icon={<X className="h-3.5 w-3.5" />} danger label="Leave Project" onClick={() => {
+                                <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
                                   setProjectToLeave(project.id);
                                   setShowProjectMenuId(null);
                                 }} />
@@ -776,32 +781,33 @@ const Projects: React.FC = () => {
                 </div>
 
                 {showProjectMenuId === project.id && (
-                  <div className="mt-3 rounded-2xl border border-border bg-card p-2 shadow-lg">
-                    <MenuItem icon={<SquarePen className="h-3.5 w-3.5" />} label="Rename" onClick={() => {
+                  <div className="mt-3 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                    <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
                       setEditingProjectId(project.id);
                       setEditingName(project.name);
                       setShowProjectMenuId(null);
                     }} />
-                    <MenuItem icon={<CircleDotDashed className="h-3.5 w-3.5" />} label="Recolour" onClick={() => {
+                    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                       const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                       updateSelectedProject({ color: nextColor });
                       setShowProjectMenuId(null);
                     }} />
-                    <MenuItem icon={<Lock className="h-3.5 w-3.5" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+                    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
                       await persistProject(project.id, { archived: !project.archived });
                       setShowProjectMenuId(null);
                     }} />
-                    <MenuItem icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+                    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
                       await persistProject(project.id, { completed: !project.completed });
                       setShowProjectMenuId(null);
                     }} />
+                    <div className="border-t border-border my-1" />
                     {project.ownerId === user?.id ? (
-                      <MenuItem icon={<Trash2 className="h-3.5 w-3.5" />} danger label="Delete" onClick={() => {
+                      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger label="Delete" onClick={() => {
                         setProjectToDelete(project.id);
                         setShowProjectMenuId(null);
                       }} />
                     ) : (
-                      <MenuItem icon={<X className="h-3.5 w-3.5" />} danger label="Leave Project" onClick={() => {
+                      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
                         setProjectToLeave(project.id);
                         setShowProjectMenuId(null);
                       }} />
@@ -931,6 +937,7 @@ const Projects: React.FC = () => {
                   setNewMilestoneName('');
                   setNewMilestoneDate('');
                   setNewMilestoneDesc('');
+                  setNewMilestoneAssignees([]);
                   setShowMilestonePopup(true);
                 }}
                 className="text-xs font-semibold text-primary hover:underline"
@@ -968,6 +975,7 @@ const Projects: React.FC = () => {
                           setNewMilestoneName(milestone.name);
                           setNewMilestoneDate(milestone.date);
                           setNewMilestoneDesc(milestone.description || '');
+                          setNewMilestoneAssignees((milestone as any).assigneeIds || []);
                           setShowMilestonePopup(true);
                         }}
                         className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1452,12 +1460,15 @@ const Projects: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Date</label>
-                <input
-                  type="date"
-                  value={newMilestoneDate}
-                  onChange={e => setNewMilestoneDate(e.target.value)}
-                  className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-                />
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={newMilestoneDate}
+                    onChange={e => setNewMilestoneDate(e.target.value)}
+                    className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
               </div>
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Description (optional)</label>
@@ -1468,6 +1479,52 @@ const Projects: React.FC = () => {
                   rows={2}
                   className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none resize-none"
                 />
+              </div>
+              <div className="relative">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Assign to</label>
+                <button
+                  onClick={() => setMilestoneAssigneeOpen(prev => !prev)}
+                  className="w-full flex items-center justify-between bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                >
+                  <span className={newMilestoneAssignees.length > 0 ? 'text-foreground' : 'text-muted-foreground'}>
+                    {newMilestoneAssignees.length > 0
+                      ? `${newMilestoneAssignees.length} member${newMilestoneAssignees.length > 1 ? 's' : ''} selected`
+                      : 'Select members'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </button>
+                {milestoneAssigneeOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMilestoneAssigneeOpen(false)} />
+                    <div className="absolute left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-20 p-1.5 max-h-48 overflow-y-auto">
+                      {selectedProject?.members.length === 0 && (
+                        <p className="text-xs text-muted-foreground text-center py-3">No members in this project</p>
+                      )}
+                      {selectedProject?.members.map(member => {
+                        const active = newMilestoneAssignees.includes(member.id);
+                        return (
+                          <button
+                            key={member.id}
+                            onClick={() => setNewMilestoneAssignees(prev =>
+                              active ? prev.filter(id => id !== member.id) : [...prev, member.id]
+                            )}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
+                              active
+                                ? 'border-primary/30 bg-primary/5 shadow-sm'
+                                : 'border-border/60 hover:bg-muted/40'
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-foreground flex-shrink-0">
+                              {member.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm text-foreground flex-1 truncate">{member.name}</span>
+                            {active && <span className="text-[10px] text-primary font-bold">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex gap-2 pt-1">
                 <button
@@ -1483,7 +1540,7 @@ const Projects: React.FC = () => {
                     }
                   }}
                   disabled={!newMilestoneName.trim() || !newMilestoneDate}
-                  className="flex-1 bg-primary text-primary-foreground text-sm font-bold py-2.5 rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                  className="flex-1 bg-foreground text-background text-sm font-bold py-2.5 rounded-xl disabled:opacity-50 hover:opacity-90 transition-colors"
                 >
                   {editingMilestoneId ? 'Update Milestone' : 'Save Milestone'}
                 </button>
@@ -1850,8 +1907,8 @@ const MenuItem = ({
   <button
     onClick={onClick}
     className={cn(
-      'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium transition-colors',
-      danger ? 'text-red-600 hover:bg-red-50' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      'flex w-full items-center gap-2 px-4 py-2 text-sm transition-colors',
+      danger ? 'text-destructive hover:bg-destructive/5' : 'text-foreground hover:bg-muted',
     )}
   >
     {icon}

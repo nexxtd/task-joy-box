@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, LABEL_COLORS } from '@/types/board';
-import { Calendar, CheckSquare, ChevronDown, ChevronUp, Brain, Clock, GripVertical, Plus } from 'lucide-react';
+import { Calendar, CheckSquare, ChevronDown, ChevronUp, Brain, Clock, GripVertical, Plus, X } from 'lucide-react';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAuth } from '@/context/AuthContext';
@@ -51,13 +51,19 @@ const getDueTimeWarning = (task: Task): 'overdue' | 'imminent' | 'soon' | 'norma
 };
 
 const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }) => {
-  const { board, updateTask, moveTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
+  const { board, updateTask, moveTask, updateColumn, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';
 
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const [editingColumn, setEditingColumn] = useState<{ id: string; name: string; color: string; icon: string } | null>(null);
+
+  const COLUMN_COLORS = [
+    '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
+    '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'
+  ];
   const toggleExpand = (taskId: string) => {
     setExpandedTaskIds(prev =>
       prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
@@ -74,6 +80,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   };
 
   return (
+    <>
     <div className="flex-1 overflow-y-scroll overflow-x-hidden p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <DragDropContext onDragEnd={handleDragEnd}>
@@ -86,7 +93,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
               <div key={column.id}>
                 <div className="flex items-center gap-2 mb-3 px-1">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: column.color }} />
-                  <h3 className="text-sm font-semibold text-foreground truncate">{column.title}</h3>
+                  <h3 className="text-sm font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors" onClick={() => setEditingColumn({ id: column.id, name: column.title, color: column.color || '', icon: column.icon || '' })}>{column.title}</h3>
                   <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">{tasks.length}</span>
                 </div>
 
@@ -238,6 +245,67 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
           )}
         </div>
     </div>
+
+      {editingColumn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setEditingColumn(null)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-base font-bold text-foreground">Edit Column</span>
+              <button onClick={() => setEditingColumn(null)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                <input
+                  autoFocus
+                  value={editingColumn.name}
+                  onChange={e => setEditingColumn(prev => prev ? { ...prev, name: e.target.value } : null)}
+                  className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {COLUMN_COLORS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setEditingColumn(prev => prev ? { ...prev, color: c } : null)}
+                      className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${editingColumn.color === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Icon</label>
+                <div className="flex gap-2">
+                  <input
+                    value={editingColumn.icon}
+                    onChange={e => setEditingColumn(prev => prev ? { ...prev, icon: e.target.value } : null)}
+                    placeholder="e.g. 📁 or 🚀"
+                    className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      if (editingColumn.name.trim()) {
+                        updateColumn(editingColumn.id, { title: editingColumn.name.trim(), color: editingColumn.color, icon: editingColumn.icon || undefined });
+                      }
+                      setEditingColumn(null);
+                    }}
+                    className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

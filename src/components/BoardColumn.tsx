@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task, LABEL_COLORS } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import TaskCard from './TaskCard';
-import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Calendar, CheckSquare, Brain } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Calendar, CheckSquare, Brain, Clock, GripVertical, Tag } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +17,21 @@ const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
 };
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
+
+const formatDuration = (minutes: number) => {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
+const formatDate = (value?: string) => {
+  if (!value) return 'No due date';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 interface BoardColumnProps {
   column: ColumnType;
@@ -151,7 +165,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[28rem]">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[36rem]">
           <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
               {column.icon && <span className="text-sm">{column.icon}</span>}
@@ -276,74 +290,125 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   <Draggable key={task.id} draggableId={task.id} index={taskIndex} isDragDisabled={!canEdit}>
                     {(taskProvided, taskSnapshot) => {
                       const isExpanded = expandedTaskIds.includes(task.id);
-                      const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
-                      const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
-                      const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+                      const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
+                      const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+                      const subtaskCount = task.subtasks?.length || 0;
+                      const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+                      const taskDurFmt = formatDuration(task.duration || 0);
+                      const taskTags = task.labels.slice(0, 3);
+                      const getDueTimeWarning = (t: Task): 'overdue' | 'imminent' | 'soon' | 'normal' => {
+                        if (!t.dueDate) return 'normal';
+                        const now = new Date();
+                        const dueDate = new Date(t.dueDate);
+                        if (t.completed) return 'normal';
+                        const diffMs = dueDate.getTime() - now.getTime();
+                        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                        if (diffMs < 0) return 'overdue';
+                        if (diffDays <= 0.5) return 'imminent';
+                        if (diffDays <= 2) return 'soon';
+                        return 'normal';
+                      };
+                      const warning = getDueTimeWarning(task);
                       return (
-                        <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                          <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 min-w-0">
-                              <CircleToggle
-                                completed={task.completed || false}
-                                onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
-                                size="sm"
-                              />
-                              {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
-                                <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                        <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} {...taskProvided.dragHandleProps} className={`rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}>
+                          <div className="flex items-center gap-1 px-3 py-3">
+                            <div className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <CircleToggle
+                              completed={task.completed || false}
+                              onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
+                              size="sm"
+                            />
+                            <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-sm font-medium text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                   {task.title}
                                 </span>
-                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                  {task.priority !== 'none' && (() => {
-                                    const pc = PRIORITY_COLORS[task.priority];
-                                    return (
-                                      <span style={{ backgroundColor: pc?.bg }} className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white inline-flex items-center">
-                                        {pc?.label}
-                                      </span>
-                                    );
-                                  })()}
-                                  {task.dueDate && (
-                                    <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
-                                      <Calendar className="w-2.5 h-2.5" />
-                                      {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                    </span>
-                                  )}
-                                  {totalItems > 0 && (
-                                    <span className={`flex items-center gap-1 text-[10px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
-                                      <CheckSquare className="w-2.5 h-2.5" />
-                                      {doneItems}/{totalItems}
-                                    </span>
-                                  )}
-                                </div>
                               </div>
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                {task.priority !== 'none' && (() => {
+                                  const pc = PRIORITY_COLORS[task.priority];
+                                  return (
+                                    <span style={{ backgroundColor: pc?.bg }} className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white inline-flex items-center">
+                                      {pc?.label}
+                                    </span>
+                                  );
+                                })()}
+                                {taskDurFmt && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    {taskDurFmt}
+                                  </span>
+                                )}
+                                <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground">
+                                  <Calendar className="w-2.5 h-2.5" />
+                                  {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+                                </span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                                  task.dueDate
+                                    ? warning === 'overdue'
+                                      ? 'bg-destructive/10 text-destructive'
+                                      : warning === 'imminent' || warning === 'soon'
+                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                        : 'bg-muted text-muted-foreground'
+                                    : 'bg-muted text-muted-foreground'
+                                }`}>
+                                  <Calendar className="w-2.5 h-2.5" />
+                                  {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+                                </span>
+                                {checklistTotal > 0 && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                    {checklistDone}/{checklistTotal} checklist
+                                  </span>
+                                )}
+                                {subtaskCount > 0 && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                    {subtaskDone}/{subtaskCount} sub task
+                                  </span>
+                                )}
+                                {taskTags.map(label => (
+                                  <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[9px] font-semibold px-1.5 py-0.5 rounded-full text-primary-foreground`}>
+                                    {label.name}
+                                  </span>
+                                ))}
+                                {task.labels.length > taskTags.length && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                    +{task.labels.length - taskTags.length}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                                className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+                                title={isExpanded ? 'Collapse' : 'Expand'}
                               >
                                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
-                                className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
-                                title="Deep Focus"
+                                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                                title="Open Deep Focus"
                               >
                                 <Brain className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            {isExpanded && (
-                              <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg" data-pan-enabled="true">
-                                <TaskDropdownExpanded
-                                  task={task}
-                                  onUpdateTask={updateTask}
-                                  onToggleChecklistItem={toggleChecklistItem}
-                                  onAddChecklistItem={addChecklistItem}
-                                  onDeleteChecklistItem={deleteChecklistItem}
-                                  isPremium={isPremium}
-                                  isPro={isPro}
-                                />
-                              </div>
-                            )}
                           </div>
+                          {isExpanded && (
+                            <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
+                              <TaskDropdownExpanded
+                                task={task}
+                                onUpdateTask={updateTask}
+                                onToggleChecklistItem={toggleChecklistItem}
+                                onAddChecklistItem={addChecklistItem}
+                                onDeleteChecklistItem={deleteChecklistItem}
+                                isPremium={isPremium}
+                                isPro={isPro}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     }}
@@ -358,74 +423,125 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                       <Draggable key={task.id} draggableId={task.id} index={uncompletedTasks.length + taskIndex} isDragDisabled={!canEdit}>
                         {(taskProvided, taskSnapshot) => {
                           const isExpanded = expandedTaskIds.includes(task.id);
-                          const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
-                          const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
-                          const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+                          const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
+                          const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+                          const subtaskCount = task.subtasks?.length || 0;
+                          const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+                          const taskDurFmt = formatDuration(task.duration || 0);
+                          const taskTags = task.labels.slice(0, 3);
+                          const getDueTimeWarning = (t: Task): 'overdue' | 'imminent' | 'soon' | 'normal' => {
+                            if (!t.dueDate) return 'normal';
+                            const now = new Date();
+                            const dueDate = new Date(t.dueDate);
+                            if (t.completed) return 'normal';
+                            const diffMs = dueDate.getTime() - now.getTime();
+                            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                            if (diffMs < 0) return 'overdue';
+                            if (diffDays <= 0.5) return 'imminent';
+                            if (diffDays <= 2) return 'soon';
+                            return 'normal';
+                          };
+                          const warning = getDueTimeWarning(task);
                           return (
-                            <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                              <div className={`rounded-lg border bg-card transition-[opacity,box-shadow,border-color] duration-200 ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg' : 'border-border hover:border-border/80 hover:shadow-sm'} ${task.completed ? 'opacity-60' : ''}`}>
-                            <div {...taskProvided.dragHandleProps} className="flex items-center gap-2 px-3 py-2.5 min-w-0">
-                              <CircleToggle
-                                completed={task.completed || false}
-                                onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
-                                size="sm"
-                              />
-                              {task.color && <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: task.color }} />}
-                              <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
-                                    <span className={`text-sm font-medium text-foreground truncate block ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                            <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} {...taskProvided.dragHandleProps} className={`rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}>
+                              <div className="flex items-center gap-1 px-3 py-3">
+                                <div className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                <CircleToggle
+                                  completed={task.completed || false}
+                                  onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
+                                  size="sm"
+                                />
+                                <div className="flex-1 min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-sm font-medium text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                                       {task.title}
                                     </span>
-                                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                      {task.priority !== 'none' && (() => {
-                                        const pc = PRIORITY_COLORS[task.priority];
-                                        return (
-                                          <span style={{ backgroundColor: pc?.bg }} className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white inline-flex items-center">
-                                            {pc?.label}
-                                          </span>
-                                        );
-                                      })()}
-                                      {task.dueDate && (
-                                        <span className={`flex items-center gap-1 text-[10px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
-                                          <Calendar className="w-2.5 h-2.5" />
-                                          {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                        </span>
-                                      )}
-                                      {totalItems > 0 && (
-                                        <span className={`flex items-center gap-1 text-[10px] ${doneItems === totalItems ? 'text-label-green' : 'text-muted-foreground'}`}>
-                                          <CheckSquare className="w-2.5 h-2.5" />
-                                          {doneItems}/{totalItems}
-                                        </span>
-                                      )}
-                                    </div>
                                   </div>
+                                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                    {task.priority !== 'none' && (() => {
+                                      const pc = PRIORITY_COLORS[task.priority];
+                                      return (
+                                        <span style={{ backgroundColor: pc?.bg }} className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white inline-flex items-center">
+                                          {pc?.label}
+                                        </span>
+                                      );
+                                    })()}
+                                    {taskDurFmt && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5" />
+                                        {taskDurFmt}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground">
+                                      <Calendar className="w-2.5 h-2.5" />
+                                      {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+                                    </span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                                      task.dueDate
+                                        ? warning === 'overdue'
+                                          ? 'bg-destructive/10 text-destructive'
+                                          : warning === 'imminent' || warning === 'soon'
+                                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                            : 'bg-muted text-muted-foreground'
+                                        : 'bg-muted text-muted-foreground'
+                                    }`}>
+                                      <Calendar className="w-2.5 h-2.5" />
+                                      {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+                                    </span>
+                                    {checklistTotal > 0 && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                        {checklistDone}/{checklistTotal} checklist
+                                      </span>
+                                    )}
+                                    {subtaskCount > 0 && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                        {subtaskDone}/{subtaskCount} sub task
+                                      </span>
+                                    )}
+                                    {taskTags.map(label => (
+                                      <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[9px] font-semibold px-1.5 py-0.5 rounded-full text-primary-foreground`}>
+                                        {label.name}
+                                      </span>
+                                    ))}
+                                    {task.labels.length > taskTags.length && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                                        +{task.labels.length - taskTags.length}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
                                   <button
                                     onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground shrink-0"
+                                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+                                    title={isExpanded ? 'Collapse' : 'Expand'}
                                   >
                                     {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                   </button>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
-                                    className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-all shrink-0"
-                                    title="Deep Focus"
+                                    className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                                    title="Open Deep Focus"
                                   >
                                     <Brain className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
-                                {isExpanded && (
-                                  <div className="border-t border-border px-3 py-2 space-y-3 bg-muted/10 rounded-b-lg" data-pan-enabled="true">
-                                    <TaskDropdownExpanded
-                                      task={task}
-                                      onUpdateTask={updateTask}
-                                      onToggleChecklistItem={toggleChecklistItem}
-                                      onAddChecklistItem={addChecklistItem}
-                                      onDeleteChecklistItem={deleteChecklistItem}
-                                      isPremium={isPremium}
-                                      isPro={isPro}
-                                    />
-                                  </div>
-                                )}
                               </div>
+                              {isExpanded && (
+                                <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
+                                  <TaskDropdownExpanded
+                                    task={task}
+                                    onUpdateTask={updateTask}
+                                    onToggleChecklistItem={toggleChecklistItem}
+                                    onAddChecklistItem={addChecklistItem}
+                                    onDeleteChecklistItem={deleteChecklistItem}
+                                    isPremium={isPremium}
+                                    isPro={isPro}
+                                  />
+                                </div>
+                              )}
                             </div>
                           );
                         }}
