@@ -3215,7 +3215,7 @@ const Notes: React.FC = () => {
                     } catch (error) {
                       console.error('Failed to create note tag:', error);
                     }
-                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add tag</button>
+                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
                   <button onClick={() => setTagPopupTaskId(null)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
                 </div>
               </div>
@@ -4219,7 +4219,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                     <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={createTagForNote} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">Add tag</button>
+                    <button onClick={createTagForNote} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
                     <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
                   </div>
                 </div>
