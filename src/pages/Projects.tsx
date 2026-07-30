@@ -870,43 +870,47 @@ const Projects: React.FC = () => {
             </div>
           )}
 
-          <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Project Description</label>
-          <textarea
-            value={selectedProject?.description || ''}
-            onChange={e => { if (canEdit) updateSelectedProject({ description: e.target.value }); }}
-            readOnly={!canEdit || Boolean(selectedProject?.archived || selectedProject?.completed)}
-            rows={4}
-            className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75"
-            placeholder={canEdit ? 'What is this project about?' : 'No description'}
-          />
-
-          <div className="mt-5">
-            <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Members</label>
-            <div className="flex flex-wrap gap-2">
-              {selectedProject?.members.length ? selectedProject.members.map(member => (
-                <button
-                  key={member.id}
-                  onClick={() => {
-                    if (canManage) {
-                      setSelectedMember(member);
-                    }
-                  }}
-                  className={cn(
-                    'group flex items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-all',
-                    canManage ? 'hover:border-primary/40 hover:bg-muted/50 cursor-pointer' : 'cursor-default'
-                  )}
-                >
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background flex-shrink-0">
-                    {member.name.slice(0, 1).toUpperCase()}
+          <div className="grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="space-y-3 xl:pt-1">
+              <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Members</label>
+              <div className="space-y-2">
+                {selectedProject?.members.length ? selectedProject.members.map(member => (
+                  <button
+                    key={member.id}
+                    onClick={() => {
+                      if (canManage) {
+                        setSelectedMember(member);
+                      }
+                    }}
+                    className={cn(
+                      'group flex w-full items-center gap-2 rounded-full border border-border bg-muted/20 px-3 py-2 text-xs text-left transition-all',
+                      canManage ? 'hover:border-primary/40 hover:bg-muted/50 cursor-pointer' : 'cursor-default'
+                    )}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background flex-shrink-0">
+                      {member.name.slice(0, 1).toUpperCase()}
+                    </div>
+                    <span className="text-foreground font-medium truncate">{member.name}</span>
+                    <span className="text-muted-foreground capitalize ml-auto flex-shrink-0">{member.role}</span>
+                  </button>
+                )) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+                    No members yet
                   </div>
-                  <span className="text-foreground font-medium">{member.name}</span>
-                  <span className="text-muted-foreground capitalize">{member.role}</span>
-                </button>
-              )) : (
-                <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
-                  No members yet
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground mb-2">Project Description</label>
+              <textarea
+                value={selectedProject?.description || ''}
+                onChange={e => { if (canEdit) updateSelectedProject({ description: e.target.value }); }}
+                readOnly={!canEdit || Boolean(selectedProject?.archived || selectedProject?.completed)}
+                rows={4}
+                className="w-full rounded-2xl border border-border bg-muted/30 px-4 py-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 read-only:cursor-not-allowed read-only:opacity-75"
+                placeholder={canEdit ? 'What is this project about?' : 'No description'}
+              />
             </div>
           </div>
         </div>
