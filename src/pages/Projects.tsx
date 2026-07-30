@@ -720,7 +720,7 @@ const Projects: React.FC = () => {
                           </div>
 
                           {showProjectMenuId === project.id && (
-                            <div className="mt-3 bg-transparent border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                            <div className="mt-3 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
                               <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                                 const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                                 updateSelectedProject({ color: nextColor });
@@ -804,7 +804,7 @@ const Projects: React.FC = () => {
                 </div>
 
                 {showProjectMenuId === project.id && (
-                  <div className="mt-3 bg-transparent border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                  <div className="mt-3 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
                     <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                       const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                       updateSelectedProject({ color: nextColor });
