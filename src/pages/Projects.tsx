@@ -676,7 +676,7 @@ const Projects: React.FC = () => {
                           {...dragProvided.draggableProps}
                           onClick={() => setSelectedProjectId(project.id)}
                           className={cn(
-                            'group cursor-pointer rounded-2xl border px-3 py-3 transition-all',
+                            'group relative cursor-pointer rounded-2xl border px-3 py-3 transition-all',
                             selectedProject?.id === project.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/30 hover:bg-muted/40',
                             dragSnapshot.isDragging ? 'shadow-lg border-primary/40 bg-card/95' : ''
                           )}
@@ -717,10 +717,39 @@ const Projects: React.FC = () => {
                                 <SquarePen className="h-4 w-4" />
                               </button>
                             </div>
+                            {editingProjectId === project.id && (
+                              <div className="absolute left-full top-0 ml-2 z-50 w-[220px] rounded-xl border border-border bg-popover py-1.5 shadow-none animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rename project</div>
+                                <div className="px-3 py-1.5">
+                                  <input
+                                    autoFocus
+                                    value={editingName}
+                                    onChange={e => setEditingName(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        persistProject(project.id, { name: editingName }).finally(() => setEditingProjectId(null));
+                                      }
+                                      if (e.key === "Escape") {
+                                        setEditingProjectId(null);
+                                        setEditingName("");
+                                      }
+                                    }}
+                                    className="w-full rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                </div>
+                                <div className="border-t border-border my-1" />
+                                <button onClick={() => persistProject(project.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted">
+                                  <CheckCircle2 className="h-4 w-4" /> Save
+                                </button>
+                                <button onClick={() => { setEditingProjectId(null); setEditingName(""); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted">
+                                  <X className="h-4 w-4" /> Cancel
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {showProjectMenuId === project.id && (
-                            <div className="mt-3 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                            <div className="absolute left-full top-0 ml-2 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50">
                               <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                                 const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                                 updateSelectedProject({ color: nextColor });
@@ -764,7 +793,7 @@ const Projects: React.FC = () => {
                 key={project.id}
                 onClick={() => setSelectedProjectId(project.id)}
                 className={cn(
-                  'group cursor-pointer rounded-2xl border px-3 py-3 transition-all',
+                  'group relative cursor-pointer rounded-2xl border px-3 py-3 transition-all',
                   selectedProject?.id === project.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/30 hover:bg-muted/40',
                 )}
               >
@@ -801,10 +830,39 @@ const Projects: React.FC = () => {
                                 <SquarePen className="h-4 w-4" />
                               </button>
                             </div>
+                            {editingProjectId === project.id && (
+                              <div className="absolute left-full top-0 ml-2 z-50 w-[220px] rounded-xl border border-border bg-popover py-1.5 shadow-none animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rename project</div>
+                                <div className="px-3 py-1.5">
+                                  <input
+                                    autoFocus
+                                    value={editingName}
+                                    onChange={e => setEditingName(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        persistProject(project.id, { name: editingName }).finally(() => setEditingProjectId(null));
+                                      }
+                                      if (e.key === "Escape") {
+                                        setEditingProjectId(null);
+                                        setEditingName("");
+                                      }
+                                    }}
+                                    className="w-full rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                </div>
+                                <div className="border-t border-border my-1" />
+                                <button onClick={() => persistProject(project.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted">
+                                  <CheckCircle2 className="h-4 w-4" /> Save
+                                </button>
+                                <button onClick={() => { setEditingProjectId(null); setEditingName(""); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted">
+                                  <X className="h-4 w-4" /> Cancel
+                                </button>
+                              </div>
+                            )}
                 </div>
 
                 {showProjectMenuId === project.id && (
-                  <div className="mt-3 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50 relative">
+                  <div className="absolute left-full top-0 ml-2 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50">
                     <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
                       const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
                       updateSelectedProject({ color: nextColor });
@@ -1424,29 +1482,6 @@ const Projects: React.FC = () => {
             </header>
 
             <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
-              {editingProjectId !== null && selectedProject?.id === editingProjectId && (
-                <div className="absolute left-6 top-6 z-50 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rename project</div>
-                  <div className="px-3 py-1.5">
-                    <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
-                      }
-                      if (e.key === 'Escape') {
-                        setEditingProjectId(null);
-                        setEditingName('');
-                      }
-                    }} className="w-full bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div className="border-t border-border my-1" />
-                  <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                    <CheckCircle2 className="w-4 h-4" /> Save
-                  </button>
-                  <button onClick={() => { setEditingProjectId(null); setEditingName(''); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
-                    <X className="w-4 h-4" /> Cancel
-                  </button>
-                </div>
-              )}
 
               {currentTab === 'home' && renderHome()}
               {currentTab === 'board' && renderBoard()}
@@ -1952,4 +1987,3 @@ const EmptyState = ({ title, description }: { title: string; description: string
 );
 
 export default Projects;
-
