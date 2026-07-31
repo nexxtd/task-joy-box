@@ -4669,9 +4669,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
             </h3>
             <button
               onClick={() => setTagPickerOpen(prev => !prev)}
-              className="text-xs text-primary hover:underline"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
             >
-              {tagPickerOpen ? 'Close' : 'Edit'}
+              <Tag className="w-3.5 h-3.5" />
+              {task.labels.length > 0 ? `${task.labels.length} tag${task.labels.length > 1 ? 's' : ''} selected` : 'Add tags'}
             </button>
           </div>
 

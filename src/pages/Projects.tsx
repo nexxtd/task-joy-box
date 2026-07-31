@@ -89,8 +89,6 @@ const Projects: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
   const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
-  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState('');
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectColor, setNewProjectColor] = useState(STORAGE_COLORS[0]);
@@ -144,6 +142,7 @@ const Projects: React.FC = () => {
   const [isBoardPanning, setIsBoardPanning] = useState(false);
   const boardPanStart = useRef({ x: 0, y: 0 });
   const boardCanvasRef = useRef<HTMLDivElement>(null);
+  const projectMenuRef = useRef<HTMLDivElement>(null);
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 2;
   const ZOOM_STEP = 0.1;
@@ -183,6 +182,18 @@ const Projects: React.FC = () => {
     };
     loadSharedTags();
   }, []);
+  useEffect(() => {
+    if (showProjectMenuId === null) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
+        setShowProjectMenuId(null);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [showProjectMenuId]);
 
   useEffect(() => {
     if (user?.id) {
@@ -694,7 +705,7 @@ const Projects: React.FC = () => {
                               </div>
                               <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                             </div>
-                  <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
+                  <div ref={showProjectMenuId === project.id ? projectMenuRef : undefined} className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -708,37 +719,38 @@ const Projects: React.FC = () => {
                           </div>
 
                           {showProjectMenuId === project.id && (
-                            <div className="absolute left-full top-0 ml-2 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50">
-                              <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
-                                setEditingProjectId(project.id);
-                                setEditingName(project.name);
-                                setShowProjectMenuId(null);
-                              }} />
-                              <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
-                                const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
-                                updateSelectedProject({ color: nextColor });
-                                setShowProjectMenuId(null);
-                              }} />
-                              <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
-                                await persistProject(project.id, { archived: !project.archived });
-                                setShowProjectMenuId(null);
-                              }} />
-                              <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
-                                await persistProject(project.id, { completed: !project.completed });
-                                setShowProjectMenuId(null);
-                              }} />
-                              <div className="border-t border-border my-1" />
-                              {project.ownerId === user?.id ? (
-                                <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
-                                  setProjectToDelete(project.id);
-                                  setShowProjectMenuId(null);
-                                }} />
-                              ) : (
-                                <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
-                                  setProjectToLeave(project.id);
-                                  setShowProjectMenuId(null);
-                                }} />
-                              )}
+  <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
+    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
+      const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
+      updateSelectedProject({ color: nextColor });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+      await persistProject(project.id, { archived: !project.archived });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+      await persistProject(project.id, { completed: !project.completed });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
+      toast({ title: "What's new", description: 'Project updates are not available yet.' });
+      setShowProjectMenuId(null);
+    }} />
+    <div className="my-1 border-t border-gray-200" />
+    {project.ownerId === user?.id ? (
+      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
+        setProjectToDelete(project.id);
+        setShowProjectMenuId(null);
+      }} />
+    ) : (
+      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
+        setProjectToLeave(project.id);
+        setShowProjectMenuId(null);
+      }} />
+    )}
+  </div>
+)}
                             </div>
                           )}
                         </div>
@@ -771,7 +783,7 @@ const Projects: React.FC = () => {
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
+                  <div ref={showProjectMenuId === project.id ? projectMenuRef : undefined} className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -785,32 +797,38 @@ const Projects: React.FC = () => {
                 </div>
 
                 {showProjectMenuId === project.id && (
-                  <div className="absolute left-full top-0 ml-2 bg-transparent border border-border rounded-xl shadow-none py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200 z-50">
-                    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
-                      const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
-                      updateSelectedProject({ color: nextColor });
-                      setShowProjectMenuId(null);
-                    }} />
-                    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
-                      await persistProject(project.id, { archived: !project.archived });
-                      setShowProjectMenuId(null);
-                    }} />
-                    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
-                      await persistProject(project.id, { completed: !project.completed });
-                      setShowProjectMenuId(null);
-                    }} />
-                    <div className="border-t border-border my-1" />
-                    {project.ownerId === user?.id ? (
-                      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger label="Delete" onClick={() => {
-                        setProjectToDelete(project.id);
-                        setShowProjectMenuId(null);
-                      }} />
-                    ) : (
-                      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
-                        setProjectToLeave(project.id);
-                        setShowProjectMenuId(null);
-                      }} />
-                    )}
+  <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
+    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
+      const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
+      updateSelectedProject({ color: nextColor });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+      await persistProject(project.id, { archived: !project.archived });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+      await persistProject(project.id, { completed: !project.completed });
+      setShowProjectMenuId(null);
+    }} />
+    <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
+      toast({ title: "What's new", description: 'Project updates are not available yet.' });
+      setShowProjectMenuId(null);
+    }} />
+    <div className="my-1 border-t border-gray-200" />
+    {project.ownerId === user?.id ? (
+      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
+        setProjectToDelete(project.id);
+        setShowProjectMenuId(null);
+      }} />
+    ) : (
+      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
+        setProjectToLeave(project.id);
+        setShowProjectMenuId(null);
+      }} />
+    )}
+  </div>
+)}
                   </div>
                 )}
               </div>
@@ -1404,31 +1422,6 @@ const Projects: React.FC = () => {
               </div>
             </header>
 
-              {editingProjectId !== null && selectedProject?.id === editingProjectId && (
-                <div className="absolute left-6 top-6 z-50 bg-popover border border-border rounded-xl shadow-2xl py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rename project</div>
-                  <div className="px-3 py-1.5">
-                    <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null));
-                      }
-                      if (e.key === 'Escape') {
-                        setEditingProjectId(null);
-                        setEditingName('');
-                      }
-                    }} className="w-full bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                  </div>
-                  <div className="border-t border-border my-1" />
-                  <button onClick={() => persistProject(selectedProject.id, { name: editingName }).finally(() => setEditingProjectId(null))} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors">
-                    <CheckCircle2 className="w-4 h-4" /> Save
-                  </button>
-                  <button onClick={() => { setEditingProjectId(null); setEditingName(''); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
-                    <X className="w-4 h-4" /> Cancel
-                  </button>
-                </div>
-              )}
-
-
             <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
 
               {currentTab === 'home' && renderHome()}
@@ -1935,3 +1928,4 @@ const EmptyState = ({ title, description }: { title: string; description: string
 );
 
 export default Projects;
+
