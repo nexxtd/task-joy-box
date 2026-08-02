@@ -89,6 +89,8 @@ const Projects: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
   const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
+  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectColor, setNewProjectColor] = useState(STORAGE_COLORS[0]);
@@ -699,7 +701,35 @@ const Projects: React.FC = () => {
                             <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: project.color }} />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                                {editingProjectId === project.id ? (
+                                  <input
+                                    autoFocus
+                                    value={editingName}
+                                    onChange={e => setEditingName(e.target.value)}
+                                    onClick={e => e.stopPropagation()}
+                                    onBlur={() => {
+                                      if (editingName.trim() && editingName.trim() !== project.name) {
+                                        persistProject(project.id, { name: editingName.trim() });
+                                      }
+                                      setEditingProjectId(null);
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        if (editingName.trim() && editingName.trim() !== project.name) {
+                                          persistProject(project.id, { name: editingName.trim() });
+                                        }
+                                        setEditingProjectId(null);
+                                      }
+                                      if (e.key === 'Escape') {
+                                        setEditingName(project.name);
+                                        setEditingProjectId(null);
+                                      }
+                                    }}
+                                    className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 px-2 py-1 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                                  />
+                                ) : (
+                                  <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                                )}
                                 {project.completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
                                 {project.archived && <Lock className="h-3.5 w-3.5 text-amber-500" />}
                               </div>
@@ -720,6 +750,11 @@ const Projects: React.FC = () => {
 
                           {showProjectMenuId === project.id && (
   <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
+    <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
+      setEditingProjectId(project.id);
+      setEditingName(project.name);
+      setShowProjectMenuId(null);
+    }} />
     <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
       const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
       updateSelectedProject({ color: nextColor });
@@ -777,7 +812,35 @@ const Projects: React.FC = () => {
                   <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: project.color }} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                      {editingProjectId === project.id ? (
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          onBlur={() => {
+                            if (editingName.trim() && editingName.trim() !== project.name) {
+                              persistProject(project.id, { name: editingName.trim() });
+                            }
+                            setEditingProjectId(null);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              if (editingName.trim() && editingName.trim() !== project.name) {
+                                persistProject(project.id, { name: editingName.trim() });
+                              }
+                              setEditingProjectId(null);
+                            }
+                            if (e.key === 'Escape') {
+                              setEditingName(project.name);
+                              setEditingProjectId(null);
+                            }
+                          }}
+                          className="min-w-0 flex-1 rounded-lg border border-border bg-muted/40 px-2 py-1 text-sm font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                        />
+                      ) : (
+                        <p className="truncate text-sm font-medium text-foreground">{project.name}</p>
+                      )}
                       {project.completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
                       {project.archived && <Lock className="h-3.5 w-3.5 text-amber-500" />}
                     </div>
@@ -798,6 +861,11 @@ const Projects: React.FC = () => {
 
                 {showProjectMenuId === project.id && (
   <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
+    <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
+      setEditingProjectId(project.id);
+      setEditingName(project.name);
+      setShowProjectMenuId(null);
+    }} />
     <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
       const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
       updateSelectedProject({ color: nextColor });
@@ -1423,7 +1491,6 @@ const Projects: React.FC = () => {
             </header>
 
             <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
-
               {currentTab === 'home' && renderHome()}
               {currentTab === 'board' && renderBoard()}
               {currentTab === 'list' && renderList()}

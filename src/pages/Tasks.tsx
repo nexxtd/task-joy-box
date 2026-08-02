@@ -419,7 +419,7 @@ const Tasks: React.FC = () => {
   const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
   const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
 
-  const [myTasksCollapsed, setMyTasksCollapsed] = useState(false);
+  const [myTasksCollapsed, setMyTasksCollapsed] = useState(() => localStorage.getItem('tasks-mytasks-collapsed') === 'true');
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
   const [columnEditName, setColumnEditName] = useState('');
   const [columnEditColor, setColumnEditColor] = useState('');
@@ -432,6 +432,7 @@ const Tasks: React.FC = () => {
     try { const v = localStorage.getItem('tasks-collapsed-columns'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
 
+  useEffect(() => { localStorage.setItem('tasks-mytasks-collapsed', String(myTasksCollapsed)); }, [myTasksCollapsed]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-projects', JSON.stringify(collapsedProjects)); }, [collapsedProjects]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
   useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
@@ -1370,19 +1371,20 @@ const Tasks: React.FC = () => {
               })()}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
               >
                 <Tag className="w-2.5 h-2.5" />
-                Tags
+                {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
               {taskTags.map(label => (
-                <button
+                <span
                   key={label.id}
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                   className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
-                </button>
+                </span>
               ))}
               {task.labels.length > taskTags.length && (
                 <button
@@ -3327,7 +3329,7 @@ const Tasks: React.FC = () => {
                 <h3 className="text-base font-semibold text-foreground">Tags</h3>
                 <button onClick={() => setTagPopupTaskId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
               </div>
-              <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+              <div className="max-h-60 space-y-2 overflow-y-auto">
                 {allTags.map(label => {
                   const active = popupTask.labels.some(item => item.id === label.id);
                   return (
@@ -3337,32 +3339,9 @@ const Tasks: React.FC = () => {
                         <span className="text-sm text-foreground">{label.name}</span>
                         {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
                       </button>
-                      <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   );
                 })}
-              </div>
-              <div className="border-t border-border pt-4">
-                <div className="flex gap-2 mb-2">
-                  <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
-                    className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                  <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={async () => {
-                    const name = normalizeTagName(newTagName);
-                    if (!name) return;
-                    try {
-                      const label = await createSharedTaskLabel(name, newTagColor);
-                      updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
-                      setNewTagName('');
-                      setNewTagColor(randomTagColor());
-                    } catch (error) {
-                      console.error('Failed to create task tag:', error);
-                    }
-                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
-                  <button onClick={() => setTagPopupTaskId(null)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
-                </div>
               </div>
             </div>
           </div>
