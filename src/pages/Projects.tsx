@@ -41,7 +41,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { Label, LabelColor, DEFAULT_LABELS, Task } from '@/types/board';
-import { fetchTags, createTag, deleteTag } from '@/services/tagService';
+import { fetchTags, createTag, deleteTag, updateTag } from '@/services/tagService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
 
@@ -383,6 +383,27 @@ const Projects: React.FC = () => {
     board.tasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
         updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  };
+
+  const renameTagEverywhere = async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch { return; }
+      }
+    }
+
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
       }
     });
   };
@@ -1953,6 +1974,7 @@ const Projects: React.FC = () => {
             if (task) updateTask(taskId, { labels: [...task.labels, label] });
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
+          onRenameTagEverywhere={renameTagEverywhere}
           isPremium={isPremium}
           isPro={isPro}
         />

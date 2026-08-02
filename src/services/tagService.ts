@@ -22,6 +22,17 @@ export async function createTag(data: { name: string; color?: string }): Promise
   return res.json();
 }
 
+export async function updateTag(id: number, data: { name: string }): Promise<SharedTag> {
+  const res = await fetch(`/api/tags/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to update tag');
+  return res.json();
+}
+
 export async function deleteTag(id: number): Promise<void> {
   const res = await fetch(`/api/tags/${id}`, {
     method: 'DELETE',
