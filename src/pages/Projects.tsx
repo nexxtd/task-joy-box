@@ -90,6 +90,7 @@ const Projects: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
   const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [editingName, setEditingName] = useState('');
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -188,13 +189,20 @@ const Projects: React.FC = () => {
     if (showProjectMenuId === null) return;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
-        setShowProjectMenuId(null);
-      }
+      const target = event.target as HTMLElement | null;
+      if (projectMenuRef.current && projectMenuRef.current.contains(target)) return;
+      if (target && target.closest('[data-project-menu-toggle]')) return;
+      setShowProjectMenuId(null);
     };
 
+    const handleScroll = () => setShowProjectMenuId(null);
+
     document.addEventListener('pointerdown', handlePointerDown);
-    return () => document.removeEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
   }, [showProjectMenuId]);
 
   useEffect(() => {
@@ -770,10 +778,18 @@ const Projects: React.FC = () => {
                               </div>
                               <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                             </div>
-                  <div ref={showProjectMenuId === project.id ? projectMenuRef : undefined} className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
+                  <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
+                                data-project-menu-toggle
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (showProjectMenuId !== project.id) {
+                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    setMenuPos({
+                                      top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
+                                      left: rect.right + 8,
+                                    });
+                                  }
                                   setShowProjectMenuId(prev => prev === project.id ? null : project.id);
                                 }}
                                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -782,45 +798,6 @@ const Projects: React.FC = () => {
                               </button>
                             </div>
                           </div>
-
-                          {showProjectMenuId === project.id && (
-  <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
-    <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
-      setEditingProjectId(project.id);
-      setEditingName(project.name);
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
-      const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
-      updateSelectedProject({ color: nextColor });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
-      await persistProject(project.id, { archived: !project.archived });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
-      await persistProject(project.id, { completed: !project.completed });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
-      toast({ title: "What's new", description: 'Project updates are not available yet.' });
-      setShowProjectMenuId(null);
-    }} />
-    <div className="my-1 border-t border-gray-200" />
-    {project.ownerId === user?.id ? (
-      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
-        setProjectToDelete(project.id);
-        setShowProjectMenuId(null);
-      }} />
-    ) : (
-      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
-        setProjectToLeave(project.id);
-        setShowProjectMenuId(null);
-      }} />
-    )}
-  </div>
-)}
                         </div>
                       )}
                     </Draggable>
@@ -879,10 +856,18 @@ const Projects: React.FC = () => {
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                   </div>
-                  <div ref={showProjectMenuId === project.id ? projectMenuRef : undefined} className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
+                  <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
+                                data-project-menu-toggle
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (showProjectMenuId !== project.id) {
+                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    setMenuPos({
+                                      top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
+                                      left: rect.right + 8,
+                                    });
+                                  }
                                   setShowProjectMenuId(prev => prev === project.id ? null : project.id);
                                 }}
                                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -891,52 +876,8 @@ const Projects: React.FC = () => {
                               </button>
                             </div>
                 </div>
-
-                {showProjectMenuId === project.id && (
-  <div className="absolute left-full top-0 ml-2 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10 z-50">
-    <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
-      setEditingProjectId(project.id);
-      setEditingName(project.name);
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: project.color }} />} label="Recolour" onClick={() => {
-      const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(project.color) + 1) % STORAGE_COLORS.length];
-      updateSelectedProject({ color: nextColor });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<Lock className="h-4 w-4" />} label={project.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
-      await persistProject(project.id, { archived: !project.archived });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={project.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
-      await persistProject(project.id, { completed: !project.completed });
-      setShowProjectMenuId(null);
-    }} />
-    <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
-      toast({ title: "What's new", description: 'Project updates are not available yet.' });
-      setShowProjectMenuId(null);
-    }} />
-    <div className="my-1 border-t border-gray-200" />
-    {project.ownerId === user?.id ? (
-      <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
-        setProjectToDelete(project.id);
-        setShowProjectMenuId(null);
-      }} />
-    ) : (
-      <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
-        setProjectToLeave(project.id);
-        setShowProjectMenuId(null);
-      }} />
-    )}
-  </div>
-)}
-                  </div>
-                ))}
-                {items.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
-                No projects in this section.
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -1979,6 +1920,53 @@ const Projects: React.FC = () => {
           isPro={isPro}
         />
       )}
+
+      {showProjectMenuId !== null && menuPos && (() => {
+        const menuProject = projects.find(project => project.id === showProjectMenuId);
+        if (!menuProject) return null;
+        return (
+          <div
+            ref={projectMenuRef}
+            style={{ top: menuPos.top, left: menuPos.left }}
+            className="fixed z-50 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10"
+          >
+            <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
+              setEditingProjectId(menuProject.id);
+              setEditingName(menuProject.name);
+              setShowProjectMenuId(null);
+            }} />
+            <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: menuProject.color }} />} label="Recolour" onClick={() => {
+              const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(menuProject.color) + 1) % STORAGE_COLORS.length];
+              updateSelectedProject({ color: nextColor });
+              setShowProjectMenuId(null);
+            }} />
+            <MenuItem icon={<Lock className="h-4 w-4" />} label={menuProject.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
+              await persistProject(menuProject.id, { archived: !menuProject.archived });
+              setShowProjectMenuId(null);
+            }} />
+            <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={menuProject.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
+              await persistProject(menuProject.id, { completed: !menuProject.completed });
+              setShowProjectMenuId(null);
+            }} />
+            <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
+              toast({ title: "What's new", description: 'Project updates are not available yet.' });
+              setShowProjectMenuId(null);
+            }} />
+            <div className="my-1 border-t border-gray-200" />
+            {menuProject.ownerId === user?.id ? (
+              <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
+                setProjectToDelete(menuProject.id);
+                setShowProjectMenuId(null);
+              }} />
+            ) : (
+              <MenuItem icon={<X className="h-4 w-4" />} danger label="Leave Project" onClick={() => {
+                setProjectToLeave(menuProject.id);
+                setShowProjectMenuId(null);
+              }} />
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };
