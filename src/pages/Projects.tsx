@@ -786,8 +786,6 @@ const Projects: React.FC = () => {
     )}
   </div>
 )}
-                            </div>
-                          )}
                         </div>
                       )}
                     </Draggable>
@@ -898,10 +896,8 @@ const Projects: React.FC = () => {
   </div>
 )}
                   </div>
-                )}
-              </div>
-            ))}
-            {items.length === 0 && (
+                ))}
+                {items.length === 0 && (
               <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
                 No projects in this section.
               </div>
