@@ -215,7 +215,21 @@ const Projects: React.FC = () => {
       .catch(() => setMilestones([]))
       .finally(() => setMilestonesLoading(false));
   }, [selectedProjectId]);
-
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const scrollMemoryRef = useRef<Record<string, number>>({});
+  const prevProjectIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (mainScrollRef.current && prevProjectIdRef.current !== null) {
+      scrollMemoryRef.current[String(prevProjectIdRef.current)] = mainScrollRef.current.scrollTop;
+    }
+    prevProjectIdRef.current = selectedProjectId;
+    const saved = selectedProjectId !== null ? scrollMemoryRef.current[String(selectedProjectId)] : 0;
+    requestAnimationFrame(() => {
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = saved ?? 0;
+      }
+    });
+  }, [selectedProjectId]);
   // Board zoom with wheel
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
@@ -1486,7 +1500,7 @@ const Projects: React.FC = () => {
               </div>
             </header>
 
-            <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
+            <main ref={mainScrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
               {currentTab === 'home' && renderHome()}
               {currentTab === 'board' && renderBoard()}
               {currentTab === 'list' && renderList()}
