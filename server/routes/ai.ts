@@ -449,19 +449,36 @@ router.post('/analyze-tasks', requireAuth, async (req: AuthRequest, res: Respons
       }))
     };
 
-    const prompt = `Analyze these tasks and provide productivity insights:
+    const today = new Date().toISOString().split('T')[0];
+    const enrichedTasks = userData.tasks.map((t: any) => ({
+      ...t,
+      status: /done|completed|finish/i.test(t.columnName)
+        ? 'done'
+        : (t.dueDate && t.dueDate < today ? 'overdue' : 'open')
+    }));
 
-User's current tasks: ${JSON.stringify(userData.tasks.slice(0, 20))}  // Limit to first 20 tasks
-Tasks: ${safeTasksStr}
+    const prompt = `Analyze ONLY the user's tasks and the projects (boards) they belong to. Never mention habits, goals, streaks, energy levels, or any other metric that is not a task or project.
+
+Today's date: ${today}
+
+For each task consider: its project, priority, due date, and status (done / overdue / open).
+
+The score must be genuinely reasoned from the actual data (0-100). Name specific tasks and quantify how each helps or hurts the score — e.g. "X is overdue (was due DATE) and drags the score down about 6 points", "completing urgent task Y added about 5 points", "N low-priority tasks are still open, each worth about 2 points".
+
+User's tasks (up to 30): ${JSON.stringify(enrichedTasks.slice(0, 30))}
+Tasks currently visible to the user: ${safeTasksStr}
 
 Respond with JSON:
 {
-  "overallScore": 75,
+  "overallScore": 78,
+  "scoreRationale": "1-2 sentence explanation of how the score was derived, referencing actual tasks and their impact",
+  "contributors": ["what is helping the score, naming specific tasks/projects when relevant"],
+  "penalties": ["what is dragging the score down — name the specific overdue, low-priority or incomplete tasks and their point impact"],
   "insights": ["insight1", "insight2", "insight3"],
   "recommendations": ["rec1", "rec2"],
   "focusArea": "The most critical thing to focus on"
 }
-Only respond with valid JSON, no markdown.`;
+Only respond with valid JSON, no markdown. Keep all content strictly about tasks and projects.`;
 
     const responseText = await generateContentWithRetry(prompt);
 

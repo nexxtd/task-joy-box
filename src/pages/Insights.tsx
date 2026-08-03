@@ -166,6 +166,9 @@ function InfoCard({ icon: Icon, label, value, color }: { icon: React.ElementType
 
 type AIData = {
   overallScore: number;
+  scoreRationale?: string;
+  contributors?: string[];
+  penalties?: string[];
   focusArea: string;
   insights: string[];
   recommendations: string[];
@@ -369,6 +372,89 @@ const Insights: React.FC = () => {
     }
   }, [completed]);
 
+  const buildFallbackAnalysis = (): AIData => {
+    const today = new Date().toISOString().split('T')[0];
+    const openTasks = tasks.filter(t => !doneColIds.includes(t.columnId));
+    const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !doneColIds.includes(t.columnId));
+    const highOpen = openTasks.filter(t => t.priority === 'urgent' || t.priority === 'high');
+    const lowOpen = openTasks.filter(t => t.priority === 'low');
+    const completedHigh = completed ? tasks.filter(t => doneColIds.includes(t.columnId) && (t.priority === 'urgent' || t.priority === 'high')) : [];
+
+    const short = (t: (typeof tasks)[number]) => t.title.length > 40 ? `${t.title.slice(0, 40)}…` : t.title;
+
+    let score = 50
+      + Math.min(40, completed * 5)
+      - Math.min(30, overdueTasks.length * 6)
+      - Math.min(20, highOpen.length * 4)
+      - Math.min(15, lowOpen.length * 2);
+    score = Math.max(1, Math.min(99, score));
+
+    const contributors: string[] = [];
+    if (completed > 0) {
+      contributors.push(`${completed} task${completed !== 1 ? 's' : ''} completed (${completionRate}%) — ${completed * 5} points`,);
+      if (completedHigh.length > 0) {
+        contributors.push(`High-priority win: "${short(completedHigh[0])}" was completed — matters more than lower-priority work`);
+      }
+    } else {
+      contributors.push('No tasks completed yet — the score is currently held up entirely by a clean (non-overdue) workload.');
+    }
+    if (overdueTasks.length === 0) {
+      contributors.push('No overdue tasks — nothing is being dragged down by missed deadlines.');
+    }
+    if (highPriority > 0 && highOpen.length === 0) {
+      contributors.push('All urgent/high-priority tasks are handled.');
+    }
+
+    const penalties: string[] = [];
+    overdueTasks.slice(0, 4).forEach(t => {
+      penalties.push(`"${short(t)}" is overdue (was due ${t.dueDate}) — pulling the score down about 6 points.`);
+    });
+    if (overdueTasks.length > 4) {
+      penalties.push(`${overdueTasks.length - 4} more overdue task${overdueTasks.length - 4 > 1 ? 's' : ''} each costing about 6 points.`);
+    }
+    highOpen.slice(0, 3).forEach(t => {
+      penalties.push(`"${t.title}" is still open despite being ${t.priority} priority — about 4 points lost.`);
+    });
+    if (highOpen.length > 3) {
+      penalties.push(`${highOpen.length - 3} more open ${highOpen[0]?.priority || 'high'}-priority task${highOpen.length - 3 > 1 ? 's' : ''} still pending.`);
+    }
+    if (lowOpen.length > 0) {
+      const labels = lowOpen.slice(0, 3).map(t => `"${short(t)}"`).join(', ');
+      penalties.push(`${lowOpen.length} low-priority task${lowOpen.length !== 1 ? 's' : ''} left open (${labels}${lowOpen.length > 3 ? '…' : ''}) — each worth about 2 points.`);
+    }
+    if (penalties.length === 0 && completed > 0) {
+      penalties.push('Nothing critical is dragging the score down right now — keep the completion streak going.');
+    }
+
+    const insights: string[] = [
+      `You have ${total} total task${total !== 1 ? 's' : ''} with ${completed} completed (${completionRate}%), spread across ${columns.length} column${columns.length !== 1 ? 's' : ''}.`,
+      `${highPriority} task${highPriority !== 1 ? 's' : ''} marked urgent or high priority${highOpen.length > 0 ? `, ${highOpen.length} still open` : ' — all under control'}.`,
+      overdueTasks.length > 0
+        ? `${overdueTasks.length} task${overdueTasks.length > 1 ? 's' : ''} past due — "${short(overdueTasks[0])}" is the oldest, costing the most.`
+        : 'No overdue tasks — deadlines are in good shape.',
+    ];
+
+    const recommendations: string[] = [
+      overdueTasks.length > 0 ? `Clear overdue tasks first — starting with "${short(overdueTasks[0])}" — to recover lost points.` : 'Review your task list for anything that can be archived or consolidated.',
+      highOpen.length > 0 ? `Finish open ${highOpen[0].priority}-priority tasks before moving to medium or low ones.` : 'Break larger tasks into smaller subtasks for better progress tracking.',
+      'Set realistic deadlines and review them weekly.',
+    ];
+
+    return {
+      overallScore: score,
+      scoreRationale: `Starting from a neutral base of 50: ${completed} completions at +5 each${overdueTasks.length > 0 ? `, ${overdueTasks.length} overdue at −6 each` : ''}${highOpen.length > 0 ? `, ${highOpen.length} open urgent/high tasks at −4 each` : ''}${lowOpen.length > 0 ? `, ${lowOpen.length} open low-priority tasks at −2 each` : ''}. That lands the score at ${score}.`,
+      contributors,
+      penalties,
+      focusArea: overdueTasks.length > 0
+        ? `Deal with the ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''} (like "${short(overdueTasks[0])}") first — they're draining the most score.`
+        : highOpen.length > 0
+          ? `Push the ${highOpen.length} open urgent/high-priority task${highOpen.length > 1 ? 's' : ''} to done to lift the score fastest.`
+          : 'Keep completing tasks to sustain your momentum.',
+      insights,
+      recommendations,
+    };
+  };
+
   const handleAIAnalysis = async () => {
     setLoadingAI(true);
     try {
@@ -388,30 +474,20 @@ const Insights: React.FC = () => {
 
       if (res.ok) {
         const data = await res.json();
-        setAiData(data);
-      } else {
         setAiData({
-          overallScore: Math.min(100, Math.max(0, completionRate + 10)),
-          focusArea: overdue > 0 ? `${overdue} overdue task${overdue > 1 ? 's' : ''} need${overdue > 1 ? '' : 's'} attention` : 'Maintain your momentum',
-          insights: [
-            `You have ${total} total task${total !== 1 ? 's' : ''} with ${completed} completed (${completionRate}%)`,
-            `${highPriority} task${highPriority !== 1 ? 's' : ''} marked as high priority or urgent`,
-            overdue > 0 ? `${overdue} task${overdue > 1 ? 's' : ''} past due date` : 'No overdue tasks — great job!',
-          ],
-          recommendations: [
-            overdue > 0 ? 'Address overdue tasks first to prevent cascading delays' : 'Review your task list for any that can be archived',
-            'Break large tasks into smaller subtasks for better progress tracking',
-            'Set realistic deadlines and review them weekly',
-          ],
+          overallScore: Math.round(Number(data.overallScore) || 0),
+          focusArea: data.focusArea || 'Focus on the most critical task',
+          insights: Array.isArray(data.insights) ? data.insights : [],
+          recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+          scoreRationale: typeof data.scoreRationale === 'string' ? data.scoreRationale : undefined,
+          contributors: Array.isArray(data.contributors) ? data.contributors : undefined,
+          penalties: Array.isArray(data.penalties) ? data.penalties : undefined,
         });
+      } else {
+        setAiData(buildFallbackAnalysis());
       }
     } catch {
-      setAiData({
-        overallScore: 70,
-        focusArea: 'Productivity',
-        insights: ['Continue maintaining consistent task completion', 'Review your workflow for optimizations'],
-        recommendations: ['Take regular breaks', 'Focus on one task at a time'],
-      });
+      setAiData(buildFallbackAnalysis());
     } finally {
       setLoadingAI(false);
       setShowAIModal(true);
@@ -799,6 +875,12 @@ const Insights: React.FC = () => {
               <div className="text-center">
                 <p className="text-5xl font-black text-foreground">{aiData.overallScore}</p>
                 <p className="text-xs text-muted-foreground mt-1">overall productivity score</p>
+                {aiData.scoreRationale && (
+                  <div className="mt-3 px-4 py-3 bg-muted/50 border border-border rounded-xl text-left">
+                    <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-1">How this score was reached</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{aiData.scoreRationale}</p>
+                  </div>
+                )}
               </div>
 
               {/* Focus area */}
@@ -806,6 +888,36 @@ const Insights: React.FC = () => {
                 <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Focus Area</p>
                 <p className="text-sm text-foreground">{aiData.focusArea}</p>
               </div>
+
+              {/* What's helping */}
+              {aiData.contributors && aiData.contributors.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">What's Helping</p>
+                  <ul className="space-y-2">
+                    {aiData.contributors.map((item: string, i: number) => (
+                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                        <span className="text-emerald-500 mt-0.5">●</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* What's dragging it down */}
+              {aiData.penalties && aiData.penalties.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">What's Dragging It Down</p>
+                  <ul className="space-y-2">
+                    {aiData.penalties.map((item: string, i: number) => (
+                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                        <span className="text-destructive mt-0.5">●</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Key insights */}
               {aiData.insights && aiData.insights.length > 0 && (

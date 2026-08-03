@@ -732,6 +732,7 @@ const Projects: React.FC = () => {
                         <div
                           ref={dragProvided.innerRef}
                           {...dragProvided.draggableProps}
+                          data-project-row
                           onClick={() => setSelectedProjectId(project.id)}
                           className={cn(
                             'group relative cursor-pointer rounded-2xl border px-3 py-3 transition-all',
@@ -786,10 +787,11 @@ const Projects: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (showProjectMenuId !== project.id) {
-                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    const rowEl = (e.currentTarget as HTMLElement).closest('[data-project-row]') as HTMLElement | null;
+                                    const rect = (rowEl || e.currentTarget).getBoundingClientRect();
                                     setMenuPos({
                                       top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
-                                      left: rect.right + 8,
+                                      left: rect.right + 12,
                                     });
                                     setShowProjectColorPicker(false);
                                   }
@@ -815,6 +817,7 @@ const Projects: React.FC = () => {
             {items.map(project => (
               <div
                 key={project.id}
+                data-project-row
                 onClick={() => setSelectedProjectId(project.id)}
                 className={cn(
                   'group relative cursor-pointer rounded-2xl border px-3 py-3 transition-all',
@@ -865,10 +868,11 @@ const Projects: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (showProjectMenuId !== project.id) {
-                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                    const rowEl = (e.currentTarget as HTMLElement).closest('[data-project-row]') as HTMLElement | null;
+                                    const rect = (rowEl || e.currentTarget).getBoundingClientRect();
                                     setMenuPos({
                                       top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
-                                      left: rect.right + 8,
+                                      left: rect.right + 12,
                                     });
                                     setShowProjectColorPicker(false);
                                   }
