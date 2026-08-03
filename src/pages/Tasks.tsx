@@ -2147,88 +2147,6 @@ const Tasks: React.FC = () => {
                 )}
           </div>
 
-          <div className="relative">
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
-            <div className="mt-1">
-              {newTaskLabels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {newTaskLabels.map(label => (
-                    <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                      {label.name}
-                      <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setNewTagPickerOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                <Tag className="w-3.5 h-3.5" />
-                {newTaskLabels.length > 0 ? `${newTaskLabels.length} tag${newTaskLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-              </button>
-              {newTagPickerOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setNewTagPickerOpen(false)}>
-                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-                  <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                      <button onClick={() => setNewTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-                    </div>
-                    <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
-                      {allTags.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
-                      )}
-                      {allTags.map(label => {
-                        const active = newTaskLabels.some(l => l.id === label.id);
-                        return (
-                          <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                            <button onClick={() => setNewTaskLabels(prev => active ? prev.filter(l => l.id !== label.id) : [...prev, label])} className="flex flex-1 items-center gap-2 text-left">
-                              <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                              <span className="text-sm text-foreground">{label.name}</span>
-                              {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                            </button>
-                            <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="border-t border-border pt-4">
-                      <div className="flex gap-2 mb-2">
-                        <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
-                          className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                        <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            const name = normalizeTagName(newTagName);
-                            if (!name) return;
-                            try {
-                              const newLabel = await createSharedTaskLabel(name, newTagColor);
-                              setNewTaskLabels(prev => [...prev, newLabel]);
-                              setNewTagName('');
-                              setNewTagColor(randomTagColor());
-                            } catch (error) {
-                              console.error('Failed to create task tag:', error);
-                            }
-                          }}
-                          disabled={!newTagName.trim()}
-                          className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed"
-                        >
-                          Add tag
-                        </button>
-                        <button onClick={() => setNewTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Start Date and Time Section */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
@@ -2281,6 +2199,88 @@ const Tasks: React.FC = () => {
                   rows={3}
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
                 />
+              </div>
+
+              <div className="relative">
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
+                <div className="mt-1">
+                  {newTaskLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {newTaskLabels.map(label => (
+                        <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                          {label.name}
+                          <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setNewTagPickerOpen(prev => !prev)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    {newTaskLabels.length > 0 ? `${newTaskLabels.length} tag${newTaskLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
+                  </button>
+                  {newTagPickerOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setNewTagPickerOpen(false)}>
+                      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+                      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="mb-4 flex items-center justify-between">
+                          <h3 className="text-base font-semibold text-foreground">Tags</h3>
+                          <button onClick={() => setNewTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
+                        </div>
+                        <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
+                          {allTags.length === 0 && (
+                            <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
+                          )}
+                          {allTags.map(label => {
+                            const active = newTaskLabels.some(l => l.id === label.id);
+                            return (
+                              <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
+                                <button onClick={() => setNewTaskLabels(prev => active ? prev.filter(l => l.id !== label.id) : [...prev, label])} className="flex flex-1 items-center gap-2 text-left">
+                                  <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
+                                  <span className="text-sm text-foreground">{label.name}</span>
+                                  {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
+                                </button>
+                                <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="border-t border-border pt-4">
+                          <div className="flex gap-2 mb-2">
+                            <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
+                              className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                            <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                const name = normalizeTagName(newTagName);
+                                if (!name) return;
+                                try {
+                                  const newLabel = await createSharedTaskLabel(name, newTagColor);
+                                  setNewTaskLabels(prev => [...prev, newLabel]);
+                                  setNewTagName('');
+                                  setNewTagColor(randomTagColor());
+                                } catch (error) {
+                                  console.error('Failed to create task tag:', error);
+                                }
+                              }}
+                              disabled={!newTagName.trim()}
+                              className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed"
+                            >
+                              Add tag
+                            </button>
+                            <button onClick={() => setNewTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Sub-tasks Card */}
@@ -4697,19 +4697,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Tag className="w-4 h-4 text-muted-foreground" />
-              Tags
-            </h3>
-            <button
-              onClick={() => setTagPickerOpen(prev => !prev)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-            >
-              <Tag className="w-3.5 h-3.5" />
-              {task.labels.length > 0 ? `${task.labels.length} tag${task.labels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-            </button>
-          </div>
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Tag className="w-4 h-4 text-muted-foreground" />
+            Tags
+          </h3>
 
           {task.labels.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -4725,6 +4716,14 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               ))}
             </div>
           )}
+
+          <button
+            onClick={() => setTagPickerOpen(prev => !prev)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+          >
+            <Tag className="w-3.5 h-3.5" />
+            {task.labels.length > 0 ? `${task.labels.length} tag${task.labels.length > 1 ? 's' : ''} selected` : 'Add tags'}
+          </button>
 
           {tagPickerOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPickerOpen(false)}>

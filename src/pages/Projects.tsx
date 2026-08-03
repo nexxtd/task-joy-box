@@ -76,6 +76,7 @@ interface ProjectMeta {
 }
 
 const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899'];
+const PROJECT_COLOR_OPTIONS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'];
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
 
 const Projects: React.FC = () => {
@@ -91,6 +92,7 @@ const Projects: React.FC = () => {
   const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const [showProjectColorPicker, setShowProjectColorPicker] = useState(false);
   const [editingName, setEditingName] = useState('');
   const [addingProject, setAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -789,6 +791,7 @@ const Projects: React.FC = () => {
                                       top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
                                       left: rect.right + 8,
                                     });
+                                    setShowProjectColorPicker(false);
                                   }
                                   setShowProjectMenuId(prev => prev === project.id ? null : project.id);
                                 }}
@@ -867,6 +870,7 @@ const Projects: React.FC = () => {
                                       top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
                                       left: rect.right + 8,
                                     });
+                                    setShowProjectColorPicker(false);
                                   }
                                   setShowProjectMenuId(prev => prev === project.id ? null : project.id);
                                 }}
@@ -1924,6 +1928,31 @@ const Projects: React.FC = () => {
       {showProjectMenuId !== null && menuPos && (() => {
         const menuProject = projects.find(project => project.id === showProjectMenuId);
         if (!menuProject) return null;
+        if (showProjectColorPicker) {
+          return (
+            <div
+              ref={projectMenuRef}
+              style={{ top: menuPos.top, left: menuPos.left }}
+              className="fixed z-50 min-w-[180px] rounded-xl border border-border bg-popover p-3 shadow-2xl"
+            >
+              <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Project Color</p>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_COLOR_OPTIONS.map(c => (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      updateSelectedProject({ color: c });
+                      setShowProjectColorPicker(false);
+                      setShowProjectMenuId(null);
+                    }}
+                    className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${menuProject.color === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        }
         return (
           <div
             ref={projectMenuRef}
@@ -1936,9 +1965,7 @@ const Projects: React.FC = () => {
               setShowProjectMenuId(null);
             }} />
             <MenuItem icon={<div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: menuProject.color }} />} label="Recolour" onClick={() => {
-              const nextColor = STORAGE_COLORS[(STORAGE_COLORS.indexOf(menuProject.color) + 1) % STORAGE_COLORS.length];
-              updateSelectedProject({ color: nextColor });
-              setShowProjectMenuId(null);
+              setShowProjectColorPicker(true);
             }} />
             <MenuItem icon={<Lock className="h-4 w-4" />} label={menuProject.archived ? 'Unarchive' : 'Archive'} onClick={async () => {
               await persistProject(menuProject.id, { archived: !menuProject.archived });
@@ -1946,10 +1973,6 @@ const Projects: React.FC = () => {
             }} />
             <MenuItem icon={<CheckCircle2 className="h-4 w-4" />} label={menuProject.completed ? 'Reopen' : 'Mark complete'} onClick={async () => {
               await persistProject(menuProject.id, { completed: !menuProject.completed });
-              setShowProjectMenuId(null);
-            }} />
-            <MenuItem icon={<Sparkles className="h-4 w-4" />} label="What's new" onClick={() => {
-              toast({ title: "What's new", description: 'Project updates are not available yet.' });
               setShowProjectMenuId(null);
             }} />
             <div className="my-1 border-t border-gray-200" />
