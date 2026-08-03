@@ -9,40 +9,40 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 220 15% 12%;
+    --background: 228 45% 97%;
+    --foreground: 222 22% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 15% 12%;
+    --card-foreground: 222 22% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 12%;
+    --popover-foreground: 222 22% 14%;
 
     /* Darker gray with white text */
-    --primary: 220 39% 11%;
+    --primary: 228 39% 22%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 12% 93%;
-    --secondary-foreground: 220 15% 25%;
+    --secondary: 228 32% 94%;
+    --secondary-foreground: 222 22% 18%;
 
-    --muted: 210 12% 94%;
-    --muted-foreground: 215 10% 48%;
+    --muted: 228 36% 95%;
+    --muted-foreground: 228 14% 46%;
 
-    --accent: 210 12% 93%;
-    --accent-foreground: 220 15% 20%;
+    --accent: 230 34% 94%;
+    --accent-foreground: 222 22% 16%;
 
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 14% 89%;
-    --input: 214 14% 89%;
-    --ring: 220 39% 11%;
+    --border: 226 24% 91%;
+    --input: 226 24% 91%;
+    --ring: 220 39% 22%;
 
     --radius: 0.5rem;
 
-    --column-bg: 210 12% 96%;
+    --column-bg: 228 34% 95%;
     --task-bg: 0 0% 100%;
-    --task-hover: 210 12% 97%;
+    --task-hover: 228 32% 96%;
 
     --label-red: 0 65% 50%;
     --label-orange: 25 85% 52%;
