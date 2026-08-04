@@ -101,6 +101,8 @@ const Dashboard: React.FC = () => {
   const [draftConflicts, setDraftConflicts] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<{ mode: 'move' | 'resize'; w: DashboardWidget; sx: number; sy: number; col: number; row: number; ww: number; hh: number } | null>(null);
+  const draftRef = useRef<Rect | null>(null);
+  const layoutRef = useRef<DashboardWidget[]>([]);
 
   const layoutKey = `dash_widgets_v2_${user?.id ?? 'anon'}`;
 
@@ -134,6 +136,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (layout.length > 0) {
+      layoutRef.current = layout;
       try { localStorage.setItem(layoutKey, JSON.stringify(layout)); } catch { }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -360,11 +363,12 @@ const Dashboard: React.FC = () => {
     const g = gestureRef.current;
     if (!g) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
+    const current = layoutRef.current;
     if (g.mode === 'move') {
       const col = clamp(cell.col, 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, cell.row);
-      const rect: Rect = { col, row, w: g.ww, h: g.hh };
-      const others = layout.filter(o => o.id !== g.w.id);
+      const rect: Rect = { col, row: Math.max(1, cell.row), w: g.ww, h: g.hh };
+      const others = current.filter(o => o.id !== g.w.id);
+      draftRef.current = rect;
       setDraft(rect);
       setDraftConflicts(others.some(o => intersects(rect, o)));
     } else {
@@ -374,40 +378,48 @@ const Dashboard: React.FC = () => {
       const dh = Math.round((e.clientY - g.sy) / CELL_H);
       const ww = clamp(g.ww + dw, 1, GRID_COLS - g.col + 1);
       const hh = clamp(g.hh + dh, 1, 12);
-      const others = layout.filter(o => o.id !== g.w.id).map(o => ({ ...o }));
+      const others = current.filter(o => o.id !== g.w.id);
       const fitted = resolveFit(others, { col: g.col, row: g.row, w: ww, h: hh });
+      draftRef.current = fitted;
       setDraft(fitted);
       setDraftConflicts(ww !== fitted.w || hh !== fitted.h);
     }
-  }, [cellFromPoint, layout]);
+  }, [cellFromPoint]);
 
   const onGestureEnd = useCallback(() => {
     const g = gestureRef.current;
     window.removeEventListener('pointermove', onGestureMove);
     window.removeEventListener('pointerup', onGestureEnd);
+    window.removeEventListener('pointercancel', onGestureEnd);
     gestureRef.current = null;
+    const finalRect = draftRef.current;
+    draftRef.current = null;
+    setDraft(null);
     setDraftConflicts(false);
-    if (g && draft) {
+    if (g && finalRect) {
       setLayout(prev => prev.map(wg => {
         if (wg.id !== g.w.id) return wg;
         if (g.mode === 'move') {
           const others = prev.filter(o => o.id !== wg.id);
-          const pushed = resolveRowPush(others, { ...draft });
-          return { ...wg, col: pushed.col, row: pushed.row, w: draft.w, h: draft.h };
+          const pushed = resolveRowPush(others, { ...finalRect });
+          return { ...wg, col: pushed.col, row: pushed.row, w: finalRect.w, h: finalRect.h };
         }
-        return { ...wg, col: draft.col, row: draft.row, w: draft.w, h: draft.h };
+        return { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h };
       }));
     }
-    setDraft(null);
-  }, [draft, onGestureMove]);
+  }, [onGestureMove]);
 
   const startGesture = (e: React.PointerEvent, widget: DashboardWidget, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
     e.preventDefault();
     gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h };
-    setDraft({ col: widget.col, row: widget.row, w: widget.w, h: widget.h });
+    const start: Rect = { col: widget.col, row: widget.row, w: widget.w, h: widget.h };
+    draftRef.current = start;
+    setDraft(start);
+    setDraftConflicts(false);
     window.addEventListener('pointermove', onGestureMove);
     window.addEventListener('pointerup', onGestureEnd);
+    window.addEventListener('pointercancel', onGestureEnd);
   };
 
   const onGridDragOver = (e: React.DragEvent) => {
