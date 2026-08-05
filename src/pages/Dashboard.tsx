@@ -7,7 +7,7 @@ import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import { getPeakEnergyHours } from '@/utils/energyTaskScheduler';
 import {
   CheckSquare, Target, Clock, Flame, Plus, ArrowRight,
-  TrendingUp, Cloud, Bot, Calendar, Zap, X,
+  TrendingUp, Bot, Calendar, Zap, X,
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
@@ -48,7 +48,7 @@ const WIDGET_DEFS: WidgetDef[] = [
   { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Times of day when you work best', icon: Clock, accent: 'label-green', w: 4, h: 1 },
   { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 4, h: 2 },
   { type: 'goals', title: 'Top Goals', desc: 'Your current goals and targets', icon: Target, accent: 'label-green', w: 4, h: 1 },
-  { type: 'account', title: 'Account Status', desc: 'Cloud sync and AI agent status', icon: Bot, accent: 'label-blue', w: 4, h: 1 },
+  { type: 'account', title: 'Account Status', desc: 'Your plan and completed work', icon: Bot, accent: 'label-blue', w: 4, h: 1 },
 ];
 
 const GRID_COLS = 12;
@@ -111,6 +111,9 @@ const Dashboard: React.FC = () => {
     energyAfternoon: 'high' as 'low' | 'medium' | 'high',
     energyEvening: 'low' as 'low' | 'medium' | 'high',
   });
+  const [energyConfigured, setEnergyConfigured] = useState(false);
+  const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
+  const [goalsData, setGoalsData] = useState<Array<{ id: number; title: string; progress: number; target: number; unit: string; status: string; completed: boolean }>>([]);
 
   const [showCustomize, setShowCustomize] = useState(false);
   const [layout, setLayout] = useState<DashboardWidget[]>([]);
@@ -160,21 +163,56 @@ const Dashboard: React.FC = () => {
   }, [layout]);
 
   useEffect(() => {
-    const fetchEnergySettings = async () => {
-      try {
-        const morning = localStorage.getItem('energyMorning') || 'medium';
-        const afternoon = localStorage.getItem('energyAfternoon') || 'high';
-        const evening = localStorage.getItem('energyEvening') || 'low';
-        setEnergySettings({
-          energyMorning: morning as 'low' | 'medium' | 'high',
-          energyAfternoon: afternoon as 'low' | 'medium' | 'high',
-          energyEvening: evening as 'low' | 'medium' | 'high',
-        });
-      } catch (error) {
-        console.error('Error loading energy settings:', error);
-      }
-    };
-    fetchEnergySettings();
+    let cancelled = false;
+    const morning = localStorage.getItem('energyMorning');
+    const afternoon = localStorage.getItem('energyAfternoon');
+    const evening = localStorage.getItem('energyEvening');
+    if (morning || afternoon || evening) {
+      setEnergyConfigured(true);
+      setEnergySettings({
+        energyMorning: (morning as 'low' | 'medium' | 'high') || 'medium',
+        energyAfternoon: (afternoon as 'low' | 'medium' | 'high') || 'medium',
+        energyEvening: (evening as 'low' | 'medium' | 'high') || 'medium',
+      });
+    }
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: any) => {
+        if (!data || cancelled) return;
+        const hasAny = data.energyMorning || data.energyAfternoon || data.energyEvening;
+        if (hasAny) setEnergyConfigured(true);
+        setEnergySettings(prev => ({
+          energyMorning: data.energyMorning || prev.energyMorning,
+          energyAfternoon: data.energyAfternoon || prev.energyAfternoon,
+          energyEvening: data.energyEvening || prev.energyEvening,
+        }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/deep-focus/sessions/today', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: any) => {
+        if (data) setDeepFocusMinutes(Number(data.minutes) || 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/goals', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: any) => {
+        if (data && Array.isArray(data.goals)) {
+          setGoalsData(data.goals.map((g: any) => ({
+            id: g.id, title: g.title || 'Untitled goal',
+            progress: Number(g.progress) || 0, target: Number(g.target) || 0,
+            unit: g.unit || '', status: g.status || 'to_do', completed: Boolean(g.completed),
+          })));
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -197,14 +235,8 @@ const Dashboard: React.FC = () => {
     [board.columns]
   );
 
-  const activeTasks = board.tasks.filter(t => {
-    const col = board.columns.find(c => c.id === t.columnId);
-    return col && col.title !== 'Completed' && !t.completed;
-  });
-  const completedTasks = board.tasks.filter(t => {
-    const col = board.columns.find(c => c.id === t.columnId);
-    return (col && col.title === 'Completed') || t.completed;
-  });
+  const activeTasks = board.tasks.filter(t => !doneColIds.includes(t.columnId) && !t.completed);
+  const completedTasks = board.tasks.filter(t => doneColIds.includes(t.columnId) || t.completed);
   const completionRate = board.tasks.length > 0
     ? Math.round((completedTasks.length / board.tasks.length) * 100)
     : 0;
@@ -268,23 +300,10 @@ const Dashboard: React.FC = () => {
   const maxWeekly = Math.max(...weeklyData, 1);
   const peakDay = weeklyData.indexOf(Math.max(...weeklyData));
 
-  const deepWorkHours = useMemo(() => {
-    try {
-      const stored = localStorage.getItem('deepFocusSessions');
-      if (!stored) return 0;
-      const sessions = JSON.parse(stored);
-      const todayDate = new Date().toDateString();
-      const todaySessions = sessions.filter((s: any) =>
-        new Date(s.startTime).toDateString() === todayDate && s.completed
-      );
-      return todaySessions.reduce((acc: number, s: any) => acc + (s.duration || 0) / 3600, 0);
-    } catch { return 0; }
-  }, []);
-
   const stats = [
     { label: 'Tasks Active', value: activeTasks.length, icon: CheckSquare, accent: 'label-purple' },
     { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, accent: 'label-green' },
-    { label: 'Deep Work', value: `${deepWorkHours.toFixed(1)}h`, icon: Clock, accent: 'label-blue' },
+    { label: 'Deep Work', value: `${(deepFocusMinutes / 60).toFixed(1)}h`, icon: Clock, accent: 'label-blue' },
     { label: 'Daily Streak', value: habitStreak, icon: Flame, accent: 'label-orange' },
   ];
 
@@ -657,7 +676,9 @@ style={{ background: 'hsl(var(--primary))' }}>
       case 'peak-hours':
         return (
           <div className="flex flex-wrap gap-2 mt-1">
-            {peakHours.length > 0 ? (
+            {!energyConfigured ? (
+              <p className="text-sm text-muted-foreground">Set your energy preferences in Settings to see your peak hours.</p>
+            ) : peakHours.length > 0 ? (
               peakHours.map((h, idx) => (
                 <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-sm" style={{ background: 'hsl(var(--label-green))' }}>
                   <Zap className="w-3 h-3" /> {h}
@@ -692,31 +713,64 @@ style={{ background: 'hsl(var(--primary))' }}>
             })}
           </div>
         );
-      case 'goals':
-        return (
-          <div className="flex items-center gap-3 mt-1.5">
-            <div className="flex-1 text-center">
-              <Target className="w-6 h-6 mx-auto mb-1 opacity-60" style={{ color: `hsl(var(--${accent}))` }} />
-              <p className="text-xs text-muted-foreground">No active goals</p>
+      case 'goals': {
+        const activeGoals = goalsData
+          .filter(g => !g.completed && g.status !== 'completed')
+          .slice(0, 4);
+        if (activeGoals.length === 0) {
+          return (
+            <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex-1 text-center">
+                <Target className="w-6 h-6 mx-auto mb-1 opacity-60" style={{ color: `hsl(var(--${accent}))` }} />
+                <p className="text-xs text-muted-foreground">No active goals</p>
+              </div>
+              <button onClick={() => navigate('/goals')} className="text-xs text-primary hover:underline">Set a goal</button>
             </div>
-            <button onClick={() => navigate('/goals')} className="text-xs text-primary hover:underline">Set a goal</button>
+          );
+        }
+        return (
+          <div className="space-y-2 mt-1">
+            {activeGoals.map(g => {
+              const pct = g.target > 0 ? Math.min(100, Math.round((g.progress / g.target) * 100)) : 0;
+              return (
+                <div key={g.id} className="rounded-lg p-2.5 cursor-pointer hover:bg-muted/30 transition-colors"
+                  style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
+                  onClick={() => navigate('/goals')}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-foreground truncate">{g.title}</p>
+                    <span className="text-[10px] font-medium text-muted-foreground flex-shrink-0">{pct}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: 'hsl(var(--primary))' }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
-      case 'account':
+      }
+      case 'account': {
+        const tier = user?.subscriptionTier || 'free';
+        const tierLabel = tier === 'pro' ? 'Pro' : tier === 'premium' ? 'Premium' : 'Free';
+        const isPaid = tier === 'pro' || tier === 'premium';
         return (
           <div className="space-y-2.5 mt-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground flex items-center gap-2"><Cloud className="w-3.5 h-3.5" /> Cloud Sync</span>
-              <span className="text-[10px] font-bold text-white bg-label-green px-2 py-1 rounded-full uppercase">Ready</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-2"><Sparkles className="w-3.5 h-3.5" /> Plan</span>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${isPaid ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground border border-border'}`}>
+                {tierLabel}
+              </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground flex items-center gap-2"><Bot className="w-3.5 h-3.5" /> AI Agent</span>
-              <span className="text-[10px] font-bold text-white bg-label-blue px-2 py-1 rounded-full uppercase">Online</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5" /> Tasks completed</span>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{completedTasks.length}</span>
             </div>
           </div>
         );
+      }
       case 'energy':
-        return <EnergyTaskRecommendations tasks={board.tasks} energySettings={energySettings} />;
+        return <EnergyTaskRecommendations tasks={board.tasks} energySettings={energySettings} configured={energyConfigured} />;
       default:
         return null;
     }

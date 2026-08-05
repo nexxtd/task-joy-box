@@ -10,11 +10,13 @@ interface EnergyTaskRecommendationsProps {
     energyAfternoon: 'low' | 'medium' | 'high';
     energyEvening: 'low' | 'medium' | 'high';
   };
+  configured?: boolean;
 }
 
 const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
   tasks,
-  energySettings
+  energySettings,
+  configured = true,
 }) => {
   const [recommendedTasks, setRecommendedTasks] = useState<Task[]>([]);
   const [peakHours, setPeakHours] = useState<string[]>([]);
@@ -61,6 +63,12 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
 
   return (
     <div className="space-y-4">
+      {!configured && (
+        <p className="text-sm text-muted-foreground p-3 rounded-xl bg-muted/40 border border-border">
+          Set your energy preferences in Settings to get personalized recommendations.
+        </p>
+      )}
+      {configured && (
       <div className="bg-card p-4 rounded-2xl border border-border">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-orange) / 0.12)' }}>
@@ -77,6 +85,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
           {recommendedTasks.length > 0 ? (
             recommendedTasks.map(task => {
               const timeBlocks = getOptimalTimeBlocks(task, energySettings);
+              const hasPriority = task.priority && task.priority !== 'none';
               
               return (
                 <div 
@@ -87,12 +96,14 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-foreground truncate">{task.title}</h4>
                       <div className="flex items-center gap-3 mt-1">
+                        {hasPriority && (
                         <span
                           className="text-[10px] font-bold uppercase px-2 py-1 rounded-full text-primary-foreground"
                           style={getPriorityFill(task.priority || 'medium')}
                         >
                           {getPriorityLabel(task.priority || 'medium')}
                         </span>
+                        )}
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />
                           <span>
@@ -134,7 +145,9 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
           )}
         </div>
       </div>
+      )}
       
+      {configured && (
       <div className="bg-card p-4 rounded-2xl border border-border">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-green) / 0.12)' }}>
@@ -164,6 +177,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
           Schedule high-priority tasks during these times for optimal performance
         </p>
       </div>
+      )}
     </div>
   );
 };
