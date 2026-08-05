@@ -71,9 +71,9 @@ const intersects = (a: Rect, b: Rect) =>
   !(a.col >= b.col + b.w || a.col + a.w <= b.col || a.row >= b.row + b.h || a.row + a.h <= b.row);
 
 const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSProperties => ({
-  background: `linear-gradient(180deg, hsl(var(--${accent}) / ${alpha}), hsl(var(--card)) 45%)`,
-  border: `1px solid hsl(var(--${accent}) / ${borderAlpha})`,
-  boxShadow: `0 18px 44px -34px hsl(228 25% 25% / 0.3)`,
+  background: 'hsl(var(--card))',
+  border: `1px solid hsl(var(--border))`,
+  boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
 });
 
 const Dashboard: React.FC = () => {
@@ -474,14 +474,8 @@ const Dashboard: React.FC = () => {
             {stats.map((stat, i) => {
               const Icon = stat.icon;
               return (
-                <div key={stat.label} className="rounded-xl p-3.5 transition-all duration-300 hover:-translate-y-0.5"
-                  style={{
-                    background: `linear-gradient(180deg, hsl(var(--${stat.accent}) / 0.09), hsl(var(--card)) 55%)`,
-                    border: `1px solid hsl(var(--${stat.accent}) / 0.18)`,
-                    boxShadow: `0 14px 30px -24px hsl(228 25% 30% / 0.35)`,
-                  }}
-                >
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.14)` }}>
+                <div key={stat.label} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm">
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
                     <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
                   </div>
                   <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
@@ -505,8 +499,8 @@ const Dashboard: React.FC = () => {
                   const col = board.columns.find(c => c.id === task.columnId);
                   const config = task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
                   return (
-                    <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md animate-fade-in"
-                      style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.13)`, animationDelay: `${i * 50}ms` }}
+                    <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-muted/30 hover:shadow-sm animate-fade-in"
+                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))', animationDelay: `${i * 50}ms` }}
                       onClick={() => navigate('/tasks')}
                     >
                       {config && (
@@ -518,7 +512,7 @@ const Dashboard: React.FC = () => {
                         <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
                         {task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
                       </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white" style={{ backgroundColor: col?.color || `hsl(var(--${accent}))` }}>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium border border-border text-muted-foreground bg-muted/50">
                         {col?.title}
                       </span>
                     </div>
@@ -548,12 +542,12 @@ const Dashboard: React.FC = () => {
               <div className="space-y-1.5">
                 {projectsInfo.slice(0, 6).map(p => (
                   <button key={p.id} onClick={() => navigate('/projects')}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:scale-[1.01] hover:shadow-md"
-                    style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.13)` }}
+                    className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:bg-muted/30 hover:shadow-sm"
+                    style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
                   >
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                     <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{p.name}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: `hsl(var(--${accent}))` }}>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
                       {p.active} active
                     </span>
                   </button>
@@ -580,7 +574,7 @@ const Dashboard: React.FC = () => {
                     value={widget.projectId ?? proj?.id ?? ''}
                     onChange={e => updateWidget(widget.id, { projectId: Number(e.target.value) || null })}
                     className="w-full rounded-lg px-3 py-2 text-sm font-medium text-foreground bg-background focus:outline-none focus:ring-2"
-                    style={{ border: `1px solid hsl(var(--${accent}) / 0.3)`, borderRadius: 8 }}
+                    style={{ border: '1px solid hsl(var(--border))', borderRadius: 8 }}
                   >
                     {projectsInfo.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
@@ -594,13 +588,13 @@ const Dashboard: React.FC = () => {
                       const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
                       return (
                         <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
-                          style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.13)` }}>
+                          style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                           <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground`}>
                             {cfg?.label || 'Open'}
                           </span>
                           <span className="flex-1 text-xs font-medium text-foreground truncate">{t.title}</span>
                           {col && (
-                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: col.color || `hsl(var(--${accent}))` }}>
+                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
                               {col.title}
                             </span>
                           )}
@@ -712,10 +706,10 @@ style={{ background: 'hsl(var(--primary))' }}>
     <>
       <div
         className="flex-1 overflow-y-auto"
-        style={{ background: 'linear-gradient(180deg, hsl(228 35% 97.5%) 0%, hsl(248 28% 97%) 55%, hsl(262 22% 97%) 100%)' }}
+        style={{ background: 'hsl(var(--background))' }}
       >
-        <header className="px-6 py-4 border-b"
-          style={{ borderColor: 'hsl(240 20% 92%)', background: 'linear-gradient(90deg, hsla(250 30% 98% / 0.9), hsla(0 0% 100% / 0.85))', backdropFilter: 'blur(12px)' }}
+        <header className="px-6 py-4 border-b border-border bg-card/30 backdrop-blur-sm"
+          style={{ borderColor: 'hsl(var(--border))' }}
         >
           <div className="flex items-center justify-between">
             <div>
@@ -728,15 +722,13 @@ style={{ background: 'hsl(var(--primary))' }}>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowCustomize(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold transition-all hover:scale-[1.02]"
-                style={{ background: 'hsl(258 60% 96%)', border: '1px solid hsl(258 60% 82%)', color: 'hsl(258 60% 45%)' }}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
               >
                 <LayoutDashboard className="w-4 h-4" /> Customize Dashboard
               </button>
               <button
                 onClick={() => navigate('/projects')}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold bg-white transition-all"
-                style={{ border: '1px solid hsl(240 20% 82%)', color: 'hsl(228 14% 40%)' }}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
               >
                 <Calendar className="w-4 h-4" /> View Schedule
               </button>
@@ -758,8 +750,7 @@ style={{ background: 'hsl(var(--primary))' }}>
               <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Dashboard to add widgets</p>
               <button
                 onClick={() => setShowCustomize(true)}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(120deg, hsl(var(--label-purple)), hsl(var(--label-blue)))' }}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
               >
                 Add widgets
               </button>
@@ -785,7 +776,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                       gridRow: `${widget.row} / span ${widget.h}`,
                       background: cardStyle(accent).background,
                       border: cardStyle(accent).border,
-                      boxShadow: `0 18px 46px -32px hsl(var(--${accent}) / 0.7)`,
+                      boxShadow: cardStyle(accent).boxShadow,
                     }}
                   >
                     <div className="flex items-center justify-between px-4 pt-3 pb-1 select-none">
@@ -818,7 +809,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                     <div
                       onPointerDown={e => startGesture(e, widget, 'resize')}
                       className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
-                      style={{ background: `linear-gradient(135deg, transparent 42%, hsl(var(--${accent}) / 0.5))` }}
+                      style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
                       title="Resize"
                     />
                   </div>
