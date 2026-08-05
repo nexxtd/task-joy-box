@@ -70,10 +70,10 @@ interface Rect {
 const intersects = (a: Rect, b: Rect) =>
   !(a.col >= b.col + b.w || a.col + a.w <= b.col || a.row >= b.row + b.h || a.row + a.h <= b.row);
 
-const cardStyle = (accent: string, alpha = 0.16, borderAlpha = 0.28): React.CSSProperties => ({
-  background: `linear-gradient(150deg, hsl(var(--${accent}) / ${alpha}), hsl(var(--${accent}) / 0.05) 55%, hsl(var(--card) / 0.9))`,
+const cardStyle = (accent: string, alpha = 0.09, borderAlpha = 0.16): React.CSSProperties => ({
+  background: `linear-gradient(160deg, hsl(var(--${accent}) / ${alpha}), hsl(var(--card)) 45%)`,
   border: `1px solid hsl(var(--${accent}) / ${borderAlpha})`,
-  boxShadow: `0 1px 0 hsl(var(--${accent}) / 0.1) inset, 0 18px 44px -30px hsl(var(--${accent}) / 0.6)`,
+  boxShadow: `0 1px 0 hsl(var(--${accent}) / 0.08) inset, 0 14px 32px -28px hsl(var(--${accent}) / 0.35)`,
 });
 
 const Dashboard: React.FC = () => {
@@ -476,12 +476,12 @@ const Dashboard: React.FC = () => {
               return (
                 <div key={stat.label} className="rounded-xl p-3.5 transition-all duration-300 hover:-translate-y-0.5"
                   style={{
-                    background: `linear-gradient(150deg, hsl(var(--${stat.accent}) / 0.15), hsl(var(--${stat.accent}) / 0.04) 60%, hsl(var(--card)))`,
-                    border: `1px solid hsl(var(--${stat.accent}) / 0.25)`,
-                    boxShadow: `0 12px 26px -18px hsl(var(--${stat.accent}) / 0.6)`,
+                    background: `linear-gradient(160deg, hsl(var(--${stat.accent}) / 0.09), hsl(var(--card)) 55%)`,
+                    border: `1px solid hsl(var(--${stat.accent}) / 0.16)`,
+                    boxShadow: `0 10px 22px -18px hsl(var(--${stat.accent}) / 0.4)`,
                   }}
                 >
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.18)` }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
                     <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
                   </div>
                   <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
@@ -506,7 +506,7 @@ const Dashboard: React.FC = () => {
                   const config = task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
                   return (
                     <div key={task.id} className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md animate-fade-in"
-                      style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.12)`, animationDelay: `${i * 50}ms` }}
+                      style={{ background: `hsl(var(--${accent}) / 0.04)`, border: `1px solid hsl(var(--${accent}) / 0.10)`, animationDelay: `${i * 50}ms` }}
                       onClick={() => navigate('/tasks')}
                     >
                       {config && (
@@ -528,7 +528,7 @@ const Dashboard: React.FC = () => {
             )}
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
-              style={{ background: `linear-gradient(120deg, hsl(var(--${accent})), hsl(var(--${accent}) / 0.82))`, boxShadow: `0 10px 24px -14px hsl(var(--${accent}) / 0.8)` }}
+              style={{ background: `hsl(var(--${accent}))`, boxShadow: `0 8px 18px -12px hsl(var(--${accent}) / 0.5)` }}
               onClick={() => openDeepFocus()}
             >
               <Zap className="w-4 h-4" /> Start Deep Work
@@ -549,7 +549,7 @@ const Dashboard: React.FC = () => {
                 {projectsInfo.slice(0, 6).map(p => (
                   <button key={p.id} onClick={() => navigate('/projects')}
                     className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:scale-[1.01] hover:shadow-md"
-                    style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.12)` }}
+                    style={{ background: `hsl(var(--${accent}) / 0.04)`, border: `1px solid hsl(var(--${accent}) / 0.10)` }}
                   >
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                     <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{p.name}</span>
@@ -594,7 +594,7 @@ const Dashboard: React.FC = () => {
                       const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
                       return (
                         <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
-                          style={{ background: `hsl(var(--${accent}) / 0.06)`, border: `1px solid hsl(var(--${accent}) / 0.12)` }}>
+                          style={{ background: `hsl(var(--${accent}) / 0.04)`, border: `1px solid hsl(var(--${accent}) / 0.10)` }}>
                           <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground`}>
                             {cfg?.label || 'Open'}
                           </span>
@@ -635,7 +635,7 @@ const Dashboard: React.FC = () => {
             </div>
             <button onClick={() => navigate('/insights')}
               className="mt-3 w-full py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
-              style={{ background: `linear-gradient(120deg, hsl(var(--${accent})), hsl(var(--${accent}) / 0.8))` }}>
+              style={{ background: `hsl(var(--${accent}))` }}>
               Open full Insights <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -666,9 +666,9 @@ const Dashboard: React.FC = () => {
                       style={{
                         height: `${height}px`,
                         background: i === peakDay
-                          ? `linear-gradient(180deg, hsl(var(--${accent})), hsl(var(--${accent}) / 0.55))`
-                          : `hsl(var(--${accent}) / 0.22)`,
-                        boxShadow: i === peakDay ? `0 8px 18px -8px hsl(var(--${accent}) / 0.7)` : 'none',
+                          ? `hsl(var(--${accent}))`
+                          : `hsl(var(--${accent}) / 0.16)`,
+                        boxShadow: i === peakDay ? `0 8px 18px -10px hsl(var(--${accent}) / 0.45)` : 'none',
                       }}
                     />
                   </div>
@@ -712,7 +712,7 @@ const Dashboard: React.FC = () => {
     <>
       <div
         className="flex-1 overflow-y-auto"
-        style={{ background: 'linear-gradient(160deg, hsl(228 45% 97%) 0%, hsl(232 55% 95%) 30%, hsl(258 45% 95%) 62%, hsl(190 42% 95%) 100%)' }}
+        style={{ background: 'linear-gradient(180deg, hsl(228 45% 98%) 0%, hsl(240 32% 98%) 55%, hsl(255 24% 98%) 100%)' }}
       >
         <header className="px-6 py-4 border-b"
           style={{ borderColor: 'hsl(240 20% 92%)', background: 'hsla(0 0% 100% / 0.72)', backdropFilter: 'blur(12px)' }}
@@ -848,7 +848,7 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
             <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
-              Drag a widget onto the dashboard grid to place it, or tap <span className="font-semibold">+</span>. Widgets snap into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
+              Drag a widget from the list onto the dashboard grid to place it — it snaps into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
             </p>
             <div className="p-3 space-y-2">
               {WIDGET_DEFS.map(def => {
@@ -859,19 +859,19 @@ const Dashboard: React.FC = () => {
                     key={def.type}
                     draggable={!placed}
                     onDragStart={(e) => { e.dataTransfer.setData('text/widget', def.type); e.dataTransfer.effectAllowed = 'copy'; }}
-                    className={placed ? 'p-3 rounded-2xl opacity-60' : 'p-3 rounded-2xl cursor-grab active:cursor-grabbing border'}
+                    className={placed ? 'p-3 rounded-2xl opacity-55' : 'p-3 rounded-2xl cursor-grab active:cursor-grabbing border'}
                     style={{
-                      borderColor: `hsl(var(--${def.accent}) / ${placed ? 0.18 : 0.4})`,
+                      borderColor: `hsl(var(--${def.accent}) / ${placed ? 0.14 : 0.26})`,
                       borderRadius: 16,
                       background: placed
                         ? 'hsl(var(--muted))'
-                        : `linear-gradient(140deg, hsl(var(--${def.accent}) / 0.14), hsl(var(--card)))`,
-                      boxShadow: placed ? 'none' : `0 10px 26px -22px hsl(var(--${def.accent}) / 0.7)`,
+                        : `linear-gradient(140deg, hsl(var(--${def.accent}) / 0.07), hsl(var(--card)) 50%)`,
+                      boxShadow: placed ? 'none' : `0 8px 20px -22px hsl(var(--${def.accent}) / 0.35)`,
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: `hsl(var(--${def.accent}) / 0.16)` }}>
-                        <Icon className="w-4.5 h-4.5" style={{ color: `hsl(var(--${def.accent}))` }} />
+                      <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: `hsl(var(--${def.accent}) / 0.12)` }}>
+                        <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-foreground">{def.title}</p>
@@ -880,14 +880,9 @@ const Dashboard: React.FC = () => {
                       {placed ? (
                         <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
                       ) : (
-                        <button
-                          onClick={() => addWidget(def.type)}
-                          className="w-7 h-7 flex-shrink-0 rounded-lg text-white font-bold text-sm transition-all hover:scale-110"
-                          style={{ background: `hsl(var(--${def.accent}))` }}
-                          title="Add to dashboard"
-                        >
-                          +
-                        </button>
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: `hsl(var(--${def.accent}) / 0.3)` }}>
+                          Drag to add
+                        </span>
                       )}
                     </div>
                   </div>

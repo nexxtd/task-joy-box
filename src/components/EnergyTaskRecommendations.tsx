@@ -61,9 +61,9 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-amber-100/80 via-orange-50 to-amber-50/70 p-4 rounded-2xl border border-orange-200/70 shadow-[0_10px_30px_-18px_hsl(25_85%_52%/0.45)]">
+      <div className="bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-amber-50/30 p-4 rounded-2xl border border-orange-200/40 shadow-[0_8px_24px_-18px_hsl(25_85%_52%/0.3)]">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-sm">
             <Zap className="w-4 h-4 text-white" />
           </div>
           <h3 className="font-semibold text-foreground">Energy-Aware Recommendations</h3>
@@ -81,7 +81,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
               return (
                 <div 
                   key={task.id} 
-                  className="p-3 bg-white/80 border border-amber-200/60 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                  className="p-3 bg-white/70 border border-amber-200/40 rounded-xl shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
@@ -106,7 +106,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
                   </div>
                   
                   {timeBlocks.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-amber-200/50">
+                    <div className="mt-2 pt-2 border-t border-amber-200/30">
                       <div className="flex flex-wrap gap-1">
                         {timeBlocks.map((block, idx) => (
                           <span 
@@ -125,8 +125,8 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
             })
           ) : (
             <div className="py-6 text-center">
-              <div className="w-10 h-10 rounded-full bg-orange-200/60 flex items-center justify-center mx-auto mb-2">
-                <TrendingUp className="w-5 h-5 text-orange-600" />
+              <div className="w-10 h-10 rounded-full bg-orange-200/40 flex items-center justify-center mx-auto mb-2">
+                <TrendingUp className="w-5 h-5 text-orange-500/80" />
               </div>
               <p className="text-sm text-muted-foreground">No tasks to recommend</p>
               <p className="text-xs text-muted-foreground/70 mt-1">Add tasks to get personalized recommendations</p>
@@ -135,9 +135,9 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
         </div>
       </div>
       
-      <div className="bg-gradient-to-br from-teal-50 to-emerald-100/60 p-4 rounded-2xl border border-teal-200/70 shadow-sm">
+      <div className="bg-gradient-to-br from-teal-50/60 to-emerald-50/40 p-4 rounded-2xl border border-teal-200/40 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-400/90 to-emerald-500/90 flex items-center justify-center shadow-sm">
             <Calendar className="w-4 h-4 text-white" />
           </div>
           <h3 className="font-semibold text-foreground">Your Peak Hours</h3>
