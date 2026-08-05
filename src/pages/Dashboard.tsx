@@ -70,10 +70,10 @@ interface Rect {
 const intersects = (a: Rect, b: Rect) =>
   !(a.col >= b.col + b.w || a.col + a.w <= b.col || a.row >= b.row + b.h || a.row + a.h <= b.row);
 
-const cardStyle = (accent: string, alpha = 0.14, borderAlpha = 0.24): React.CSSProperties => ({
-  background: `linear-gradient(160deg, hsl(var(--${accent}) / ${alpha}), hsl(var(--${accent}) / 0.06) 55%, hsl(var(--card)) 90%)`,
+const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSProperties => ({
+  background: `linear-gradient(180deg, hsl(var(--${accent}) / ${alpha}), hsl(var(--card)) 45%)`,
   border: `1px solid hsl(var(--${accent}) / ${borderAlpha})`,
-  boxShadow: `0 1px 0 hsl(var(--${accent}) / 0.1) inset, 0 16px 38px -28px hsl(var(--${accent}) / 0.45)`,
+  boxShadow: `0 18px 44px -34px hsl(228 25% 25% / 0.3)`,
 });
 
 const Dashboard: React.FC = () => {
@@ -476,12 +476,12 @@ const Dashboard: React.FC = () => {
               return (
                 <div key={stat.label} className="rounded-xl p-3.5 transition-all duration-300 hover:-translate-y-0.5"
                   style={{
-                    background: `linear-gradient(160deg, hsl(var(--${stat.accent}) / 0.13), hsl(var(--${stat.accent}) / 0.03) 60%, hsl(var(--card)))`,
-                    border: `1px solid hsl(var(--${stat.accent}) / 0.22)`,
-                    boxShadow: `0 12px 24px -18px hsl(var(--${stat.accent}) / 0.5)`,
+                    background: `linear-gradient(180deg, hsl(var(--${stat.accent}) / 0.09), hsl(var(--card)) 55%)`,
+                    border: `1px solid hsl(var(--${stat.accent}) / 0.18)`,
+                    boxShadow: `0 14px 30px -24px hsl(228 25% 30% / 0.35)`,
                   }}
                 >
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.15)` }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.14)` }}>
                     <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
                   </div>
                   <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
@@ -528,7 +528,7 @@ const Dashboard: React.FC = () => {
             )}
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
-              style={{ background: `hsl(var(--${accent}))`, boxShadow: `0 8px 18px -12px hsl(var(--${accent}) / 0.5)` }}
+              style={{ background: 'hsl(var(--primary))', boxShadow: '0 8px 18px -12px hsl(228 25% 25% / 0.4)' }}
               onClick={() => openDeepFocus()}
             >
               <Zap className="w-4 h-4" /> Start Deep Work
@@ -635,7 +635,7 @@ const Dashboard: React.FC = () => {
             </div>
             <button onClick={() => navigate('/insights')}
               className="mt-3 w-full py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
-              style={{ background: `hsl(var(--${accent}))` }}>
+style={{ background: 'hsl(var(--primary))' }}>
               Open full Insights <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -712,10 +712,10 @@ const Dashboard: React.FC = () => {
     <>
       <div
         className="flex-1 overflow-y-auto"
-        style={{ background: 'linear-gradient(180deg, hsl(228 45% 97%) 0%, hsl(243 40% 96%) 50%, hsl(190 38% 96%) 100%)' }}
+        style={{ background: 'linear-gradient(180deg, hsl(228 35% 97.5%) 0%, hsl(248 28% 97%) 55%, hsl(262 22% 97%) 100%)' }}
       >
         <header className="px-6 py-4 border-b"
-          style={{ borderColor: 'hsl(240 20% 90%)', background: 'linear-gradient(90deg, hsla(258 60% 97% / 0.85), hsla(0 0% 100% / 0.75) 40%, hsla(190 50% 97% / 0.85))', backdropFilter: 'blur(12px)' }}
+          style={{ borderColor: 'hsl(240 20% 92%)', background: 'linear-gradient(90deg, hsla(250 30% 98% / 0.9), hsla(0 0% 100% / 0.85))', backdropFilter: 'blur(12px)' }}
         >
           <div className="flex items-center justify-between">
             <div>
@@ -859,14 +859,12 @@ const Dashboard: React.FC = () => {
                     key={def.type}
                     draggable={!placed}
                     onDragStart={(e) => { e.dataTransfer.setData('text/widget', def.type); e.dataTransfer.effectAllowed = 'copy'; }}
-                    className={placed ? 'p-3 rounded-2xl opacity-55' : 'p-3 rounded-2xl cursor-grab active:cursor-grabbing border'}
+                    className={placed ? 'p-3 rounded-2xl border opacity-60' : 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing'}
                     style={{
-                      borderColor: `hsl(var(--${def.accent}) / ${placed ? 0.14 : 0.26})`,
+                      borderColor: placed ? 'hsl(var(--border))' : 'hsl(var(--border))',
                       borderRadius: 16,
-                      background: placed
-                        ? 'hsl(var(--muted))'
-                        : `linear-gradient(140deg, hsl(var(--${def.accent}) / 0.07), hsl(var(--card)) 50%)`,
-                      boxShadow: placed ? 'none' : `0 8px 20px -22px hsl(var(--${def.accent}) / 0.35)`,
+                      background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+                      boxShadow: '0 6px 18px -18px hsl(228 25% 25% / 0.4)',
                     }}
                   >
                     <div className="flex items-center gap-3">
@@ -880,7 +878,7 @@ const Dashboard: React.FC = () => {
                       {placed ? (
                         <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
                       ) : (
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: `hsl(var(--${def.accent}) / 0.3)` }}>
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
                           Drag to add
                         </span>
                       )}
