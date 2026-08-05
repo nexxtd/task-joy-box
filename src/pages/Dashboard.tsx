@@ -76,6 +76,23 @@ const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSP
   boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
 });
 
+const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
+  const sorted = [...widgets].sort((a, b) => (a.row - b.row) || (a.col - b.col));
+  const result: DashboardWidget[] = [];
+  for (const w of sorted) {
+    const cur = { ...w };
+    let guard = 0;
+    while (guard < 200) {
+      const hit = result.find(o => intersects(cur, o));
+      if (!hit) break;
+      cur.row = hit.row + hit.h;
+      guard += 1;
+    }
+    result.push(cur);
+  }
+  return result;
+};
+
 const Dashboard: React.FC = () => {
   const { board, addTask } = useBoardContext();
   const { user } = useAuth();
@@ -352,10 +369,10 @@ const Dashboard: React.FC = () => {
       id: genKey(), type, title: def.title,
       col: placed.col, row: placed.row, w: def.w, h: def.h,
     };
-    setLayout(prev => [...prev, widget]);
+    setLayout(prev => packLayout([...prev, widget]));
   };
 
-  const removeWidget = (id: string) => setLayout(prev => prev.filter(w => w.id !== id));
+  const removeWidget = (id: string) => setLayout(prev => packLayout(prev.filter(w => w.id !== id)));
   const updateWidget = (id: string, patch: Partial<DashboardWidget>) =>
     setLayout(prev => prev.map(w => w.id === id ? { ...w, ...patch } : w));
 
@@ -397,15 +414,18 @@ const Dashboard: React.FC = () => {
     setDraft(null);
     setDraftConflicts(false);
     if (g && finalRect) {
-      setLayout(prev => prev.map(wg => {
-        if (wg.id !== g.w.id) return wg;
-        if (g.mode === 'move') {
-          const others = prev.filter(o => o.id !== wg.id);
-          const pushed = resolveRowPush(others, { ...finalRect });
-          return { ...wg, col: pushed.col, row: pushed.row, w: finalRect.w, h: finalRect.h };
-        }
-        return { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h };
-      }));
+      setLayout(prev => {
+        const next = prev.map(wg => {
+          if (wg.id !== g.w.id) return wg;
+          if (g.mode === 'move') {
+            const others = prev.filter(o => o.id !== wg.id);
+            const pushed = resolveRowPush(others, { ...finalRect });
+            return { ...wg, col: pushed.col, row: pushed.row, w: finalRect.w, h: finalRect.h };
+          }
+          return { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h };
+        });
+        return packLayout(next);
+      });
     }
   }, [onGestureMove]);
 
