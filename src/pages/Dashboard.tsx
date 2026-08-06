@@ -7,7 +7,7 @@ import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import { getPeakEnergyHours } from '@/utils/energyTaskScheduler';
 import {
   CheckSquare, Target, Clock, Flame, Plus, ArrowRight,
-  TrendingUp, Bot, Calendar, Zap, X,
+  TrendingUp, Bot, Calendar, Zap, X, Maximize2, Minimize2,
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority } from '@/types/board';
@@ -26,6 +26,12 @@ interface DashboardWidget {
   w: number;
   h: number;
   projectId?: number | null;
+  expanded?: boolean;
+}
+
+interface WidgetSize {
+  w: number;
+  h: number;
 }
 
 interface WidgetDef {
@@ -34,21 +40,22 @@ interface WidgetDef {
   desc: string;
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   accent: string;
-  w: number;
-  h: number;
+  small: WidgetSize;
+  large: WidgetSize;
+  defaultSize: 'small' | 'large';
 }
 
 const WIDGET_DEFS: WidgetDef[] = [
-  { type: 'stats', title: 'Stats Overview', desc: 'Tasks Active, Completion, Deep Work & Streak', icon: LayoutDashboard, accent: 'label-purple', w: 8, h: 2 },
-  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 3 },
-  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 4, h: 3 },
-  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 4, h: 3 },
-  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 4, h: 2 },
-  { type: 'energy', title: 'Energy-Aware Recommendations', desc: 'Tasks best matched to your energy today', icon: Zap, accent: 'label-orange', w: 4, h: 3 },
-  { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Times of day when you work best', icon: Clock, accent: 'label-green', w: 4, h: 1 },
-  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 4, h: 2 },
-  { type: 'goals', title: 'Top Goals', desc: 'Your current goals and targets', icon: Target, accent: 'label-green', w: 4, h: 1 },
-  { type: 'account', title: 'Account Status', desc: 'Your plan and completed work', icon: Bot, accent: 'label-blue', w: 4, h: 1 },
+  { type: 'stats', title: 'Stats Overview', desc: 'Tasks Active, Completion, Deep Work & Streak', icon: LayoutDashboard, accent: 'label-purple', small: { w: 4, h: 2 }, large: { w: 8, h: 2 }, defaultSize: 'large' },
+  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', small: { w: 4, h: 2 }, large: { w: 8, h: 3 }, defaultSize: 'large' },
+  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', small: { w: 4, h: 2 }, large: { w: 8, h: 3 }, defaultSize: 'small' },
+  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', small: { w: 4, h: 2 }, large: { w: 8, h: 3 }, defaultSize: 'small' },
+  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', small: { w: 4, h: 2 }, large: { w: 8, h: 2 }, defaultSize: 'small' },
+  { type: 'energy', title: 'Energy-Aware Recommendations', desc: 'Tasks best matched to your energy today', icon: Zap, accent: 'label-orange', small: { w: 4, h: 3 }, large: { w: 8, h: 4 }, defaultSize: 'small' },
+  { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Times of day when you work best', icon: Clock, accent: 'label-green', small: { w: 4, h: 1 }, large: { w: 8, h: 1 }, defaultSize: 'small' },
+  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', small: { w: 4, h: 1 }, large: { w: 8, h: 2 }, defaultSize: 'small' },
+  { type: 'goals', title: 'Top Goals', desc: 'Your current goals and targets', icon: Target, accent: 'label-green', small: { w: 4, h: 1 }, large: { w: 8, h: 2 }, defaultSize: 'small' },
+  { type: 'account', title: 'Account Status', desc: 'Your plan and completed work', icon: Bot, accent: 'label-blue', small: { w: 4, h: 1 }, large: { w: 8, h: 1 }, defaultSize: 'small' },
 ];
 
 const GRID_COLS = 12;
@@ -75,6 +82,21 @@ const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSP
   border: `1px solid hsl(var(--border))`,
   boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
 });
+
+const isExpanded = (widget: DashboardWidget, def?: WidgetDef): boolean => {
+  if (widget.expanded !== undefined) return widget.expanded;
+  if (!def) return false;
+  return widget.w >= def.large.w && widget.h >= def.large.h;
+};
+
+const normalizeSizes = (widgets: DashboardWidget[]): DashboardWidget[] =>
+  widgets.map(wg => {
+    const def = WIDGET_DEFS.find(d => d.type === wg.type);
+    if (!def) return wg;
+    const expanded = isExpanded(wg, def);
+    const dims = expanded ? def.large : def.small;
+    return { ...wg, col: Math.min(wg.col, GRID_COLS - dims.w + 1), w: dims.w, h: dims.h, expanded };
+  });
 
 const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
   const sorted = [...widgets].sort((a, b) => (a.row - b.row) || (a.col - b.col));
@@ -120,25 +142,28 @@ const Dashboard: React.FC = () => {
   const [draft, setDraft] = useState<Rect | null>(null);
   const [draftConflicts, setDraftConflicts] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
-  const gestureRef = useRef<{ mode: 'move' | 'resize'; w: DashboardWidget; sx: number; sy: number; col: number; row: number; ww: number; hh: number } | null>(null);
+  const gestureRef = useRef<{ w: DashboardWidget; sx: number; sy: number; col: number; row: number; ww: number; hh: number } | null>(null);
   const draftRef = useRef<Rect | null>(null);
   const layoutRef = useRef<DashboardWidget[]>([]);
 
   const layoutKey = `dash_widgets_v2_${user?.id ?? 'anon'}`;
 
   const defaultLayout = (): DashboardWidget[] => {
-    const w = (type: DashboardWidgetType, title: string, col: number, row: number, wd: number, ht: number, projectId?: number | null): DashboardWidget => ({
-      id: `${type}-${row}-${col}-${genKey()}`, type, title, col, row, w: wd, h: ht, projectId,
-    });
+    const w = (type: DashboardWidgetType, title: string, col: number, row: number, projectId?: number | null): DashboardWidget => {
+      const def = WIDGET_DEFS.find(d => d.type === type)!;
+      const expanded = def.defaultSize === 'large';
+      const dims = expanded ? def.large : def.small;
+      return { id: `${type}-${row}-${col}-${genKey()}`, type, title, col, row, w: dims.w, h: dims.h, projectId, expanded };
+    };
     return [
-      w('stats', 'Stats Overview', 1, 1, 8, 2),
-      w('tasks', 'Tasks', 1, 3, 8, 3),
-      w('peak-hours', 'Your Peak Hours', 9, 1, 4, 1),
-      w('energy', 'Energy-Aware Recommendations', 9, 2, 4, 3),
-      w('weekly', 'Weekly Activity', 9, 5, 4, 2),
-      w('goals', 'Top Goals', 1, 7, 4, 1),
-      w('account', 'Account Status', 5, 7, 4, 1),
-      w('insights', 'Insights', 1, 8, 4, 2),
+      w('stats', 'Stats Overview', 1, 1),
+      w('tasks', 'Tasks', 1, 3),
+      w('peak-hours', 'Your Peak Hours', 9, 1),
+      w('energy', 'Energy-Aware Recommendations', 9, 2),
+      w('weekly', 'Weekly Activity', 9, 5),
+      w('goals', 'Top Goals', 1, 7),
+      w('account', 'Account Status', 5, 7),
+      w('insights', 'Insights', 1, 8),
     ];
   };
 
@@ -147,7 +172,7 @@ const Dashboard: React.FC = () => {
       const raw = localStorage.getItem(layoutKey);
       if (raw) {
         const parsed = JSON.parse(raw) as DashboardWidget[];
-        if (Array.isArray(parsed) && parsed.length > 0) { setLayout(parsed); return; }
+        if (Array.isArray(parsed) && parsed.length > 0) { setLayout(normalizeSizes(parsed)); return; }
       }
     } catch { }
     setLayout(defaultLayout());
@@ -353,19 +378,6 @@ const Dashboard: React.FC = () => {
     return candidate;
   };
 
-  const resolveFit = (others: Rect[], rect: Rect): Rect => {
-    let best: { w: number; h: number } | null = null;
-    for (let w = rect.w; w >= 1; w--) {
-      for (let h = rect.h; h >= 1; h--) {
-        const test: Rect = { col: rect.col, row: rect.row, w, h };
-        if (!others.some(o => intersects(test, o))) { best = { w, h }; break; }
-      }
-      if (best) break;
-    }
-    if (!best) return { col: rect.col, row: rect.row, w: 1, h: 1 };
-    return { col: rect.col, row: rect.row, w: best.w, h: best.h };
-  };
-
   const findFreeSlot = (w: number, h: number): Rect => {
     for (let row = 1; row < 400; row++) {
       for (let col = 1; col <= GRID_COLS - w + 1; col++) {
@@ -381,12 +393,14 @@ const Dashboard: React.FC = () => {
     if (hasWidget(type)) return;
     const def = WIDGET_DEFS.find(d => d.type === type);
     if (!def) return;
-    const slot = at ? at : findFreeSlot(def.w, def.h);
+    const expanded = def.defaultSize === 'large';
+    const dims = expanded ? def.large : def.small;
+    const slot = at ? at : findFreeSlot(dims.w, dims.h);
     const others = layout.map(o => ({ ...o }));
-    const placed = resolveRowPush(others, { ...slot, w: def.w, h: def.h });
+    const placed = resolveRowPush(others, { ...slot, w: dims.w, h: dims.h });
     const widget: DashboardWidget = {
       id: genKey(), type, title: def.title,
-      col: placed.col, row: placed.row, w: def.w, h: def.h,
+      col: placed.col, row: placed.row, w: dims.w, h: dims.h, expanded,
     };
     setLayout(prev => packLayout([...prev, widget]));
   };
@@ -395,31 +409,31 @@ const Dashboard: React.FC = () => {
   const updateWidget = (id: string, patch: Partial<DashboardWidget>) =>
     setLayout(prev => prev.map(w => w.id === id ? { ...w, ...patch } : w));
 
+  const toggleSize = (id: string) => {
+    setLayout(prev => {
+      const next = prev.map(wg => {
+        if (wg.id !== id) return wg;
+        const def = WIDGET_DEFS.find(d => d.type === wg.type);
+        if (!def) return wg;
+        const expanded = !isExpanded(wg, def);
+        const dims = expanded ? def.large : def.small;
+        return { ...wg, col: Math.min(wg.col, GRID_COLS - dims.w + 1), w: dims.w, h: dims.h, expanded };
+      });
+      return packLayout(next);
+    });
+  };
+
   const onGestureMove = useCallback((e: PointerEvent) => {
     const g = gestureRef.current;
     if (!g) return;
     const cell = cellFromPoint(e.clientX, e.clientY);
     const current = layoutRef.current;
-    if (g.mode === 'move') {
-      const col = clamp(cell.col, 1, GRID_COLS - g.ww + 1);
-      const rect: Rect = { col, row: Math.max(1, cell.row), w: g.ww, h: g.hh };
-      const others = current.filter(o => o.id !== g.w.id);
-      draftRef.current = rect;
-      setDraft(rect);
-      setDraftConflicts(others.some(o => intersects(rect, o)));
-    } else {
-      const el = gridRef.current;
-      const colW = el ? el.getBoundingClientRect().width / GRID_COLS : 1;
-      const dw = Math.round((e.clientX - g.sx) / colW);
-      const dh = Math.round((e.clientY - g.sy) / CELL_H);
-      const ww = clamp(g.ww + dw, 1, GRID_COLS - g.col + 1);
-      const hh = clamp(g.hh + dh, 1, 12);
-      const others = current.filter(o => o.id !== g.w.id);
-      const fitted = resolveFit(others, { col: g.col, row: g.row, w: ww, h: hh });
-      draftRef.current = fitted;
-      setDraft(fitted);
-      setDraftConflicts(ww !== fitted.w || hh !== fitted.h);
-    }
+    const col = clamp(cell.col, 1, GRID_COLS - g.ww + 1);
+    const rect: Rect = { col, row: Math.max(1, cell.row), w: g.ww, h: g.hh };
+    const others = current.filter(o => o.id !== g.w.id);
+    draftRef.current = rect;
+    setDraft(rect);
+    setDraftConflicts(others.some(o => intersects(rect, o)));
   }, [cellFromPoint]);
 
   const onGestureEnd = useCallback(() => {
@@ -436,22 +450,19 @@ const Dashboard: React.FC = () => {
       setLayout(prev => {
         const next = prev.map(wg => {
           if (wg.id !== g.w.id) return wg;
-          if (g.mode === 'move') {
-            const others = prev.filter(o => o.id !== wg.id);
-            const pushed = resolveRowPush(others, { ...finalRect });
-            return { ...wg, col: pushed.col, row: pushed.row, w: finalRect.w, h: finalRect.h };
-          }
-          return { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h };
+          const others = prev.filter(o => o.id !== wg.id);
+          const pushed = resolveRowPush(others, { ...finalRect });
+          return { ...wg, col: pushed.col, row: pushed.row, w: finalRect.w, h: finalRect.h };
         });
         return packLayout(next);
       });
     }
   }, [onGestureMove]);
 
-  const startGesture = (e: React.PointerEvent, widget: DashboardWidget, mode: 'move' | 'resize') => {
+  const startGesture = (e: React.PointerEvent, widget: DashboardWidget) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h };
+    gestureRef.current = { w: widget, sx: e.clientX, sy: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h };
     const start: Rect = { col: widget.col, row: widget.row, w: widget.w, h: widget.h };
     draftRef.current = start;
     setDraft(start);
@@ -466,8 +477,9 @@ const Dashboard: React.FC = () => {
     const type = e.dataTransfer.getData('text/widget') as DashboardWidgetType;
     const def = WIDGET_DEFS.find(d => d.type === type);
     if (!def) return;
+    const dims = def.defaultSize === 'large' ? def.large : def.small;
     const cell = cellFromPoint(e.clientX, e.clientY);
-    const rect: Rect = { col: clamp(cell.col, 1, GRID_COLS - def.w + 1), row: Math.max(1, cell.row), w: def.w, h: def.h };
+    const rect: Rect = { col: clamp(cell.col, 1, GRID_COLS - dims.w + 1), row: Math.max(1, cell.row), w: dims.w, h: dims.h };
     setDraft(rect);
     setDraftConflicts(layout.some(o => intersects(rect, o)));
   };
@@ -480,8 +492,10 @@ const Dashboard: React.FC = () => {
     const cell = cellFromPoint(e.clientX, e.clientY);
     setDraft(null);
     setDraftConflicts(false);
-    if (!WIDGET_DEFS.some(d => d.type === type)) return;
-    addWidget(type, { col: clamp(cell.col, 1, GRID_COLS - (WIDGET_DEFS.find(d => d.type === type)?.w || 1) + 1), row: Math.max(1, cell.row), w: 1, h: 1 });
+    const def = WIDGET_DEFS.find(d => d.type === type);
+    if (!def) return;
+    const dims = def.defaultSize === 'large' ? def.large : def.small;
+    addWidget(type, { col: clamp(cell.col, 1, GRID_COLS - dims.w + 1), row: Math.max(1, cell.row), w: 1, h: 1 });
   };
 
   const renderGhost = () => {
@@ -503,14 +517,14 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  const renderWidgetBody = (widget: DashboardWidget) => {
+  const renderWidgetBody = (widget: DashboardWidget, expanded: boolean) => {
     const def = WIDGET_DEFS.find(d => d.type === widget.type);
     const accent = def?.accent || 'label-blue';
     switch (widget.type) {
       case 'stats':
         return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
-            {stats.map((stat, i) => {
+          <div className={`grid gap-3 mt-1 ${expanded ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`}>
+            {(expanded ? stats : stats.slice(0, 2)).map((stat, i) => {
               const Icon = stat.icon;
               return (
                 <div key={stat.label} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm">
@@ -534,7 +548,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {priorityTasks.map((task, i) => {
+                {priorityTasks.slice(0, expanded ? 5 : 3).map((task, i) => {
                   const col = board.columns.find(c => c.id === task.columnId);
                   const config = task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
                   return (
@@ -549,7 +563,7 @@ const Dashboard: React.FC = () => {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{task.title}</p>
-                        {task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
+                        {expanded && task.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{task.description}</p>}
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-medium border border-border text-muted-foreground bg-muted/50">
                         {col?.title}
@@ -559,6 +573,7 @@ const Dashboard: React.FC = () => {
                 })}
               </div>
             )}
+            {expanded && (
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
               style={{ background: 'hsl(var(--primary))', boxShadow: '0 8px 18px -12px hsl(228 25% 25% / 0.4)' }}
@@ -566,6 +581,7 @@ const Dashboard: React.FC = () => {
             >
               <Zap className="w-4 h-4" /> Start Deep Work
             </button>
+            )}
           </div>
         );
       case 'projects':
@@ -579,7 +595,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {projectsInfo.slice(0, 6).map(p => (
+                {projectsInfo.slice(0, expanded ? 6 : 3).map(p => (
                   <button key={p.id} onClick={() => navigate('/projects')}
                     className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:bg-muted/30 hover:shadow-sm"
                     style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
@@ -598,7 +614,7 @@ const Dashboard: React.FC = () => {
       case 'project-tasks': {
         const proj = projectsInfo.find(p => p.id === widget.projectId) || projectsInfo[0];
         const projTasks = proj
-          ? board.tasks.filter(t => t.projectId === proj.id && !(doneColIds.includes(t.columnId) || t.completed)).slice(0, 6)
+          ? board.tasks.filter(t => t.projectId === proj.id && !(doneColIds.includes(t.columnId) || t.completed)).slice(0, expanded ? 6 : 3)
           : [];
         return (
           <div>
@@ -666,34 +682,43 @@ const Dashboard: React.FC = () => {
                 <p className="text-xs text-muted-foreground">{projectsInfo.length} project{projectsInfo.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
+            {expanded && (
             <button onClick={() => navigate('/insights')}
               className="mt-3 w-full py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
 style={{ background: 'hsl(var(--primary))' }}>
               Open full Insights <ArrowRight className="w-3 h-3" />
             </button>
+            )}
           </div>
         );
       case 'peak-hours':
         return (
-          <div className="flex flex-wrap gap-2 mt-1">
-            {!energyConfigured ? (
-              <p className="text-sm text-muted-foreground">Set your energy preferences in Settings to see your peak hours.</p>
-            ) : peakHours.length > 0 ? (
-              peakHours.map((h, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-sm" style={{ background: 'hsl(var(--label-green))' }}>
-                  <Zap className="w-3 h-3" /> {h}
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No peak energy hours detected</p>
+          <div className="mt-1">
+            <div className="flex flex-wrap gap-2">
+              {!energyConfigured ? (
+                <p className="text-sm text-muted-foreground">Set your energy preferences in Settings to see your peak hours.</p>
+              ) : peakHours.length > 0 ? (
+                peakHours.map((h, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-sm" style={{ background: 'hsl(var(--label-green))' }}>
+                    <Zap className="w-3 h-3" /> {h}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No peak energy hours detected</p>
+              )}
+            </div>
+            {expanded && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Schedule high-priority tasks during these times for optimal performance
+              </p>
             )}
           </div>
         );
       case 'weekly':
         return (
-          <div className="flex items-end gap-2 h-24 mt-1">
+          <div className="flex items-end gap-2 mt-1" style={{ height: expanded ? 96 : 64 }}>
             {weekDays.map((day, i) => {
-              const height = weeklyData[i] > 0 ? Math.max(10, (weeklyData[i] / maxWeekly) * 80) : 6;
+              const height = weeklyData[i] > 0 ? Math.max(expanded ? 10 : 8, (weeklyData[i] / maxWeekly) * (expanded ? 80 : 50)) : 6;
               return (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
                   <div className="w-full">
@@ -707,7 +732,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                       }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground">{day}</span>
+                  {expanded && <span className="text-[10px] text-muted-foreground">{day}</span>}
                 </div>
               );
             })}
@@ -716,7 +741,7 @@ style={{ background: 'hsl(var(--primary))' }}>
       case 'goals': {
         const activeGoals = goalsData
           .filter(g => !g.completed && g.status !== 'completed')
-          .slice(0, 4);
+          .slice(0, expanded ? 4 : 2);
         if (activeGoals.length === 0) {
           return (
             <div className="flex items-center gap-3 mt-1.5">
@@ -766,11 +791,23 @@ style={{ background: 'hsl(var(--primary))' }}>
               <span className="text-xs text-muted-foreground flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5" /> Tasks completed</span>
               <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{completedTasks.length}</span>
             </div>
+            {expanded && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground flex items-center gap-2"><FolderOpen className="w-3.5 h-3.5" /> Projects</span>
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{projectsInfo.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground flex items-center gap-2"><Sparkles className="w-3.5 h-3.5" /> Signed in</span>
+                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{user?.name || '—'}</span>
+                </div>
+              </>
+            )}
           </div>
         );
       }
       case 'energy':
-        return <EnergyTaskRecommendations tasks={board.tasks} energySettings={energySettings} configured={energyConfigured} />;
+        return <EnergyTaskRecommendations tasks={board.tasks} energySettings={energySettings} configured={energyConfigured} limit={expanded ? 5 : 3} showPeakHours={expanded} />;
       default:
         return null;
     }
@@ -841,6 +878,7 @@ style={{ background: 'hsl(var(--primary))' }}>
               {layout.map(widget => {
                 const def = WIDGET_DEFS.find(d => d.type === widget.type);
                 const accent = def?.accent || 'label-blue';
+                const expanded = isExpanded(widget, def);
                 return (
                   <div
                     key={widget.id}
@@ -862,7 +900,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                       </div>
                       <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                         <button
-                          onPointerDown={e => startGesture(e, widget, 'move')}
+                          onPointerDown={e => startGesture(e, widget)}
                           className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
                           title="Move"
                         >
@@ -878,14 +916,15 @@ style={{ background: 'hsl(var(--primary))' }}>
                       </div>
                     </div>
                     <div className="px-4 pb-4 overflow-y-auto">
-                      {renderWidgetBody(widget)}
+                      {renderWidgetBody(widget, expanded)}
                     </div>
-                    <div
-                      onPointerDown={e => startGesture(e, widget, 'resize')}
-                      className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
-                      style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
-                      title="Resize"
-                    />
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleSize(widget.id); }}
+                      className="absolute bottom-1 right-1 p-1.5 rounded-md text-muted-foreground hover:bg-black/5 opacity-0 group-hover/widget:opacity-100 transition-opacity"
+                      title={expanded ? 'Shrink widget' : 'Expand widget'}
+                    >
+                      {expanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 );
               })}

@@ -11,12 +11,16 @@ interface EnergyTaskRecommendationsProps {
     energyEvening: 'low' | 'medium' | 'high';
   };
   configured?: boolean;
+  limit?: number;
+  showPeakHours?: boolean;
 }
 
 const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
   tasks,
   energySettings,
   configured = true,
+  limit = 5,
+  showPeakHours = true,
 }) => {
   const [recommendedTasks, setRecommendedTasks] = useState<Task[]>([]);
   const [peakHours, setPeakHours] = useState<string[]>([]);
@@ -27,11 +31,11 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
     
     // Rank tasks by optimal timing
     const rankedTasks = rankTasksByOptimalTiming(incompleteTasks, energySettings);
-    setRecommendedTasks(rankedTasks.slice(0, 5)); // Show top 5 recommendations
+    setRecommendedTasks(rankedTasks.slice(0, limit)); // Show top recommendations
     
     // Get peak energy hours
     setPeakHours(getPeakEnergyHours(energySettings));
-  }, [tasks, energySettings]);
+  }, [tasks, energySettings, limit]);
 
   const getEnergyFill = (level: string) => {
     switch (level) {
@@ -147,7 +151,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
       </div>
       )}
       
-      {configured && (
+      {configured && showPeakHours && (
       <div className="bg-card p-4 rounded-2xl border border-border">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-green) / 0.12)' }}>
