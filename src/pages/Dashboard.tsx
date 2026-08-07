@@ -401,8 +401,9 @@ const Dashboard: React.FC = () => {
     const cell = cellFromPoint(e.clientX, e.clientY);
     const current = layoutRef.current;
     if (g.mode === 'move') {
-      const col = clamp(cell.col, 1, GRID_COLS - g.ww + 1);
-      const rect: Rect = { col, row: Math.max(1, cell.row), w: g.ww, h: g.hh };
+      const col = clamp(cell.col - Math.floor((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
+      const row = Math.max(1, cell.row - Math.floor((g.hh - 1) / 2));
+      const rect: Rect = { col, row, w: g.ww, h: g.hh };
       const others = current.filter(o => o.id !== g.w.id);
       draftRef.current = rect;
       setDraft(rect);
