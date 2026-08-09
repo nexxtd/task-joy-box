@@ -764,6 +764,7 @@ const Dashboard: React.FC = () => {
     window.addEventListener('pointerup', onGestureEnd);
     window.addEventListener('pointercancel', onGestureEnd);
     window.addEventListener('keydown', onGestureKey);
+    startAutoScroll();
   };
 
   const onPanelItemPointerDown = (def: WidgetDef) => (e: React.PointerEvent) => {
@@ -795,6 +796,7 @@ const Dashboard: React.FC = () => {
       window.addEventListener('pointerup', onGestureEnd);
       window.addEventListener('pointercancel', onGestureEnd);
       window.addEventListener('keydown', onGestureKey);
+      startAutoScroll();
     };
     const onUp = () => {
       panelPendingRef.current = null;
