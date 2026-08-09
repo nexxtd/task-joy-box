@@ -745,29 +745,51 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Message is required' });
   }
 
-  const userDataResponse = await db.select()
-    .from(tasks)
-    .leftJoin(boards, eq(tasks.boardId, boards.id))
-    .leftJoin(columns, eq(tasks.columnId, columns.id))
-    .where(eq(boards.userId, req.userId!))
-    .orderBy(desc(tasks.createdAt));
+  let userData: { tasks: any[] } = { tasks: [] };
+  try {
+    const userDataResponse = await db
+      .select({
+        tasks: {
+          id: tasks.id,
+          boardId: tasks.boardId,
+          columnId: tasks.columnId,
+          title: tasks.title,
+          description: tasks.description,
+          priority: tasks.priority,
+          dueDate: tasks.dueDate,
+          createdAt: tasks.createdAt,
+          updatedAt: tasks.updatedAt,
+          order: tasks.order,
+        },
+        boards: { id: boards.id, name: boards.name, userId: boards.userId },
+        columns: { id: columns.id, title: columns.title },
+      })
+      .from(tasks)
+      .leftJoin(boards, eq(tasks.boardId, boards.id))
+      .leftJoin(columns, eq(tasks.columnId, columns.id))
+      .where(eq(boards.userId, req.userId!))
+      .orderBy(desc(tasks.createdAt));
 
-  const userData = {
-    tasks: userDataResponse.map((row: any) => ({
-      id: row.tasks.id,
-      title: row.tasks.title,
-      description: row.tasks.description || '',
-      priority: row.tasks.priority,
-      dueDate: row.tasks.dueDate || null,
-      createdAt: row.tasks.createdAt,
-      updatedAt: row.tasks.updatedAt,
-      columnId: row.tasks.columnId,
-      boardId: row.tasks.boardId,
-      order: row.tasks.order,
-      columnName: row.columns?.title || 'Unknown',
-      boardName: row.boards?.name || 'Unknown'
-    }))
-  };
+    userData = {
+      tasks: userDataResponse.map((row: any) => ({
+        id: row.tasks.id,
+        title: row.tasks.title,
+        description: row.tasks.description || '',
+        priority: row.tasks.priority,
+        dueDate: row.tasks.dueDate || null,
+        createdAt: row.tasks.createdAt,
+        updatedAt: row.tasks.updatedAt,
+        columnId: row.tasks.columnId,
+        boardId: row.tasks.boardId,
+        order: row.tasks.order,
+        columnName: row.columns?.title || 'Unknown',
+        boardName: row.boards?.name || 'Unknown'
+      }))
+    };
+  } catch (dbErr: any) {
+    console.error('AI chat context query failed:', dbErr?.message || dbErr);
+    userData = { tasks: [] };
+  }
 
   const safeMessage = sanitize(message);
 
@@ -844,7 +866,7 @@ Rules:
 
   if (aiOk) {
     try {
-      parsed = extractJsonFromResponse(responseText);
+      parsed = await extractJsonFromResponse(responseText);
     } catch {
       parsed = null;
     }
