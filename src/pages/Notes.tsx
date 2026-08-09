@@ -602,7 +602,6 @@ const Notes: React.FC = () => {
       images: tmpl.images || [],
       attachments: tmpl.attachments || [],
       comments: [],
-      attachments: [],
       columnName: '',
       projectName: '',
       createdAt: new Date().toISOString(),
