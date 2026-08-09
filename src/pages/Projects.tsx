@@ -113,8 +113,6 @@ const Projects: React.FC = () => {
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
-  const [newMilestoneAssignees, setNewMilestoneAssignees] = useState<number[]>([]);
-  const [milestoneAssigneeOpen, setMilestoneAssigneeOpen] = useState(false);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
 
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
@@ -294,6 +292,33 @@ const Projects: React.FC = () => {
       setNewColTitle('');
       setAddingColumn(false);
     }
+  };
+
+  const openProjectMenu = (e: React.MouseEvent<HTMLButtonElement>, projectId: number) => {
+    e.stopPropagation();
+    if (showProjectMenuId !== projectId) {
+      const rowEl = (e.currentTarget as HTMLElement).closest('[data-project-row]') as HTMLElement | null;
+      const rect = (rowEl || e.currentTarget).getBoundingClientRect();
+      const asideEl = rowEl?.closest('aside') as HTMLElement | null;
+      const asideRect = asideEl?.getBoundingClientRect();
+      const mainRect = mainScrollRef.current?.getBoundingClientRect();
+      let left = rect.right + 12;
+      if (asideRect && mainRect) {
+        // Roughly the middle of the gap between the project list panel and the board content.
+        const boardContentLeft = mainRect.left + 24; // matches the p-6 padding of the main area
+        left = (asideRect.right + boardContentLeft) / 2;
+        // Keep a clear minimum gap from the project list edge.
+        left = Math.max(left, rect.right + 20);
+      }
+      // Keep the menu on screen.
+      left = Math.min(left, window.innerWidth - 280);
+      setMenuPos({
+        top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
+        left,
+      });
+      setShowProjectColorPicker(false);
+    }
+    setShowProjectMenuId(prev => prev === projectId ? null : projectId);
   };
 
   const handleAddMilestone = async (name: string, date: string, description?: string) => {
@@ -784,19 +809,7 @@ const Projects: React.FC = () => {
                   <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
                                 data-project-menu-toggle
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (showProjectMenuId !== project.id) {
-                                    const rowEl = (e.currentTarget as HTMLElement).closest('[data-project-row]') as HTMLElement | null;
-                                    const rect = (rowEl || e.currentTarget).getBoundingClientRect();
-                                    setMenuPos({
-                                      top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
-                                      left: rect.right + 12,
-                                    });
-                                    setShowProjectColorPicker(false);
-                                  }
-                                  setShowProjectMenuId(prev => prev === project.id ? null : project.id);
-                                }}
+                                onClick={(e) => openProjectMenu(e, project.id)}
                                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                               >
                                 <MoreHorizontal className="h-4 w-4" />
@@ -865,19 +878,7 @@ const Projects: React.FC = () => {
                   <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
                                 data-project-menu-toggle
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (showProjectMenuId !== project.id) {
-                                    const rowEl = (e.currentTarget as HTMLElement).closest('[data-project-row]') as HTMLElement | null;
-                                    const rect = (rowEl || e.currentTarget).getBoundingClientRect();
-                                    setMenuPos({
-                                      top: Math.max(8, Math.min(rect.top, window.innerHeight - 300)),
-                                      left: rect.right + 12,
-                                    });
-                                    setShowProjectColorPicker(false);
-                                  }
-                                  setShowProjectMenuId(prev => prev === project.id ? null : project.id);
-                                }}
+                                onClick={(e) => openProjectMenu(e, project.id)}
                                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                               >
                                 <MoreHorizontal className="h-4 w-4" />
@@ -1006,7 +1007,6 @@ const Projects: React.FC = () => {
                   setNewMilestoneName('');
                   setNewMilestoneDate('');
                   setNewMilestoneDesc('');
-                  setNewMilestoneAssignees([]);
                   setShowMilestonePopup(true);
                 }}
                 className="text-xs font-semibold text-primary hover:underline"
@@ -1044,7 +1044,6 @@ const Projects: React.FC = () => {
                           setNewMilestoneName(milestone.name);
                           setNewMilestoneDate(milestone.date);
                           setNewMilestoneDesc(milestone.description || '');
-                          setNewMilestoneAssignees((milestone as any).assigneeIds || []);
                           setShowMilestonePopup(true);
                         }}
                         className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1112,7 +1111,7 @@ const Projects: React.FC = () => {
             <p className="text-xs text-muted-foreground">Drag tasks between columns to reorganize the project.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks � {projectColumns.length} columns</div>
+            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
             <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-1.5 py-1">
               <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
                 <ZoomOut className="w-4 h-4 text-muted-foreground" />
@@ -1222,7 +1221,7 @@ const Projects: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Project Chat</h3>
-            <p className="text-xs text-muted-foreground">{selectedProject?.name} � {chatMessages.length} messages</p>
+            <p className="text-xs text-muted-foreground">{selectedProject?.name} · {chatMessages.length} messages</p>
           </div>
         </div>
         {canManage && (
@@ -1257,7 +1256,7 @@ const Projects: React.FC = () => {
                 </div>
                 <span className="text-[10px] text-muted-foreground px-1">
                   {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {' � '}
+                  {' · '}
                   {new Date(msg.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                 </span>
               </div>
@@ -1275,7 +1274,7 @@ const Projects: React.FC = () => {
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChatMessage(); }
             }}
-            placeholder="Type a message�"
+            placeholder="Type a message…"
             rows={1}
             className="flex-1 bg-muted/50 border border-border rounded-2xl px-4 py-2.5 text-sm resize-none outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
             style={{ minHeight: 40, maxHeight: 120 }}
@@ -1520,56 +1519,10 @@ const Projects: React.FC = () => {
                 <textarea
                   value={newMilestoneDesc}
                   onChange={e => setNewMilestoneDesc(e.target.value)}
-                  placeholder="Describe this milestone�"
+                  placeholder="Describe this milestone…"
                   rows={2}
                   className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none resize-none"
                 />
-              </div>
-              <div className="relative">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Assign to</label>
-                <button
-                  onClick={() => setMilestoneAssigneeOpen(prev => !prev)}
-                  className="w-full flex items-center justify-between bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-                >
-                  <span className={newMilestoneAssignees.length > 0 ? 'text-foreground' : 'text-muted-foreground'}>
-                    {newMilestoneAssignees.length > 0
-                      ? `${newMilestoneAssignees.length} member${newMilestoneAssignees.length > 1 ? 's' : ''} selected`
-                      : 'Select members'}
-                  </span>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                </button>
-                {milestoneAssigneeOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMilestoneAssigneeOpen(false)} />
-                    <div className="absolute left-0 mt-1 w-full bg-card border border-border rounded-xl shadow-xl z-20 p-1.5 max-h-48 overflow-y-auto">
-                      {selectedProject?.members.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-3">No members in this project</p>
-                      )}
-                      {selectedProject?.members.map(member => {
-                        const active = newMilestoneAssignees.includes(member.id);
-                        return (
-                          <button
-                            key={member.id}
-                            onClick={() => setNewMilestoneAssignees(prev =>
-                              active ? prev.filter(id => id !== member.id) : [...prev, member.id]
-                            )}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
-                              active
-                                ? 'border-primary/30 bg-primary/5 shadow-sm'
-                                : 'border-border/60 hover:bg-muted/40'
-                            }`}
-                          >
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-foreground flex-shrink-0">
-                              {member.name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-sm text-foreground flex-1 truncate">{member.name}</span>
-                            {active && <span className="text-[10px] text-primary font-bold">?</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
               </div>
               <div className="flex gap-2 pt-1">
                 <button
@@ -1856,7 +1809,7 @@ const Projects: React.FC = () => {
                   type="text"
                   value={assignSearch}
                   onChange={e => setAssignSearch(e.target.value)}
-                  placeholder="Search tasks�"
+                  placeholder="Search tasks…"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
               </div>

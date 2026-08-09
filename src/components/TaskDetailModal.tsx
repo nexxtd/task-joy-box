@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, User, GripVertical } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
@@ -29,29 +29,6 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const [uploading, setUploading] = useState(false);
 
   const currentColumn = board.columns.find(c => c.id === task.columnId);
-  const [assignableUsers, setAssignableUsers] = useState<{id: number; name: string; email: string}[]>([]);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        if (task.projectId) {
-          const res = await fetch('/api/projects', { credentials: 'include' });
-          if (res.ok) {
-            const data = await res.json();
-            const project = (data.projects || []).find((p: any) => p.id === task.projectId);
-            if (project?.members) setAssignableUsers(project.members);
-          }
-        } else {
-          const res = await fetch('/api/boards/assignable-users', { credentials: 'include' });
-          if (res.ok) {
-            const data = await res.json();
-            setAssignableUsers(data.users || []);
-          }
-        }
-      } catch {}
-    };
-    fetchUsers();
-  }, [task.projectId]);
 
   const saveTitle = () => {
     if (title.trim() && title !== task.title) updateTask(task.id, { title: title.trim() });
@@ -367,50 +344,6 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
 
           {/* Assignment */}
           <div className="grid grid-cols-2 gap-6 pt-4 border-t border-border/50">
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
-                <User className="w-3.5 h-3.5" /> Assigned To
-              </h4>
-              {(assignableUsers.length > 0 || !task.assignedToUserId) && (
-                <Select
-                  value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
-                  onValueChange={(val) => {
-                    if (val === 'unassigned') {
-                      updateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
-                    } else {
-                      const user = assignableUsers.find(u => u.id === Number(val));
-                      updateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: user?.name });
-                    }
-                  }}
-                  disabled={!canEdit}
-                >
-                  <SelectTrigger className="w-full bg-muted border border-border text-sm">
-                    <SelectValue placeholder="Assign to..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">
-                      <span className="text-muted-foreground">Unassigned</span>
-                    </SelectItem>
-                    {assignableUsers.map(user => (
-                      <SelectItem key={user.id} value={String(user.id)}>
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
-                            {user.name.slice(0, 1).toUpperCase()}
-                          </div>
-                          <span>{user.name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {(assignableUsers.length === 0 && task.assignedToUserId) && (
-                <div className="text-sm text-muted-foreground bg-muted border border-border rounded-md px-3 py-2">
-                  Loading assignees...
-                </div>
-              )}
-            </div>
-
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                 Subject / Category

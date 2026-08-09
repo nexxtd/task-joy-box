@@ -19,6 +19,22 @@
   <meta name="twitter:title" content="MyPlanner - Beta v0.1">
   <meta property="og:description" content="MyPlanner Beta v0.1 - A comprehensive task management application with collaboration features, AI insights, and billing capabilities">
   <meta name="twitter:description" content="MyPlanner Beta v0.1 - A comprehensive task management application with collaboration features, AI insights, and billing capabilities">
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('theme');
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        var hsl = localStorage.getItem('accentHsl');
+        if (hsl) {
+          var rootStyle = document.documentElement.style;
+          rootStyle.setProperty('--primary', hsl);
+          rootStyle.setProperty('--ring', hsl);
+          rootStyle.setProperty('--sidebar-primary', hsl);
+          rootStyle.setProperty('--sidebar-ring', hsl);
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
   <body>

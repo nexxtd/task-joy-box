@@ -56,25 +56,33 @@ function createCacheKey(input: string, model: string): string {
 }
 
 async function extractJsonFromResponse(text: string) {
-  try {
-    // Try to find JSON within code blocks first
-    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    let jsonText = codeBlockMatch ? codeBlockMatch[1].trim() : text;
+  // Try to find JSON within code blocks first
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  let jsonText = codeBlockMatch ? codeBlockMatch[1].trim() : text;
 
-    // Find the actual JSON portion if it's mixed with other text
-    const jsonStart = jsonText.indexOf('{');
-    const jsonEnd = jsonText.lastIndexOf('}') + 1;
+  // Find the actual JSON portion if it's mixed with other text
+  const jsonStart = jsonText.indexOf('{');
+  const jsonEnd = jsonText.lastIndexOf('}') + 1;
 
-    if (jsonStart !== -1 && jsonEnd > jsonStart) {
-      jsonText = jsonText.substring(jsonStart, jsonEnd);
-    }
-
-    return JSON.parse(jsonText);
-  } catch (parseError) {
-    console.error('Failed to parse AI response:', parseError);
-    console.error('Raw response:', text);
-    throw new Error('Invalid JSON response from AI service');
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    jsonText = jsonText.substring(jsonStart, jsonEnd);
   }
+
+  // Try the full slice first, then progressively drop trailing junk after each '}'.
+  const candidates = [jsonText];
+  for (let i = jsonText.lastIndexOf('}'); i > 0; i = jsonText.lastIndexOf('}', i - 1)) {
+    candidates.push(jsonText.slice(0, i + 1));
+  }
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (parseError) {
+      // keep trying shorter slices
+    }
+  }
+
+  console.error('Failed to parse AI response:', text);
+  throw new Error('Invalid JSON response from AI service');
 }
 
 function sanitize(str: string): string {
@@ -639,165 +647,248 @@ Only respond with valid JSON, no markdown.`;
   }
 });
 
+function cleanReplyText(text: string): string {
+  return text
+    .replace(/```(?:json)?\s*[\s\S]*?```/g, '') // drop stray code fences
+    .replace(/```/g, '')
+    .replace(/\*\*|__/g, '')
+    .replace(/\*|_/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function defaultReplyFor(action: string): string {
+  switch (action) {
+    case 'create': return 'Done — creating that task now.';
+    case 'delete': return 'Okay — looking for that task to remove.';
+    case 'move': return 'Okay — moving that task now.';
+    case 'update': return 'Okay — updating that task now.';
+    case 'show_overdue': return 'Here are your overdue tasks.';
+    case 'clear_completed': return 'Here are the completed tasks I can clear.';
+    case 'find_duplicates': return 'Here are the duplicate tasks I found.';
+    case 'summarize': return 'Here is your board summary.';
+    default: return 'Let me rephrase that — what would you like to do?';
+  }
+}
+
+function localChatFallback(message: string, context: { tasks?: any[]; columns?: any[] } | undefined) {
+  const m = message.toLowerCase();
+  const tasks = context?.tasks || [];
+  const columns = context?.columns || [];
+  const firstColumn = columns[0];
+  const quotedTitle = message.match(/["“]([^"”]+)["”]/);
+  const quoted = quotedTitle ? quotedTitle[1] : null;
+
+  if (/(show|list|find|check).*\boverdue\b/.test(m)) return { action: 'show_overdue' };
+  if (/\bduplicates?\b/.test(m) && /(find|remove|delete|check)/.test(m)) return { action: 'find_duplicates' };
+  if (/(clear|delete|remove).*\b(completed|done|finished)\b/.test(m)) return { action: 'clear_completed' };
+  if (/\b(summary|summarize|overview|how many)\b/.test(m)) return { action: 'summarize' };
+
+  if (/(create|add|make|new)\b.*\btask\b/.test(m)) {
+    const inlineTitle = message
+      .replace(/^(please\s+)?(create|add|make|new)\s+(a|an\s+)?task\s*(called|named|titled)?\s*["']?[-:：]?\s*/i, '')
+      .replace(/[.!?]+$/, '')
+      .trim();
+    return {
+      action: 'create',
+      data: {
+        title: quoted || (inlineTitle.length >= 2 && inlineTitle.length <= 80 ? inlineTitle : 'New task'),
+        description: '',
+        priority: m.includes('urgent') ? 'urgent' : m.includes('high') ? 'high' : m.includes('low') ? 'low' : 'medium',
+        columnName: firstColumn?.title || null,
+      },
+      message: 'Creating that task for you now.',
+    };
+  }
+
+  if (/\b(delete|remove)\b.*\btask\b/.test(m)) {
+    const inlineTask = message
+      .replace(/^(please\s+)?(delete|remove)\b.*\btask\b\s*/i, '')
+      .replace(/[.!?]+$/, '')
+      .trim()
+      .split(' ')
+      .slice(0, 6)
+      .join(' ');
+    return {
+      action: 'delete',
+      data: { taskTitle: quoted || inlineTask || 'that task' },
+      message: 'Looking for that task to remove.',
+    };
+  }
+
+  if (/\bmove\b.*\bto\b/.test(m)) {
+    const target = (m.match(/\bto\s+([a-z][a-z ]{1,30})/) || [])[1]?.trim();
+    return {
+      action: 'move',
+      data: { taskTitle: quoted || 'task', targetColumnName: target || null },
+      message: 'Moving that task now.',
+    };
+  }
+
+  if (/\b(priority|prioriti[sz]e)\b/.test(m)) {
+    return { action: 'update', data: {}, message: 'Updating that task priority now.' };
+  }
+
+  const openCount = tasks.filter((t: any) => {
+    const col = columns.find((c: any) => c.id === t.columnId);
+    return !t.completed && !/done|completed|finish/i.test(col?.title || '');
+  }).length;
+  return {
+    action: 'chat',
+    message: `I'm having trouble reaching the AI service right now, so here is a quick snapshot instead: ${tasks.length} tasks on your board (${openCount} open, ${tasks.length - openCount} completed) across ${columns.length} columns. Try again in a few seconds.`,
+  };
+}
+
 router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
+  const { message, context } = req.body;
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const userDataResponse = await db.select()
+    .from(tasks)
+    .leftJoin(boards, eq(tasks.boardId, boards.id))
+    .leftJoin(columns, eq(tasks.columnId, columns.id))
+    .where(eq(boards.userId, req.userId!))
+    .orderBy(desc(tasks.createdAt));
+
+  const userData = {
+    tasks: userDataResponse.map((row: any) => ({
+      id: row.tasks.id,
+      title: row.tasks.title,
+      description: row.tasks.description || '',
+      priority: row.tasks.priority,
+      dueDate: row.tasks.dueDate || null,
+      createdAt: row.tasks.createdAt,
+      updatedAt: row.tasks.updatedAt,
+      columnId: row.tasks.columnId,
+      boardId: row.tasks.boardId,
+      order: row.tasks.order,
+      columnName: row.columns?.title || 'Unknown',
+      boardName: row.boards?.name || 'Unknown'
+    }))
+  };
+
+  const safeMessage = sanitize(message);
+
+  const systemPrompt = `You are Planora, a helpful task-management assistant.
+The user's message may ask you to CREATE, DELETE, MOVE, UPDATE a task, or answer a question.
+If the user asks for a board action, you MUST reply with ONLY a JSON object like:
+{"action": "create", "title": "Task Title", "description": "", "priority": "medium", "columnName": "To Do", "message": "Short friendly confirmation"}
+{"action": "delete", "taskTitle": "Task Title", "message": "..."}
+{"action": "move", "taskTitle": "Task Title", "targetColumnName": "Done", "message": "..."}
+{"action": "update", "taskTitle": "Task Title", "priority": "high", "message": "..."}
+{"action": "show_overdue", "message": "..."}
+{"action": "clear_completed", "message": "..."}
+{"action": "find_duplicates", "message": "..."}
+{"action": "summarize", "message": "..."}
+{"action": "chat", "message": "your helpful reply"}
+Available columns: ${(context?.columns || []).map((c: any) => c.title).join(', ') || 'none'}
+Current tasks: ${JSON.stringify(userData.tasks.slice(0, 15))}
+Rules:
+- For ordinary questions or conversation, respond with {"action": "chat", "message": "your answer"}.
+- Only use an action key when you actually must perform that board action based on the user's request.
+- Never invent tasks that don't exist. If a task name is unclear, use action "chat" and ask the user to confirm.
+- Keep messages concise, friendly, without markdown bold/italics.
+- Reply with ONLY the JSON object, no code fences, no extra text.`.trim();
+
+  let responseText = '';
+  let aiOk = false;
   try {
     const client = getOpenRouter();
-    if (!client) {
-      return res.status(503).json({
-        error: 'AI service is currently unavailable. Please set up your OPENROUTER_API_KEY in the .env file.'
-      });
-    }
+    if (client) {
+      try {
+        let completion: any;
+        for (let attempt = 0; attempt <= 1; attempt++) {
+          try {
+            completion = await client.chat.completions.create({
+              model: AI_MODEL,
+              temperature: 0.6,
+              max_tokens: 1200,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: safeMessage }
+              ],
+            });
+            break;
+          } catch (err: any) {
+            const status = err?.status || err?.error?.status;
+            if (attempt === 0 && status === 429) {
+              await delay(2500);
+              continue;
+            }
+            throw err;
+          }
+        }
 
-    const { message, context } = req.body;
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    // Get user's data for context
-    const userDataResponse = await db.select()
-      .from(tasks)
-      .leftJoin(boards, eq(tasks.boardId, boards.id))
-      .leftJoin(columns, eq(tasks.columnId, columns.id))
-      .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
-
-    const userData = {
-      tasks: userDataResponse.map((row: any) => ({
-        id: row.tasks.id,
-        title: row.tasks.title,
-        description: row.tasks.description || '',
-        priority: row.tasks.priority,
-        dueDate: row.tasks.dueDate || null,
-        createdAt: row.tasks.createdAt,
-        updatedAt: row.tasks.updatedAt,
-        columnId: row.tasks.columnId,
-        boardId: row.tasks.boardId,
-        order: row.tasks.order,
-        columnName: row.columns?.title || 'Unknown',
-        boardName: row.boards?.name || 'Unknown'
-      }))
-    };
-
-    const safeMessage = sanitize(message);
-    const safeContext = context ? sanitize(JSON.stringify(context)) : '';
-
-    const completion = await client.chat.completions.create({
-      messages: [{
-        role: 'system', content: `You are Planora, a helpful productivity assistant for a task management app called My Planner.
-
-When the user asks to CREATE a task, DELETE a task, MOVE a task, UPDATE a task priority, or perform other board actions, you MUST respond with a JSON action object AND a friendly message.
-
-Respond in this exact format:
-{"action": "create", "title": "Task Title", "description": "", "priority": "medium", "columnName": "To Do", "message": "Friendly confirmation"}
-OR
-{"action": "delete", "taskTitle": "Task Title", "message": "Friendly confirmation"}
-OR
-{"action": "move", "taskTitle": "Task Title", "targetColumnName": "Done", "message": "Friendly confirmation"}
-OR
-{"action": "update", "taskTitle": "Task Title", "priority": "high", "message": "Friendly confirmation"}
-OR
-{"action": "show_overdue", "message": "Looking for overdue tasks..."}
-OR
-{"action": "clear_completed", "message": "Checking completed tasks..."}
-OR
-{"action": "find_duplicates", "message": "Searching for duplicates..."}
-OR
-{"action": "summarize", "message": "Here is your board summary..."}
-OR
-{"action": "chat", "message": "Your friendly response without markdown bold/italics"}
-
-Available column names from context: ${(context?.columns || []).map((c: any) => c.title).join(', ')}
-Current tasks: ${JSON.stringify(userData.tasks.slice(0, 15))}
-
-IMPORTANT: Do not use markdown formatting like **bold** or *italics*. Keep responses concise and friendly.` }, {
-        role: 'user', content: safeMessage
-      }],
-      model: AI_MODEL,
-      temperature: 0.6,
-      max_tokens: 400,
-    });
-
-    console.log('OpenRouter chat response:', JSON.stringify({ choices: completion.choices?.length, model: completion.model, id: completion.id }));
-
-    if (!completion.choices || completion.choices.length === 0) {
-      console.error('Empty choices in response. Full response:', JSON.stringify(completion));
-      return res.status(500).json({
-        error: 'AI returned empty response',
-        details: `Model "${AI_MODEL}" returned no choices. The model may not exist or is not available.`,
-        hint: 'Check https://openrouter.ai/models for available models'
-      });
-    }
-
-    const responseText = completion.choices[0].message?.content || '';
-
-    let cleanedResponse = responseText;
-    try {
-      const parsed = JSON.parse(responseText);
-      if (parsed && typeof parsed === 'object' && parsed.message) {
-        cleanedResponse = parsed.message;
+        if (!completion?.choices?.length) {
+          console.error('AI chat: empty choices response');
+        } else {
+          responseText = completion.choices[0].message?.content || '';
+          aiOk = Boolean(responseText.trim());
+        }
+      } catch (e: any) {
+        console.error('AI chat upstream request failed:', e?.message || e);
       }
-    } catch { /* not JSON, use as-is */ }
-
-    try {
-      await db.insert(aiRequests).values({
-        userId: req.userId!,
-        prompt: safeMessage,
-        response: cleanedResponse,
-      });
-    } catch (saveError) {
-      console.error('Failed to save AI conversation:', saveError);
+    } else {
+      console.warn('OpenRouter not configured — using local chat fallback.');
     }
-
-    res.json({ response: cleanedResponse });
   } catch (e: any) {
-    console.error('AI chat error:', e);
-    const status = e?.status || e?.error?.status || 500;
-    const errorMessage = e?.message || e?.error?.message || 'Unknown error';
+    console.error('AI chat init failed:', e?.message || e);
+  }
 
-    if (status === 429) {
-      return res.status(429).json({
-        error: 'Rate limit exceeded',
-        details: 'Too many requests to the AI service. Please try again later.',
-        helpUrl: 'https://openrouter.ai/docs'
-      });
+  let action = 'chat';
+  let actionData: any = null;
+  let reply = '';
+  let parsed: any = null;
+
+  if (aiOk) {
+    try {
+      parsed = extractJsonFromResponse(responseText);
+    } catch {
+      parsed = null;
     }
-
-    if (status === 401) {
-      return res.status(500).json({
-        error: 'AI chat request failed',
-        details: 'Invalid or expired API key. Please check your OPENROUTER_API_KEY in the .env file.',
-        hint: 'Get a new key at https://openrouter.ai/keys'
-      });
+    if (parsed && typeof parsed === 'object') {
+      const knownActions = ['create', 'delete', 'move', 'update', 'show_overdue', 'clear_completed', 'find_duplicates', 'summarize'];
+      if (typeof parsed.action === 'string' && knownActions.includes(parsed.action)) {
+        action = parsed.action;
+        actionData = parsed;
+      } else {
+        action = 'chat';
+      }
+      reply = cleanReplyText(String(parsed.message ?? parsed.reply ?? parsed.answer ?? parsed.text ?? ''));
     }
-
-    if (status === 403) {
-      return res.status(500).json({
-        error: 'AI chat request failed',
-        details: 'Access denied by the AI service provider.',
-        hint: 'Your API key may not have access to the requested model.'
-      });
+    if (!reply) {
+      reply = cleanReplyText(responseText);
     }
+  }
 
-    if (status === 404) {
-      return res.status(500).json({
-        error: 'AI chat request failed',
-        details: `AI model "${AI_MODEL}" is not available. Try a different model.`,
-        hint: 'Check https://openrouter.ai/models for available models'
-      });
+  if (!reply) {
+    if (aiOk && parsed) {
+      reply = defaultReplyFor(action);
+    } else {
+      const fallback = localChatFallback(message, context);
+      action = fallback.action;
+      actionData = fallback.action === 'chat' ? null : fallback.data || null;
+      reply = fallback.message || defaultReplyFor(fallback.action);
+      console.warn('AI chat unavailable or empty — used local fallback:', action);
     }
+  }
 
-    if (status === 503) {
-      return res.status(503).json({
-        error: 'AI service temporarily unavailable',
-        details: 'The AI service provider is currently unavailable. Please try again later.',
-        hint: 'If this persists, check https://openrouter.ai/status'
-      });
-    }
-
-    res.status(500).json({
-      error: 'AI chat request failed',
-      details: 'The AI service encountered an error. Please try again.',
+  try {
+    await db.insert(aiRequests).values({
+      userId: req.userId!,
+      prompt: safeMessage,
+      response: reply,
     });
+  } catch (saveError) {
+    console.error('Failed to save AI conversation:', saveError);
+  }
+
+  if (action === 'chat') {
+    res.json({ action: 'chat', reply });
+  } else {
+    res.json({ action, reply, data: actionData || {} });
   }
 });
 
@@ -1374,6 +1465,139 @@ router.post('/premium/ai-prioritize', requireAuth, async (req: AuthRequest, res:
   } catch (error) {
     console.error('AI prioritization failed:', error);
     res.status(500).json({ error: 'AI prioritization failed' });
+  }
+});
+
+// Pro AI dashboard widgets - powers the AI Productivity Score, AI Task Prioritizer,
+// AI Bottleneck Detector and AI Weekly Summary widgets on the dashboard.
+router.post('/pro/dashboard-widgets', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await requireProTier(req, res);
+    if (!user) return;
+
+    const client = getOpenRouter();
+    if (!client) {
+      return res.status(503).json({
+        error: 'AI service is currently unavailable. Please set up your OPENROUTER_API_KEY.'
+      });
+    }
+
+    const { tasks } = req.body;
+    const safeTasks: any[] = (Array.isArray(tasks) ? tasks : []).slice(0, 120).map((t: any) => ({
+      id: String(t?.id ?? ''),
+      title: String(t?.title ?? '').slice(0, 120),
+      priority: t?.priority || 'none',
+      status: t?.status || 'to_do',
+      completed: Boolean(t?.completed),
+      dueDate: t?.dueDate || null,
+      dueTime: t?.dueTime || null,
+      duration: Math.max(0, Number(t?.duration) || 0),
+      projectName: t?.projectName ? String(t.projectName).slice(0, 60) : null,
+      createdAt: t?.createdAt || null,
+      completedAt: t?.completedAt || null,
+      updatedAt: t?.updatedAt || null,
+    }));
+
+    const validIds = new Set(safeTasks.map((t: any) => t.id).filter(Boolean));
+    const isDone = (t: any) => t.completed || /done|completed|finish/i.test(String(t.status || ''));
+    const active = safeTasks.filter((t: any) => !isDone(t));
+    const completed = safeTasks.filter((t: any) => isDone(t));
+    const overdue = active.filter((t: any) => {
+      if (!t.dueDate) return false;
+      const due = t.dueTime ? new Date(`${t.dueDate}T${t.dueTime}`) : new Date(`${t.dueDate}T23:59:59`);
+      return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+    });
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    if (safeTasks.length === 0) {
+      return res.json({
+        productivityScore: {
+          score: 0,
+          summary: 'You have no tasks yet. Add your first task to get an AI productivity score.',
+          focusAreas: [],
+        },
+        nextTasks: [],
+        bottlenecks: [],
+        weeklySummary: 'No task activity to recap yet. Add and complete a few tasks and your AI weekly summary will appear here.',
+      });
+    }
+
+    const prompt = `You are an AI productivity analyst powering live dashboard widgets. Today's date is ${todayStr}.
+
+Analyze ONLY the user's real data below and produce specific, data-grounded output. Never invent tasks, projects, or numbers that are not present in the data.
+
+WORKSPACE SNAPSHOT:
+- Total tasks: ${safeTasks.length}
+- Active: ${active.length}
+- Completed: ${completed.length}
+- Overdue: ${overdue.length}
+- Completion rate: ${safeTasks.length > 0 ? Math.round((completed.length / safeTasks.length) * 100) : 0}%
+
+Overdue task titles: ${overdue.slice(0, 8).map((t: any) => t.title).join(' | ') || 'none'}
+
+ACTIVE TASKS (${active.length}):
+${active.slice(0, 60).map((t: any) => `- ${t.id} | "${t.title}" | priority=${t.priority} | due=${t.dueDate || 'none'}${t.dueTime ? ' ' + t.dueTime : ''} | est=${t.duration}min | project=${t.projectName || 'none'}`).join('\n') || '(none)'}
+
+COMPLETED TASKS (recent, ${completed.length}):
+${completed.slice(0, 20).map((t: any) => `- ${t.id} | "${t.title}" | completedAt=${t.completedAt || 'unknown'}`).join('\n') || '(none)'}
+
+TASKS MISSING KEY INFO:
+- Tasks without a due date: ${active.filter((t: any) => !t.dueDate).length}
+- Tasks with priority 'none': ${active.filter((t: any) => t.priority === 'none').length}
+
+Respond with ONLY valid JSON (no markdown, no code fences) shaped exactly like:
+{
+  "productivityScore": {
+    "score": 0-100 integer,
+    "summary": "one or two short sentences about this user's productivity",
+    "focusAreas": ["2-4 short focus areas"]
+  },
+  "nextTasks": [
+    { "id": "a task id from ACTIVE TASKS", "reason": "one sentence on why this should be done next (deadline/priority/effort)" }
+  ],
+  "bottlenecks": [
+    { "id": "a task id from the data", "reason": "why this task may be stalling" }
+  ],
+  "weeklySummary": "2-3 natural-language sentences recapping the week and what to do better next week"
+}
+All task ids must come verbatim from the data provided. If there are no active tasks, leave nextTasks as an empty array.`;
+
+    const responseText = await generateContentWithRetry(prompt);
+    let parsed: any;
+    try {
+      parsed = await extractJsonFromResponse(responseText);
+    } catch (parseError) {
+      return res.status(500).json({ error: 'The AI returned an unreadable response. Please try again.' });
+    }
+
+    const clampInt = (v: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
+    const scoreObj = parsed?.productivityScore && typeof parsed.productivityScore === 'object' ? parsed.productivityScore : {};
+    const focusAreas = (Array.isArray(scoreObj.focusAreas) ? scoreObj.focusAreas : [])
+      .map((f: any) => String(f ?? '').slice(0, 90))
+      .filter(Boolean)
+      .slice(0, 4);
+    const nextTasks = (Array.isArray(parsed?.nextTasks) ? parsed.nextTasks : [])
+      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 200) }))
+      .filter((t: any) => t.id && validIds.has(t.id))
+      .slice(0, 6);
+    const bottlenecks = (Array.isArray(parsed?.bottlenecks) ? parsed.bottlenecks : [])
+      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 240) }))
+      .filter((t: any) => t.id && validIds.has(t.id))
+      .slice(0, 5);
+
+    res.json({
+      productivityScore: {
+        score: clampInt(scoreObj.score, 0, 100),
+        summary: String(scoreObj.summary ?? '').slice(0, 320),
+        focusAreas,
+      },
+      nextTasks,
+      bottlenecks,
+      weeklySummary: String(parsed?.weeklySummary ?? '').slice(0, 600),
+    });
+  } catch (e) {
+    console.error('Dashboard widgets AI request failed:', e);
+    res.status(500).json({ error: 'AI request failed. Please try again.' });
   }
 });
 

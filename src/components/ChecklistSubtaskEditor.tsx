@@ -397,7 +397,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         const text = perChecklistInput[list.id] ?? '';
                                         if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
                                       }}
-                                      className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg"
+                                      className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg"
                                     >
                                       Add
                                     </button>
@@ -435,7 +435,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                   }
                 }}
                 disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg disabled:opacity-40"
+                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg disabled:opacity-40"
               >
                 Add checklist
               </button>

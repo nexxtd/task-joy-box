@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   CheckSquare, TrendingUp, AlertTriangle, Clock, BarChart3,
   Sparkles, Bot, Loader2, X, RefreshCw, Lock,
-  Flame, Sun, Sunrise, Sunset, ChevronRight,
+  Sun, Sunrise, Sunset, ChevronRight,
   Target, Zap
 } from 'lucide-react';
 
@@ -184,9 +184,6 @@ const Insights: React.FC = () => {
   const [loadingAI, setLoadingAI] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
-  const [streakDays, setStreakDays] = useState(0);
-  const [weeklyRate, setWeeklyRate] = useState(0);
-  const [longestStreak, setLongestStreak] = useState(0);
 
   const tasks = board?.tasks || [];
   const columns = board?.columns || [];
@@ -342,35 +339,6 @@ const Insights: React.FC = () => {
       top3: withDuration.slice(0, 3).map(t => ({ title: t.title, duration: t.duration || 0 })),
     };
   }, [tasks]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('ta_insights_streak');
-    let currentStreak = 0;
-    let currentWeekly = 85;
-    let currentLongest = 0;
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        currentStreak = parsed.current || 0;
-        currentWeekly = parsed.weekly || 85;
-        currentLongest = parsed.longest || 0;
-        setStreakDays(currentStreak);
-        setWeeklyRate(currentWeekly);
-        setLongestStreak(currentLongest);
-      } catch { /* ignore */ }
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    const lastDate = localStorage.getItem('ta_insights_last_date');
-    if (lastDate !== today && completed > 0) {
-      const newStreak = lastDate && new Date(lastDate).getTime() === new Date(today).getTime() - 86400000 ? currentStreak + 1 : 1;
-      const newLongest = Math.max(newStreak, currentLongest || 0);
-      setStreakDays(newStreak);
-      setLongestStreak(newLongest);
-      localStorage.setItem('ta_insights_streak', JSON.stringify({ current: newStreak, weekly: currentWeekly, longest: newLongest }));
-      localStorage.setItem('ta_insights_last_date', today);
-    }
-  }, [completed]);
 
   const buildFallbackAnalysis = (): AIData => {
     const today = new Date().toISOString().split('T')[0];
@@ -561,49 +529,6 @@ const Insights: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Daily Habits */}
-        <div className={cardClasses}>
-          <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <CheckSquare className="w-4 h-4 text-green-500" /> Daily Habits
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-muted/30 rounded-lg">
-              <p className="text-3xl font-bold text-green-500">{streakDays}</p>
-              <p className="text-xs text-muted-foreground">Keep it going!</p>
-            </div>
-            <div className="p-4 bg-muted/30 rounded-lg">
-              <p className="text-3xl font-bold text-primary">{weeklyRate || 85}%</p>
-              <p className="text-xs text-muted-foreground">This week</p>
-            </div>
-          </div>
-          {/* Longest Streak (premium) — inside Daily Habits, full width */}
-          {isPremium ? (
-            <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <Flame className="w-5 h-5 text-orange-500" />
-                <span className="text-2xl font-bold text-foreground">{longestStreak || streakDays}</span>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-foreground">longest streak ever</p>
-                <p className="text-[11px] text-muted-foreground">All-time best</p>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 pt-4 border-t border-border">
-              <PremiumBlur>
-                <div className="flex items-center gap-3">
-                  <Flame className="w-5 h-5 text-orange-500" />
-                  <span className="text-2xl font-bold text-foreground">0</span>
-                  <div>
-                    <p className="text-xs font-medium text-foreground">longest streak ever</p>
-                    <p className="text-[11px] text-muted-foreground">All-time best</p>
-                  </div>
-                </div>
-              </PremiumBlur>
-            </div>
-          )}
         </div>
 
         {/* Tasks Completed Over Time (premium) */}

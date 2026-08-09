@@ -571,11 +571,15 @@ export async function initDatabase() {
         labels TEXT DEFAULT '[]',
         subtasks TEXT DEFAULT '[]',
         checklists TEXT DEFAULT '[]',
+        images TEXT DEFAULT '[]',
+        attachments TEXT DEFAULT '[]',
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS task_templates_user_id_idx ON task_templates(user_id);`);
+    await addColumnIfNotExists('task_templates', 'images', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('task_templates', 'attachments', "TEXT DEFAULT '[]'");
     console.log('Task templates table verified');
 
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---

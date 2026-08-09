@@ -1018,7 +1018,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                               placeholder="Add checklist item"
                               className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                             />
-                            <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                            <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                           </div>
                         </div>
                       </div>
@@ -1136,7 +1136,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             placeholder="Add checklist item"
                                             className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                           />
-                                          <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                          <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                         </div>
                                       </div>
                                     )}
@@ -1158,7 +1158,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       placeholder="New checklist name"
                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     />
-                    <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                    <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
                   </div>
                 </div>
               )}

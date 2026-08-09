@@ -35,6 +35,36 @@ import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
 import DeepFocusMode from "@/components/DeepFocusMode";
 import { useDeepFocus } from "@/hooks/useDeepFocus";
+import { applyAccentHsl, normalizeAccent } from "@/lib/accent";
+
+const AppearanceSync = () => {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/settings", { credentials: "include" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const { hex, hsl } = normalizeAccent(data.accentColor, data.accentHsl);
+        applyAccentHsl(hsl);
+        localStorage.setItem("accentColor", hex);
+        localStorage.setItem("accentHsl", hsl);
+        if (data.fontFamily) {
+          document.body.style.fontFamily = `'${data.fontFamily}', system-ui, -apple-system, sans-serif`;
+          localStorage.setItem("font", data.fontFamily);
+        }
+      } catch {
+        // Ignore — CSS defaults stay in place until the user saves settings.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  return null;
+};
 
 const Notifier = () => {
   const { board } = useBoardContext();
@@ -99,6 +129,7 @@ function ProtectedRoutes() {
         <GoalsProvider>
           <HabitsProvider>
             <Notifier />
+            <AppearanceSync />
             <EnergyPopup />
             {shouldShowTutorial && <Tutorial />}
             {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}

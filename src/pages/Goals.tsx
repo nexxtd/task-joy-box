@@ -613,8 +613,9 @@ const Goals: React.FC = () => {
       labels: tmpl.labels || [],
       subtasks: tmpl.subtasks || [],
       checklists: tmpl.checklists || [],
+      images: tmpl.images || [],
+      attachments: tmpl.attachments || [],
       comments: [],
-      attachments: [],
       columnName: '',
       projectName: '',
       createdAt: new Date().toISOString(),
@@ -655,6 +656,8 @@ const Goals: React.FC = () => {
         labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
         subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
+        images: (edited.images ?? editingTemplateMeta.template.images) || [],
+        attachments: (edited.attachments ?? editingTemplateMeta.template.attachments) || [],
       });
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
@@ -2463,7 +2466,7 @@ const Goals: React.FC = () => {
                             placeholder="Add checklist item"
                             className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                           />
-                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                         </div>
                       </div>
                     </div>
@@ -2553,7 +2556,7 @@ const Goals: React.FC = () => {
                                           placeholder="Add checklist item"
                                           className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                         />
-                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                       </div>
                                     </div>
                                   )}
@@ -2575,7 +2578,7 @@ const Goals: React.FC = () => {
                         placeholder="New checklist name"
                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                       />
-                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
                     </div>
                   </div>
                 )}
@@ -3394,7 +3397,7 @@ const Goals: React.FC = () => {
                     } catch (error) {
                       console.error('Failed to create goal tag:', error);
                     }
-                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
+                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
                   <button onClick={() => setTagPopupTaskId(null)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
                 </div>
               </div>
@@ -3900,7 +3903,7 @@ const GoalDropdownExpanded: React.FC<{
                                       placeholder="Add checklist item"
                                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                     />
-                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                   </div>
                                 </div>
                               )}
@@ -3925,7 +3928,7 @@ const GoalDropdownExpanded: React.FC<{
               <button
                 onClick={() => { if (newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
                 disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
+                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
               >
                 Add checklist
               </button>
@@ -4699,7 +4702,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                     <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={createTagForGoal} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
+                    <button onClick={createTagForGoal} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
                     <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
                   </div>
                 </div>
@@ -4934,7 +4937,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                                         placeholder="Add checklist item"
                                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                       />
-                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                     </div>
                                   </div>
                                 )}
@@ -4959,7 +4962,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                 <button
                   onClick={() => { if (newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
                   disabled={!newChecklistTitle.trim()}
-                  className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
                 >
                   Add checklist
                 </button>

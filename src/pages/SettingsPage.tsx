@@ -13,6 +13,7 @@ import { useLanguage } from '@/context/LanguageContext'; // Import the language 
 import EnergyAnalytics from '@/components/EnergyAnalytics';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -55,7 +56,7 @@ const hexToHsl = (hex: string) => {
 };
 
 const ACCENT_COLORS = [
-  { hex: '#111827', hsl: '220 39% 11%', label: 'Dark Gray' },
+  { hex: '#000000', hsl: '0 0% 0%', label: 'Black' },
   { hex: '#2563EB', hsl: '220 89% 56%', label: 'Blue' },
   { hex: '#7C3AED', hsl: '263 70% 50%', label: 'Purple' },
   { hex: '#059669', hsl: '161 94% 30%', label: 'Green' },
@@ -73,7 +74,7 @@ const SettingsPage: React.FC = () => {
   const [selectedTheme, setSelectedTheme] = useState(theme);
   const [font, setFont] = useState(() => localStorage.getItem('font') || 'Inter');
   // Remove local language state since we're using context
-  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#111827');
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#000000');
   const [smartAlerts, setSmartAlerts] = useState(() => localStorage.getItem('smartAlerts') !== 'false');
   const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('emailNotifs') !== 'false');
   const [energyMorning, setEnergyMorning] = useState(() => localStorage.getItem('energyMorning') || 'medium');
@@ -185,10 +186,10 @@ const SettingsPage: React.FC = () => {
           setFont(data.fontFamily);
           document.body.style.fontFamily = `'${data.fontFamily}', system-ui, -apple-system, sans-serif`;
         }
-        if (data.accentColor && data.accentHsl) {
-          setAccentColor(data.accentColor);
-          document.documentElement.style.setProperty('--primary', data.accentHsl);
-          document.documentElement.style.setProperty('--ring', data.accentHsl);
+        if (data.accentColor || data.accentHsl) {
+          const { hex, hsl } = normalizeAccent(data.accentColor, data.accentHsl);
+          setAccentColor(hex);
+          applyAccentHsl(hsl);
         }
         if (data.language) setLanguage(data.language);
         setSmartAlerts(data.smartAlerts !== false);
@@ -204,12 +205,7 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     const savedFont = localStorage.getItem('font');
-    const savedHsl = localStorage.getItem('accentHsl');
     if (savedFont) document.body.style.fontFamily = `'${savedFont}', system-ui, -apple-system, sans-serif`;
-    if (savedHsl) {
-      document.documentElement.style.setProperty('--primary', savedHsl);
-      document.documentElement.style.setProperty('--ring', savedHsl);
-    }
   }, []);
 
   useEffect(() => {
@@ -376,10 +372,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const applyAccentColor = async (hex: string, hsl: string) => {
-    document.documentElement.style.setProperty('--primary', hsl);
-    document.documentElement.style.setProperty('--ring', hsl);
-    document.documentElement.style.setProperty('--sidebar-primary', hsl);
-    document.documentElement.style.setProperty('--sidebar-ring', hsl);
+    applyAccentHsl(hsl);
     setAccentColor(hex);
     localStorage.setItem('accentColor', hex);
     localStorage.setItem('accentHsl', hsl);
@@ -486,7 +479,7 @@ const SettingsPage: React.FC = () => {
     setEnergyEvening('low');
     setLanguage('English');
     setFont('Inter');
-    setAccentColor('#111827');
+    setAccentColor('#000000');
     setSelectedTheme('light');
     
     // Clear all settings from localStorage except essential auth data
@@ -509,15 +502,15 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('energyEvening', 'low');
     localStorage.setItem('language', 'English');
     localStorage.setItem('font', 'Inter');
-    localStorage.setItem('accentColor', '#111827');
-    localStorage.setItem('accentHsl', '220 39% 11%');
+    localStorage.setItem('accentColor', '#000000');
+    localStorage.setItem('accentHsl', '0 0% 0%');
     
     // Apply the settings to the DOM
     document.body.style.fontFamily = `'Inter', system-ui, -apple-system, sans-serif`;
-    document.documentElement.style.setProperty('--primary', '220 39% 11%');
-    document.documentElement.style.setProperty('--ring', '220 39% 11%');
-    document.documentElement.style.setProperty('--sidebar-primary', '220 39% 11%');
-    document.documentElement.style.setProperty('--sidebar-ring', '220 39% 11%');
+    document.documentElement.style.setProperty('--primary', '0 0% 0%');
+    document.documentElement.style.setProperty('--ring', '0 0% 0%');
+    document.documentElement.style.setProperty('--sidebar-primary', '0 0% 0%');
+    document.documentElement.style.setProperty('--sidebar-ring', '0 0% 0%');
     
     // Reset backend settings too
     try {
@@ -528,8 +521,8 @@ const SettingsPage: React.FC = () => {
         body: JSON.stringify({
           theme: 'system',
           fontFamily: 'Inter',
-          accentColor: '#111827',
-          accentHsl: '220 39% 11%',
+          accentColor: '#000000',
+          accentHsl: '0 0% 0%',
           language: 'English',
           smartAlerts: true,
           emailNotifs: true,
@@ -701,7 +694,7 @@ const SettingsPage: React.FC = () => {
                     </p>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-3">Click the color wheel to choose any custom color. Default is Dark Gray.</p>
+                <p className="text-xs text-muted-foreground mt-3">Click the color wheel to choose any custom color. Default is Black.</p>
               </div>
 
               <div>

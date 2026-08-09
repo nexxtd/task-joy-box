@@ -13,6 +13,7 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Clock,
   Clock3,
@@ -28,7 +29,6 @@ import {
   Sparkles,
   Star,
   Trash2,
-  Users,
   X,
   Zap,
 } from 'lucide-react';
@@ -50,13 +50,304 @@ const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
   { value: 'completed', label: 'Completed' },
 ];
 
-type AnalysisTab = 'overview' | 'duration' | 'deadlines' | 'focus';
+type AnalysisTab = 'overview' | 'deadlines' | 'progress' | 'priority';
+
+type AnalysisFactTone = 'ok' | 'warn' | 'bad' | 'neutral';
+
+interface AnalysisFact {
+  label: string;
+  value: string;
+  tone: AnalysisFactTone;
+}
+
+interface AnalysisTaskItem {
+  taskId: string;
+  title: string;
+  statusLabel: string;
+  facts: AnalysisFact[];
+  reasoning: string;
+  suggestion?: string;
+}
 
 interface AnalysisResult {
   title: string;
   summary: string;
   lines: Array<{ text: string; taskId?: string }>;
+  items?: AnalysisTaskItem[];
 }
+
+const PRIORITY_PTS: Record<Priority, number> = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 };
+
+const analysisDueTime = (t: Task): number | null => {
+  if (!t.dueDate) return null;
+  const d = new Date(`${t.dueDate}T${t.dueTime || '23:59'}`);
+  return Number.isNaN(d.getTime()) ? null : d.getTime();
+};
+
+const analysisDaysUntil = (ts: number) => Math.floor((ts - Date.now()) / 86400000);
+
+const analysisDaysSince = (iso?: string): number | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+};
+
+const analysisTaskBreakdown = (t: Task) => {
+  const legacySubtasks = t.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
+  const subtasks = (t.subtasks && t.subtasks.length > 0) ? t.subtasks : (legacySubtasks?.items || []);
+  const subDone = subtasks.filter(s => s.completed).length;
+  const checklistLists = t.checklists.filter(list => list.id !== legacySubtasks?.id);
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  return { subtaskTotal: subtasks.length, subDone, checklistTotal, checklistDone };
+};
+
+const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
+  activeScope
+    .sort((a, b) => (analysisDueTime(a) ?? Number.MAX_SAFE_INTEGER) - (analysisDueTime(b) ?? Number.MAX_SAFE_INTEGER))
+    .map(task => {
+      const due = analysisDueTime(task);
+      const prio = task.priority === 'none' ? 'unprioritized' : PRIORITY_CONFIG[task.priority].label.toLowerCase();
+      const { subtaskTotal, subDone, checklistTotal, checklistDone } = analysisTaskBreakdown(task);
+      const openWork = (subtaskTotal - subDone) + (checklistTotal - checklistDone);
+      if (due == null) {
+        const contradiction = task.priority === 'urgent' || task.priority === 'high';
+        return {
+          taskId: task.id,
+          title: task.title,
+          statusLabel: getStatusLabel(getTaskStatus(task)),
+          facts: [
+            { label: 'Due date', value: 'Not set', tone: 'neutral' },
+            { label: 'Urgency', value: contradiction ? 'Unanchored urgency' : 'No deadline pressure', tone: contradiction ? 'warn' : 'neutral' },
+            { label: 'Open work', value: openWork > 0 ? `${openWork} item${openWork > 1 ? 's' : ''} open` : 'Nothing open', tone: 'neutral' },
+          ],
+          reasoning: contradiction
+            ? `"${task.title}" is tagged ${prio} but has no due date at all. Nothing in the data is forcing it forward - a ${prio} label with no deadline has no anchor, so it gets deprioritized piece by piece as dated tasks pile up. This is the most fragile shape in the view: urgent work nobody can actually be late on.`
+            : `"${task.title}" has no due date, and at ${prio} priority there is nothing pulling it into the schedule. Tasks without deadlines only get worked on once everything dated is done, which rarely happens, so this one is at risk of being quietly forgotten. If it matters it needs a date; if it genuinely doesn't matter, that is a sign it may not need to stay active at all.`,
+          suggestion: contradiction
+            ? 'Set a concrete due date in the next few days to make the urgency real - or drop the priority.'
+            : 'Give it a due date within the next week, or consciously park it until it has one.',
+        };
+      }
+      const days = analysisDaysUntil(due);
+      let urgency: string;
+      let tone: AnalysisFactTone;
+      let reasoning: string;
+      let suggestion: string | undefined;
+      if (days < 0) {
+        urgency = `Overdue by ${-days}d`;
+        tone = 'bad';
+        reasoning = `"${task.title}" was due ${formatDate(task.dueDate)} - ${-days} day${-days > 1 ? 's' : ''} ago - and still sits ${getTaskStatus(task) === 'to_do' ? 'unstarted' : 'in progress'}. Overdue tasks drop out of any ordered "up next" surface, so nothing pulls them back; each passing day quietly raises the odds this one is never finished. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to close out.` : 'No breakdown work is left open, but the overdue date itself is still unresolved.'}`;
+        suggestion = 'Re-date it within the next 2-3 days, or downscope it and close it out this week.';
+      } else if (days === 0) {
+        urgency = 'Due today';
+        tone = 'bad';
+        reasoning = `"${task.title}" hits its deadline today with ${openWork > 0 ? `${openWork} open item${openWork > 1 ? 's' : ''} still outstanding` : 'no outstanding breakdown items'}. There is zero slack left, so whatever remains has to be done now or the date will silently pass. The usual trap is pushing a due-today task to tomorrow without formally rescheduling it, which is exactly how tasks turn into overdue ones.`;
+        suggestion = 'Finish it today, or explicitly re-date it before the day ends.';
+      } else if (days <= 3) {
+        urgency = `Due in ${days}d`;
+        tone = 'warn';
+        reasoning = `"${task.title}" is due in ${days} day${days > 1 ? 's' : ''} (${formatDate(task.dueDate)}) - the window where the deadline is near enough to matter but far enough to feel safe. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to get through, so the remaining effort is a real block of time.` : 'Its breakdown is fully done, so completion depends only on actually doing it.'} At ${prio} priority, the next ${days} day${days > 1 ? 's' : ''} are effectively the budget for finishing it.`;
+        suggestion = 'Start it within the next 48 hours - do not let it reach "due tomorrow".';
+      } else if (days <= 7) {
+        urgency = `Due in ${days}d`;
+        tone = 'warn';
+        reasoning = `"${task.title}" lands ${days} days out (${formatDate(task.dueDate)}), in the 3-7 day band where scheduling usually goes wrong: not urgent yet, so it is easy to keep pushing. ${openWork > 0 ? `It carries ${openWork} open item${openWork > 1 ? 's' : ''} of work, which means the real effort spans more than a day.` : 'No breakdown items are open, but the task itself is still not completed.'} If the next few days fill up, this is the task that quietly drifts into next week.`;
+        suggestion = `Slot it into the schedule before ${formatDate(task.dueDate)} rather than waiting for the deadline to arrive.`;
+      } else {
+        urgency = `Due in ${days}d`;
+        tone = 'ok';
+        reasoning = `"${task.title}" is ${days} days out (${formatDate(task.dueDate)}) - a comfortable runway with no immediate pressure. ${openWork > 0 ? `The only watch point is its ${openWork} open item${openWork > 1 ? 's' : ''} of breakdown work: plenty of time, but the longer the runway, the easier it is to defer.` : 'No breakdown items are open, so completing it is straightforward whenever it gets scheduled.'} For a ${prio} task this window is healthy rather than risky.`;
+        suggestion = undefined;
+      }
+      return {
+        taskId: task.id,
+        title: task.title,
+        statusLabel: getStatusLabel(getTaskStatus(task)),
+        facts: [
+          { label: 'Due date', value: `${formatDate(task.dueDate)}${task.dueTime ? ` · ${task.dueTime}` : ''}`, tone: 'neutral' },
+          { label: 'Urgency', value: urgency, tone },
+          { label: 'Open work', value: openWork > 0 ? `${openWork} item${openWork > 1 ? 's' : ''} open` : 'Nothing open', tone: 'neutral' },
+        ],
+        reasoning,
+        suggestion,
+      };
+    });
+
+const buildAnalysisOverview = (scope: Task[], activeScope: Task[]): AnalysisResult => {
+  const completedCount = scope.filter(t => isTaskCompleted(t)).length;
+  const reviewCount = scope.filter(t => getTaskStatus(t) === 'review').length;
+  const withSubtasks = scope.filter(t => (t.subtasks || []).length > 0).length;
+  const withChecklist = scope.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
+  return {
+    title: 'Task Overview',
+    summary: `${scope.length} task${scope.length !== 1 ? 's' : ''} in the current view, ${activeScope.length} still open. The tabs below break this down task-by-task: Deadlines reads the due-date pressure and risk on each task, Progress checks whether each task is actually moving, and Priority re-tests whether each priority tag still holds up.`,
+    lines: [
+      { text: `${activeScope.length} active` },
+      { text: `${completedCount} completed` },
+      { text: `${reviewCount} in review` },
+      { text: `${withSubtasks} with sub-tasks` },
+      { text: `${withChecklist} with checklist items` },
+    ],
+  };
+};
+
+const buildProgressItems = (activeScope: Task[]): AnalysisTaskItem[] =>
+  activeScope
+    .sort((a, b) => (analysisDaysSince(b.updatedAt || b.createdAt) ?? 0) - (analysisDaysSince(a.updatedAt || a.createdAt) ?? 0))
+    .map(task => {
+      const { subtaskTotal, subDone, checklistTotal, checklistDone } = analysisTaskBreakdown(task);
+      const totalItems = subtaskTotal + checklistTotal;
+      const doneItems = subDone + checklistDone;
+      const openItems = totalItems - doneItems;
+      const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : null;
+      const lastTouched = analysisDaysSince(task.updatedAt || task.createdAt);
+      const est = Math.max(0, Number(task.duration) || 0);
+      const subTotalMin = task.subtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
+      const stalled = pct !== null && pct === 0 && lastTouched !== null && lastTouched >= 7;
+      const facts: AnalysisFact[] = [
+        { label: 'Status', value: getStatusLabel(getTaskStatus(task)), tone: getTaskStatus(task) === 'in_progress' ? 'ok' : 'neutral' },
+        { label: 'Sub-tasks', value: subtaskTotal > 0 ? `${subDone}/${subtaskTotal} done` : 'None', tone: subtaskTotal > 0 && subDone === subtaskTotal ? 'ok' : 'neutral' },
+        { label: 'Checklist', value: checklistTotal > 0 ? `${checklistDone}/${checklistTotal} done` : 'None', tone: checklistTotal > 0 && checklistDone === checklistTotal ? 'ok' : 'neutral' },
+        { label: 'Last activity', value: lastTouched == null ? '-' : lastTouched === 0 ? 'Today' : `${lastTouched}d ago`, tone: stalled ? 'bad' : 'neutral' },
+      ];
+      if (est > 0 && subtaskTotal > 0 && est !== subTotalMin) {
+        facts.push({
+          label: 'Est. vs sub-tasks',
+          value: `${formatDuration(est)} est - ${subTotalMin > 0 ? formatDuration(subTotalMin) : '0 min'} in sub-tasks`,
+          tone: 'warn',
+        });
+      }
+      let reasoning: string;
+      let suggestion: string | undefined;
+      if (totalItems === 0) {
+        reasoning = `"${task.title}" has no sub-tasks and no checklist items, so there is no breakdown to measure progress against - only its status (${getStatusLabel(getTaskStatus(task))}) and its last activity ${lastTouched == null ? '(not recorded)' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. A task with no decomposition is hard to verify: "in progress" can mean almost-done or barely-touched. ${est > 0 ? `It is estimated at ${formatDuration(est)}, which at least gives it a concrete size.` : 'Without an estimate or breakdown, nothing here tracks how far along it really is.'}`;
+        suggestion = est > 0 || lastTouched == null ? undefined : 'Add checklist items so progress becomes measurable, or finish it.';
+      } else if (pct === 100) {
+        reasoning = `"${task.title}" shows ${doneItems}/${totalItems} items done - 100% of its breakdown is complete, yet the task itself still reads as ${getStatusLabel(getTaskStatus(task))}${lastTouched != null && lastTouched > 0 ? ` and has been untouched for ${lastTouched} day${lastTouched > 1 ? 's' : ''}` : ''}. Everything planned is finished; the only remaining step is marking it completed, and the longer that waits, the easier it is to lose the completion entirely.`;
+        suggestion = 'Mark it completed - all breakdown work is done.';
+      } else if (stalled) {
+        reasoning = `"${task.title}" has ${totalItems} planned item${totalItems > 1 ? 's' : ''} with ${doneItems} done, and nothing has changed in ${lastTouched} day${lastTouched > 1 ? 's' : ''}. On paper it is ${pct}% complete, but in practice it has been idle for over a week - not slow progress, but stalled. The plan exists and execution stopped near the start, which is the most common way tasks quietly die.`;
+        suggestion = 'Restart it this week, or consciously cut it from the active set.';
+      } else if (pct === 0) {
+        reasoning = `"${task.title}"'s breakdown is fully untouched (0/${totalItems} items done) but it was worked on ${lastTouched == null ? 'recently' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`} - early motion without execution yet. It has been picked up, but none of the actual work has started, so it still ranks as "about to start" rather than in progress.`;
+        suggestion = lastTouched !== null && lastTouched <= 2 ? 'Start the first checklist item now, while the momentum exists.' : undefined;
+      } else {
+        const recently = lastTouched != null && lastTouched <= 3;
+        reasoning = recently
+          ? `"${task.title}" is genuinely moving: ${doneItems}/${totalItems} items done (${pct}%), last touched${lastTouched === 0 ? ' today' : ` ${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. With ${openItems} item${openItems > 1 ? 's' : ''} left, the momentum looks real - this is one of the tasks actually trending toward completion.`
+          : `"${task.title}" shows partial progress - ${doneItems}/${totalItems} items done (${pct}%) - but the last change was ${lastTouched == null ? 'some time ago' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}, which puts it in a stalled-midway state: work started, then paused. ${openItems > 0 ? `The remaining ${openItems} item${openItems > 1 ? 's' : ''} still represent a real block of effort.` : ''}`;
+        suggestion = recently ? undefined : 'Pick it up again within the next few days, or it will slip from half-done to abandoned.';
+      }
+      return { taskId: task.id, title: task.title, statusLabel: getStatusLabel(getTaskStatus(task)), facts, reasoning, suggestion };
+    });
+
+const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
+  activeScope.map(task => {
+    const due = analysisDueTime(task);
+    const days = due == null ? null : analysisDaysUntil(due);
+    const { subtaskTotal, subDone, checklistTotal, checklistDone } = analysisTaskBreakdown(task);
+    const totalItems = subtaskTotal + checklistTotal;
+    const doneItems = subDone + checklistDone;
+    const openItems = totalItems - doneItems;
+    const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : null;
+    const dueText = due == null ? 'no due date' : days! < 0 ? `overdue by ${-days} day${-days > 1 ? 's' : ''}` : days === 0 ? 'due today' : `due in ${days} day${days > 1 ? 's' : ''}`;
+    let reasoning: string;
+    let suggestion: string;
+    let tone: AnalysisFactTone;
+    switch (task.priority) {
+      case 'urgent':
+        if (days != null && days <= 2) {
+          tone = 'ok';
+          reasoning = `"${task.title}" is Urgent, and the data backs it up: ${days! < 0 ? `it is ${-days} day${-days > 1 ? 's' : ''} past due` : days === 0 ? 'it is due today' : `it lands in ${days} day${days > 1 ? 's' : ''}`}, and ${openItems > 0 ? `it still has ${openItems} open item${openItems > 1 ? 's' : ''}` : 'its breakdown is fully done'}. The label matches the deadline pressure exactly, so the urgency is honest.`;
+          suggestion = `Keep it Urgent - ${days! < 0 ? 'the overdue date' : 'the deadline'} justifies it. Just make sure it is actually worked on ${days! < 0 ? 'immediately' : 'before the date arrives'}.`;
+        } else if (days != null && days <= 7) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is Urgent with a deadline ${days} day${days > 1 ? 's' : ''} out, plus ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''}` : 'no remaining breakdown work'}. The tag is still defensible at this distance, but Urgent should mean it is one of the next things you touch, not merely scheduled - this is where the label starts to outrun the actual plan.`;
+          suggestion = 'Start it within the next 48 hours to keep the label honest.';
+        } else {
+          tone = 'bad';
+          reasoning = `"${task.title}" carries the strongest label available, yet nothing in the data earns it: ${dueText}, with only ${openItems} open item${openItems !== 1 ? 's' : ''}. An urgent tag with no deadline and no heavy workload is how tasks become permanently stressful while still being deferred.`;
+          suggestion = 'Demote it to Medium, or give it a real deadline and keep Urgent.';
+        }
+        break;
+      case 'high':
+        if (due != null && days! <= 5) {
+          tone = 'ok';
+          reasoning = `"${task.title}" is High and the conditions agree: it is ${dueText} with ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''}` : 'all breakdown work done'}. High is the right band for work with a near-term deadline, so the ordering holds.`;
+          suggestion = `Keep it High - the ${days! < 0 ? 'overdue' : 'approaching'} deadline keeps it justified.`;
+        } else if (due != null && days! <= 14) {
+          tone = 'ok';
+          reasoning = `"${task.title}" is High with a deadline ${days!} day${days! > 1 ? 's' : ''} out. That is a medium-range window, and a High tag there is defensible - close enough that it should stay visible, not so close that it needs to run the show.`;
+          suggestion = 'Keep it High; reassess once it moves inside the 5-day window.';
+        } else if (openItems >= 3) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is High with a substantial workload attached - ${openItems} open item${openItems > 1 ? 's' : ''} - but ${dueText}. A heavy High-priority task with an open-ended date tends to sit at the top of the list while nothing concrete forces it forward.`;
+          suggestion = 'Either set a target date to justify High, or trim the workload before it lingers.';
+        } else {
+          tone = 'ok';
+          reasoning = `"${task.title}" is High: a small, focused task with ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''} ` : 'nothing open '}and ${dueText}. The tag gives it weight without needing a deadline; it holds up fine as long as it keeps getting picked.`;
+          suggestion = 'Keep it High, but park it as Low if it keeps getting skipped for two weeks.';
+        }
+        break;
+      case 'medium':
+        if (days != null && days < 0) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is already ${-days} day${-days > 1 ? 's' : ''} past due but only sits at Medium. Either the deadline stopped mattering (renegotiate it or close the task) or it matters more than Medium admits - an overdue task that is genuinely unimportant should be Low or closed, not drifting.`;
+          suggestion = 'Re-date it and raise it to High, or consciously drop it to Low and close it out.';
+        } else if (days != null && days <= 3) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is ${dueText}, which makes it one of the nearest deadlines in the active set - yet it is only Medium. The closer a deadline gets, the more the Medium tag understates it: in any priority-sorted view this task will sit below work with far fewer time constraints.`;
+          suggestion = 'Bump it to High for now - its deadline is inside the 72-hour window.';
+        } else {
+          tone = 'ok';
+          reasoning = `"${task.title}" sits at Medium, and for a task that is ${dueText} with ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''}` : 'an empty breakdown'} that is a defensible middle band - real but not immediate. It belongs in the queue, just not at the front.`;
+          suggestion = 'Keep it at Medium; elevate it if its deadline moves inside 3 days.';
+        }
+        break;
+      case 'low':
+        if (days != null && days <= 5) {
+          tone = 'bad';
+          reasoning = `"${task.title}" is Low but carries a deadline that is ${dueText}. That is a contradiction the data cannot square: either it matters enough to hit that date (then Low is wrong) or it does not matter (then the deadline is noise). Low-priority tasks with real deadlines are exactly the ones that quietly slip past the date.`;
+          suggestion = 'Raise it to High/Medium, or remove the deadline and accept it stays parked.';
+        } else if (openItems >= 3) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is Low yet carries ${openItems} open item${openItems > 1 ? 's' : ''} of work - a deceptively large footprint for something tagged low priority. If it truly is Low, that work will sit far down every ordered list; if the work is important, the tag is holding it back.`;
+          suggestion = 'Either trim the workload down, or admit it is more than Low and re-tag it.';
+        } else {
+          tone = 'ok';
+          reasoning = `"${task.title}" is Low with ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''} ` : 'no open breakdown items '}and ${dueText} - fully consistent. Nothing scheduled expects it soon, so the low tag costs nothing and keeps the list honest.`;
+          suggestion = 'Keep it at Low; revisit once the higher-priority queue clears.';
+        }
+        break;
+      default:
+        if (due != null && days! <= 3) {
+          tone = 'warn';
+          reasoning = `"${task.title}" has no priority tag at all, but it is ${dueText} - the least-important-looking task becomes the most important one when it holds the nearest deadline. Unprioritized tasks are invisible to every priority-based view, which makes this the riskiest configuration in the set.`;
+          suggestion = `Tag it High (or at least Medium) - it has a deadline inside ${days} day${days! > 1 ? 's' : ''}.`;
+        } else if (openItems >= 5) {
+          tone = 'warn';
+          reasoning = `"${task.title}" is the task with no priority tag and the largest workload in view - ${openItems} open item${openItems > 1 ? 's' : ''}. The absence of a tag means it cannot surface in priority ordering even though it represents a significant block of work.`;
+          suggestion = 'Give it a priority - Medium at minimum, given its size.';
+        } else {
+          tone = 'ok';
+          reasoning = `"${task.title}" is unprioritized, and with ${dueText} and ${openItems > 0 ? `${openItems} open item${openItems > 1 ? 's' : ''}` : 'no open work'} nothing critical depends on tagging it today. But any task without a priority value stays invisible to priority-based views, so the tag is worth adding whenever you next touch it.`;
+          suggestion = 'Give it a priority so it shows up in ordered views.';
+        }
+    }
+    return {
+      taskId: task.id,
+      title: task.title,
+      statusLabel: getStatusLabel(getTaskStatus(task)),
+      facts: [
+        { label: 'Priority', value: task.priority === 'none' ? 'Unprioritized' : PRIORITY_CONFIG[task.priority].label, tone },
+        { label: 'Due', value: due == null ? 'Not set' : `${formatDate(task.dueDate)}${task.dueTime ? ` · ${task.dueTime}` : ''}`, tone: 'neutral' },
+        { label: 'Progress', value: pct == null ? 'No breakdown' : `${doneItems}/${totalItems} items (${pct}%)`, tone: 'neutral' },
+      ],
+      reasoning,
+      suggestion,
+    };
+  });
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; className: string }> = {
   to_do: { label: 'To Do', className: 'bg-muted text-muted-foreground' },
@@ -354,7 +645,6 @@ const Tasks: React.FC = () => {
   const [projectFilterId, setProjectFilterId] = useState<number | 'all'>('all');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
-  const [assignedToMeFilter, setAssignedToMeFilter] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -455,6 +745,7 @@ const Tasks: React.FC = () => {
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<AnalysisTab>('overview');
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisExpanded, setAnalysisExpanded] = useState<string[]>([]);
   const [mainTmplPopupOpen, setMainTmplPopupOpen] = useState(false);
   const [mainTemplates, setMainTemplates] = useState<TaskTemplate[]>([]);
 
@@ -523,10 +814,9 @@ const Tasks: React.FC = () => {
       const matchesTags = tagFilterIds.length === 0
         ? true
         : tagFilterIds.every(tagId => task.labels.some(label => label.id === tagId));
-      const matchesAssigned = assignedToMeFilter ? task.assignedToUserId === user?.id : true;
-      return matchesSearch && matchesPriority && matchesProject && matchesTags && matchesAssigned;
+      return matchesSearch && matchesPriority && matchesProject && matchesTags;
     });
-  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds, assignedToMeFilter, user?.id]);
+  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds]);
 
   const filtered = useMemo(() => {
     const byGroup = filteredTasksByBase.filter(task =>
@@ -618,6 +908,8 @@ const Tasks: React.FC = () => {
       labels: tmpl.labels || [],
       subtasks: tmpl.subtasks || [],
       checklists: tmpl.checklists || [],
+      images: tmpl.images || [],
+      attachments: tmpl.attachments || [],
       comments: [],
       attachments: [],
       columnName: '',
@@ -660,6 +952,8 @@ const Tasks: React.FC = () => {
         labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
         subtasks: ((edited.subtasks ?? editingTemplateMeta.template.subtasks) || []).map((st: any) => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: (edited.checklists ?? editingTemplateMeta.template.checklists) || [],
+        images: (edited.images ?? editingTemplateMeta.template.images) || [],
+        attachments: (edited.attachments ?? editingTemplateMeta.template.attachments) || [],
       });
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
@@ -797,84 +1091,36 @@ const Tasks: React.FC = () => {
   const runTaskAnalysis = useCallback((type: AnalysisTab) => {
     setActiveAnalysisTab(type);
     setAnalysisLoading(true);
+    setAnalysisExpanded([]);
     const scope = [...filtered.active, ...filtered.completed];
     const activeScope = scope.filter(task => !isTaskCompleted(task));
-    const now = new Date();
     let result: AnalysisResult;
 
     if (type === 'overview') {
-      const completedCount = scope.filter(t => isTaskCompleted(t)).length;
-      const reviewCount = scope.filter(t => getTaskStatus(t) === 'review').length;
-      const withSubtasks = scope.filter(t => (t.subtasks || []).length > 0).length;
-      const withChecklist = scope.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
-      result = {
-        title: 'Task Overview',
-        summary: `${scope.length} tasks in current view`,
-        lines: [
-          { text: `${activeScope.length} active` },
-          { text: `${completedCount} completed` },
-          { text: `${reviewCount} in review` },
-          { text: `${withSubtasks} with sub-tasks` },
-          { text: `${withChecklist} with checklist items` },
-        ],
-      };
-    } else if (type === 'duration') {
-      const mismatches = activeScope
-        .map(task => {
-          const estimated = Math.max(0, Number(task.duration) || 0);
-          const subtaskTotal = (task.subtasks || []).reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
-          return { task, estimated, subtaskTotal };
-        })
-        .filter(item => item.estimated > 0 && item.estimated !== item.subtaskTotal)
-        .slice(0, 8);
-      result = {
-        title: 'Duration Check',
-        summary: mismatches.length === 0 ? 'All tasks match estimated duration.' : `${mismatches.length} tasks need review`,
-        lines: mismatches.length === 0
-          ? [{ text: 'No mismatches found.' }]
-          : mismatches.map(item => ({
-              text: `${item.task.title}: ${item.estimated} min estimated vs ${item.subtaskTotal} min in sub-tasks`,
-              taskId: item.task.id,
-            })),
-      };
+      result = buildAnalysisOverview(scope, activeScope);
     } else if (type === 'deadlines') {
-      const deadlines = activeScope
-        .filter(t => !!t.dueDate)
-        .map(t => ({ task: t, due: new Date(`${t.dueDate}T${t.dueTime || '23:59'}`) }))
-        .filter(item => !Number.isNaN(item.due.getTime()))
-        .sort((a, b) => a.due.getTime() - b.due.getTime())
-        .slice(0, 8);
+      const items = buildDeadlineItems(activeScope);
       result = {
-        title: 'Deadline Risk',
-        summary: deadlines.length === 0 ? 'No due dates in current view.' : 'Closest deadlines first',
-        lines: deadlines.length === 0
-          ? [{ text: 'Add due dates to get deadline analysis.' }]
-          : deadlines.map(item => ({
-              text: `${item.task.title}: ${item.due.getTime() < now.getTime() ? 'Overdue' : formatDate(item.task.dueDate)} (${getStatusLabel(getTaskStatus(item.task))})`,
-              taskId: item.task.id,
-            })),
+        title: 'Deadline Analysis',
+        summary: `${items.length} active task${items.length !== 1 ? 's' : ''} - ${items.filter(i => i.facts.some(f => f.tone === 'bad')).length} in distress, ${items.filter(i => i.facts.some(f => f.tone === 'warn')).length} approaching risk`,
+        lines: [],
+        items,
+      };
+    } else if (type === 'progress') {
+      const items = buildProgressItems(activeScope);
+      result = {
+        title: 'Progress Analysis',
+        summary: `${items.length} active task${items.length !== 1 ? 's' : ''} - ${items.filter(i => i.facts.some(f => f.tone === 'bad')).length} stalled, ${items.filter(i => i.facts.some(f => f.tone === 'ok')).length} moving`,
+        lines: [],
+        items,
       };
     } else {
-      const candidates = activeScope
-        .map(task => {
-          const pw = ({ urgent: 4, high: 3, medium: 2, low: 1, none: 0 } as Record<string, number>)[task.priority] ?? 0;
-          const dw = task.dueDate ? Math.max(0, 100000000000 - new Date(`${task.dueDate}T${task.dueTime || '23:59'}`).getTime()) : 0;
-          const ct = task.checklists.reduce((s, l) => s + l.items.length, 0);
-          const cd = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-          const penalty = ct > 0 ? cd / ct : 0;
-          return { task, score: pw * 100 + dw / 1e9 - penalty * 10 };
-        })
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
+      const items = buildPriorityItems(activeScope);
       result = {
-        title: 'Focus Suggestions',
-        summary: candidates.length === 0 ? 'No active tasks to analyze.' : 'Suggested tasks to tackle next',
-        lines: candidates.length === 0
-          ? [{ text: 'Create active tasks to get suggestions.' }]
-          : candidates.map(item => ({
-              text: `${item.task.title} — ${getStatusLabel(getTaskStatus(item.task))}, ${item.task.priority}`,
-              taskId: item.task.id,
-            })),
+        title: 'Priority Analysis',
+        summary: `${items.length} active task${items.length !== 1 ? 's' : ''} - ${items.filter(i => i.facts.some(f => f.tone === 'bad')).length} with a priority tag that no longer matches the data`,
+        lines: [],
+        items,
       };
     }
 
@@ -1791,18 +2037,6 @@ const Tasks: React.FC = () => {
             )}
           </div>
 
-          <button
-            onClick={() => setAssignedToMeFilter(prev => !prev)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
-              assignedToMeFilter
-                ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
-                : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Assigned to me</span>
-          </button>
-
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={toggleSortByDueDate}
@@ -2270,7 +2504,7 @@ const Tasks: React.FC = () => {
                                 }
                               }}
                               disabled={!newTagName.trim()}
-                              className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed"
+                              className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed"
                             >
                               Add tag
                             </button>
@@ -2457,7 +2691,7 @@ const Tasks: React.FC = () => {
                             placeholder="Add checklist item"
                             className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                           />
-                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                         </div>
                       </div>
                     </div>
@@ -2547,7 +2781,7 @@ const Tasks: React.FC = () => {
                                           placeholder="Add checklist item"
                                           className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                         />
-                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                       </div>
                                     </div>
                                   )}
@@ -2569,7 +2803,7 @@ const Tasks: React.FC = () => {
                         placeholder="New checklist name"
                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                       />
-                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg">Add checklist</button>
+                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
                     </div>
                   </div>
                 )}
@@ -2984,7 +3218,7 @@ const Tasks: React.FC = () => {
               <div className="flex-1 flex items-center">
                 <PremiumGate
                   title="Task Analysis"
-                  description="Get AI-powered insights into your tasks with overview, duration check, deadline risk, and focus suggestions."
+                  description="Get AI-style insights into your tasks with overview, deadline risk, progress tracking, and priority checks."
                   icon={<BarChart3 className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -2994,9 +3228,9 @@ const Tasks: React.FC = () => {
                   {(
                     [
                       { key: 'overview', label: 'Overview' },
-                      { key: 'duration', label: 'Duration' },
                       { key: 'deadlines', label: 'Deadlines' },
-                      { key: 'focus', label: 'Focus' },
+                      { key: 'progress', label: 'Progress' },
+                      { key: 'priority', label: 'Priority' },
                     ] as Array<{ key: AnalysisTab; label: string }>
                   ).map(tab => (
                     <button
@@ -3025,24 +3259,99 @@ const Tasks: React.FC = () => {
                   )}
                   {!analysisLoading && analysisResult && (
                     <div className="space-y-3">
-                      <h4 className="text-base font-semibold text-foreground">{analysisResult.title}</h4>
-                      <p className="text-sm text-muted-foreground">{analysisResult.summary}</p>
-                      <div className="space-y-2">
-                        {analysisResult.lines.map((line, idx) => (
-                          <div
-                            key={idx}
-                            className={`text-sm text-foreground bg-muted/30 rounded-lg px-3 py-2 ${line.taskId ? 'cursor-pointer hover:bg-muted/60 transition-colors' : ''}`}
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-base font-semibold text-foreground">{analysisResult.title}</h4>
+                          <p className="text-sm text-muted-foreground mt-0.5">{analysisResult.summary}</p>
+                        </div>
+                        {analysisResult.items && analysisResult.items.length > 0 && (
+                          <button
                             onClick={() => {
-                              if (line.taskId) {
-                                setAnalysisPanelOpen(false);
-                                setOpenTaskId(line.taskId);
-                              }
+                              const allExpanded = analysisResult.items!.length > 0 &&
+                                analysisResult.items!.every(i => analysisExpanded.includes(i.taskId));
+                              setAnalysisExpanded(allExpanded ? [] : analysisResult.items!.map(i => i.taskId));
                             }}
+                            className="shrink-0 text-xs font-semibold text-primary hover:underline"
                           >
-                            {line.text}
-                          </div>
-                        ))}
+                            {analysisResult.items.length > 0 && analysisResult.items.every(i => analysisExpanded.includes(i.taskId))
+                              ? 'Collapse all'
+                              : 'Expand all'}
+                          </button>
+                        )}
                       </div>
+
+                      {!analysisResult.items || analysisResult.items.length === 0 ? (
+                        <div className="space-y-2">
+                          {analysisResult.lines.map((line, idx) => (
+                            <div
+                              key={idx}
+                              className={`text-sm text-foreground bg-muted/30 rounded-lg px-3 py-2 ${line.taskId ? 'cursor-pointer hover:bg-muted/60 transition-colors' : ''}`}
+                              onClick={() => {
+                                if (line.taskId) {
+                                  setAnalysisPanelOpen(false);
+                                  setOpenTaskId(line.taskId);
+                                }
+                              }}
+                            >
+                              {line.text}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {analysisResult.items.map(item => {
+                            const expanded = analysisExpanded.includes(item.taskId);
+                            const hasBad = item.facts.some(f => f.tone === 'bad');
+                            const hasWarn = item.facts.some(f => f.tone === 'warn');
+                            return (
+                              <div key={item.taskId} className="rounded-lg border border-border bg-card overflow-hidden">
+                                <button
+                                  onClick={() =>
+                                    setAnalysisExpanded(prev =>
+                                      prev.includes(item.taskId)
+                                        ? prev.filter(id => id !== item.taskId)
+                                        : [...prev, item.taskId]
+                                    )
+                                  }
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+                                >
+                                  <ChevronRight className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium text-foreground truncate">{item.title}</div>
+                                    <div className="text-xs text-muted-foreground">{item.statusLabel}</div>
+                                  </div>
+                                  {hasBad && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
+                                  {!hasBad && hasWarn && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />}
+                                </button>
+                                {expanded && (
+                                  <div className="px-3 pb-3 pt-0.5 space-y-1.5">
+                                    <p className="text-xs text-muted-foreground leading-relaxed">{item.reasoning}</p>
+                                    {item.facts.map((fact, idx) => (
+                                      <div key={idx} className="flex items-start gap-2 text-sm">
+                                        <span
+                                          className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
+                                            fact.tone === 'ok' ? 'bg-green-500' : fact.tone === 'warn' ? 'bg-amber-500' : fact.tone === 'bad' ? 'bg-red-500' : 'bg-muted-foreground'
+                                          }`}
+                                        />
+                                        <span className="text-foreground"><span className="font-medium">{fact.label}:</span> {fact.value}</span>
+                                      </div>
+                                    ))}
+                                    <button
+                                      onClick={() => {
+                                        setAnalysisPanelOpen(false);
+                                        setOpenTaskId(item.taskId);
+                                      }}
+                                      className="mt-1 text-xs font-semibold text-primary hover:underline"
+                                    >
+                                      Open task
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3459,18 +3768,6 @@ export const TaskDropdownExpanded: React.FC<{
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const { user: currentUser } = useAuth();
-  const [assignableUsers, setAssignableUsers] = useState<{id: number; name: string; email: string}[]>([]);
-  useEffect(() => {
-    if (!task.projectId) return;
-    fetch('/api/projects', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : { projects: [] })
-      .then(data => {
-        const project = (data.projects || []).find((p: any) => p.id === task.projectId);
-        if (project?.members) setAssignableUsers(project.members);
-      })
-      .catch(() => {});
-  }, [task.projectId]);
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
@@ -3695,46 +3992,6 @@ export const TaskDropdownExpanded: React.FC<{
         />
       </div>
 
-      {task.projectId && (
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Assigned To</h3>
-            </div>
-            <Select
-              value={task.assignedToUserId ? String(task.assignedToUserId) : 'unassigned'}
-              onValueChange={(val) => {
-                if (val === 'unassigned') {
-                  onUpdateTask(task.id, { assignedToUserId: null, assignedToUserName: undefined });
-                } else {
-                  const u = assignableUsers.find(au => au.id === Number(val));
-                  onUpdateTask(task.id, { assignedToUserId: Number(val), assignedToUserName: u?.name });
-                }
-              }}
-            >
-              <SelectTrigger className="w-40 bg-muted/40 border border-border text-sm h-8">
-                <SelectValue placeholder="Assign to..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unassigned">
-                  <span className="text-muted-foreground">Unassigned</span>
-                </SelectItem>
-                {assignableUsers.map(u => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
-                        {u.name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <span>{u.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      )}
-
       {/* Sub-tasks Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
         <button
@@ -3953,7 +4210,7 @@ export const TaskDropdownExpanded: React.FC<{
                                       placeholder="Add checklist item"
                                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                     />
-                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                   </div>
                                 </div>
                               )}
@@ -3978,7 +4235,7 @@ export const TaskDropdownExpanded: React.FC<{
               <button
                 onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
                 disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
+                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
               >
                 Add checklist
               </button>
@@ -4780,7 +5037,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={createTagForTask} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:bg-black disabled:text-white disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
+                    <button onClick={createTagForTask} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
                     <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
                   </div>
                 </div>
@@ -5018,7 +5275,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         placeholder="Add checklist item"
                                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                       />
-                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs !bg-[#000] !text-white rounded-lg">Add</button>
+                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
                                     </div>
                                   </div>
                                 )}
@@ -5043,7 +5300,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <button
                   onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
                   disabled={!newChecklistTitle.trim()}
-                  className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
                 >
                   Add checklist
                 </button>

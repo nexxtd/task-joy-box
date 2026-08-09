@@ -728,7 +728,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </button>
               <button
                 onClick={handleCompletedTask}
-                className="flex-1 py-2.5 px-4 text-sm font-medium !bg-[#000] !text-white rounded-xl hover:opacity-90 transition-all"
+                className="flex-1 py-2.5 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all"
               >
                 Yes, Done!
               </button>
@@ -968,7 +968,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 placeholder="Add item"
                                                 className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                                               />
-                                              <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg shrink-0">Add</button>
+                                              <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg shrink-0">Add</button>
                                             </div>
                                           </div>
                                         )}
@@ -1040,7 +1040,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       placeholder="New checklist name"
                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     />
-                    <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg shrink-0">Add checklist</button>
+                    <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg shrink-0">Add checklist</button>
                   </div>
                 </div>
               )}
@@ -1055,7 +1055,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </button>
               <button
                 onClick={handleFinalComplete}
-                className="flex-1 py-2.5 px-4 text-sm font-medium !bg-[#000] !text-white rounded-xl hover:opacity-90 transition-all"
+                className="flex-1 py-2.5 px-4 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all"
               >
                 Complete
               </button>
@@ -1170,7 +1170,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     </div>
                     <button
                       onClick={saveCustomDuration}
-                      className="w-full py-1.5 !bg-[#000] !text-white text-xs font-medium rounded-lg hover:opacity-90 transition-all"
+                      className="w-full py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:opacity-90 transition-all"
                     >
                       Save
                     </button>
@@ -1220,7 +1220,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 {!isRunning ? (
                   <button
                     onClick={timeLeft < totalSecs && totalSecs > 0 && timeLeft > 0 ? handleResume : handleStartSession}
-                    className="w-full py-3 !bg-[#000] !text-white rounded-xl font-semibold text-sm hover:opacity-90 flex items-center justify-center gap-2 transition-all"
+                    className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 flex items-center justify-center gap-2 transition-all"
                   >
                     <Play className="w-4 h-4" />
                     {timeLeft < totalSecs && timeLeft > 0 ? 'Resume Session' : 'Start Session'}
@@ -1492,7 +1492,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                   placeholder="Add item"
                                                   className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                                                 />
-                                                <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs !bg-[#000] !text-white rounded-lg shrink-0">Add</button>
+                                                <button onClick={() => addNamedChecklistItem(list.id)} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg shrink-0">Add</button>
                                               </div>
                                             </div>
                                           )}
@@ -1564,7 +1564,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         placeholder="New checklist name"
                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                       />
-                      <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold !bg-[#000] !text-white rounded-lg shrink-0">Add checklist</button>
+                      <button onClick={addNamedChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg shrink-0">Add checklist</button>
                     </div>
                   </div>
                 )}

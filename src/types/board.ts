@@ -84,8 +84,6 @@ export interface Task {
   images?: Attachment[];
   comments?: TaskComment[];
   activityLog?: TaskActivity[];
-  assignedToUserId?: number | null;
-  assignedToUserName?: string;
 }
 
 export interface Column {
@@ -121,6 +119,8 @@ export interface TaskTemplate {
   labels: Label[];
   subtasks: Array<{ text: string; durationMinutes: number }>;
   checklists: Checklist[];
+  images?: Attachment[];
+  attachments?: Attachment[];
   createdAt: string;
   updatedAt: string;
 }
