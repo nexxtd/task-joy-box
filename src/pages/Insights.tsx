@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from '@/hooks/use-toast';
 import { DoneCtx, buildAiScoreFallback } from '@/components/insights/insightData';
 import {
   InsightWidget, InsightWidgetType,
@@ -68,6 +69,14 @@ const LockedAiWidget: React.FC<{ onUpgrade: () => void }> = ({ onUpgrade }) => (
   </div>
 );
 
+// Module-level cache so the analysis survives page navigation: the request keeps
+// running in the background and the result is restored if the user comes back.
+let analysisCache: {
+  bottlenecks: Array<{ id: string; reason: string; suggestion?: string }> | null;
+  scoreData: AiScoreData['data'];
+  lastAnalysis: { text: string; time: string; error: boolean } | null;
+} | null = null;
+
 const Insights: React.FC = () => {
   const navigate = useNavigate();
   const { board } = useBoardContext();
@@ -112,7 +121,12 @@ const Insights: React.FC = () => {
     setBottleneckError(null);
     setScoreError(null);
     const markDone = (text: string, error: boolean) => {
-      setLastAnalysis({ text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error });
+      const info = { text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error };
+      setLastAnalysis(info);
+      return info;
+    };
+    const commit = (result: { bottlenecks: Array<{ id: string; reason: string; suggestion?: string }> | null; scoreData: AiScoreData['data']; lastAnalysis: { text: string; time: string; error: boolean } | null }) => {
+      analysisCache = result;
     };
     try {
       const res = await fetch('/api/ai/pro/dashboard-widgets', {
@@ -131,7 +145,9 @@ const Insights: React.FC = () => {
         setBottleneckError(msg);
         setBottlenecks(null);
         setScoreData(fallback);
-        markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
+        const info = markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
+        commit({ bottlenecks: null, scoreData: fallback, lastAnalysis: info });
+        toast({ title: 'AI analysis finished', description: `${info.text}`, variant: 'destructive' });
         return;
       }
       const data = await res.json();
@@ -141,29 +157,47 @@ const Insights: React.FC = () => {
       const s = Number(ps.score);
       const focusAreas = Array.isArray(ps.focusAreas) ? ps.focusAreas.map(String) : [];
       const finalScore = Number.isFinite(s) ? Math.round(s) : fallback.overallScore;
-      setScoreData({
+      const scoreResult: AiScoreData['data'] = {
         overallScore: finalScore,
         scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
         contributors: fallback.contributors,
         penalties: fallback.penalties,
         insights: focusAreas.length > 0 ? focusAreas : fallback.insights,
         recommendations: fallback.recommendations,
-      });
+      };
+      setScoreData(scoreResult);
       const parts: string[] = [`Score ${finalScore}/100`];
       if (focusAreas.length > 0) parts.push(`Focus: ${focusAreas.slice(0, 3).join(', ')}`);
       if (bns.length > 0) parts.push(`${bns.length} bottleneck${bns.length !== 1 ? 's' : ''} detected`);
       if (typeof ps.summary === 'string' && ps.summary) parts.push(ps.summary);
-      markDone(parts.join(' · '), false);
+      const info = markDone(parts.join(' · '), false);
+      commit({ bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
+      toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
     } catch {
       setBottleneckError('Could not reach the AI service. Check your connection and try again.');
       setBottlenecks(null);
       const fb = buildAiScoreFallback(tasks, ctx);
       setScoreData(fb);
-      markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
+      const info = markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
+      commit({ bottlenecks: null, scoreData: fb, lastAnalysis: info });
+      toast({ title: 'AI analysis failed', description: 'Could not reach the AI service. Showing the offline score instead.', variant: 'destructive' });
     } finally {
       setAiLoading(false);
     }
   }, [tasks, ctx]);
+
+  // Restore the last analysis if the user navigates back to this page — the
+  // request is never cancelled by navigation, it just keeps running.
+  const restoredCacheRef = useRef(false);
+  useEffect(() => {
+    if (analysisCache && !restoredCacheRef.current) {
+      restoredCacheRef.current = true;
+      aiFetchedRef.current = true;
+      setBottlenecks(analysisCache.bottlenecks);
+      setScoreData(analysisCache.scoreData);
+      setLastAnalysis(analysisCache.lastAnalysis);
+    }
+  }, []);
 
   const wantsAi = hasWidget('ai-bottlenecks') || hasWidget('ai-score');
   useEffect(() => {
