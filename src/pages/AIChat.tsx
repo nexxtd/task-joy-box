@@ -210,13 +210,14 @@ const AIChat: React.FC = () => {
 
   // Executes an AI action against the board and pushes any supplementary UI (confirm prompts, task cards).
   // The assistant's textual reply is persisted separately by the caller.
-  const runAction = useCallback((action: string, actionData: any, chatId: string): boolean => {
+  const runAction = useCallback((action: string, actionData: any, chatId: string, automated = false): boolean => {
+    const msg = (text: string, isAutomated = automated) => ({ id: genId(), role: 'assistant' as const, text, ts: new Date().toISOString(), automated: isAutomated });
     switch (action) {
       case 'create': {
         let columnId = board.columns[0]?.id;
         if (actionData.columnName) { const col = getColumnByName(actionData.columnName); if (col) columnId = col.id; }
         if (!columnId) {
-          pushEphemeral({ type: 'result-error', title: 'No columns available', body: 'Create a column first.' });
+          pushEphemeral({ type: 'result-error', title: 'No columns available', body: 'Create a column first.', automated: true });
           return true;
         }
         addTask(columnId, actionData.title, {
@@ -225,22 +226,22 @@ const AIChat: React.FC = () => {
           dueDate: actionData.dueDate,
         });
         const colName = board.columns.find(c => c.id === columnId)?.title || 'first column';
-        appendMsg(chatId, { id: genId(), role: 'assistant', text: `Task created: "${actionData.title}" → ${colName}${actionData.priority && actionData.priority !== 'none' ? ` · ${actionData.priority} priority` : ''}${actionData.dueDate ? ` · due ${actionData.dueDate}` : ''}`, ts: new Date().toISOString() });
+        appendMsg(chatId, msg(`Task created: "${actionData.title}" → ${colName}${actionData.priority && actionData.priority !== 'none' ? ` · ${actionData.priority} priority` : ''}${actionData.dueDate ? ` · due ${actionData.dueDate}` : ''}`));
         return true;
       }
       case 'delete': {
         const matches = findTasksByTitle(actionData.taskTitle);
         if (matches.length === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `No task matching "${actionData.taskTitle}" was found.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`No task matching "${actionData.taskTitle}" was found.`));
         } else if (matches.length === 1) {
           const task = matches[0];
           pushEphemeral({
             type: 'confirm', title: `Delete "${task.title}"?`, body: 'This will permanently remove this task from your board.',
-            tasks: [task], confirmLabel: 'Delete',
-            confirmAction: () => { deleteTask(task.id); appendMsg(chatId, { id: genId(), role: 'assistant', text: `"${task.title}" has been removed.`, ts: new Date().toISOString() }); },
+            tasks: [task], confirmLabel: 'Delete', automated: true,
+            confirmAction: () => { deleteTask(task.id); appendMsg(chatId, msg(`"${task.title}" has been removed.`)); },
           });
         } else {
-          pushEphemeral({ type: 'result-info', title: `Found ${matches.length} matching tasks`, body: `Multiple tasks match "${actionData.taskTitle}". Be more specific.`, tasks: matches });
+          pushEphemeral({ type: 'result-info', title: `Found ${matches.length} matching tasks`, body: `Multiple tasks match "${actionData.taskTitle}". Be more specific.`, tasks: matches, automated: true });
         }
         return true;
       }
@@ -248,24 +249,24 @@ const AIChat: React.FC = () => {
         const matches = findTasksByTitle(actionData.taskTitle);
         const targetCol = getColumnByName(actionData.targetColumnName);
         if (matches.length === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `No task matching "${actionData.taskTitle}" found.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`No task matching "${actionData.taskTitle}" found.`));
         } else if (!targetCol) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `Which column should it move to? Available: ${board.columns.map(c => c.title).join(', ') || 'no columns yet'}.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`Which column should it move to? Available: ${board.columns.map(c => c.title).join(', ') || 'no columns yet'}.`));
         } else {
           const task = matches[0];
           moveTask(task.id, targetCol.id, 0);
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `"${task.title}" moved to ${targetCol.title}.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`"${task.title}" moved to ${targetCol.title}.`));
         }
         return true;
       }
       case 'update': {
         const matches = findTasksByTitle(actionData.taskTitle);
         if (matches.length === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `No task matching "${actionData.taskTitle}" found.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`No task matching "${actionData.taskTitle}" found.`));
         } else {
           const task = matches[0];
           updateTask(task.id, { priority: actionData.priority });
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `"${task.title}" priority set to ${actionData.priority}.`, ts: new Date().toISOString() });
+          appendMsg(chatId, msg(`"${task.title}" priority set to ${actionData.priority}.`));
         }
         return true;
       }
@@ -273,10 +274,10 @@ const AIChat: React.FC = () => {
         const today = new Date().toISOString().split('T')[0];
         const overdue = board.tasks.filter(t => t.dueDate && t.dueDate < today);
         if (overdue.length === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: 'All your tasks are on track — no overdue items!', ts: new Date().toISOString() });
+          appendMsg(chatId, msg('All your tasks are on track — no overdue items!'));
         } else {
-          pushEphemeral({ type: 'result-warning', title: `${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}`, body: 'These tasks are past their due date:', tasks: overdue });
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: `Found ${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}.`, ts: new Date().toISOString() });
+          pushEphemeral({ type: 'result-warning', title: `${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}`, body: 'These tasks are past their due date:', tasks: overdue, automated: true });
+          appendMsg(chatId, msg(`Found ${overdue.length} overdue task${overdue.length > 1 ? 's' : ''}.`));
         }
         return true;
       }
@@ -284,12 +285,12 @@ const AIChat: React.FC = () => {
         const doneCols = board.columns.filter(c => /done|completed|finish/i.test(c.title));
         const doneTasks = board.tasks.filter(t => doneCols.some(c => c.id === t.columnId));
         if (doneTasks.length === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: 'No completed tasks found in Done/Completed columns.', ts: new Date().toISOString() });
+          appendMsg(chatId, msg('No completed tasks found in Done/Completed columns.'));
         } else {
           pushEphemeral({
             type: 'confirm', title: `Delete ${doneTasks.length} completed task${doneTasks.length > 1 ? 's' : ''}?`, body: 'This will permanently remove all tasks from Done/Completed columns.',
-            tasks: doneTasks, confirmLabel: `Delete ${doneTasks.length} task${doneTasks.length > 1 ? 's' : ''}`,
-            confirmAction: () => { bulkDeleteTasks(doneTasks.map(t => t.id)); appendMsg(chatId, { id: genId(), role: 'assistant', text: `Removed ${doneTasks.length} completed task${doneTasks.length > 1 ? 's' : ''}.`, ts: new Date().toISOString() }); },
+            tasks: doneTasks, confirmLabel: `Delete ${doneTasks.length} task${doneTasks.length > 1 ? 's' : ''}`, automated: true,
+            confirmAction: () => { bulkDeleteTasks(doneTasks.map(t => t.id)); appendMsg(chatId, msg(`Removed ${doneTasks.length} completed task${doneTasks.length > 1 ? 's' : ''}.`)); },
           });
         }
         return true;
@@ -297,22 +298,22 @@ const AIChat: React.FC = () => {
       case 'find_duplicates': {
         const dupes = findDuplicates();
         if (dupes.size === 0) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: 'All your tasks have unique titles — no duplicates found.', ts: new Date().toISOString() });
+          appendMsg(chatId, msg('All your tasks have unique titles — no duplicates found.'));
         } else {
           const allDupeTasks: Task[] = [];
           const lines: string[] = [];
           dupes.forEach((tasks, key) => { lines.push(`"${tasks[0].title}" appears ${tasks.length} times`); tasks.slice(1).forEach(t => allDupeTasks.push(t)); });
           pushEphemeral({
             type: 'confirm', title: `Found ${dupes.size} duplicate group${dupes.size > 1 ? 's' : ''}`, body: lines.join('\n') + `\n\nKeep the oldest copy and remove ${allDupeTasks.length} duplicate${allDupeTasks.length > 1 ? 's' : ''}?`,
-            tasks: allDupeTasks, confirmLabel: `Remove ${allDupeTasks.length} duplicate${allDupeTasks.length > 1 ? 's' : ''}`,
-            confirmAction: () => { bulkDeleteTasks(allDupeTasks.map(t => t.id)); appendMsg(chatId, { id: genId(), role: 'assistant', text: `Removed ${allDupeTasks.length} duplicate task${allDupeTasks.length > 1 ? 's' : ''}.`, ts: new Date().toISOString() }); },
+            tasks: allDupeTasks, confirmLabel: `Remove ${allDupeTasks.length} duplicate${allDupeTasks.length > 1 ? 's' : ''}`, automated: true,
+            confirmAction: () => { bulkDeleteTasks(allDupeTasks.map(t => t.id)); appendMsg(chatId, msg(`Removed ${allDupeTasks.length} duplicate task${allDupeTasks.length > 1 ? 's' : ''}.`)); },
           });
         }
         return true;
       }
       case 'summarize': {
         const summary = board.columns.map(col => { const colTasks = board.tasks.filter(t => t.columnId === col.id); return `${col.title}: ${colTasks.length} task${colTasks.length !== 1 ? 's' : ''}`; }).join('\n');
-        appendMsg(chatId, { id: genId(), role: 'assistant', text: summary || 'No columns yet.', ts: new Date().toISOString() });
+        appendMsg(chatId, msg(summary || 'No columns yet.'));
         return true;
       }
       default:
@@ -363,7 +364,7 @@ const AIChat: React.FC = () => {
 
       const action = (data.action || 'chat') as string;
       if (action !== 'chat') {
-        const handled = runAction(action, data.data || {}, chatId);
+        const handled = runAction(action, data.data || {}, chatId, Boolean(data.automated));
         if (!handled) {
           appendMsg(chatId, { id: genId(), role: 'assistant', text: renderableReply(data.reply) || 'I couldn\'t process that.', ts: new Date().toISOString(), automated: Boolean(data.automated) });
         }
