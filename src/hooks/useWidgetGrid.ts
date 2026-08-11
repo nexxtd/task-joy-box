@@ -44,10 +44,12 @@ export const packLayout = <T extends GridWidget>(widgets: T[]): T[] => {
   for (const w of sorted) {
     const cur = { ...w };
     let guard = 0;
+    // Pull the widget up to the highest free position so gaps above get filled.
     while (guard < 200) {
-      const hit = result.find(o => intersects(cur, o));
-      if (!hit) break;
-      cur.row = hit.row + hit.h;
+      if (cur.row <= 1) break;
+      const up = { ...cur, row: cur.row - 1 };
+      if (result.some(o => intersects(up, o))) break;
+      cur.row = up.row;
       guard += 1;
     }
     result.push(cur);
@@ -128,7 +130,7 @@ export function useWidgetGrid<T extends string>({
         const parsed = JSON.parse(raw) as GridWidget<T>[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           const known = parsed.filter((w: GridWidget<T>) => defs.some(d => d.type === w.type));
-          if (known.length > 0) { setLayout(known); return; }
+          if (known.length > 0) { setLayout(packLayout(known)); return; }
         }
       }
     } catch { /* ignore */ }
@@ -230,8 +232,10 @@ export function useWidgetGrid<T extends string>({
     g.lastY = e.clientY;
     const bounds = el.getBoundingClientRect();
     const tol = 24;
+    // Allow dragging below the grid's bottom edge so widgets can be moved
+    // beneath everything else (the grid grows as the drag goes further down).
     if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol ||
-        e.clientY < bounds.top - tol || e.clientY > bounds.bottom + tol) {
+        e.clientY < bounds.top - tol) {
       cancelGesture();
       return;
     }

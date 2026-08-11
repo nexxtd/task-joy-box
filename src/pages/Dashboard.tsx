@@ -88,6 +88,12 @@ const WIDGET_DEFS: WidgetDef[] = [
   { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 8, h: 2, tier: 'pro' },
 ];
 
+const TIER_SECTIONS: { tier: DashboardWidgetTier; label: string }[] = [
+  { tier: 'free', label: 'Free' },
+  { tier: 'premium', label: 'Premium' },
+  { tier: 'pro', label: 'Pro' },
+];
+
 const GRID_COLS = 12;
 const ROW_PX = 112;
 const GAP_PX = 16;
@@ -119,10 +125,12 @@ const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
   for (const w of sorted) {
     const cur = { ...w };
     let guard = 0;
+    // Pull the widget up to the highest free position so gaps above get filled.
     while (guard < 200) {
-      const hit = result.find(o => intersects(cur, o));
-      if (!hit) break;
-      cur.row = hit.row + hit.h;
+      if (cur.row <= 1) break;
+      const up = { ...cur, row: cur.row - 1 };
+      if (result.some(o => intersects(up, o))) break;
+      cur.row = up.row;
       guard += 1;
     }
     result.push(cur);
@@ -337,7 +345,7 @@ const Dashboard: React.FC = () => {
         const parsed = JSON.parse(raw) as DashboardWidget[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           const known = parsed.filter((w: DashboardWidget) => WIDGET_DEFS.some(d => d.type === w.type));
-          if (known.length > 0) { setLayout(known); return; }
+          if (known.length > 0) { setLayout(packLayout(known)); return; }
         }
       }
     } catch { }
@@ -765,8 +773,10 @@ const Dashboard: React.FC = () => {
     g.lastY = e.clientY;
     const bounds = el.getBoundingClientRect();
     const tol = 24;
+    // Allow dragging below the grid's bottom edge so widgets can be moved
+    // beneath everything else (the grid grows as the drag goes further down).
     if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol ||
-        e.clientY < bounds.top - tol || e.clientY > bounds.bottom + tol) {
+        e.clientY < bounds.top - tol) {
       cancelGesture();
       return;
     }
@@ -1723,61 +1733,75 @@ style={{ background: 'hsl(var(--primary))' }}>
             <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
               Drag a widget from the list onto the dashboard grid to place it — it snaps into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
             </p>
-            <div className="p-3 space-y-2">
-              {WIDGET_DEFS.map(def => {
-                const placed = hasWidget(def.type);
-                const unlocked = canAccessTier(def.tier);
-                const Icon = def.icon;
-                const tierClass = def.tier === 'pro'
-                  ? 'bg-label-purple/15 text-[hsl(268_60%_60%)]'
-                  : def.tier === 'premium'
-                    ? 'bg-label-yellow/15 text-[hsl(38_92%_50%)]'
-                    : 'bg-muted/60 text-muted-foreground';
+            <div className="p-3 space-y-4">
+              {TIER_SECTIONS.map(section => {
+                const defs = WIDGET_DEFS.filter(d => d.tier === section.tier);
+                const lockedCount = defs.filter(d => !canAccessTier(d.tier)).length;
                 return (
-                  <div
-                    key={def.type}
-                    onClick={!placed && !unlocked ? () => navigate('/pricing') : undefined}
-                    onPointerDown={placed || !unlocked ? undefined : onPanelItemPointerDown(def)}
-                    className={placed
-                      ? 'p-3 rounded-2xl border opacity-60'
-                      : unlocked
-                        ? 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing touch-none select-none'
-                        : 'p-3 rounded-2xl border cursor-pointer select-none'}
-                    style={{
-                      borderColor: 'hsl(var(--border))',
-                      borderRadius: 16,
-                      background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                      boxShadow: unlocked ? '0 6px 18px -18px hsl(228 25% 25% / 0.4)' : 'none',
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: unlocked ? `hsl(var(--${def.accent}) / 0.12)` : 'hsl(var(--muted) / 0.6)' }}>
-                        {unlocked ? (
-                          <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
-                        ) : (
-                          <Lock className="w-4 h-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>{def.title}</p>
-                        <p className={`text-xs mt-0.5 ${unlocked ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>{def.desc}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        {(def.tier === 'premium' || def.tier === 'pro') && (
-                          <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${tierClass}`}>
-                            <Crown className="w-2.5 h-2.5" /> {def.tier}
-                          </span>
-                        )}
-                        {placed ? (
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
-                        ) : unlocked ? (
-                          <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
-                            Drag to add
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold uppercase text-primary px-2 py-1 rounded-full bg-primary/10">Upgrade</span>
-                        )}
-                      </div>
+                  <div key={section.tier}>
+                    <div className="flex items-center justify-between px-1 mb-1.5">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{section.label}</p>
+                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{lockedCount} locked</span>}
+                    </div>
+                    <div className="space-y-2">
+                      {defs.map(def => {
+                        const placed = hasWidget(def.type);
+                        const unlocked = canAccessTier(def.tier);
+                        const Icon = def.icon;
+                        const tierClass = def.tier === 'pro'
+                          ? 'bg-label-purple/15 text-[hsl(268_60%_60%)]'
+                          : def.tier === 'premium'
+                            ? 'bg-label-yellow/15 text-[hsl(38_92%_50%)]'
+                            : 'bg-muted/60 text-muted-foreground';
+                        return (
+                          <div
+                            key={def.type}
+                            onClick={!placed && !unlocked ? () => navigate('/pricing') : undefined}
+                            onPointerDown={placed || !unlocked ? undefined : onPanelItemPointerDown(def)}
+                            className={placed
+                              ? 'p-3 rounded-2xl border opacity-60'
+                              : unlocked
+                                ? 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing touch-none select-none'
+                                : 'p-3 rounded-2xl border cursor-pointer select-none'}
+                            style={{
+                              borderColor: 'hsl(var(--border))',
+                              borderRadius: 16,
+                              background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+                              boxShadow: unlocked ? '0 6px 18px -18px hsl(228 25% 25% / 0.4)' : 'none',
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: unlocked ? `hsl(var(--${def.accent}) / 0.12)` : 'hsl(var(--muted) / 0.6)' }}>
+                                {unlocked ? (
+                                  <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-bold ${unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>{def.title}</p>
+                                <p className={`text-xs mt-0.5 ${unlocked ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>{def.desc}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {(def.tier === 'premium' || def.tier === 'pro') && (
+                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${tierClass}`}>
+                                    <Crown className="w-2.5 h-2.5" /> {def.tier}
+                                  </span>
+                                )}
+                                {placed ? (
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
+                                ) : unlocked ? (
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
+                                    Drag to add
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold uppercase text-primary px-2 py-1 rounded-full bg-primary/10">Upgrade</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

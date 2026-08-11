@@ -3,11 +3,8 @@ import { db } from '../db';
 import { users, organizations, coupons, couponRedemptions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
-import paypalSdk from 'paypal-rest-sdk';
-import { encrypt, decrypt } from '../lib/encryption';
 
 const router = Router();
-const paypal = paypalSdk;
 const frontendUrl = process.env.FRONTEND_URL || '';
 
 type SubscriptionTier = 'free' | 'premium' | 'pro';
@@ -22,14 +19,94 @@ function safeParseInt(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-// Configure PayPal
+// ── PayPal Orders v2 integration (the legacy REST v1 /v1/payments API used by
+// paypal-rest-sdk is deprecated by PayPal and fails for newer app integrations).
 const paypalConfigured = Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
-if (paypalConfigured) {
-  paypal.configure({
-    mode: process.env.PAYPAL_MODE || 'sandbox',
-    client_id: process.env.PAYPAL_CLIENT_ID || '',
-    client_secret: process.env.PAYPAL_CLIENT_SECRET || '',
+const paypalApiBase = (process.env.PAYPAL_MODE || 'sandbox') === 'live'
+  ? 'https://api-m.paypal.com'
+  : 'https://api-m.sandbox.paypal.com';
+
+let paypalTokenCache: { token: string; expiresAt: number } | null = null;
+
+async function getPayPalAccessToken(): Promise<string> {
+  if (paypalTokenCache && paypalTokenCache.expiresAt > Date.now() + 60_000) {
+    return paypalTokenCache.token;
+  }
+  const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+  const res = await fetch(`${paypalApiBase}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`PayPal authentication failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+  const data = await res.json() as { access_token?: string; expires_in?: number };
+  if (!data.access_token) throw new Error('PayPal authentication returned no access token');
+  paypalTokenCache = { token: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000 };
+  return data.access_token;
+}
+
+const newRequestId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+async function createPayPalOrder(options: {
+  amount: string;
+  returnUrl: string;
+  cancelUrl: string;
+  description: string;
+}): Promise<{ approvalUrl: string; paymentId: string }> {
+  const token = await getPayPalAccessToken();
+  const res = await fetch(`${paypalApiBase}/v2/checkout/orders`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'PayPal-Request-Id': newRequestId(),
+    },
+    body: JSON.stringify({
+      intent: 'CAPTURE',
+      purchase_units: [{
+        description: options.description.slice(0, 127),
+        amount: { currency_code: 'USD', value: options.amount },
+      }],
+      application_context: {
+        brand_name: 'Task Joy Box',
+        return_url: options.returnUrl,
+        cancel_url: options.cancelUrl,
+        user_action: 'PAY_NOW',
+      },
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`PayPal order creation failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+  const data = await res.json() as { id?: string; links?: Array<{ rel: string; href: string }> };
+  const approvalUrl = data.links?.find((l: any) => l.rel === 'approve')?.href;
+  if (!data.id || !approvalUrl) {
+    throw new Error('No approval URL in PayPal response');
+  }
+  return { approvalUrl, paymentId: data.id };
+}
+
+async function capturePayPalOrder(orderId: string): Promise<void> {
+  const token = await getPayPalAccessToken();
+  const res = await fetch(`${paypalApiBase}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'PayPal-Request-Id': newRequestId(),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`PayPal capture failed (${res.status}): ${body.slice(0, 300)}`);
+  }
 }
 
 // Plan definitions matching the new tier structure
@@ -182,56 +259,18 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
     }
 
     const paymentData = {
-      intent: 'sale',
-      payer: { payment_method: 'paypal' },
-      redirect_urls: {
-        return_url: `${appBaseUrl}/api/payment/execute-payment${couponId ? `?couponId=${couponId}` : ''}`,
-        cancel_url: `${appBaseUrl}/pricing?subscription=cancelled`,
-      },
-      transactions: [{
-        item_list: {
-          items: [{
-            name: `${selectedTier.name} ${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan`,
-            sku: `${planType}_${tier}${couponId ? `_coupon${couponId}` : ''}`,
-            price: adjustedPrice.toFixed(2),
-            currency: 'USD',
-            quantity: 1,
-          }]
-        },
-        amount: { currency: 'USD', total: adjustedPrice.toFixed(2) },
-        description: `My Planner subscription — ${selectedTier.name} ${planType} plan`,
-      }]
+      amount: adjustedPrice.toFixed(2),
+      returnUrl: `${appBaseUrl}/api/payment/execute-payment?tier=${tier}&planType=${planType}${couponId ? `&couponId=${couponId}` : ''}`,
+      cancelUrl: `${appBaseUrl}/pricing?subscription=cancelled`,
+      description: `${selectedTier.name} ${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan — My Planner subscription`,
     };
 
-    paypal.payment.create(paymentData, (error: any, payment: any) => {
-      if (error) {
-        console.error('PayPal payment creation error:', {
-          error: error,
-          message: error.message,
-          details: error.details,
-          response: error.response,
-          paymentData: paymentData
-        });
-        return res.status(500).json({ 
-          error: 'Failed to create PayPal payment', 
-          details: error.message || 'Unknown PayPal error' 
-        });
-      }
-      if (!payment) {
-        console.error('No payment response from PayPal:', { paymentData });
-        return res.status(500).json({ error: 'No payment response from PayPal' });
-      }
-      const approvalUrl = payment.links?.find((l: any) => l.rel === 'approval_url')?.href;
-      if (!approvalUrl) {
-        console.error('No approval URL in PayPal response:', { payment, links: payment.links });
-        return res.status(500).json({ error: 'No approval URL in PayPal response' });
-      }
-      console.log('PayPal payment created successfully:', { paymentId: payment.id, approvalUrl });
-      res.json({ approvalUrl, paymentId: payment.id });
-    });
+    const { approvalUrl, paymentId } = await createPayPalOrder(paymentData);
+    console.log('PayPal order created successfully:', { paymentId, approvalUrl });
+    res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    res.status(500).json({ error: 'Failed to create checkout session', details: error instanceof Error ? error.message : 'Unknown PayPal error' });
   }
 });
 
@@ -262,45 +301,16 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
     const appBaseUrl = getAppBaseUrl(req);
     const total = (selectedTier.price * parsedSeats).toFixed(2);
 
-    const paymentData = {
-      intent: 'sale',
-      payer: { payment_method: 'paypal' },
-      redirect_urls: {
-        return_url: `${appBaseUrl}/api/payment/execute-org-payment?orgId=${parsedOrgId}&tier=${tier}&seats=${parsedSeats}`,
-        cancel_url: `${appBaseUrl}/collaboration?org_payment=cancelled`,
-      },
-      transactions: [{
-        amount: { currency: 'USD', total },
-        description: `Organization Seats — ${selectedTier.name} (${parsedSeats} seats)`,
-        item_list: {
-          items: [{
-            name: `${selectedTier.name} Seats`,
-            sku: `org_${tier}`,
-            price: selectedTier.price.toFixed(2),
-            currency: 'USD',
-            quantity: parsedSeats,
-          }]
-        }
-      }]
-    };
-
-    paypal.payment.create(paymentData, (error: any, payment: any) => {
-      if (error) {
-        console.error('PayPal org payment error:', error);
-        return res.status(500).json({ error: 'Failed to create PayPal payment', details: error.message });
-      }
-      if (!payment) {
-        return res.status(500).json({ error: 'No payment response from PayPal' });
-      }
-      const approvalUrl = payment.links?.find((l: any) => l.rel === 'approval_url')?.href;
-      if (!approvalUrl) {
-        return res.status(500).json({ error: 'No approval URL in PayPal response' });
-      }
-      res.json({ approvalUrl, paymentId: payment.id });
+    const { approvalUrl, paymentId } = await createPayPalOrder({
+      amount: total,
+      returnUrl: `${appBaseUrl}/api/payment/execute-org-payment?orgId=${parsedOrgId}&tier=${tier}&seats=${parsedSeats}`,
+      cancelUrl: `${appBaseUrl}/collaboration?org_payment=cancelled`,
+      description: `Organization Seats — ${selectedTier.name} (${parsedSeats} seats)`,
     });
+    res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating org checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    res.status(500).json({ error: 'Failed to create checkout session', details: error instanceof Error ? error.message : 'Unknown PayPal error' });
   }
 });
 
@@ -308,82 +318,86 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Response) => {
   if (!paypalConfigured) return res.status(503).json({ error: 'PayPal is not configured' });
 
-  const { paymentId, PayerID, couponId } = req.query;
-  if (!paymentId || !PayerID) return res.status(400).json({ error: 'Missing payment parameters' });
+  // Orders v2 appends `token` (the order id) to the return URL; older links use `paymentId`.
+  const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
+  if (!paymentId) return res.status(400).json({ error: 'Missing payment parameters' });
 
-  paypal.payment.execute(paymentId as string, { payer_id: PayerID as string }, async (error: any, payment: any) => {
-    if (error) {
-      console.error('PayPal payment execution error:', error);
-      return res.status(500).json({ error: 'Failed to execute PayPal payment', details: error.message });
-    }
-    try {
-      const sku = payment.transactions[0].item_list?.items[0]?.sku;
-      const parts = sku?.split('_') || [];
-      const tier = parts[1] as SubscriptionTier || 'pro';
+  const tier = (req.query.tier as SubscriptionTier) || 'pro';
+  const couponId = req.query.couponId;
 
-      await db.update(users)
-        .set({
-          subscriptionTier: tier,
-          subscriptionStatus: 'active',
-          subscriptionEndsAt: null,
-        } as UpdateUser)
-        .where(eq(users.id, req.userId!));
+  try {
+    await capturePayPalOrder(paymentId);
+  } catch (error) {
+    console.error('PayPal payment capture error:', error);
+    return res.status(500).json({
+      error: 'Failed to execute PayPal payment',
+      details: error instanceof Error ? error.message : 'Unknown PayPal error',
+    });
+  }
 
-      // Track coupon redemption
-      if (couponId) {
-        const parsedCouponId = parseInt(couponId as string);
-        await db.insert(couponRedemptions).values({
-          couponId: parsedCouponId,
-          userId: req.userId!,
-        });
+  try {
+    await db.update(users)
+      .set({
+        subscriptionTier: tier,
+        subscriptionStatus: 'active',
+        subscriptionEndsAt: null,
+      } as UpdateUser)
+      .where(eq(users.id, req.userId!));
 
-        // Increment used count
-        const [coupon] = await db.select().from(coupons).where(eq(coupons.id, parsedCouponId)).limit(1);
-        if (coupon) {
-          const newUsedCount = coupon.usedCount + 1;
-          const updateData: any = { usedCount: newUsedCount };
+    // Track coupon redemption
+    if (couponId) {
+      const parsedCouponId = parseInt(couponId as string);
+      await db.insert(couponRedemptions).values({
+        couponId: parsedCouponId,
+        userId: req.userId!,
+      });
 
-          // Auto-deactivate if usage limit reached
-          if (coupon.maxUses !== null && newUsedCount >= coupon.maxUses) {
-            updateData.active = false;
-          }
+      // Increment used count
+      const [coupon] = await db.select().from(coupons).where(eq(coupons.id, parsedCouponId)).limit(1);
+      if (coupon) {
+        const newUsedCount = coupon.usedCount + 1;
+        const updateData: any = { usedCount: newUsedCount };
 
-          await db.update(coupons).set(updateData).where(eq(coupons.id, parsedCouponId));
+        // Auto-deactivate if usage limit reached
+        if (coupon.maxUses !== null && newUsedCount >= coupon.maxUses) {
+          updateData.active = false;
         }
-      }
 
-      res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
-    } catch (dbError) {
-      console.error('Database update error:', dbError);
-      res.status(500).json({ error: 'Failed to update subscription status' });
+        await db.update(coupons).set(updateData).where(eq(coupons.id, parsedCouponId));
+      }
     }
-  });
+
+    res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
+  } catch (dbError) {
+    console.error('Database update error:', dbError);
+    res.status(500).json({ error: 'Failed to update subscription status' });
+  }
 });
 
 // Execute PayPal organization payment
 router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Response) => {
-  const { paymentId, PayerID, orgId, tier, seats } = req.query;
-  if (!paymentId || !PayerID || !orgId) return res.status(400).json({ error: 'Missing parameters' });
+  const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
+  const { orgId, tier, seats } = req.query;
+  if (!paymentId || !orgId) return res.status(400).json({ error: 'Missing parameters' });
 
   const parsedOrgId = parseInt(orgId as string);
   const parsedSeats = parseInt(seats as string);
-  const selectedTier = PRICING_TIERS[tier as SubscriptionTier];
-  const total = (selectedTier.price * parsedSeats).toFixed(2);
 
-  paypal.payment.execute(paymentId as string, { payer_id: PayerID as string }, async (error: any) => {
-    if (error) {
-      console.error('PayPal org execution error:', error);
-      return res.status(500).json({ error: 'Failed to execute payment', details: error.message });
-    }
-    try {
-      await db.update(organizations)
-        .set({ status: 'active', tier: tier as string, maxSeats: parsedSeats } as UpdateOrganization)
-        .where(eq(organizations.id, parsedOrgId));
-      res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
-    } catch {
-      res.status(500).json({ error: 'Failed to activate organization' });
-    }
-  });
+  try {
+    await capturePayPalOrder(paymentId);
+  } catch (error) {
+    console.error('PayPal org capture error:', error);
+    return res.status(500).json({ error: 'Failed to execute payment', details: error instanceof Error ? error.message : 'Unknown PayPal error' });
+  }
+
+  try {
+    await db.update(organizations)
+      .set({ status: 'active', tier: tier as string, maxSeats: parsedSeats } as UpdateOrganization)
+      .where(eq(organizations.id, parsedOrgId));
+    res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
+  } catch {
+    res.status(500).json({ error: 'Failed to activate organization' });
+  }
 });
 
 // Get user's subscription status
