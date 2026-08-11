@@ -214,101 +214,97 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
         onClick={() => onTaskClick(task)}
         className={`cursor-pointer rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1.5 px-3.5 py-3.5">
           <div {...taskProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-            <GripVertical className="w-4 h-4" />
+            <GripVertical className="w-5 h-5" />
           </div>
           <CircleToggle
             completed={task.completed || false}
             onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
-            size="sm"
+            size="md"
           />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className={`text-sm font-medium text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                {task.title}
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <span className={`text-[15px] font-medium text-foreground truncate flex-1 min-w-0 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+              {task.title}
+            </span>
+            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+              <PriorityBadge
+                task={task}
+                onUpdate={(priority) => updateTask(task.id, { priority })}
+                isOpen={priorityEditTaskId === task.id}
+                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+              />
+            )}
+            {taskDurFmt && (
+              <button
+                onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
+                className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+              >
+                {taskDurFmt}
+              </button>
+            )}
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                setDateEditField(prev => prev === 'start' ? null : 'start');
+              }}
+              className="text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
+            >
+              <Calendar className="w-3 h-3" />
+              {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+            </button>
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                setDateEditField(prev => prev === 'due' ? null : 'due');
+              }}
+              className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                task.dueDate
+                  ? warning === 'overdue'
+                    ? 'bg-destructive/10 text-destructive'
+                    : warning === 'imminent' || warning === 'soon'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'bg-muted text-muted-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Calendar className="w-3 h-3" />
+              {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+            </button>
+            {checklistTotal > 0 && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                {checklistDone}/{checklistTotal} checklist
               </span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
-                <PriorityBadge
-                  task={task}
-                  onUpdate={(priority) => updateTask(task.id, { priority })}
-                  isOpen={priorityEditTaskId === task.id}
-                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
-                />
-              )}
-              {taskDurFmt && (
-                <button
-                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  {taskDurFmt}
-                </button>
-              )}
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
-                }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  task.dueDate
-                    ? warning === 'overdue'
-                      ? 'bg-destructive/10 text-destructive'
-                      : warning === 'imminent' || warning === 'soon'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'bg-muted text-muted-foreground'
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
-              </button>
-              {checklistTotal > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {checklistDone}/{checklistTotal} checklist
-                </span>
-              )}
-              {subtaskCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {subtaskDone}/{subtaskCount} sub task
-                </span>
-              )}
-              {taskTags.map(label => (
-                <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                  {label.name}
-                </span>
-              ))}
-              {task.labels.length > taskTags.length && (
-                <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  +{task.labels.length - taskTags.length}
-                </button>
-              )}
+            )}
+            {subtaskCount > 0 && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                {subtaskDone}/{subtaskCount} sub task
+              </span>
+            )}
+            {taskTags.map(label => (
+              <span key={label.id} className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                {label.name}
+              </span>
+            ))}
+            {task.labels.length > taskTags.length && (
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                }`}
+                className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
               >
-                <Tag className="w-2.5 h-2.5" />
-                {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
+                +{task.labels.length - taskTags.length}
               </button>
-            </div>
+            )}
+            <button
+              onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+              className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <Tag className="w-3 h-3" />
+              {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -316,14 +312,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
               className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
               title="Open Deep Focus"
             >
-              <Brain className="w-3.5 h-3.5" />
+              <Brain className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -488,11 +484,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[36rem]">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[44rem]">
           <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
-              {column.icon && <span className="text-sm">{column.icon}</span>}
-              <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: column.color }} />
+              {column.icon && <span className="text-base">{column.icon}</span>}
+              <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: column.color }} />
               {editingColumnName ? (
                 <input
                   autoFocus
@@ -519,18 +515,18 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   className="text-sm font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               ) : (
-                <h3 className="text-sm font-bold text-foreground tracking-tight truncate">{column.title}</h3>
+                <h3 className="text-lg font-bold text-foreground tracking-tight truncate">{column.title}</h3>
               )}
-              <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-bold">{tasks.length}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-bold">{tasks.length}</span>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setTasksCollapsed(!tasksCollapsed)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" title={tasksCollapsed ? 'Show tasks' : 'Hide tasks'}>
-                {tasksCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              <button onClick={() => setTasksCollapsed(!tasksCollapsed)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all" title={tasksCollapsed ? 'Show tasks' : 'Hide tasks'}>
+                {tasksCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
               </button>
               {canEdit && (
               <div className="relative">
-                <button onClick={() => setShowMenu(!showMenu)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all">
-                  <MoreHorizontal className="w-4 h-4" />
+                <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all">
+                  <MoreHorizontal className="w-5 h-5" />
                 </button>
                 {showMenu && (
                   <div className="absolute right-0 top-9 bg-popover border border-border rounded-xl shadow-2xl z-50 py-1.5 min-w-[200px] animate-in fade-in zoom-in-95 duration-200">
