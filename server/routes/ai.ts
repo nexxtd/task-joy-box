@@ -56,6 +56,26 @@ function createCacheKey(input: string, model: string): string {
   return `${model}:${inputHash}:${Math.floor(input.length / 100)}`;
 }
 
+// Free AI models frequently truncate their JSON or leave trailing junk —
+// repair the most common damage: drop trailing commas and close unclosed braces.
+function repairJson(text: string): unknown {
+  const start = text.indexOf('{');
+  if (start === -1) return undefined;
+  let candidate = text.slice(start).replace(/,\s*([}\]])/g, '$1');
+  for (let i = 0; i < 12; i++) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
+        return parsed;
+      }
+    } catch (parseError) {
+      // keep closing braces
+    }
+    candidate += '}';
+  }
+  return undefined;
+}
+
 async function extractJsonFromResponse(text: string) {
   // Try to find JSON within code blocks first
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -81,6 +101,10 @@ async function extractJsonFromResponse(text: string) {
       // keep trying shorter slices
     }
   }
+
+  // Repair pass: close unclosed braces and drop trailing commas.
+  const repaired = repairJson(jsonText);
+  if (repaired !== undefined) return repaired;
 
   console.error('Failed to parse AI response:', text);
   throw new Error('Invalid JSON response from AI service');
@@ -183,7 +207,7 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
         messages: [{ role: 'user', content: prompt }],
         model: AI_MODEL,
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 4000,
       });
 
       console.log('OpenRouter response:', JSON.stringify({ choices: completion.choices?.length, model: completion.model, id: completion.id }));
@@ -1734,8 +1758,19 @@ All task ids must come verbatim from the data provided. If there are no active t
         responseText = await generateContentWithRetry(prompt, 1, true, true);
         parsed = await extractJsonFromResponse(responseText);
       } catch (parseError2) {
-        return res.status(500).json({ error: 'The AI returned an unreadable response. Please try again.' });
+        // Last resort: ask the model to repair its own output into valid JSON.
+        try {
+          console.warn('Dashboard widgets: second AI response unreadable, attempting repair pass.');
+          const repairPrompt = `The text below was supposed to be a JSON object, but it is malformed. Output ONLY the corrected valid JSON object with EXACTLY this shape: {"productivityScore":{"score":0-100,"summary":"one or two short sentences","focusAreas":["2-4 short focus areas"]},"nextTasks":[{"id":"a task id","reason":"one sentence"}],"bottlenecks":[{"id":"a task id","reason":"one sentence","suggestion":"one concrete next step"}],"weeklySummary":"2-3 sentences"}. If the text contains no usable data, output {"productivityScore":{"score":0,"summary":"Not enough data for analysis","focusAreas":[]},"nextTasks":[],"bottlenecks":[],"weeklySummary":"Not enough data for analysis"}.\n\nMALFORMED TEXT:\n${responseText.slice(0, 4000)}`;
+          const fixed = await generateContentWithRetry(repairPrompt, 1, true, true);
+          parsed = await extractJsonFromResponse(fixed);
+        } catch (parseError3) {
+          parsed = null;
+        }
       }
+    }
+    if (!parsed) {
+      return res.status(500).json({ error: 'The AI returned an unreadable response. Please try again.' });
     }
 
     const clampInt = (v: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
