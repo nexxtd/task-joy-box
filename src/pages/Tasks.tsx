@@ -33,6 +33,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
+import TagsModal from '@/components/shared/TagsModal';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -753,6 +755,7 @@ const Tasks: React.FC = () => {
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
+  const [aiTaskDraft, setAiTaskDraft] = useState<CreateTaskInitialValues | null>(null);
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
 
@@ -1372,24 +1375,32 @@ const Tasks: React.FC = () => {
         const matchedCol = board.columns.find(c =>
           c.title.toLowerCase() === data.group!.toLowerCase()
         );
-        if (matchedCol) setNewTaskColumnId(matchedCol.id);
+        if (matchedCol) setAiTaskDraft(prev => ({ ...prev, columnId: matchedCol.id }));
       }
 
-      setNewTaskSubtasks(
-        (data.subtasks || []).map(st => ({
-          id: crypto.randomUUID(),
+      const matchedTags: Label[] = (data.tags && data.tags.length > 0)
+        ? (data.tags.map(tagName =>
+            allTags.find(t => t.name.toLowerCase() === tagName.toLowerCase())
+          ).filter(Boolean) as Label[])
+        : [];
+
+      setAiTaskDraft({
+        title: data.title || '',
+        description: data.description || '',
+        priority: (data.priority as Priority) || 'medium',
+        status: (data.status as TaskStatus) || 'to_do',
+        startDate: data.startDate || '',
+        startTime: data.startTime || '',
+        dueDate: data.dueDate || '',
+        dueTime: data.dueTime || '',
+        duration: data.duration || 60,
+        subtasks: (data.subtasks || []).map(st => ({
           text: st.text,
           durationMinutes: st.durationMinutes || 0,
-        }))
-      );
-      setNewChecklistItems((data.checklistItems || []).map(text => ({ id: crypto.randomUUID(), text })));
-
-      if (data.tags && data.tags.length > 0) {
-        const matched = data.tags.map(tagName =>
-          allTags.find(t => t.name.toLowerCase() === tagName.toLowerCase())
-        ).filter(Boolean) as Label[];
-        setNewTaskLabels(matched);
-      }
+        })),
+        checklistItems: (data.checklistItems || []).map(text => text),
+        labels: matchedTags,
+      });
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
@@ -1949,45 +1960,23 @@ const Tasks: React.FC = () => {
               Tags
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
-            {tagPickerOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
-                <div className="absolute left-0 mt-1.5 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Tag filter</p>
-                      <p className="text-xs text-muted-foreground">Filter tasks by tag.</p>
-                    </div>
-                    <button onClick={() => setTagPickerOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                    {allTags.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">No tags yet.</p>
-                    )}
-                    {allTags.map(tag => {
-                      const isActive = tagFilterIds.includes(tag.id);
-                      return (
-                        <button
-                          key={tag.id}
-                          onClick={() => toggleTagFilter(tag.id)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
-                            isActive
-                              ? 'border-primary/30 bg-primary/5 shadow-sm'
-                              : 'border-border/60 hover:bg-muted/40'
-                          }`}
-                        >
-                          <span className={`w-3 h-3 rounded-full flex-shrink-0 ${LABEL_COLORS[tag.color]}`} />
-                          <span className="text-sm text-foreground flex-1">{tag.name}</span>
-                          {isActive && <span className="text-[10px] text-primary font-bold">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
+            <TagsModal
+              open={tagPickerOpen}
+              onClose={() => setTagPickerOpen(false)}
+              tags={allTags}
+              selectedIds={tagFilterIds}
+              onToggle={tagId => toggleTagFilter(tagId)}
+              onCreate={async (name, color) => {
+                try {
+                  await createSharedTaskLabel(name, color);
+                } catch (error) {
+                  console.error('Failed to create task tag:', error);
+                }
+              }}
+              onDelete={tagId => deleteTagEverywhere(tagId)}
+              onRename={renameTagEverywhere}
+              emptyText="No tags yet. Create one below."
+            />
           </div>
 
           <div className="relative">
@@ -2293,6 +2282,14 @@ const Tasks: React.FC = () => {
       </div>
 
       {addingTask && (
+        <CreateTaskModal
+          open={addingTask}
+          onClose={() => setAddingTask(false)}
+          initialValues={aiTaskDraft}
+        />
+      )}
+
+      {false && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setAddingTask(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div
@@ -3657,54 +3654,23 @@ const Tasks: React.FC = () => {
         const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
         if (!popupTask) return null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                <button onClick={() => setTagPopupTaskId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-              </div>
-              <div className="max-h-60 space-y-2 overflow-y-auto">
-                {allTags.map(label => {
-                  const active = popupTask.labels.some(item => item.id === label.id);
-                  return (
-                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                      {editingTagId === label.id ? (
-                        <input
-                          autoFocus
-                          value={editingTagName}
-                          onChange={e => setEditingTagName(e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          onBlur={() => {
-                            setEditingTagId(null);
-                            renameTagEverywhere(label.id, editingTagName);
-                          }}
-                          onKeyDown={e => {
-                            e.stopPropagation();
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            else if (e.key === 'Escape') setEditingTagId(null);
-                          }}
-                          className="flex-1 rounded-lg border border-primary bg-muted/40 px-2 py-1 text-sm outline-none"
-                        />
-                      ) : (
-                        <button onClick={() => toggleTaskTag(popupTask.id, label)} className="flex flex-1 items-center gap-2 text-left">
-                          <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                          <span
-                            onClick={e => { e.stopPropagation(); setEditingTagId(label.id); setEditingTagName(label.name); }}
-                            title="Rename tag"
-                            className="text-sm text-foreground hover:underline cursor-text"
-                          >
-                            {label.name}
-                          </span>
-                          {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <TagsModal
+            open={!!tagPopupTaskId}
+            onClose={() => setTagPopupTaskId(null)}
+            tags={allTags}
+            selectedIds={popupTask.labels.map(label => label.id)}
+            onToggle={tagId => { const label = allTags.find(t => t.id === tagId); if (label) toggleTaskTag(popupTask.id, label); }}
+            onCreate={async (name, color) => {
+              try {
+                const newLabel = await createSharedTaskLabel(name, color);
+                updateTask(popupTask.id, { labels: [...popupTask.labels, newLabel] });
+              } catch (error) {
+                console.error('Failed to create task tag:', error);
+              }
+            }}
+            onDelete={tagId => deleteTagEverywhere(tagId)}
+            onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+          />
         );
       })()}
 
@@ -4963,7 +4929,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               {task.labels.map(label => (
                 <button
                   key={label.id}
-                  onClick={() => onToggleTag(task.id, label)}
+                  onClick={() => setTagPickerOpen(true)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
@@ -4982,66 +4948,18 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
 
           {tagPickerOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPickerOpen(false)}>
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-              <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                  <button onClick={() => setTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-                </div>
-                <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
-                  {allTags.map(label => {
-                    const active = task.labels.some(item => item.id === label.id);
-                    return (
-                      <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                        {editingTagId === label.id ? (
-                          <input
-                            autoFocus
-                            value={editingTagName}
-                            onChange={e => setEditingTagName(e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            onBlur={() => {
-                              setEditingTagId(null);
-                              onRenameTagEverywhere(label.id, editingTagName);
-                            }}
-                            onKeyDown={e => {
-                              e.stopPropagation();
-                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              else if (e.key === 'Escape') setEditingTagId(null);
-                            }}
-                            className="flex-1 rounded-lg border border-primary bg-muted/40 px-2 py-1 text-sm outline-none"
-                          />
-                        ) : (
-                          <button onClick={() => onToggleTag(task.id, label)} className="flex flex-1 items-center gap-2 text-left">
-                            <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                            <span
-                              onClick={e => { e.stopPropagation(); setEditingTagId(label.id); setEditingTagName(label.name); }}
-                              title="Rename tag"
-                              className="text-sm text-foreground hover:underline cursor-text"
-                            >
-                              {label.name}
-                            </span>
-                            {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                          </button>
-                        )}
-                        <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-border pt-4">
-                  <div className="flex gap-2 mb-2">
-                    <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
-                      className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                    <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={createTagForTask} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
-                    <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TagsModal
+              open={tagPickerOpen}
+              onClose={() => setTagPickerOpen(false)}
+              tags={allTags}
+              selectedIds={task.labels.map(label => label.id)}
+              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(task.id, label); }}
+              onCreate={(name, color) => {
+                onCreateTag(task.id, name, color);
+              }}
+              onDelete={tagId => onDeleteTagEverywhere(tagId)}
+              onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
+            />
           )}
           {tagDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>

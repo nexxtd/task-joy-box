@@ -6,7 +6,8 @@ import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
-import { fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import TagsModal from '@/components/shared/TagsModal';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 interface ListViewProps {
@@ -266,6 +267,26 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     board.tasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
         updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
       }
     });
   };
@@ -634,54 +655,22 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
         const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
         if (!popupTask) return null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                <button onClick={() => setTagPopupTaskId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-              </div>
-              <div className="max-h-60 space-y-2 overflow-y-auto">
-                {allTags.map(label => {
-                  const active = popupTask.labels.some(item => item.id === label.id);
-                  return (
-                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                      {editingTagId === label.id ? (
-                        <input
-                          autoFocus
-                          value={editingTagName}
-                          onChange={e => setEditingTagName(e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          onBlur={() => {
-                            setEditingTagId(null);
-                            renameTagEverywhere(label.id, editingTagName);
-                          }}
-                          onKeyDown={e => {
-                            e.stopPropagation();
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            else if (e.key === 'Escape') setEditingTagId(null);
-                          }}
-                          className="flex-1 rounded-lg border border-primary bg-muted/40 px-2 py-1 text-sm outline-none"
-                        />
-                      ) : (
-                        <button onClick={() => toggleTaskTag(popupTask.id, label)} className="flex flex-1 items-center gap-2 text-left">
-                          <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                          <span
-                            onClick={e => { e.stopPropagation(); setEditingTagId(label.id); setEditingTagName(label.name); }}
-                            title="Rename tag"
-                            className="text-sm text-foreground hover:underline cursor-text"
-                          >
-                            {label.name}
-                          </span>
-                          {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <TagsModal
+            open
+            title="Tags"
+            onClose={() => setTagPopupTaskId(null)}
+            tags={allTags}
+            selectedIds={popupTask.labels.map(label => label.id)}
+            onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) toggleTaskTag(popupTask.id, label); }}
+            onCreate={async (name, color) => {
+              const tag = await createTag({ name, color });
+              const label = sharedTagToLabel(tag);
+              updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+            }}
+            onDelete={deleteTagEverywhere}
+            onRename={renameTagEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
         );
       })()}
 

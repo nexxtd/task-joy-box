@@ -13,8 +13,21 @@ import {
   GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw,
   Flame, Crown, Lock, CheckCircle2
 } from 'lucide-react';
-import { PRIORITY_CONFIG, Priority, Task, LABEL_COLORS } from '@/types/board';
+import { PRIORITY_CONFIG, Priority, Task, LABEL_COLORS, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import CreateTaskModal from '@/components/CreateTaskModal';
+import TagsModal from '@/components/shared/TagsModal';
+import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+
+const SHARED_TAG_PREFIX = 'shared-tag-';
+
+const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const sharedTagToLabel = (tag: SharedTag): Label => ({
+  id: `${SHARED_TAG_PREFIX}${tag.id}`,
+  name: tag.name,
+  color: tag.color as LabelColor,
+});
 
 type DashboardWidgetType =
   | 'stats' | 'tasks' | 'projects' | 'project-tasks' | 'insights'
@@ -203,17 +216,11 @@ const LockedWidget: React.FC<{ tierLabel: string; onUpgrade: () => void }> = ({ 
 );
 
 const Dashboard: React.FC = () => {
-  const { board, addTask } = useBoardContext();
+  const { board, updateTask } = useBoardContext();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('none');
-  const [newTaskDueDate, setNewTaskDueDate] = useState('');
-  const [newTaskDueTime, setNewTaskDueTime] = useState('');
-  const [newTaskColumn, setNewTaskColumn] = useState('');
   const [energySettings, setEnergySettings] = useState({
     energyMorning: 'medium' as 'low' | 'medium' | 'high',
     energyAfternoon: 'high' as 'low' | 'medium' | 'high',
@@ -221,6 +228,72 @@ const Dashboard: React.FC = () => {
   });
   const [energyConfigured, setEnergyConfigured] = useState(false);
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
+  const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const tags = await fetchTags();
+        if (!cancelled) setSharedTags(tags);
+      } catch (error) {
+        console.error('Failed to load shared tags:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const allTags = useMemo<Label[]>(() => {
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
+    sharedTags.forEach(tag => byName.set(normalizeTagName(tag.name).toLowerCase(), sharedTagToLabel(tag)));
+    return Array.from(byName.values());
+  }, [sharedTags]);
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  };
+
+  const renameTagEverywhere = async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch (error) {
+          console.error('Failed to rename shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
 
   const [showCustomize, setShowCustomize] = useState(false);
   const [layout, setLayout] = useState<DashboardWidget[]>([]);
@@ -601,21 +674,7 @@ const Dashboard: React.FC = () => {
   ];
 
   const handleAddTask = () => {
-    if (newTaskTitle.trim() && newTaskColumn) {
-      addTask(newTaskColumn, newTaskTitle.trim(), {
-        description: newTaskDescription,
-        priority: newTaskPriority,
-        dueDate: newTaskDueDate || undefined,
-        dueTime: newTaskDueTime || undefined,
-      });
-      setNewTaskTitle('');
-      setNewTaskDescription('');
-      setNewTaskPriority('none');
-      setNewTaskDueDate('');
-      setNewTaskDueTime('');
-      setNewTaskColumn('');
-      setShowAddTask(false);
-    }
+    setShowAddTask(true);
   };
 
   const cellFromPoint = useCallback((clientX: number, clientY: number) => {
@@ -1210,11 +1269,11 @@ style={{ background: 'hsl(var(--primary))' }}>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {tagsOverview.map(t => (
-                  <span key={t.label.id} className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full"
+                  <button key={t.label.id} onClick={() => setTagsModalOpen(true)} className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer transition-colors hover:bg-muted"
                     style={{ background: 'hsl(var(--muted) / 0.5)', border: '1px solid hsl(var(--border))' }}>
                     <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--${LABEL_COLORS[t.label.color].replace('bg-', '')}))` }} />
                     {t.label.name} <span className="text-muted-foreground">·</span> {t.count}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}
@@ -1703,98 +1762,23 @@ style={{ background: 'hsl(var(--primary))' }}>
         </div>
       )}
 
+      {tagsModalOpen && (
+        <TagsModal
+          open={tagsModalOpen}
+          onClose={() => setTagsModalOpen(false)}
+          title="Tags"
+          tags={allTags}
+          selectedIds={[]}
+          onToggle={() => {}}
+          onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
+          onDelete={deleteTagEverywhere}
+          onRename={renameTagEverywhere}
+          emptyText="No tags yet. Create one below."
+        />
+      )}
+
       {showAddTask && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4" onClick={() => setShowAddTask(false)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-lg font-semibold text-foreground">Add New Task</h2>
-              <button onClick={() => setShowAddTask(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Title</label>
-                <input
-                  autoFocus
-                  value={newTaskTitle}
-                  onChange={e => setNewTaskTitle(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddTask()}
-                  placeholder="Task title..."
-                  className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Description</label>
-                <textarea
-                  value={newTaskDescription}
-                  onChange={e => setNewTaskDescription(e.target.value)}
-                  placeholder="Task description..."
-                  className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Column</label>
-                <Select value={newTaskColumn} onValueChange={setNewTaskColumn}>
-                  <SelectTrigger className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-10">
-                    <SelectValue placeholder="Select a column..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {board.columns.map(col => (
-                      <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Priority</label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setNewTaskPriority('none')}
-                    className={`text-xs px-3 py-1.5 rounded-md border transition-all ${newTaskPriority === 'none' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
-                  >
-                    None
-                  </button>
-                  {(Object.entries(PRIORITY_CONFIG) as [Exclude<Priority, 'none'>, { label: string; className: string }][]).map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={() => setNewTaskPriority(key)}
-                      className={`text-xs px-3 py-1.5 rounded-md transition-all ${newTaskPriority === key ? `${cfg.className} text-primary-foreground` : 'border border-border text-muted-foreground hover:text-foreground'}`}
-                    >
-                      {cfg.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Due Date</label>
-                <input
-                  type="date"
-                  value={newTaskDueDate}
-                  onChange={e => setNewTaskDueDate(e.target.value)}
-                  className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Due Time</label>
-                <input
-                  type="time"
-                  value={newTaskDueTime}
-                  onChange={e => setNewTaskDueTime(e.target.value)}
-                  className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
-              <button onClick={() => setShowAddTask(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-              <button onClick={handleAddTask} disabled={!newTaskTitle.trim() || !newTaskColumn} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                Add Task
-              </button>
-            </div>
-          </div>
-        </div>
+        <CreateTaskModal open={showAddTask} onClose={() => setShowAddTask(false)} />
       )}
     </>
   );

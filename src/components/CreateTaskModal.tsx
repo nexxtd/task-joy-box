@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import TagsModal from '@/components/shared/TagsModal';
 import heic2any from 'heic2any';
 
 type NewTaskSubtaskDraft = {
@@ -28,11 +29,29 @@ type NewTaskSubtaskDraft = {
   durationMinutes: number;
 };
 
+export type CreateTaskInitialValues = {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  status?: TaskStatus;
+  startDate?: string;
+  startTime?: string;
+  dueDate?: string;
+  dueTime?: string;
+  duration?: number;
+  columnId?: string;
+  subtasks?: Array<{ text: string; durationMinutes: number }>;
+  checklistItems?: string[];
+  labels?: Label[];
+};
+
 export type CreateTaskModalProps = {
   open: boolean;
   onClose: () => void;
   defaultColumnId?: string;
   defaultProjectId?: number | null;
+  initialValues?: CreateTaskInitialValues | null;
+  initialAI?: boolean;
 };
 
 type ProjectMeta = {
@@ -137,6 +156,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   onClose,
   defaultColumnId,
   defaultProjectId,
+  initialValues,
+  initialAI,
 }) => {
   const { board, addTask, updateTask } = useBoardContext();
   const { user } = useAuth();
@@ -244,6 +265,28 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setNewTaskLabels(prev => prev.map(label => label.id === tagId ? { ...label, name } : label));
   };
 
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+          setSharedTags(prev => prev.filter(tag => tag.id !== sharedTagId));
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+      }
+    });
+    setNewTaskLabels(prev => prev.filter(label => label.id !== tagId));
+  };
+
   const newSubtaskTotal = newTaskSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
@@ -318,6 +361,26 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   useEffect(() => {
     if (!open) return;
     resetTaskDraft();
+    if (initialValues) {
+      if (initialValues.title != null) setNewTaskTitle(initialValues.title);
+      if (initialValues.description != null) setNewTaskDescription(initialValues.description);
+      if (initialValues.priority != null) setNewTaskPriority(initialValues.priority);
+      if (initialValues.status != null) setNewTaskStatus(initialValues.status);
+      if (initialValues.startDate != null) setNewTaskStartDate(initialValues.startDate);
+      if (initialValues.startTime != null) setNewTaskStartTime(initialValues.startTime);
+      if (initialValues.dueDate != null) setNewTaskDueDate(initialValues.dueDate);
+      if (initialValues.dueTime != null) setNewTaskDueTime(initialValues.dueTime);
+      if (initialValues.duration != null) setNewTaskDuration(initialValues.duration);
+      if (initialValues.columnId != null) setNewTaskColumnId(initialValues.columnId);
+      if (initialValues.subtasks) {
+        setNewTaskSubtasks(initialValues.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: st.durationMinutes })));
+      }
+      if (initialValues.checklistItems) {
+        setNewChecklistItems(initialValues.checklistItems.map(text => ({ id: crypto.randomUUID(), text })));
+      }
+      if (initialValues.labels) setNewTaskLabels(initialValues.labels);
+    }
+    if (initialAI) setAiBuilderOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -718,103 +781,29 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </div>
               )}
             </div>
-      {newTagPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setNewTagPickerOpen(false)}>
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground">Tags</h3>
-              <button onClick={() => setNewTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
-              {allTags.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
-              )}
-              {allTags.map(label => {
-                const active = newTaskLabels.some(item => item.id === label.id);
-                return (
-                  <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                    {editingTagId === label.id ? (
-                      <input
-                        autoFocus
-                        value={editingTagName}
-                        onChange={e => setEditingTagName(e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                        onBlur={() => {
-                          setEditingTagId(null);
-                          renameTagEverywhere(label.id, editingTagName);
-                        }}
-                        onKeyDown={e => {
-                          e.stopPropagation();
-                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          else if (e.key === 'Escape') setEditingTagId(null);
-                        }}
-                        className="flex-1 rounded-lg border border-primary bg-muted/40 px-2 py-1 text-sm outline-none"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => setNewTaskLabels(prev => active ? prev.filter(l => l.id !== label.id) : [...prev, label])}
-                        className="flex flex-1 items-center gap-2 text-left"
-                      >
-                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                        <span
-                          onClick={e => { e.stopPropagation(); setEditingTagId(label.id); setEditingTagName(label.name); }}
-                          title="Rename tag"
-                          className="text-sm text-foreground hover:underline cursor-text"
-                        >
-                          {label.name}
-                        </span>
-                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="border-t border-border pt-4">
-              <div className="flex gap-2 mb-2">
-                <input
-                  value={newTagName}
-                  onChange={e => setNewTagName(e.target.value)}
-                  placeholder="Create tag"
-                  className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <button
-                  onClick={() => setNewTagColor(randomTagColor())}
-                  className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`}
-                  title="Random color"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    const name = normalizeTagName(newTagName);
-                    if (!name) return;
-                    try {
-                      const newLabel = await createSharedTaskLabel(name, newTagColor);
-                      setNewTaskLabels(prev => [...prev, newLabel]);
-                      setNewTagName('');
-                      setNewTagColor(randomTagColor());
-                    } catch (error) {
-                      console.error('Failed to create task tag:', error);
-                    }
-                  }}
-                  disabled={!newTagName.trim()}
-                  className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                >
-                  Add tag
-                </button>
-                <button
-                  onClick={() => setNewTagPickerOpen(false)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <TagsModal
+        open={newTagPickerOpen}
+        onClose={() => setNewTagPickerOpen(false)}
+        tags={allTags}
+        selectedIds={newTaskLabels.map(label => label.id)}
+        onToggle={labelId =>
+          setNewTaskLabels(prev =>
+            prev.some(label => label.id === labelId)
+              ? prev.filter(label => label.id !== labelId)
+              : [...prev, allTags.find(label => label.id === labelId)!]
+          )
+        }
+        onCreate={async (name, color) => {
+          try {
+            const newLabel = await createSharedTaskLabel(name, color);
+            setNewTaskLabels(prev => [...prev, newLabel]);
+          } catch (error) {
+            console.error('Failed to create task tag:', error);
+          }
+        }}
+        onDelete={tagId => deleteTagEverywhere(tagId)}
+        onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+      />
 
             {/* Sub-tasks */}
             <div className="rounded-2xl border border-border bg-muted/20">

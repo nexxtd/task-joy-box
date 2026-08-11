@@ -188,14 +188,14 @@ const Insights: React.FC = () => {
   const tasks = board?.tasks || [];
   const columns = board?.columns || [];
 
-  const doneColIds = useMemo(() =>
-    columns.filter(c => /done|completed|finish/i.test(c.title)).map(c => c.id),
-    [columns]
-  );
+  const isTaskDone = (t: { completed?: boolean; columnId: string; completedAt?: string; updatedAt?: string }) =>
+    Boolean(t.completed || columns.find(c => c.id === t.columnId)?.title?.toLowerCase() === 'completed');
+
+  const completedTimestamp = (t: { completedAt?: string; updatedAt?: string }) => t.completedAt ?? t.updatedAt;
 
   const total = tasks.length;
-  const completed = tasks.filter(t => doneColIds.includes(t.columnId)).length;
-  const overdue = tasks.filter(t => t.dueDate && t.dueDate < new Date().toISOString().split('T')[0] && !doneColIds.includes(t.columnId)).length;
+  const completed = tasks.filter(t => isTaskDone(t)).length;
+  const overdue = tasks.filter(t => t.dueDate && t.dueDate < new Date().toISOString().split('T')[0] && !isTaskDone(t)).length;
   const highPriority = tasks.filter(t => t.priority === 'urgent' || t.priority === 'high').length;
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -221,11 +221,12 @@ const Insights: React.FC = () => {
   }, [tasks]);
 
   const avgTimeToComplete = useMemo(() => {
-    const completedWithDates = tasks.filter(t => doneColIds.includes(t.columnId) && t.createdAt);
+    const completedWithDates = tasks.filter(t => isTaskDone(t) && t.createdAt && completedTimestamp(t));
     if (completedWithDates.length === 0) return { days: 0, hours: 0, display: '0 days', isHours: false };
     const totalMs = completedWithDates.reduce((sum, t) => {
       const created = new Date(t.createdAt).getTime();
-      const completedAt = t.completedAt ? new Date(t.completedAt).getTime() : Date.now();
+      const cAt = completedTimestamp(t);
+      const completedAt = cAt ? new Date(cAt).getTime() : Date.now();
       return sum + (completedAt - created);
     }, 0);
     const avgDays = totalMs / completedWithDates.length / (1000 * 60 * 60 * 24);
@@ -234,27 +235,27 @@ const Insights: React.FC = () => {
       return { days: 0, hours: avgHours, display: `${avgHours}h`, isHours: true };
     }
     return { days: Math.round(avgDays), hours: 0, display: `${Math.round(avgDays)} day${Math.round(avgDays) !== 1 ? 's' : ''}`, isHours: false };
-  }, [tasks, doneColIds]);
+  }, [tasks, columns]);
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayData = useMemo(() => {
     const dayCount = Array(7).fill(0);
     tasks.forEach(t => {
-      if (doneColIds.includes(t.columnId) && t.createdAt) {
-        const d = new Date(t.createdAt);
+      if (isTaskDone(t) && completedTimestamp(t)) {
+        const d = new Date(completedTimestamp(t) as string);
         dayCount[d.getDay()]++;
       }
     });
     const max = Math.max(...dayCount, 1);
     const peakIdx = dayCount.indexOf(Math.max(...dayCount));
     return dayCount.map((val, i) => ({ label: dayLabels[i], value: val, isPeak: i === peakIdx }));
-  }, [tasks, doneColIds]);
+  }, [tasks, columns]);
 
   const timeOfDayData = useMemo(() => {
     const times = { morning: 0, afternoon: 0, evening: 0 };
     tasks.forEach(t => {
-      if (doneColIds.includes(t.columnId) && t.createdAt) {
-        const h = new Date(t.createdAt).getHours();
+      if (isTaskDone(t) && completedTimestamp(t)) {
+        const h = new Date(completedTimestamp(t) as string).getHours();
         if (h < 12) times.morning++;
         else if (h < 17) times.afternoon++;
         else times.evening++;
@@ -267,7 +268,7 @@ const Insights: React.FC = () => {
       { label: 'Afternoon', value: times.afternoon, color: '#f97316', icon: Sun, peak: peak === 'afternoon' },
       { label: 'Evening', value: times.evening, color: '#6366f1', icon: Sunset, peak: peak === 'evening' },
     ];
-  }, [tasks, doneColIds]);
+  }, [tasks, columns]);
 
   const overdueTrendData = useMemo(() => {
     if (tasks.length === 0) return [];
@@ -277,11 +278,11 @@ const Insights: React.FC = () => {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const count = tasks.filter(t => t.dueDate && t.dueDate === dateStr && t.dueDate < now.toISOString().split('T')[0] && !doneColIds.includes(t.columnId)).length;
+      const count = tasks.filter(t => t.dueDate && t.dueDate === dateStr && t.dueDate < now.toISOString().split('T')[0] && !isTaskDone(t)).length;
       points.push({ label: dayLabels[d.getDay()], value: count });
     }
     return points;
-  }, [tasks, doneColIds]);
+  }, [tasks, columns]);
 
   const completedOverTimeData = useMemo(() => {
     const now = new Date();
@@ -291,7 +292,7 @@ const Insights: React.FC = () => {
         const d = new Date(now);
         d.setHours(d.getHours() - i);
         const hour = d.getHours();
-        const count = tasks.filter(t => doneColIds.includes(t.columnId) && t.completedAt && new Date(t.completedAt).getHours() === hour && new Date(t.completedAt).toDateString() === now.toDateString()).length;
+        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).getHours() === hour && new Date(completedTimestamp(t) as string).toDateString() === now.toDateString()).length;
         points.push({ label: `${hour}:00`, value: count });
       }
       return points;
@@ -301,7 +302,7 @@ const Insights: React.FC = () => {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
         const dateStr = d.toISOString().split('T')[0];
-        const count = tasks.filter(t => doneColIds.includes(t.columnId) && t.completedAt && new Date(t.completedAt).toISOString().split('T')[0] === dateStr).length;
+        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).toISOString().split('T')[0] === dateStr).length;
         points.push({ label: dayLabels[d.getDay()], value: count });
       }
       return points;
@@ -311,12 +312,12 @@ const Insights: React.FC = () => {
         const d = new Date(now);
         d.setMonth(d.getMonth() - i);
         const monthStr = d.toLocaleString('default', { month: 'short' });
-        const count = tasks.filter(t => doneColIds.includes(t.columnId) && t.completedAt && new Date(t.completedAt).getMonth() === d.getMonth() && new Date(t.completedAt).getFullYear() === d.getFullYear()).length;
+        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).getMonth() === d.getMonth() && new Date(completedTimestamp(t) as string).getFullYear() === d.getFullYear()).length;
         points.push({ label: monthStr, value: count });
       }
       return points;
     }
-  }, [tasks, doneColIds, timeRange]);
+  }, [tasks, columns, timeRange]);
 
   const createdVsCompleted = useMemo(() => {
     const created = tasks.length;
@@ -342,11 +343,11 @@ const Insights: React.FC = () => {
 
   const buildFallbackAnalysis = (): AIData => {
     const today = new Date().toISOString().split('T')[0];
-    const openTasks = tasks.filter(t => !doneColIds.includes(t.columnId));
-    const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !doneColIds.includes(t.columnId));
+    const openTasks = tasks.filter(t => !isTaskDone(t));
+    const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !isTaskDone(t));
     const highOpen = openTasks.filter(t => t.priority === 'urgent' || t.priority === 'high');
     const lowOpen = openTasks.filter(t => t.priority === 'low');
-    const completedHigh = completed ? tasks.filter(t => doneColIds.includes(t.columnId) && (t.priority === 'urgent' || t.priority === 'high')) : [];
+    const completedHigh = completed ? tasks.filter(t => isTaskDone(t) && (t.priority === 'urgent' || t.priority === 'high')) : [];
 
     const short = (t: (typeof tasks)[number]) => t.title.length > 40 ? `${t.title.slice(0, 40)}…` : t.title;
 

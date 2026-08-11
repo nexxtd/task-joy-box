@@ -128,8 +128,6 @@ const Projects: React.FC = () => {
   });
 
   // Board "Add Task" popup state
-  const [addTaskPopupColumnId, setAddTaskPopupColumnId] = useState<string | null>(null);
-  const [assignSearch, setAssignSearch] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
 
@@ -1163,8 +1161,8 @@ const Projects: React.FC = () => {
                           canCreateTasks={canCreateTasks}
                           canEdit={canEdit}
                           onAddClick={canCreateTasks ? () => {
-                            setAddTaskPopupColumnId(column.id);
-                            setAssignSearch('');
+                            setCreateModalColumnId(column.id);
+                            setShowCreateModal(true);
                           } : undefined}
                         />
                       );
@@ -1748,100 +1746,6 @@ const Projects: React.FC = () => {
                     Copy
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {addTaskPopupColumnId && selectedProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setAddTaskPopupColumnId(null)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Add Task to Board</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Assign an existing task or create a brand new one.</p>
-              </div>
-              <button onClick={() => setAddTaskPopupColumnId(null)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <button
-                onClick={() => {
-                  setCreateModalColumnId(addTaskPopupColumnId);
-                  setAddTaskPopupColumnId(null);
-                  setShowCreateModal(true);
-                }}
-                className="flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-border bg-muted/20 hover:border-primary/40 hover:bg-primary/5 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <Plus className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-foreground">Create New</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Build a fresh task</p>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {}}
-                className="flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-primary/30 bg-primary/5 transition-all group"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <Search className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-foreground">Assign Existing</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Pick from your tasks</p>
-                </div>
-              </button>
-            </div>
-
-            <div className="border-t border-border pt-4">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-2 block">Your tasks not in this project</label>
-              <div className="flex items-center gap-2 bg-muted/30 border border-border rounded-xl px-3 py-2 mb-3">
-                <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                <input
-                  autoFocus
-                  type="text"
-                  value={assignSearch}
-                  onChange={e => setAssignSearch(e.target.value)}
-                  placeholder="Search tasks…"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
-              </div>
-              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                {board.tasks
-                  .filter(t => t.projectId !== selectedProject.id && (!assignSearch || t.title.toLowerCase().includes(assignSearch.toLowerCase())))
-                  .slice(0, 20)
-                  .map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        updateTask(t.id, { projectId: selectedProject.id, columnId: addTaskPopupColumnId! });
-                        toast({ title: 'Task assigned', description: `"${t.title}" added to this project.` });
-                        setAddTaskPopupColumnId(null);
-                      }}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-background hover:bg-muted/50 hover:border-primary/30 transition-all text-left"
-                    >
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground/30 flex-shrink-0" />
-                      <span className="text-sm text-foreground truncate">{t.title}</span>
-                      {t.priority && t.priority !== 'none' && (
-                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                          t.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                          t.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-                          t.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-muted text-muted-foreground'
-                        }`}>{t.priority}</span>
-                      )}
-                    </button>
-                  ))}
-                {board.tasks.filter(t => t.projectId !== selectedProject.id && (!assignSearch || t.title.toLowerCase().includes(assignSearch.toLowerCase()))).length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center py-4">No tasks found. Create a new one above.</p>
-                )}
               </div>
             </div>
           </div>

@@ -3,7 +3,8 @@ import { useGoalsContext } from '@/context/GoalsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Goal, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
-import { createTag, deleteTag, fetchTags, type SharedTag } from '@/services/tagService';
+import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import TagsModal from '@/components/shared/TagsModal';
 import heic2any from 'heic2any';
 import {
   ArrowDown,
@@ -1291,6 +1292,29 @@ const Goals: React.FC = () => {
     setTagFilterIds(prev => prev.filter(id => id !== tagId));
   };
 
+  const renameTagEverywhere = async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch (error) {
+          console.error('Failed to rename shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(goal => {
+      if (goal.labels.some(label => label.id === tagId)) {
+        updateTask(goal.id, { labels: goal.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
 
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
@@ -1723,43 +1747,18 @@ const Goals: React.FC = () => {
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
             {tagPickerOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setTagPickerOpen(false)} />
-                <div className="absolute left-0 mt-1.5 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Tag filter</p>
-                      <p className="text-xs text-muted-foreground">Filter goals by tag.</p>
-                    </div>
-                    <button onClick={() => setTagPickerOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                    {allTags.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-3">No tags yet.</p>
-                    )}
-                    {allTags.map(tag => {
-                      const isActive = tagFilterIds.includes(tag.id);
-                      return (
-                        <button
-                          key={tag.id}
-                          onClick={() => toggleTagFilter(tag.id)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
-                            isActive
-                              ? 'border-primary/30 bg-primary/5 shadow-sm'
-                              : 'border-border/60 hover:bg-muted/40'
-                          }`}
-                        >
-                          <span className={`w-3 h-3 rounded-full flex-shrink-0 ${LABEL_COLORS[tag.color]}`} />
-                          <span className="text-sm text-foreground flex-1">{tag.name}</span>
-                          {isActive && <span className="text-[10px] text-primary font-bold">✓</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
+              <TagsModal
+                open={tagPickerOpen}
+                onClose={() => setTagPickerOpen(false)}
+                title="Filter by tags"
+                tags={allTags}
+                selectedIds={tagFilterIds}
+                onToggle={toggleTagFilter}
+                onCreate={async (name, color) => { await createSharedGoalLabel(name, color); }}
+                onDelete={deleteTagEverywhere}
+                onRename={renameTagEverywhere}
+                emptyText="No tags yet. Create one below."
+              />
             )}
           </div>
 
@@ -2176,66 +2175,23 @@ const Goals: React.FC = () => {
                 {newGoalLabels.length > 0 ? `${newGoalLabels.length} tag${newGoalLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
               </button>
               {newTagPickerOpen && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setNewTagPickerOpen(false)} />
-                  <div className="absolute left-0 mt-2 w-96 max-w-[95vw] bg-card border border-border rounded-2xl shadow-xl z-30 p-4 space-y-3">
-                    <div className="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                      {allTags.length === 0 && (
-                        <p className="text-xs text-muted-foreground text-center py-3">No tags yet. Create one below.</p>
-                      )}
-                      {allTags.map(tag => {
-                        const active = newGoalLabels.some(l => l.id === tag.id);
-                        return (
-                          <button
-                            key={tag.id}
-                            onClick={() => setNewGoalLabels(prev => active ? prev.filter(l => l.id !== tag.id) : [...prev, tag])}
-                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left ${
-                              active
-                                ? 'border-primary/30 bg-primary/5 shadow-sm'
-                                : 'border-border/60 hover:bg-muted/40'
-                            }`}
-                          >
-                            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${LABEL_COLORS[tag.color]}`} />
-                            <span className="text-sm text-foreground flex-1">{tag.name}</span>
-                            {active && <span className="text-[10px] text-primary font-bold">✓</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-2 border-t border-border pt-3">
-                      <input
-                        value={newTagName}
-                        onChange={e => setNewTagName(e.target.value)}
-                        placeholder="Create tag"
-                        className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                      <button
-                        onClick={() => setNewTagColor(randomTagColor())}
-                        className={`w-10 h-10 rounded-xl border-2 border-border/50 flex-shrink-0 transition-transform hover:scale-110 ${LABEL_COLORS[newTagColor]}`}
-                        title="Randomize color"
-                      />
-                      <button
-                        onClick={async () => {
-                          const name = normalizeTagName(newTagName);
-                          if (!name) return;
-                          try {
-                            const newLabel = await createSharedGoalLabel(name, newTagColor);
-                            setNewGoalLabels(prev => [...prev, newLabel]);
-                            setNewTagName('');
-                            setNewTagColor(randomTagColor());
-                            setNewTagPickerOpen(false);
-                          } catch (error) {
-                            console.error('Failed to create goal tag:', error);
-                          }
-                        }}
-                        disabled={!newTagName.trim()}
-                        className="px-4 py-2 text-xs font-medium bg-foreground text-background rounded-xl disabled:opacity-40"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                </>
+                <TagsModal
+                  open={newTagPickerOpen}
+                  onClose={() => setNewTagPickerOpen(false)}
+                  title="Tags"
+                  tags={allTags}
+                  selectedIds={newGoalLabels.map(label => label.id)}
+                  onToggle={labelId => setNewGoalLabels(prev =>
+                    prev.some(l => l.id === labelId) ? prev.filter(l => l.id !== labelId) : [...prev, ...allTags.filter(t => t.id === labelId)]
+                  )}
+                  onCreate={async (name, color) => {
+                    const newLabel = await createSharedGoalLabel(name, color);
+                    setNewGoalLabels(prev => [...prev, newLabel]);
+                  }}
+                  onDelete={deleteTagEverywhere}
+                  onRename={renameTagEverywhere}
+                  emptyText="No tags yet. Create one below."
+                />
               )}
             </div>
           </div>
@@ -3131,6 +3087,7 @@ const Goals: React.FC = () => {
             }
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
+          onRenameTagEverywhere={renameTagEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToGoal={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -3357,52 +3314,21 @@ const Goals: React.FC = () => {
         const popupGoal = board.tasks.find(t => t.id === tagPopupTaskId);
         if (!popupGoal) return null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPopupTaskId(null)}>
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                <button onClick={() => setTagPopupTaskId(null)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-              </div>
-              <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
-                {allTags.map(label => {
-                  const active = popupGoal.labels.some(item => item.id === label.id);
-                  return (
-                    <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                      <button onClick={() => toggleGoalTag(popupGoal.id, label)} className="flex flex-1 items-center gap-2 text-left">
-                        <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                        <span className="text-sm text-foreground">{label.name}</span>
-                        {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                      </button>
-                      <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="border-t border-border pt-4">
-                <div className="flex gap-2 mb-2">
-                  <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
-                    className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                  <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={async () => {
-                    const name = normalizeTagName(newTagName);
-                    if (!name) return;
-                    try {
-                      const label = await createSharedGoalLabel(name, newTagColor);
-                      updateTask(popupGoal.id, { labels: [...popupGoal.labels, label] });
-                      setNewTagName('');
-                      setNewTagColor(randomTagColor());
-                    } catch (error) {
-                      console.error('Failed to create goal tag:', error);
-                    }
-                  }} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
-                  <button onClick={() => setTagPopupTaskId(null)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <TagsModal
+            open
+            title="Tags"
+            onClose={() => setTagPopupTaskId(null)}
+            tags={allTags}
+            selectedIds={popupGoal.labels.map(label => label.id)}
+            onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) toggleGoalTag(popupGoal.id, label); }}
+            onCreate={async (name, color) => {
+              const label = await createSharedGoalLabel(name, color);
+              updateTask(popupGoal.id, { labels: [...popupGoal.labels, label] });
+            }}
+            onDelete={deleteTagEverywhere}
+            onRename={renameTagEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
         );
       })()}
 
@@ -3424,6 +3350,7 @@ interface GoalFullViewProps {
   onToggleTag: (taskId: string, tag: Label) => void;
   onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
   onDeleteTagEverywhere: (tagId: string) => void;
+  onRenameTagEverywhere: (tagId: string, newName: string) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToGoal?: (taskId: string) => void;
@@ -4132,6 +4059,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
   onToggleTag,
   onCreateTag,
   onDeleteTagEverywhere,
+  onRenameTagEverywhere,
   isPremium,
   isPro,
   onJumpToGoal,
@@ -4662,7 +4590,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               {goal.labels.map(label => (
                 <button
                   key={label.id}
-                  onClick={() => onToggleTag(goal.id, label)}
+                  onClick={() => setTagPickerOpen(true)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
@@ -4673,41 +4601,18 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
           )}
 
           {tagPickerOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagPickerOpen(false)}>
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-              <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                  <button onClick={() => setTagPickerOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-                </div>
-                <div className="max-h-60 space-y-2 overflow-y-auto mb-4">
-                  {allTags.map(label => {
-                    const active = goal.labels.some(item => item.id === label.id);
-                    return (
-                      <div key={label.id} className="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-2">
-                        <button onClick={() => onToggleTag(goal.id, label)} className="flex flex-1 items-center gap-2 text-left">
-                          <span className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                          <span className="text-sm text-foreground">{label.name}</span>
-                          {active && <span className="ml-auto text-[10px] text-primary font-semibold">Selected</span>}
-                        </button>
-                        <button onClick={() => setTagDeleteConfirm(label.id)} className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="border-t border-border pt-4">
-                  <div className="flex gap-2 mb-2">
-                    <input value={newTagName} onChange={e => setNewTagName(e.target.value)} placeholder="Create tag"
-                      className="flex-1 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
-                    <button onClick={() => setNewTagColor(randomTagColor())} className={`w-11 rounded-xl border border-border ${LABEL_COLORS[newTagColor]}`} title="Random color" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={createTagForGoal} disabled={!newTagName.trim()} className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-primary disabled:text-primary-foreground disabled:opacity-100 disabled:cursor-not-allowed">Add tag</button>
-                    <button onClick={() => setTagPickerOpen(false)} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">Done</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TagsModal
+              open={tagPickerOpen}
+              onClose={() => setTagPickerOpen(false)}
+              title="Tags"
+              tags={allTags}
+              selectedIds={goal.labels.map(label => label.id)}
+              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(goal.id, label); }}
+              onCreate={(name, color) => { onCreateTag(goal.id, name, color); }}
+              onDelete={onDeleteTagEverywhere}
+              onRename={onRenameTagEverywhere}
+              emptyText="No tags yet. Create one below."
+            />
           )}
           {tagDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>

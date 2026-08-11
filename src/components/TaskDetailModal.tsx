@@ -1,11 +1,23 @@
-import React, { useState, useCallback } from 'react';
-import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority } from '@/types/board';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import TagsModal from '@/components/shared/TagsModal';
+
+const SHARED_TAG_PREFIX = 'shared-tag-';
+
+const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const sharedTagToLabel = (tag: SharedTag): Label => ({
+  id: `${SHARED_TAG_PREFIX}${tag.id}`,
+  name: tag.name,
+  color: tag.color as LabelColor,
+});
 
 interface TaskDetailModalProps {
   task: Task;
@@ -27,6 +39,71 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';
   const [uploading, setUploading] = useState(false);
+  const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const tags = await fetchTags();
+        if (!cancelled) setSharedTags(tags);
+      } catch (error) {
+        console.error('Failed to load shared tags:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const allTags = useMemo<Label[]>(() => {
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
+    sharedTags.forEach(tag => byName.set(normalizeTagName(tag.name).toLowerCase(), sharedTagToLabel(tag)));
+    return Array.from(byName.values());
+  }, [sharedTags]);
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  };
+
+  const renameTagEverywhere = async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch (error) {
+          console.error('Failed to rename shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
 
   const currentColumn = board.columns.find(c => c.id === task.columnId);
 
@@ -223,30 +300,25 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               </div>
             )}
             {showLabelPicker && canEdit && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowLabelPicker(false)}>
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-                <div className="relative w-full max-w-lg rounded-2xl border border-border bg-card p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-foreground">Tags</h3>
-                    <button onClick={() => setShowLabelPicker(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X className="h-4 w-4" /></button>
-                  </div>
-                  <div className="grid max-h-60 grid-cols-2 gap-2 overflow-y-auto">
-                    {DEFAULT_LABELS.map(label => {
-                      const active = task.labels.find(l => l.id === label.id);
-                      return (
-                        <button
-                          key={label.id}
-                          onClick={() => toggleLabel(label)}
-                          className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-all ${active ? 'ring-2 ring-primary bg-muted' : 'hover:bg-muted'}`}
-                        >
-                          <div className={`w-3 h-3 rounded-full ${LABEL_COLORS[label.color]}`} />
-                          <span className="text-foreground">{label.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
+              <TagsModal
+                open={showLabelPicker}
+                onClose={() => setShowLabelPicker(false)}
+                title="Tags"
+                tags={allTags}
+                selectedIds={task.labels.map(l => l.id)}
+                onToggle={labelId => {
+                  const label = allTags.find(t => t.id === labelId);
+                  if (label) toggleLabel(label);
+                }}
+                onCreate={async (name, color) => {
+                  const tag = await createTag({ name, color });
+                  const label = sharedTagToLabel(tag);
+                  updateTask(task.id, { labels: [...task.labels, label] });
+                }}
+                onDelete={deleteTagEverywhere}
+                onRename={renameTagEverywhere}
+                emptyText="No tags yet. Create one below."
+              />
             )}
           </div>
           <div className="grid grid-cols-2 gap-6">
