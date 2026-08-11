@@ -1102,7 +1102,7 @@ const Projects: React.FC = () => {
     const boardZoomPercent = Math.round(boardZoom * 100);
 
     return (
-      <div className="min-w-0 flex-1 rounded-3xl border border-border bg-background shadow-sm h-full flex flex-col">
+      <div className="min-w-0 flex-1 rounded-3xl border border-border bg-background shadow-sm h-full flex flex-col overflow-hidden">
         <div className="flex items-center justify-between border-b border-border/70 bg-card/60 px-5 py-4 backdrop-blur-sm">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Board View</h3>

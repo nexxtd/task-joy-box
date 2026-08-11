@@ -259,7 +259,12 @@ const Insights: React.FC = () => {
                   : <Sparkles className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-purple))' }} />}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+                <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                  {lastAnalysis.error && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive normal-case tracking-normal">
+                      <AlertTriangle className="w-3 h-3" />Automated Message
+                    </span>
+                  )}
                   AI Analysis · {lastAnalysis.time}
                   {aiLoading && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" />}
                 </p>

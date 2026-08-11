@@ -19,6 +19,7 @@ interface FeedEntry {
   timestamp: Date;
   confirmAction?: () => void;
   confirmLabel?: string;
+  automated?: boolean;
 }
 
 interface ChatMessage {
@@ -26,6 +27,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   ts: string;
+  automated?: boolean;
 }
 
 interface Chat {
@@ -113,6 +115,7 @@ const AIChat: React.FC = () => {
       title: m.text,
       body: m.role === 'assistant' ? m.text : undefined,
       timestamp: new Date(m.ts),
+      automated: m.automated,
     }));
     return [...base, ...ephemeral];
   }, [activeChat, ephemeral]);
@@ -354,7 +357,7 @@ const AIChat: React.FC = () => {
       if (!res.ok || !data) {
         const errBody = data?.details || data?.error || 'Failed to get a response from the AI service.';
         const errHint = data?.hint ? `\n\nTip: ${data.hint}` : '';
-        pushEphemeral({ type: 'result-error', title: 'AI service error', body: errBody + errHint });
+        pushEphemeral({ type: 'result-error', title: 'AI service error', body: errBody + errHint, automated: true });
         return;
       }
 
@@ -362,10 +365,10 @@ const AIChat: React.FC = () => {
       if (action !== 'chat') {
         const handled = runAction(action, data.data || {}, chatId);
         if (!handled) {
-          appendMsg(chatId, { id: genId(), role: 'assistant', text: renderableReply(data.reply) || 'I couldn\'t process that.', ts: new Date().toISOString() });
+          appendMsg(chatId, { id: genId(), role: 'assistant', text: renderableReply(data.reply) || 'I couldn\'t process that.', ts: new Date().toISOString(), automated: Boolean(data.automated) });
         }
       } else {
-        appendMsg(chatId, { id: genId(), role: 'assistant', text: renderableReply(data.reply) || 'I couldn\'t process that.', ts: new Date().toISOString() });
+        appendMsg(chatId, { id: genId(), role: 'assistant', text: renderableReply(data.reply) || 'I couldn\'t process that.', ts: new Date().toISOString(), automated: Boolean(data.automated) });
       }
 
       if (wasNewChat) {
@@ -542,6 +545,13 @@ const AIChat: React.FC = () => {
 
                 return (
                   <div key={entry.id} className={`px-6 py-4 animate-slide-up ${isError ? 'bg-destructive/3' : isWarning || isConfirm ? 'bg-label-orange/5' : ''}`}>
+                    {entry.automated && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive text-[10px] font-bold uppercase tracking-wide">
+                          <AlertTriangle className="w-3 h-3" />Automated Message
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded-md bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10 shrink-0">

@@ -161,13 +161,13 @@ function delay(ms: number): Promise<void> {
 }
 
 // Add AI request function with retry and caching
-async function generateContentWithRetry(prompt: string, retries = 1, useFallback = true) {
+async function generateContentWithRetry(prompt: string, retries = 1, useFallback = true, forceFresh = false) {
   // Create cache key for this request
   const cacheKey = createCacheKey(prompt, AI_MODEL);
   const cached = requestCache.get(cacheKey);
 
   // Return cached response if available and not expired
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (!forceFresh && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     console.log('Returning cached response');
     return cached.response;
   }
@@ -702,7 +702,23 @@ function localChatFallback(
     return { action: 'chat', message: 'I can see your calendar, but the AI service is busy right now. Try again in a few seconds.' };
   }
 
-  if (/(show|list|find|check).*\boverdue\b/.test(m)) return { action: 'show_overdue' };
+  if (/\boverdue\b/.test(m)) {
+    const today = calendar?.todayStr || new Date().toISOString().slice(0, 10);
+    const overdueTasks = tasks.filter((t: any) => {
+      const col = columns.find((c: any) => c.id === t.columnId);
+      if (/done|completed|finish/i.test(col?.title || '')) return false;
+      return t.dueDate && String(t.dueDate) < today;
+    });
+    const count = overdueTasks.length;
+    const names = overdueTasks.slice(0, 5).map((t: any) => `"${t.title}"`).join(', ');
+    return {
+      action: 'show_overdue',
+      data: { taskTitles: overdueTasks.slice(0, 10).map((t: any) => t.title) },
+      message: count === 0
+        ? 'You have no overdue tasks — everything is on track.'
+        : `You have ${count} overdue task${count === 1 ? '' : 's'}${count > 0 ? `: ${names}` : ''}${count > 5 ? ` and ${count - 5} more` : ''}.`,
+    };
+  }
   if (/\bduplicates?\b/.test(m) && /(find|remove|delete|check)/.test(m)) return { action: 'find_duplicates' };
   if (/(clear|delete|remove).*\b(completed|done|finished)\b/.test(m)) return { action: 'clear_completed' };
   if (/\b(summary|summarize|overview|how many)\b/.test(m)) return { action: 'summarize' };
@@ -752,13 +768,20 @@ function localChatFallback(
     return { action: 'update', data: {}, message: 'Updating that task priority now.' };
   }
 
+  if (/^(hey|hi|hello|yo|hiya|good\s+(morning|afternoon|evening))\b/.test(m)) {
+    return {
+      action: 'chat',
+      message: `Hey! I'm Planora, but the AI service is temporarily unreachable — this is an automated reply. I can still show overdue tasks, summarize your board, or find duplicates offline. Otherwise, try again in a few seconds.`,
+    };
+  }
+
   const openCount = tasks.filter((t: any) => {
     const col = columns.find((c: any) => c.id === t.columnId);
     return !t.completed && !/done|completed|finish/i.test(col?.title || '');
   }).length;
   return {
     action: 'chat',
-    message: `I'm having trouble reaching the AI service right now, so here is a quick snapshot instead: ${tasks.length} tasks on your board (${openCount} open, ${tasks.length - openCount} completed) across ${columns.length} columns. Try again in a few seconds.`,
+    message: `I can't reach the AI service right now, so this is an automated snapshot instead: ${tasks.length} tasks on your board (${openCount} open, ${tasks.length - openCount} completed) across ${columns.length} columns. Try again in a few seconds.`,
   };
 }
 
@@ -933,12 +956,12 @@ Rules:
     if (client) {
       try {
         let completion: any;
-        for (let attempt = 0; attempt <= 1; attempt++) {
+        for (let attempt = 0; attempt <= 2; attempt++) {
           try {
             completion = await client.chat.completions.create({
               model: AI_MODEL,
               temperature: 0.6,
-              max_tokens: 1200,
+              max_tokens: 1600,
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: safeMessage }
@@ -947,8 +970,8 @@ Rules:
             break;
           } catch (err: any) {
             const status = err?.status || err?.error?.status;
-            if (attempt === 0 && status === 429) {
-              await delay(2500);
+            if (attempt < 2 && (status === 429 || (status >= 500 && status <= 599))) {
+              await delay(2500 * (attempt + 1));
               continue;
             }
             throw err;
@@ -1019,10 +1042,12 @@ Rules:
     console.error('Failed to save AI conversation:', saveError);
   }
 
+  const automated = !aiOk;
+
   if (action === 'chat') {
-    res.json({ action: 'chat', reply });
+    res.json({ action: 'chat', reply, automated });
   } else {
-    res.json({ action, reply, data: actionData || {} });
+    res.json({ action, reply, data: actionData || {}, automated });
   }
 });
 
@@ -1694,12 +1719,23 @@ Respond with ONLY valid JSON (no markdown, no code fences) shaped exactly like:
 }
 All task ids must come verbatim from the data provided. If there are no active tasks, leave nextTasks as an empty array.`;
 
-    const responseText = await generateContentWithRetry(prompt);
+    let responseText = await generateContentWithRetry(prompt);
     let parsed: any;
+    let parseFailed = false;
     try {
       parsed = await extractJsonFromResponse(responseText);
     } catch (parseError) {
-      return res.status(500).json({ error: 'The AI returned an unreadable response. Please try again.' });
+      // The model sometimes emits malformed JSON — retry once with a fresh (uncached) generation.
+      parseFailed = true;
+      console.warn('Dashboard widgets: first AI response unreadable, retrying once.');
+    }
+    if (parseFailed) {
+      try {
+        responseText = await generateContentWithRetry(prompt, 1, true, true);
+        parsed = await extractJsonFromResponse(responseText);
+      } catch (parseError2) {
+        return res.status(500).json({ error: 'The AI returned an unreadable response. Please try again.' });
+      }
     }
 
     const clampInt = (v: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));

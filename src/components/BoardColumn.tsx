@@ -208,7 +208,12 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     const taskTags = task.labels.slice(0, 3);
     const warning = getDueTimeWarning(task);
     return (
-      <div ref={taskProvided.innerRef} {...taskProvided.draggableProps} className={`rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}>
+      <div
+        ref={taskProvided.innerRef}
+        {...taskProvided.draggableProps}
+        onClick={() => onTaskClick(task)}
+        className={`cursor-pointer rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}
+      >
         <div className="flex items-center gap-1 px-3 py-3">
           <div {...taskProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
