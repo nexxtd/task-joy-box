@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Clock, RotateCcw, Calendar, Coffee, ListChecks, Target, Flame, ChevronDown } from 'lucide-react';
+import { X, Clock, RotateCcw, Calendar, Coffee, ListChecks, Target, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CalendarSlot } from '@/types/calendar';
 import { generateId, formatTimeDisplay, RECURRING_OPTIONS } from '@/utils/calendarUtils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface SchedulingPopupProps {
   open: boolean;
@@ -133,19 +134,20 @@ const SchedulingPopup: React.FC<SchedulingPopupProps> = ({
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.12em]">
                 {type === 'task' ? 'Sub-task to focus on' : 'Sub-goal to focus on'}
               </label>
-              <div className="relative">
-                <select
-                  value={selectedSubId || ''}
-                  onChange={(e) => setSelectedSubId(e.target.value || null)}
-                  className="w-full px-3.5 py-3 bg-background border border-border/60 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all appearance-none cursor-pointer"
-                >
-                  <option value="">None — work on main item</option>
+              <Select
+                value={selectedSubId || ''}
+                onValueChange={v => setSelectedSubId(v || null)}
+              >
+                <SelectTrigger className="w-full px-3.5 py-3 bg-background border border-border/60 rounded-xl text-sm h-auto">
+                  <SelectValue placeholder="None — work on main item" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None — work on main item</SelectItem>
                   {subItems.map((s) => (
-                    <option key={s.id} value={s.id}>{s.title}</option>
+                    <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
                   ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
+                </SelectContent>
+              </Select>
             </div>
           )}
 

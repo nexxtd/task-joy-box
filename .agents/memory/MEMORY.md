@@ -3,3 +3,5 @@
 - [Task Joy Box — CORS](cors-fix.md) — Added .replit.dev/.riker.replit.dev/.replit.app domains to allowed CORS origins in server/index.ts.
 - [Task Joy Box — Project board features](project-board-features.md) — BoardColumn has onAddClick prop; Projects.tsx shows choose popup (Assign/Create); chat tab is full embedded UI; CreateTaskModal exists at src/components/CreateTaskModal.tsx.
 - [Task Joy Box — Settings tickets](settings-tickets.md) — Tickets nav renamed; hasTickets only ever goes false→true; tabs (Open/Resolved) + search + category filter added.
+- [Task Joy Box — Insights rebuild](insights-rebuild.md) — Insights page is now a 14-widget draggable grid (6 free / 6 premium / 2 pro) on src/hooks/useWidgetGrid.ts; widget bodies in src/components/insights/; all native <select> replaced with Radix Select.
+- [Task Joy Box — Deep focus + dashboard hardening](deep-focus-dashboard-hardening.md) — Review & Complete dialog has full sub-task editing (drag reorder + duration); Dashboard Start Deep Work opens a task picker → navigate('/tasks') + openDeepFocus(task); drag centering uses Math.round in both grids.

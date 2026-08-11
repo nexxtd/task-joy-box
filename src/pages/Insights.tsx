@@ -1,879 +1,414 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle, BarChart3, Bot, CalendarClock, CalendarDays, Clock, Crown, FileText,
+  FolderOpen, Gauge, GitCompare, GripVertical, Layers, LayoutDashboard, ListChecks,
+  Lock, RefreshCw, Sparkles, Tag, Target, TrendingUp, X,
+} from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
+import { DoneCtx, buildAiScoreFallback } from '@/components/insights/insightData';
 import {
-  CheckSquare, TrendingUp, AlertTriangle, Clock, BarChart3,
-  Sparkles, Bot, Loader2, X, RefreshCw, Lock,
-  Sun, Sunrise, Sunset, ChevronRight,
-  Target, Zap
-} from 'lucide-react';
+  InsightWidget, InsightWidgetType,
+  CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody,
+  WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody,
+} from '@/components/insights/InsightWidgets';
+import {
+  CompletionTrendBody, AvgCompletionTimeBody, BusiestDaysBody, MultiProjectBody,
+  SubtaskHealthBody, CustomReportBody, AiBottlenecksBody, AiScoreBody,
+  AiWidgetsData, AiScoreData,
+} from '@/components/insights/InsightPremiumWidgets';
+import { GridWidgetDef, useWidgetGrid, cellStyle, WidgetTier } from '@/hooks/useWidgetGrid';
 
-type TimeRange = 'day' | 'week' | 'month';
+const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
+  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 4, h: 3, tier: 'free' },
+  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 4, h: 3, tier: 'free' },
+  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
+  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 4, h: 3, tier: 'free' },
+  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 4, h: 3, tier: 'free' },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 4, h: 3, tier: 'free' },
+  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 4, h: 4, tier: 'premium' },
+  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 4, h: 4, tier: 'premium' },
+  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
+  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 4, h: 4, tier: 'premium' },
+  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 4, h: 4, tier: 'premium' },
+  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 4, h: 4, tier: 'premium' },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 4, h: 4, tier: 'pro' },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 4, h: 4, tier: 'pro' },
+];
 
-const COLORS = {
-  urgent: '#ef4444',
-  high: '#f97316',
-  medium: '#eab308',
-  low: '#6b7280',
-  primary: 'hsl(var(--primary))',
-  muted: 'hsl(var(--muted))',
-  border: 'hsl(var(--border))',
-};
+const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
+  ({ id, type, title, col, row, w: ww, h: hh });
 
-function PremiumBlur({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative group">
-      <div className="blur-sm select-none pointer-events-none">{children}</div>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
-        <div className="flex items-center gap-2">
-          <Lock className="w-4 h-4 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-card/80 px-2 py-0.5 rounded">Premium</span>
-        </div>
-        <a href="/pricing" className="text-xs text-primary hover:underline font-medium">Upgrade</a>
-      </div>
-    </div>
-  );
-}
+const defaultLayout = (): InsightWidget[] => [
+  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 4, 3),
+  w('w2', 'active-vs-overdue', 'Active vs Overdue', 5, 1, 4, 3),
+  w('w3', 'tasks-by-priority', 'Tasks by Priority', 9, 1, 4, 3),
+  w('w4', 'weekly-activity', 'Weekly Activity', 1, 4, 4, 3),
+  w('w5', 'project-breakdown', 'Project Breakdown', 5, 4, 4, 3),
+  w('w6', 'tags-overview', 'Tags Overview', 9, 4, 4, 3),
+];
 
-function CircularProgress({ value, size = 96 }: { value: number; size?: number }) {
-  const r = (size - 8) / 2;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference - (value / 100) * circumference;
-  return (
-    <svg width={size} height={size} className="-rotate-90" viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="6" />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="hsl(var(--primary))" strokeWidth="6"
-        strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
-        className="transition-all duration-1000 ease-out" />
-    </svg>
-  );
-}
-
-function DonutChart({ segments }: { segments: { label: string; value: number; color: string }[] }) {
-  const total = segments.reduce((s, seg) => s + seg.value, 0) || 1;
-  let cumulative = 0;
-  const slices = segments.filter(s => s.value > 0).map(s => {
-    const startAngle = (cumulative / total) * 360;
-    cumulative += s.value;
-    const endAngle = (cumulative / total) * 360;
-    return { ...s, startAngle, endAngle };
-  });
-
-  const size = 160;
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = 60;
-
-  function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-    const rad = ((angleDeg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  }
-
-  function describeArc(cx: number, cy: number, r: number, start: number, end: number) {
-    const s = polarToCartesian(cx, cy, r, end);
-    const e = polarToCartesian(cx, cy, r, start);
-    const large = end - start > 180 ? 1 : 0;
-    return `M ${cx} ${cy} L ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y} Z`;
-  }
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {slices.map((s, i) => (
-        <path key={i} d={describeArc(cx, cy, r, s.startAngle, s.endAngle)} fill={s.color} />
-      ))}
-      <circle cx={cx} cy={cy} r={r * 0.55} fill="hsl(var(--card))" />
-    </svg>
-  );
-}
-
-function SimpleBarChart({ data, highlightIndex }: { data: { label: string; value: number; color?: string }[]; highlightIndex?: number }) {
-  const max = Math.max(...data.map(d => d.value), 1);
-  return (
-    <div className="flex items-end gap-1.5 h-28">
-      {data.map((d, i) => {
-        const h = Math.max((d.value / max) * 100, 4);
-        const isHighlight = i === highlightIndex;
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <span className="text-[10px] text-muted-foreground">{d.value}</span>
-            <div
-              className={`w-full rounded-t ${isHighlight ? 'opacity-100' : 'opacity-50'}`}
-              style={{
-                height: `${h}%`,
-                backgroundColor: d.color || (isHighlight ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'),
-                minHeight: 4,
-              }}
-            />
-            <span className="text-[10px] text-muted-foreground truncate w-full text-center">{d.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SimpleLineChart({ data, color = 'hsl(var(--primary))' }: { data: { label: string; value: number }[]; color?: string }) {
-  const max = Math.max(...data.map(d => d.value), 1);
-  const w = 400;
-  const h = 120;
-  const padding = 24;
-  const chartW = w - padding * 2;
-  const chartH = h - padding * 2;
-
-  if (data.length < 2) {
-    return <div className="flex items-center justify-center h-[120px] text-xs text-muted-foreground">Not enough data</div>;
-  }
-
-  const points = data.map((d, i) => {
-    const x = padding + (i / (data.length - 1)) * chartW;
-    const y = padding + chartH - (d.value / max) * chartH;
-    return `${x},${y}`;
-  });
-
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p}`).join(' ');
-  const fillPath = `${linePath} L ${padding + chartW},${padding + chartH} L ${padding},${padding + chartH} Z`;
-
-  const isImproving = data.length >= 2 && data[data.length - 1].value < data[0].value;
-
-  return (
-    <div>
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-        <path d={fillPath} fill={`${color}15`} />
-        <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {data.map((d, i) => {
-          const x = padding + (i / (data.length - 1)) * chartW;
-          const y = padding + chartH - (d.value / max) * chartH;
-          return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
-        })}
-      </svg>
-      <div className="flex justify-between mt-1">
-        <span className="text-[10px] text-muted-foreground">{data[0].label}</span>
-        <span className="text-[10px] text-muted-foreground">{data[data.length - 1].label}</span>
-      </div>
-    </div>
-  );
-}
-
-function InfoCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-5">
-      <Icon className={`w-5 h-5 ${color} mb-3`} />
-      <p className="text-2xl font-bold text-foreground">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{label}</p>
-    </div>
-  );
-}
-
-type AIData = {
-  overallScore: number;
-  scoreRationale?: string;
-  contributors?: string[];
-  penalties?: string[];
-  focusArea: string;
-  insights: string[];
-  recommendations: string[];
-};
+const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
+  { tier: 'free', label: 'Free' },
+  { tier: 'premium', label: 'Premium' },
+  { tier: 'pro', label: 'Pro' },
+];
 
 const Insights: React.FC = () => {
+  const navigate = useNavigate();
   const { board } = useBoardContext();
   const { user } = useAuth();
-  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isPremium = user?.subscriptionTier === 'premium';
-
-  const [aiData, setAiData] = useState<AIData | null>(null);
-  const [loadingAI, setLoadingAI] = useState(false);
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [timeRange, setTimeRange] = useState<TimeRange>('week');
+  const tier: WidgetTier = user?.subscriptionTier === 'pro'
+    ? 'pro'
+    : user?.subscriptionTier === 'premium'
+      ? 'premium'
+      : 'free';
 
   const tasks = board?.tasks || [];
   const columns = board?.columns || [];
 
-  const isTaskDone = (t: { completed?: boolean; columnId: string; completedAt?: string; updatedAt?: string }) =>
-    Boolean(t.completed || columns.find(c => c.id === t.columnId)?.title?.toLowerCase() === 'completed');
-
-  const completedTimestamp = (t: { completedAt?: string; updatedAt?: string }) => t.completedAt ?? t.updatedAt;
-
-  const total = tasks.length;
-  const completed = tasks.filter(t => isTaskDone(t)).length;
-  const overdue = tasks.filter(t => t.dueDate && t.dueDate < new Date().toISOString().split('T')[0] && !isTaskDone(t)).length;
-  const highPriority = tasks.filter(t => t.priority === 'urgent' || t.priority === 'high').length;
-  const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  const columnStats = useMemo(() =>
-    columns.map(col => ({
-      name: col.title,
-      count: tasks.filter(t => t.columnId === col.id).length,
-      color: col.color || 'hsl(var(--primary))',
-    })),
-    [columns, tasks]
+  const doneColIds = useMemo(
+    () => (board?.columns || []).filter(c => /done|completed|finish/i.test(c.title)).map(c => c.id),
+    [board]
   );
+  const ctx: DoneCtx = useMemo(() => ({ doneColIds }), [doneColIds]);
 
-  const priorityBreakdown = useMemo(() => {
-    const counts: Record<string, number> = { urgent: 0, high: 0, medium: 0, low: 0 };
-    tasks.forEach(t => { if (t.priority !== 'none') counts[t.priority] = (counts[t.priority] || 0) + 1; });
-    const totalPriorities = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
-    return [
-      { label: 'Urgent', value: counts.urgent, color: COLORS.urgent, pct: Math.round((counts.urgent / totalPriorities) * 100) },
-      { label: 'High', value: counts.high, color: COLORS.high, pct: Math.round((counts.high / totalPriorities) * 100) },
-      { label: 'Medium', value: counts.medium, color: COLORS.medium, pct: Math.round((counts.medium / totalPriorities) * 100) },
-      { label: 'Low', value: counts.low, color: COLORS.low, pct: Math.round((counts.low / totalPriorities) * 100) },
-    ];
-  }, [tasks]);
+  const {
+    layout, previewLayout, draft, activeDragId, suppressMotion, displacedIds, gridHeight,
+    gridRef, scrollElRef, bodyRefs, hasWidget, removeWidget, updateWidget, startGesture,
+    onPanelItemPointerDown, showCustomize, setShowCustomize, panelClosing, resetToDefault, canAccessTier,
+  } = useWidgetGrid<InsightWidgetType>({
+    defs: WIDGET_DEFS,
+    storageKey: 'insights-grid-v1',
+    defaultLayout,
+    tier,
+  });
 
-  const avgTimeToComplete = useMemo(() => {
-    const completedWithDates = tasks.filter(t => isTaskDone(t) && t.createdAt && completedTimestamp(t));
-    if (completedWithDates.length === 0) return { days: 0, hours: 0, display: '0 days', isHours: false };
-    const totalMs = completedWithDates.reduce((sum, t) => {
-      const created = new Date(t.createdAt).getTime();
-      const cAt = completedTimestamp(t);
-      const completedAt = cAt ? new Date(cAt).getTime() : Date.now();
-      return sum + (completedAt - created);
-    }, 0);
-    const avgDays = totalMs / completedWithDates.length / (1000 * 60 * 60 * 24);
-    if (avgDays < 1) {
-      const avgHours = Math.round(avgDays * 24);
-      return { days: 0, hours: avgHours, display: `${avgHours}h`, isHours: true };
-    }
-    return { days: Math.round(avgDays), hours: 0, display: `${Math.round(avgDays)} day${Math.round(avgDays) !== 1 ? 's' : ''}`, isHours: false };
-  }, [tasks, columns]);
+  // ---- AI widget data (Pro) ----
+  const [aiLoading, setAiLoading] = useState(false);
+  const [bottleneckError, setBottleneckError] = useState<string | null>(null);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const [bottlenecks, setBottlenecks] = useState<Array<{ id: string; reason: string; suggestion?: string }> | null>(null);
+  const [scoreData, setScoreData] = useState<AiScoreData['data']>(null);
+  const aiFetchedRef = useRef(false);
 
-  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const dayData = useMemo(() => {
-    const dayCount = Array(7).fill(0);
-    tasks.forEach(t => {
-      if (isTaskDone(t) && completedTimestamp(t)) {
-        const d = new Date(completedTimestamp(t) as string);
-        dayCount[d.getDay()]++;
-      }
-    });
-    const max = Math.max(...dayCount, 1);
-    const peakIdx = dayCount.indexOf(Math.max(...dayCount));
-    return dayCount.map((val, i) => ({ label: dayLabels[i], value: val, isPeak: i === peakIdx }));
-  }, [tasks, columns]);
-
-  const timeOfDayData = useMemo(() => {
-    const times = { morning: 0, afternoon: 0, evening: 0 };
-    tasks.forEach(t => {
-      if (isTaskDone(t) && completedTimestamp(t)) {
-        const h = new Date(completedTimestamp(t) as string).getHours();
-        if (h < 12) times.morning++;
-        else if (h < 17) times.afternoon++;
-        else times.evening++;
-      }
-    });
-    const maxVal = Math.max(times.morning, times.afternoon, times.evening, 1);
-    const peak = ['morning', 'afternoon', 'evening'].find(k => times[k as keyof typeof times] === maxVal) as string;
-    return [
-      { label: 'Morning', value: times.morning, color: '#fbbf24', icon: Sunrise, peak: peak === 'morning' },
-      { label: 'Afternoon', value: times.afternoon, color: '#f97316', icon: Sun, peak: peak === 'afternoon' },
-      { label: 'Evening', value: times.evening, color: '#6366f1', icon: Sunset, peak: peak === 'evening' },
-    ];
-  }, [tasks, columns]);
-
-  const overdueTrendData = useMemo(() => {
-    if (tasks.length === 0) return [];
-    const now = new Date();
-    const points: { label: string; value: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const count = tasks.filter(t => t.dueDate && t.dueDate === dateStr && t.dueDate < now.toISOString().split('T')[0] && !isTaskDone(t)).length;
-      points.push({ label: dayLabels[d.getDay()], value: count });
-    }
-    return points;
-  }, [tasks, columns]);
-
-  const completedOverTimeData = useMemo(() => {
-    const now = new Date();
-    if (timeRange === 'day') {
-      const points: { label: string; value: number }[] = [];
-      for (let i = 23; i >= 0; i--) {
-        const d = new Date(now);
-        d.setHours(d.getHours() - i);
-        const hour = d.getHours();
-        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).getHours() === hour && new Date(completedTimestamp(t) as string).toDateString() === now.toDateString()).length;
-        points.push({ label: `${hour}:00`, value: count });
-      }
-      return points;
-    } else if (timeRange === 'week') {
-      const points: { label: string; value: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).toISOString().split('T')[0] === dateStr).length;
-        points.push({ label: dayLabels[d.getDay()], value: count });
-      }
-      return points;
-    } else {
-      const points: { label: string; value: number }[] = [];
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(now);
-        d.setMonth(d.getMonth() - i);
-        const monthStr = d.toLocaleString('default', { month: 'short' });
-        const count = tasks.filter(t => isTaskDone(t) && completedTimestamp(t) && new Date(completedTimestamp(t) as string).getMonth() === d.getMonth() && new Date(completedTimestamp(t) as string).getFullYear() === d.getFullYear()).length;
-        points.push({ label: monthStr, value: count });
-      }
-      return points;
-    }
-  }, [tasks, columns, timeRange]);
-
-  const createdVsCompleted = useMemo(() => {
-    const created = tasks.length;
-    const completedCount = completed;
-    const ratio = completedCount > 0 ? `${Math.round(created / completedCount)}:1` : `${created}:0`;
-    let context = '';
-    if (created > completedCount) context = 'You are creating tasks faster than you are completing them.';
-    else if (created === completedCount) context = 'You are keeping up with your workload.';
-    else context = 'You are staying ahead of your tasks!';
-    return { created, completed: completedCount, ratio, context };
-  }, [tasks, completed]);
-
-  const focusTasks = useMemo(() => {
-    const withDuration = tasks.filter(t => (t.duration || 0) > 0).sort((a, b) => (b.duration || 0) - (a.duration || 0));
-    const totalMinutes = withDuration.reduce((s, t) => s + (t.duration || 0), 0);
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    return {
-      totalDisplay: `${hours}h ${mins}m`,
-      top3: withDuration.slice(0, 3).map(t => ({ title: t.title, duration: t.duration || 0 })),
-    };
-  }, [tasks]);
-
-  const buildFallbackAnalysis = (): AIData => {
-    const today = new Date().toISOString().split('T')[0];
-    const openTasks = tasks.filter(t => !isTaskDone(t));
-    const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !isTaskDone(t));
-    const highOpen = openTasks.filter(t => t.priority === 'urgent' || t.priority === 'high');
-    const lowOpen = openTasks.filter(t => t.priority === 'low');
-    const completedHigh = completed ? tasks.filter(t => isTaskDone(t) && (t.priority === 'urgent' || t.priority === 'high')) : [];
-
-    const short = (t: (typeof tasks)[number]) => t.title.length > 40 ? `${t.title.slice(0, 40)}…` : t.title;
-
-    let score = 50
-      + Math.min(40, completed * 5)
-      - Math.min(30, overdueTasks.length * 6)
-      - Math.min(20, highOpen.length * 4)
-      - Math.min(15, lowOpen.length * 2);
-    score = Math.max(1, Math.min(99, score));
-
-    const contributors: string[] = [];
-    if (completed > 0) {
-      contributors.push(`${completed} task${completed !== 1 ? 's' : ''} completed (${completionRate}%) — ${completed * 5} points`,);
-      if (completedHigh.length > 0) {
-        contributors.push(`High-priority win: "${short(completedHigh[0])}" was completed — matters more than lower-priority work`);
-      }
-    } else {
-      contributors.push('No tasks completed yet — the score is currently held up entirely by a clean (non-overdue) workload.');
-    }
-    if (overdueTasks.length === 0) {
-      contributors.push('No overdue tasks — nothing is being dragged down by missed deadlines.');
-    }
-    if (highPriority > 0 && highOpen.length === 0) {
-      contributors.push('All urgent/high-priority tasks are handled.');
-    }
-
-    const penalties: string[] = [];
-    overdueTasks.slice(0, 4).forEach(t => {
-      penalties.push(`"${short(t)}" is overdue (was due ${t.dueDate}) — pulling the score down about 6 points.`);
-    });
-    if (overdueTasks.length > 4) {
-      penalties.push(`${overdueTasks.length - 4} more overdue task${overdueTasks.length - 4 > 1 ? 's' : ''} each costing about 6 points.`);
-    }
-    highOpen.slice(0, 3).forEach(t => {
-      penalties.push(`"${t.title}" is still open despite being ${t.priority} priority — about 4 points lost.`);
-    });
-    if (highOpen.length > 3) {
-      penalties.push(`${highOpen.length - 3} more open ${highOpen[0]?.priority || 'high'}-priority task${highOpen.length - 3 > 1 ? 's' : ''} still pending.`);
-    }
-    if (lowOpen.length > 0) {
-      const labels = lowOpen.slice(0, 3).map(t => `"${short(t)}"`).join(', ');
-      penalties.push(`${lowOpen.length} low-priority task${lowOpen.length !== 1 ? 's' : ''} left open (${labels}${lowOpen.length > 3 ? '…' : ''}) — each worth about 2 points.`);
-    }
-    if (penalties.length === 0 && completed > 0) {
-      penalties.push('Nothing critical is dragging the score down right now — keep the completion streak going.');
-    }
-
-    const insights: string[] = [
-      `You have ${total} total task${total !== 1 ? 's' : ''} with ${completed} completed (${completionRate}%), spread across ${columns.length} column${columns.length !== 1 ? 's' : ''}.`,
-      `${highPriority} task${highPriority !== 1 ? 's' : ''} marked urgent or high priority${highOpen.length > 0 ? `, ${highOpen.length} still open` : ' — all under control'}.`,
-      overdueTasks.length > 0
-        ? `${overdueTasks.length} task${overdueTasks.length > 1 ? 's' : ''} past due — "${short(overdueTasks[0])}" is the oldest, costing the most.`
-        : 'No overdue tasks — deadlines are in good shape.',
-    ];
-
-    const recommendations: string[] = [
-      overdueTasks.length > 0 ? `Clear overdue tasks first — starting with "${short(overdueTasks[0])}" — to recover lost points.` : 'Review your task list for anything that can be archived or consolidated.',
-      highOpen.length > 0 ? `Finish open ${highOpen[0].priority}-priority tasks before moving to medium or low ones.` : 'Break larger tasks into smaller subtasks for better progress tracking.',
-      'Set realistic deadlines and review them weekly.',
-    ];
-
-    return {
-      overallScore: score,
-      scoreRationale: `Starting from a neutral base of 50: ${completed} completions at +5 each${overdueTasks.length > 0 ? `, ${overdueTasks.length} overdue at −6 each` : ''}${highOpen.length > 0 ? `, ${highOpen.length} open urgent/high tasks at −4 each` : ''}${lowOpen.length > 0 ? `, ${lowOpen.length} open low-priority tasks at −2 each` : ''}. That lands the score at ${score}.`,
-      contributors,
-      penalties,
-      focusArea: overdueTasks.length > 0
-        ? `Deal with the ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''} (like "${short(overdueTasks[0])}") first — they're draining the most score.`
-        : highOpen.length > 0
-          ? `Push the ${highOpen.length} open urgent/high-priority task${highOpen.length > 1 ? 's' : ''} to done to lift the score fastest.`
-          : 'Keep completing tasks to sustain your momentum.',
-      insights,
-      recommendations,
-    };
-  };
-
-  const handleAIAnalysis = async () => {
-    setLoadingAI(true);
+  const runAi = useCallback(async () => {
+    setAiLoading(true);
+    setBottleneckError(null);
+    setScoreError(null);
     try {
-      const res = await fetch('/api/ai/analyze-tasks', {
+      const res = await fetch('/api/ai/pro/dashboard-widgets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          tasks: tasks.map(t => ({
-            title: t.title,
-            priority: t.priority,
-            dueDate: t.dueDate,
-            columnId: t.columnId,
-          })),
-        }),
+        body: JSON.stringify({ tasks }),
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAiData({
-          overallScore: Math.round(Number(data.overallScore) || 0),
-          focusArea: data.focusArea || 'Focus on the most critical task',
-          insights: Array.isArray(data.insights) ? data.insights : [],
-          recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
-          scoreRationale: typeof data.scoreRationale === 'string' ? data.scoreRationale : undefined,
-          contributors: Array.isArray(data.contributors) ? data.contributors : undefined,
-          penalties: Array.isArray(data.penalties) ? data.penalties : undefined,
-        });
-      } else {
-        setAiData(buildFallbackAnalysis());
+      const fallback = buildAiScoreFallback(tasks, ctx);
+      if (!res.ok) {
+        let msg = 'AI service is currently unavailable.';
+        try {
+          const j = await res.json();
+          if (j?.error) msg = String(j.error);
+        } catch { /* ignore */ }
+        setBottleneckError(msg);
+        setBottlenecks(null);
+        setScoreData(fallback);
+        return;
       }
+      const data = await res.json();
+      setBottlenecks(Array.isArray(data.bottlenecks) ? data.bottlenecks : []);
+      const ps = data.productivityScore || {};
+      const s = Number(ps.score);
+      setScoreData({
+        overallScore: Number.isFinite(s) ? Math.round(s) : fallback.overallScore,
+        scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
+        contributors: fallback.contributors,
+        penalties: fallback.penalties,
+        insights: Array.isArray(ps.focusAreas) && ps.focusAreas.length > 0 ? ps.focusAreas.map(String) : fallback.insights,
+        recommendations: fallback.recommendations,
+      });
     } catch {
-      setAiData(buildFallbackAnalysis());
+      setBottleneckError('Could not reach the AI service. Check your connection and try again.');
+      setBottlenecks(null);
+      setScoreData(buildAiScoreFallback(tasks, ctx));
     } finally {
-      setLoadingAI(false);
-      setShowAIModal(true);
+      setAiLoading(false);
+    }
+  }, [tasks, ctx]);
+
+  const wantsAi = hasWidget('ai-bottlenecks') || hasWidget('ai-score');
+  useEffect(() => {
+    if (wantsAi && !aiFetchedRef.current) {
+      aiFetchedRef.current = true;
+      runAi();
+    }
+  }, [wantsAi, runAi]);
+
+  const aiWidgetsData: AiWidgetsData = useMemo(() => ({
+    loading: aiLoading,
+    error: bottleneckError,
+    bottlenecks,
+    score: null,
+    onRetry: runAi,
+  }), [aiLoading, bottleneckError, bottlenecks, runAi]);
+
+  const aiScoreData: AiScoreData = useMemo(() => ({
+    loading: aiLoading,
+    error: scoreError,
+    data: scoreData,
+    onRetry: runAi,
+  }), [aiLoading, scoreError, scoreData, runAi]);
+
+  const renderBody = (widget: InsightWidget) => {
+    switch (widget.type) {
+      case 'completion-overview':
+        return <CompletionOverviewBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
+      case 'active-vs-overdue':
+        return <ActiveVsOverdueBody tasks={tasks} ctx={ctx} />;
+      case 'tasks-by-priority':
+        return <TasksByPriorityBody tasks={tasks} ctx={ctx} />;
+      case 'weekly-activity':
+        return <WeeklyActivityBody tasks={tasks} ctx={ctx} />;
+      case 'project-breakdown':
+        return <ProjectBreakdownBody tasks={tasks} columns={columns} ctx={ctx} />;
+      case 'tags-overview':
+        return <TagsOverviewBody tasks={tasks} ctx={ctx} />;
+      case 'completion-trend':
+        return <CompletionTrendBody tasks={tasks} ctx={ctx} />;
+      case 'avg-completion-time':
+        return <AvgCompletionTimeBody tasks={tasks} ctx={ctx} />;
+      case 'busiest-days-times':
+        return <BusiestDaysBody tasks={tasks} ctx={ctx} />;
+      case 'multi-project-comparison':
+        return <MultiProjectBody tasks={tasks} columns={columns} ctx={ctx} />;
+      case 'subtask-checklist-health':
+        return <SubtaskHealthBody tasks={tasks} ctx={ctx} />;
+      case 'custom-report':
+        return <CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
+      case 'ai-bottlenecks':
+        return <AiBottlenecksBody tasks={tasks} ctx={ctx} aiData={aiWidgetsData} />;
+      case 'ai-score':
+        return <AiScoreBody scoreData={aiScoreData} />;
     }
   };
 
-  const timeRangeToggles: { label: string; value: TimeRange }[] = [
-    { label: 'Day', value: 'day' },
-    { label: 'Week', value: 'week' },
-    { label: 'Month', value: 'month' },
-  ];
-
-  const cardClasses = "bg-card border border-border rounded-xl p-5";
-
   return (
-    <div className="flex-1 overflow-y-auto">
-      <header className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-        <h1 className="text-base font-bold text-foreground">Insights & Analytics</h1>
-        <button
-          onClick={handleAIAnalysis}
-          disabled={loadingAI}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loadingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
-          {loadingAI ? 'Analyzing...' : 'AI Analysis'}
-        </button>
+    <div ref={scrollElRef} className="flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
+      <header className="px-6 py-4 border-b border-border bg-card/30 backdrop-blur-sm shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">Live analytics — recalculated on every change</p>
+            <h1 className="text-xl font-bold text-foreground mt-0.5">Insights & Analytics</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {tier === 'pro' && (
+              <button
+                onClick={runAi}
+                disabled={aiLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
+              </button>
+            )}
+            <button
+              onClick={() => setShowCustomize(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <LayoutDashboard className="w-4 h-4" /> Customize Insights
+            </button>
+          </div>
+        </div>
       </header>
 
-      <div className="p-6 space-y-6 max-w-5xl mx-auto">
-        {/* Top stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <InfoCard icon={CheckSquare} label="Total Tasks" value={total} color="text-primary" />
-          <InfoCard icon={TrendingUp} label="Completed" value={completed} color="text-green-500" />
-          <InfoCard icon={AlertTriangle} label="Overdue" value={overdue} color="text-destructive" />
-          <InfoCard icon={Clock} label="High Priority" value={highPriority} color="text-orange-500" />
-        </div>
-
-        {/* Task Distribution */}
-        <div className={cardClasses}>
-          <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4" /> Task Distribution
-          </h2>
-          <div className="space-y-3">
-            {columnStats.map((col, i) => (
-              <div key={col.name}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-foreground font-medium">{col.name}</span>
-                  <span className="text-xs text-muted-foreground">{col.count} tasks</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-700 ease-out"
-                    style={{ width: total > 0 ? `${(col.count / total) * 100}%` : '0%', backgroundColor: col.color }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Completion Rate */}
-        <div className={cardClasses}>
-          <h2 className="text-sm font-semibold text-foreground mb-4">Completion Rate</h2>
-          <div className="flex items-center gap-6">
-            <div className="relative w-24 h-24 flex items-center justify-center">
-              <CircularProgress value={completionRate} />
-              <span className="absolute text-lg font-bold text-foreground">{completionRate}%</span>
-            </div>
-            <div>
-              <p className="text-sm text-foreground font-medium">{completed} of {total} tasks completed</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {completionRate >= 80 ? 'Keep up the great work!' : completionRate >= 50 ? 'Good progress, keep going!' : 'Every step counts — keep pushing!'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tasks Completed Over Time (premium) */}
-        {isPremium ? (
-          <div className={cardClasses}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">Tasks Completed Over Time</h2>
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-                {timeRangeToggles.map(t => (
-                  <button key={t.value} onClick={() => setTimeRange(t.value)}
-                    className={`px-2.5 py-1 text-xs rounded-md transition-colors ${timeRange === t.value ? 'bg-card text-foreground font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <SimpleLineChart data={completedOverTimeData} color="hsl(var(--primary))" />
+      <div className="p-6">
+        {layout.length === 0 && !previewLayout ? (
+          <div className="text-center py-20">
+            <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
+            <p className="text-base font-semibold text-foreground">Your insights board is empty</p>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Insights to add widgets</p>
+            <button
+              onClick={() => setShowCustomize(true)}
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
+            >
+              Add widgets
+            </button>
           </div>
         ) : (
-          <div className={cardClasses}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">Tasks Completed Over Time</h2>
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-                {timeRangeToggles.map(t => (
-                  <span key={t.value} className="px-2.5 py-1 text-xs text-muted-foreground">{t.label}</span>
-                ))}
-              </div>
-            </div>
-            <PremiumBlur>
-              <div className="h-32" />
-            </PremiumBlur>
-          </div>
-        )}
-
-        {/* Most Productive Day and Time (premium) */}
-        {isPremium ? (
-          <div className={`${cardClasses} grid grid-cols-1 md:grid-cols-2 gap-6`}>
-            <div>
-              <h3 className="text-xs font-semibold text-foreground mb-3">Most Productive Day</h3>
-              <SimpleBarChart
-                data={dayData.map(d => ({ label: d.label, value: d.value, color: d.isPeak ? 'hsl(var(--primary))' : undefined }))}
-                highlightIndex={dayData.findIndex(d => d.isPeak)} />
-            </div>
-            <div>
-              <h3 className="text-xs font-semibold text-foreground mb-3">Most Productive Time</h3>
-              <div className="space-y-2">
-                {timeOfDayData.map(t => (
-                  <div key={t.label} className={`flex items-center gap-3 p-2 rounded-lg ${t.peak ? 'bg-primary/10 border border-primary/20' : ''}`}>
-                    <t.icon className={`w-4 h-4 ${t.peak ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <div className="flex-1">
-                      <div className="flex justify-between text-xs">
-                        <span className={t.peak ? 'text-foreground font-medium' : 'text-muted-foreground'}>{t.label}</span>
-                        <span className={t.peak ? 'text-foreground font-medium' : 'text-muted-foreground'}>{t.value} tasks</span>
+          <div ref={gridRef} className="relative" style={{ height: gridHeight }}>
+            {(previewLayout ?? layout).map(widget => {
+              const def = WIDGET_DEFS.find(d => d.type === widget.type);
+              const accent = def?.accent || 'label-blue';
+              const isDisplaced = displacedIds.has(widget.id);
+              return (
+                <div
+                  key={widget.id}
+                  className={`relative group/widget rounded-2xl overflow-hidden flex flex-col ${isDisplaced ? 'animate-widget-flash' : ''} ${activeDragId === widget.id ? 'z-10' : ''}`}
+                  style={{
+                    position: 'absolute',
+                    ...cellStyle(widget),
+                    background: 'hsl(var(--card))',
+                    border: activeDragId === widget.id ? '2px dashed hsl(var(--primary) / 0.55)' : '1px solid hsl(var(--border))',
+                    boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
+                    transition: suppressMotion || activeDragId === widget.id
+                      ? 'none'
+                      : 'left 180ms cubic-bezier(0.22, 1, 0.36, 1), top 180ms cubic-bezier(0.22, 1, 0.36, 1), width 180ms cubic-bezier(0.22, 1, 0.36, 1), height 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  <div className="flex items-center justify-between px-4 pt-3 pb-1 select-none shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                        {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
                       </div>
-                      <div className="h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${(t.value / Math.max(...timeOfDayData.map(x => x.value), 1)) * 100}%`, backgroundColor: t.peak ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }} />
-                      </div>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
                     </div>
-                    {t.peak && <Zap className="w-3.5 h-3.5 text-primary shrink-0" />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className={`${cardClasses} grid grid-cols-1 md:grid-cols-2 gap-6`}>
-            <PremiumBlur>
-              <h3 className="text-xs font-semibold text-foreground mb-3">Most Productive Day</h3>
-              <div className="h-28" />
-            </PremiumBlur>
-            <PremiumBlur>
-              <h3 className="text-xs font-semibold text-foreground mb-3">Most Productive Time</h3>
-              <div className="space-y-2">
-                {['Morning', 'Afternoon', 'Evening'].map(t => (
-                  <div key={t} className="flex items-center gap-3 p-2 rounded-lg">
-                    <span className="text-muted-foreground">{t}</span>
-                  </div>
-                ))}
-              </div>
-            </PremiumBlur>
-          </div>
-        )}
-
-        {/* Average Time to Complete (premium) */}
-        {isPremium ? (
-          <div className={`${cardClasses} flex items-center gap-4`}>
-            <Clock className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-2xl font-bold text-foreground">{avgTimeToComplete.display}</p>
-              <p className="text-xs text-muted-foreground mt-1">{avgTimeToComplete.isHours ? 'hours on average' : 'days on average'}</p>
-            </div>
-          </div>
-        ) : (
-          <PremiumBlur>
-            <div className={`${cardClasses} flex items-center gap-4`}>
-              <Clock className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-2xl font-bold text-foreground">—</p>
-                <p className="text-xs text-muted-foreground mt-1">{avgTimeToComplete.isHours ? 'hours on average' : 'days on average'}</p>
-              </div>
-            </div>
-          </PremiumBlur>
-        )}
-
-        {/* Overdue Trends (premium) */}
-        {isPremium ? (
-          <div className={cardClasses}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">Overdue Trends</h2>
-              {overdueTrendData.length >= 2 && (
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${overdueTrendData[overdueTrendData.length - 1].value < overdueTrendData[0].value ? 'bg-green-500/10 text-green-600' : 'bg-destructive/10 text-destructive'}`}>
-                  {overdueTrendData[overdueTrendData.length - 1].value < overdueTrendData[0].value ? 'Improving' : 'Needs attention'}
-                </span>
-              )}
-            </div>
-            <SimpleLineChart data={overdueTrendData} color="hsl(var(--destructive))" />
-          </div>
-        ) : (
-          <div className={cardClasses}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-foreground">Overdue Trends</h2>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">—</span>
-            </div>
-            <PremiumBlur>
-              <div className="h-32" />
-            </PremiumBlur>
-          </div>
-        )}
-
-        {/* Priority Breakdown (premium) */}
-        {isPremium ? (
-          <div className={cardClasses}>
-            <h2 className="text-sm font-semibold text-foreground mb-4">Priority Breakdown</h2>
-            <div className="flex items-center gap-6">
-              <DonutChart segments={priorityBreakdown} />
-              <div className="flex-1 space-y-2">
-                {priorityBreakdown.map(p => (
-                  <div key={p.label} className="flex items-center gap-2 text-xs">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                    <span className="flex-1 text-foreground">{p.label}</span>
-                    <span className="text-muted-foreground">{p.value} tasks</span>
-                    <span className="text-muted-foreground w-8 text-right">{p.pct}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className={cardClasses}>
-            <h2 className="text-sm font-semibold text-foreground mb-4">Priority Breakdown</h2>
-            <PremiumBlur>
-              <div className="flex items-center gap-6">
-                <DonutChart segments={priorityBreakdown} />
-                <div className="flex-1 space-y-2">
-                  {priorityBreakdown.map(p => (
-                    <div key={p.label} className="flex items-center gap-2 text-xs">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                      <span className="flex-1 text-foreground">{p.label}</span>
+                    <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                      <button
+                        onPointerDown={e => startGesture(e, widget, 'move')}
+                        className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
+                        title="Move"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={() => removeWidget(widget.id)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  ))}
+                  </div>
+                  <div
+                    ref={(el) => { if (el) bodyRefs.current.set(widget.id, el); else bodyRefs.current.delete(widget.id); }}
+                    onWheel={(e) => {
+                      const el = bodyRefs.current.get(widget.id);
+                      if (!el) return;
+                      const canScrollDown = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+                      const canScrollUp = el.scrollTop > 1;
+                      if ((e.deltaY > 0 && canScrollDown) || (e.deltaY < 0 && canScrollUp)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        el.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                      }
+                    }}
+                    className="px-4 pb-4 overflow-y-auto min-h-0 flex-1"
+                  >
+                    {renderBody(widget as InsightWidget)}
+                  </div>
+                  <div
+                    onPointerDown={e => startGesture(e, widget, 'resize')}
+                    className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
+                    style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
+                    title="Resize"
+                  />
                 </div>
-              </div>
-            </PremiumBlur>
-          </div>
-        )}
-
-        {/* Tasks Created vs Completed Ratio (premium) */}
-        {isPremium ? (
-          <div className={cardClasses}>
-            <h2 className="text-sm font-semibold text-foreground mb-4">Tasks Created vs Completed</h2>
-            <div className="flex items-center justify-center gap-8">
-              <div className="text-center">
-                <p className="text-3xl font-bold text-foreground">{createdVsCompleted.created}</p>
-                <p className="text-xs text-muted-foreground">Created</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-primary">{createdVsCompleted.ratio}</p>
-                <p className="text-xs text-muted-foreground">ratio</p>
-              </div>
-              <div className="text-center">
-                <p className="text-3xl font-bold text-green-500">{createdVsCompleted.completed}</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground text-center mt-3">{createdVsCompleted.context}</p>
-          </div>
-        ) : (
-          <PremiumBlur>
-            <div className={cardClasses}>
-              <h2 className="text-sm font-semibold text-foreground mb-4">Tasks Created vs Completed</h2>
-              <div className="flex items-center justify-center gap-8">
-                <div className="text-center"><p className="text-3xl font-bold text-foreground">—</p><p className="text-xs text-muted-foreground">Created</p></div>
-                <div className="text-center"><p className="text-2xl font-bold text-primary">—</p><p className="text-xs text-muted-foreground">ratio</p></div>
-                <div className="text-center"><p className="text-3xl font-bold text-green-500">—</p><p className="text-xs text-muted-foreground">Completed</p></div>
-              </div>
-            </div>
-          </PremiumBlur>
-        )}
-
-        {/* Focus Time Logged (premium) */}
-        {isPremium ? (
-          <div className={cardClasses}>
-            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Target className="w-4 h-4 text-primary" /> Focus Time Logged
-            </h2>
-            <p className="text-3xl font-bold text-foreground mb-4">{focusTasks.totalDisplay}</p>
-            {focusTasks.top3.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Top tasks</p>
-                {focusTasks.top3.map((t, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs py-1.5 px-3 bg-muted/30 rounded-lg">
-                    <span className="text-foreground font-medium truncate flex-1">{t.title}</span>
-                    <span className="text-muted-foreground ml-2">{Math.floor(t.duration / 60)}h {t.duration % 60}m</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">No focus time logged yet. Set task durations to track focus time.</p>
-            )}
-          </div>
-        ) : (
-          <PremiumBlur>
-            <div className={cardClasses}>
-              <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Target className="w-4 h-4 text-primary" /> Focus Time Logged
-              </h2>
-              <p className="text-3xl font-bold text-foreground mb-4">—</p>
-            </div>
-          </PremiumBlur>
-        )}
-
-        {/* Show upgrade prompt for free users below premium cards */}
-        {!isPro && (
-          <div className="p-8 text-center bg-muted/10 border border-dashed border-border rounded-2xl">
-            <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
-            <h3 className="text-base font-bold text-foreground mb-2">Unlock Premium Insights</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-4">
-              Get charts, trends, and deep analytics to supercharge your productivity.
-            </p>
-            <a href="/pricing" className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors">
-              Upgrade to Premium <ChevronRight className="w-3.5 h-3.5" />
-            </a>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* AI Analysis Modal */}
-      {showAIModal && aiData && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-12">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAIModal(false)} />
-          <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto animate-fade-in">
+      {showCustomize && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className={panelClosing ? 'absolute inset-0 pointer-events-none' : 'absolute inset-0 bg-black/20 backdrop-blur-[2px]'}
+            onClick={() => setShowCustomize(false)}
+          />
+          <div className={`relative w-full max-w-sm h-full bg-card border-l border-border shadow-2xl overflow-y-auto ${panelClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'}`}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">AI Productivity Analysis</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={handleAIAnalysis} disabled={loadingAI} className="p-1.5 rounded-lg hover:bg-muted transition-colors" title="Refresh">
-                  <RefreshCw className={`w-4 h-4 text-muted-foreground ${loadingAI ? 'animate-spin' : ''}`} />
-                </button>
-                <button onClick={() => setShowAIModal(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <LayoutDashboard className="w-4 h-4 text-primary" /> Customize Insights
+              </h2>
+              <button onClick={() => setShowCustomize(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-
-            <div className="p-5 space-y-5">
-              {/* Score */}
-              <div className="text-center">
-                <p className="text-5xl font-black text-foreground">{aiData.overallScore}</p>
-                <p className="text-xs text-muted-foreground mt-1">overall productivity score</p>
-                {aiData.scoreRationale && (
-                  <div className="mt-3 px-4 py-3 bg-muted/50 border border-border rounded-xl text-left">
-                    <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-1">How this score was reached</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{aiData.scoreRationale}</p>
+            <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
+              Drag a widget from the list onto the board to place it — it snaps into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
+            </p>
+            <div className="p-3 space-y-4">
+              {TIER_SECTIONS.map(section => {
+                const defs = WIDGET_DEFS.filter(d => d.tier === section.tier);
+                const lockedCount = defs.filter(d => !canAccessTier(d.tier)).length;
+                return (
+                  <div key={section.tier}>
+                    <div className="flex items-center justify-between px-1 mb-1.5">
+                      <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{section.label}</p>
+                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{lockedCount} locked</span>}
+                    </div>
+                    <div className="space-y-2">
+                      {defs.map(def => {
+                        const placed = hasWidget(def.type);
+                        const unlocked = canAccessTier(def.tier);
+                        const Icon = def.icon;
+                        const tierClass = def.tier === 'pro'
+                          ? 'bg-label-purple/15 text-[hsl(268_60%_60%)]'
+                          : def.tier === 'premium'
+                            ? 'bg-label-yellow/15 text-[hsl(38_92%_50%)]'
+                            : 'bg-muted/60 text-muted-foreground';
+                        return (
+                          <div
+                            key={def.type}
+                            onClick={!placed && !unlocked ? () => navigate('/pricing') : undefined}
+                            onPointerDown={placed || !unlocked ? undefined : onPanelItemPointerDown(def)}
+                            className={placed
+                              ? 'p-3 rounded-2xl border opacity-60'
+                              : unlocked
+                                ? 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing touch-none select-none'
+                                : 'p-3 rounded-2xl border cursor-pointer select-none'}
+                            style={{
+                              borderColor: 'hsl(var(--border))',
+                              borderRadius: 16,
+                              background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+                              boxShadow: unlocked ? '0 6px 18px -18px hsl(228 25% 25% / 0.4)' : 'none',
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: unlocked ? `hsl(var(--${def.accent}) / 0.12)` : 'hsl(var(--muted) / 0.6)' }}>
+                                {unlocked ? (
+                                  <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
+                                ) : (
+                                  <Lock className="w-4 h-4 text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-bold ${unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>{def.title}</p>
+                                <p className={`text-xs mt-0.5 ${unlocked ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>{def.desc}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {(def.tier === 'premium' || def.tier === 'pro') && (
+                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${tierClass}`}>
+                                    <Crown className="w-2.5 h-2.5" /> {def.tier}
+                                  </span>
+                                )}
+                                {placed ? (
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
+                                ) : unlocked ? (
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
+                                    Drag to add
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold uppercase text-primary px-2 py-1 rounded-full bg-primary/10">Upgrade</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* Focus area */}
-              <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl">
-                <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Focus Area</p>
-                <p className="text-sm text-foreground">{aiData.focusArea}</p>
-              </div>
-
-              {/* What's helping */}
-              {aiData.contributors && aiData.contributors.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">What's Helping</p>
-                  <ul className="space-y-2">
-                    {aiData.contributors.map((item: string, i: number) => (
-                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                        <span className="text-emerald-500 mt-0.5">●</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* What's dragging it down */}
-              {aiData.penalties && aiData.penalties.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">What's Dragging It Down</p>
-                  <ul className="space-y-2">
-                    {aiData.penalties.map((item: string, i: number) => (
-                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                        <span className="text-destructive mt-0.5">●</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Key insights */}
-              {aiData.insights && aiData.insights.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Key Insights</p>
-                  <ul className="space-y-2">
-                    {aiData.insights.map((insight: string, i: number) => (
-                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                        <span className="text-primary mt-0.5">•</span>
-                        <span>{insight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {aiData.recommendations && aiData.recommendations.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2">Recommendations</p>
-                  <ul className="space-y-2">
-                    {aiData.recommendations.map((rec: string, i: number) => (
-                      <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                        <span className="text-primary mt-0.5">→</span>
-                        <span>{rec}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                );
+              })}
+            </div>
+            <div className="p-3 pt-1">
+              <button
+                onClick={() => { resetToDefault(); }}
+                className="w-full py-2.5 rounded-xl text-sm font-bold border transition-colors hover:bg-muted"
+                style={{ borderColor: 'hsl(var(--border))', color: 'hsl(228 14% 40%)' }}
+              >
+                Reset to default layout
+              </button>
             </div>
           </div>
         </div>

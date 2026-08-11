@@ -230,6 +230,8 @@ const Dashboard: React.FC = () => {
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [showTaskPicker, setShowTaskPicker] = useState(false);
+  const [taskPickerQuery, setTaskPickerQuery] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -412,6 +414,18 @@ const Dashboard: React.FC = () => {
       return order[a.priority] - order[b.priority];
     })
     .slice(0, 5);
+
+  const pickedTasks = useMemo(() => {
+    const q = taskPickerQuery.trim().toLowerCase();
+    const sorted = [...activeTasks].sort((a, b) => {
+      const order = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+      return (order[a.priority] - order[b.priority]) || a.title.localeCompare(b.title);
+    });
+    if (!q) return sorted;
+    return sorted.filter(t =>
+      t.title.toLowerCase().includes(q) || (t.projectName || '').toLowerCase().includes(q)
+    );
+  }, [activeTasks, taskPickerQuery]);
 
   const projectsInfo = useMemo(() => {
     const map = new Map<number, { id: number; name: string; color: string; active: number; done: number; total: number }>();
@@ -750,8 +764,8 @@ const Dashboard: React.FC = () => {
       const dh = Math.round((e.clientY - g.sy) / CELL_H);
       rect = { col: g.col, row: g.row, w: clamp(g.ww + dw, 1, GRID_COLS - g.col + 1), h: clamp(g.hh + dh, 1, 30) };
     } else {
-      const col = clamp(cell.col - Math.floor((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, cell.row - Math.floor((g.hh - 1) / 2));
+      const col = clamp(cell.col - Math.round((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
+      const row = Math.max(1, cell.row - Math.round((g.hh - 1) / 2));
       rect = { col, row, w: g.ww, h: g.hh };
     }
     const { widgets, activeRect } = solveLayout(g, rect);
@@ -846,7 +860,7 @@ const Dashboard: React.FC = () => {
       gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: p.def.w, hh: p.def.h };
       setActiveDragId('__dragging__');
       setSuppressMotion(false);
-      const rect: Rect = { col: clamp(cell.col, 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row), w: p.def.w, h: p.def.h };
+      const rect: Rect = { col: clamp(cell.col - Math.round((p.def.w - 1) / 2), 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row - Math.round((p.def.h - 1) / 2)), w: p.def.w, h: p.def.h };
       const solved = solveLayout(gestureRef.current, rect);
       draftRef.current = solved.activeRect;
       setDraft(solved.activeRect);
@@ -927,7 +941,7 @@ const Dashboard: React.FC = () => {
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
               style={{ background: 'hsl(var(--primary))', boxShadow: '0 8px 18px -12px hsl(228 25% 25% / 0.4)' }}
-              onClick={() => openDeepFocus()}
+              onClick={() => setShowTaskPicker(true)}
             >
               <Zap className="w-4 h-4" /> Start Deep Work
             </button>
@@ -974,14 +988,20 @@ const Dashboard: React.FC = () => {
             ) : (
               <>
                 <div className="mb-3">
-                  <select
-                    value={widget.projectId ?? proj?.id ?? ''}
-                    onChange={e => updateWidget(widget.id, { projectId: Number(e.target.value) || null })}
-                    className="w-full rounded-lg px-3 py-2 text-sm font-medium text-foreground bg-background focus:outline-none focus:ring-2"
-                    style={{ border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                  <Select
+                    value={String(widget.projectId ?? proj?.id ?? '')}
+                    onValueChange={v => {
+                      const n = Number(v);
+                      updateWidget(widget.id, { projectId: Number.isFinite(n) && n > 0 ? n : null });
+                    }}
                   >
-                    {projectsInfo.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                    <SelectTrigger className="w-full rounded-lg px-3 py-2 text-sm font-medium text-foreground h-auto">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectsInfo.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {projTasks.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-5">No open tasks in this project</p>
@@ -1315,26 +1335,26 @@ style={{ background: 'hsl(var(--primary))' }}>
         return (
           <div className="mt-1">
             <div className="flex gap-2 mb-3">
-              <select
-                value={metric}
-                onChange={e => updateWidget(widget.id, { metric: e.target.value as ReportMetric })}
-                className="flex-1 rounded-lg px-2 py-1.5 text-xs font-medium text-foreground bg-background focus:outline-none focus:ring-2"
-                style={{ border: '1px solid hsl(var(--border))' }}
-              >
-                <option value="completed">Completed</option>
-                <option value="created">Created</option>
-                <option value="checklist">Checklist items</option>
-              </select>
-              <select
-                value={range}
-                onChange={e => updateWidget(widget.id, { range: Number(e.target.value) })}
-                className="rounded-lg px-2 py-1.5 text-xs font-medium text-foreground bg-background focus:outline-none focus:ring-2"
-                style={{ border: '1px solid hsl(var(--border))' }}
-              >
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={30}>30 days</option>
-              </select>
+              <Select value={metric} onValueChange={v => updateWidget(widget.id, { metric: v as ReportMetric })}>
+                <SelectTrigger className="flex-1 rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="created">Created</SelectItem>
+                  <SelectItem value="checklist">Checklist items</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={String(range)} onValueChange={v => updateWidget(widget.id, { range: Number(v) })}>
+                <SelectTrigger className="rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                  <SelectItem value="30">30 days</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {total === 0 ? (
               <div className="text-center py-6">
@@ -1775,6 +1795,75 @@ style={{ background: 'hsl(var(--primary))' }}>
           onRename={renameTagEverywhere}
           emptyText="No tags yet. Create one below."
         />
+      )}
+
+      {showTaskPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowTaskPicker(false)} />
+          <div className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-primary" /> Start Deep Work
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Pick a task to focus on</p>
+              </div>
+              <button onClick={() => setShowTaskPicker(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b border-border shrink-0">
+              <input
+                autoFocus
+                value={taskPickerQuery}
+                onChange={e => setTaskPickerQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setShowTaskPicker(false);
+                }}
+                placeholder="Search tasks…"
+                className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5 min-h-0">
+              {pickedTasks.length === 0 ? (
+                <div className="text-center py-10">
+                  <CheckSquare className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-blue))' }} />
+                  <p className="text-sm text-muted-foreground">
+                    {activeTasks.length === 0 ? 'No active tasks. Add some to get started!' : 'No tasks match your search'}
+                  </p>
+                </div>
+              ) : (
+                pickedTasks.map(task => {
+                  const cfg = task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
+                  return (
+                    <button
+                      key={task.id}
+                      onClick={() => {
+                        setTaskPickerQuery('');
+                        setShowTaskPicker(false);
+                        navigate('/tasks');
+                        openDeepFocus(task);
+                      }}
+                      className="w-full flex items-center gap-2.5 p-2.5 rounded-lg text-left transition-all hover:bg-muted/40 hover:shadow-sm"
+                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
+                    >
+                      {cfg ? (
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>
+                      ) : (
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">Open</span>
+                      )}
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-foreground truncate">{task.title}</span>
+                        {task.projectName && <span className="block text-[11px] text-muted-foreground truncate">{task.projectName}</span>}
+                      </span>
+                      <Zap className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {showAddTask && (

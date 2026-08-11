@@ -2303,15 +2303,16 @@ const Habits: React.FC = () => {
                       placeholder="5"
                     />
                     <span className="text-xs text-muted-foreground">units</span>
-                    <select
-                      value={newTargetPeriod}
-                      onChange={e => setNewTargetPeriod(e.target.value as any)}
-                      className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                    >
-                      <option value="daily">per day</option>
-                      <option value="weekly">per week</option>
-                      <option value="monthly">per month</option>
-                    </select>
+                    <Select value={newTargetPeriod} onValueChange={v => setNewTargetPeriod(v as any)}>
+                      <SelectTrigger className="bg-muted/40 border-border rounded-lg px-3 py-2 text-sm h-auto w-auto">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">per day</SelectItem>
+                        <SelectItem value="weekly">per week</SelectItem>
+                        <SelectItem value="monthly">per month</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -4834,12 +4835,17 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Priority</label>
-                  <select value={editingTmplPriority} onChange={e => setEditingTmplPriority(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all">
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
+                  <Select value={editingTmplPriority} onValueChange={setEditingTmplPriority}>
+                    <SelectTrigger className="w-full bg-muted/40 border-border rounded-xl px-3 py-2.5 text-sm h-auto">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Duration (min)</label>

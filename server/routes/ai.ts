@@ -1578,7 +1578,7 @@ Respond with ONLY valid JSON (no markdown, no code fences) shaped exactly like:
     { "id": "a task id from ACTIVE TASKS", "reason": "one sentence on why this should be done next (deadline/priority/effort)" }
   ],
   "bottlenecks": [
-    { "id": "a task id from the data", "reason": "why this task may be stalling" }
+    { "id": "a task id from the data", "reason": "why this task may be stalling", "suggestion": "one concrete next step the user should take to unblock it" }
   ],
   "weeklySummary": "2-3 natural-language sentences recapping the week and what to do better next week"
 }
@@ -1603,7 +1603,7 @@ All task ids must come verbatim from the data provided. If there are no active t
       .filter((t: any) => t.id && validIds.has(t.id))
       .slice(0, 6);
     const bottlenecks = (Array.isArray(parsed?.bottlenecks) ? parsed.bottlenecks : [])
-      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 240) }))
+      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 240), suggestion: String(t?.suggestion ?? '').slice(0, 240) }))
       .filter((t: any) => t.id && validIds.has(t.id))
       .slice(0, 5);
 
