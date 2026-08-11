@@ -513,7 +513,7 @@ const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
   none: { bg: '#9ca3af', label: 'None' },
 };
 
-const PriorityBadge: React.FC<{
+export const PriorityBadge: React.FC<{
   task: Task;
   onUpdate: (priority: Priority) => void;
   isOpen: boolean;

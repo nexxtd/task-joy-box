@@ -304,4 +304,71 @@ router.delete('/disconnect', requireAuth, async (req: AuthRequest, res: Response
   }
 });
 
+// Shared helper so the AI chat endpoint can see the user's Google Calendar too.
+export async function getCalendarEventsForAI(userId: number): Promise<{
+  connected: boolean;
+  events: Array<{
+    title: string;
+    startDate: string | null;
+    endDate: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    allDay: boolean;
+  }>;
+}> {
+  try {
+    const [tokenRow] = await db.select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, userId)).limit(1);
+    if (!tokenRow) return { connected: false, events: [] };
+
+    const oauth2Client = createOAuth2Client('http://localhost');
+    oauth2Client.setCredentials({
+      access_token: decrypt(tokenRow.accessToken) ?? tokenRow.accessToken,
+      refresh_token: tokenRow.refreshToken ? (decrypt(tokenRow.refreshToken) ?? tokenRow.refreshToken) : undefined,
+    });
+
+    oauth2Client.on('tokens', async (tokens) => {
+      if (tokens.access_token) {
+        await db.update(googleCalendarTokens).set({
+          accessToken: encrypt(tokens.access_token) ?? tokens.access_token,
+          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+        }).where(eq(googleCalendarTokens.userId, userId));
+      }
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const timeMin = new Date();
+    timeMin.setDate(timeMin.getDate() - 1);
+    const timeMax = new Date();
+    timeMax.setDate(timeMax.getDate() + 14);
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+
+    const events = response.data.items || [];
+    const formatted = events.map(event => {
+      const startDate = event.start?.date || event.start?.dateTime?.split('T')[0] || null;
+      const endDate = event.end?.date || event.end?.dateTime?.split('T')[0] || null;
+      return {
+        title: event.summary || 'Untitled Event',
+        startDate,
+        endDate,
+        startTime: event.start?.dateTime ? new Date(event.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        endTime: event.end?.dateTime ? new Date(event.end.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+        allDay: !!event.start?.date,
+      };
+    });
+
+    return { connected: true, events: formatted };
+  } catch (e) {
+    console.error('AI calendar events fetch failed:', e);
+    return { connected: false, events: [] };
+  }
+}
+
 export default router;

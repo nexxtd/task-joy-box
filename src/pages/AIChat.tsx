@@ -39,6 +39,7 @@ interface Chat {
 const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 
 const getStorageKey = (userId?: number | string) => `ta_ai_chats${userId ? `_${userId}` : ''}`;
+const getActiveKey = (userId?: number | string) => `ta_ai_active_chat${userId ? `_${userId}` : ''}`;
 
 function loadChats(key: string): Chat[] {
   try {
@@ -72,15 +73,23 @@ const AIChat: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const didLoad = useRef(false);
 
-  // Load chats once. Always land on a fresh blank chat.
+  // Load chats once. Reopen the last conversation (or the most recently
+  // updated one) so nothing looks lost after switching pages.
   useEffect(() => {
     if (!isPaid || didLoad.current) return;
     didLoad.current = true;
-    setChats(loadChats(storageKey));
-    setActiveChatId(null);
+    const loaded = loadChats(storageKey);
+    setChats(loaded);
+    const savedId = localStorage.getItem(getActiveKey(user?.id));
+    const resumeId = loaded.some(c => c.id === savedId)
+      ? savedId
+      : loaded.length > 0
+        ? [...loaded].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0].id
+        : null;
+    setActiveChatId(resumeId);
     setEphemeral([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPaid, storageKey]);
+  }, [isPaid, storageKey, user?.id]);
 
   // Every chat mutation is saved to localStorage synchronously so nothing is
   // ever lost on remount, navigation, or refresh.
@@ -127,12 +136,14 @@ const AIChat: React.FC = () => {
     setActiveChatId(id);
     setEphemeral([]);
     setExpandedMessages(new Set());
+    try { localStorage.setItem(getActiveKey(user?.id), id); } catch { /* ignore */ }
   };
 
   const newChat = () => {
     setActiveChatId(null);
     setEphemeral([]);
     setExpandedMessages(new Set());
+    try { localStorage.removeItem(getActiveKey(user?.id)); } catch { /* ignore */ }
     inputRef.current?.focus();
   };
 
@@ -141,6 +152,7 @@ const AIChat: React.FC = () => {
     if (activeChatId === id) {
       setActiveChatId(null);
       setEphemeral([]);
+      try { localStorage.removeItem(getActiveKey(user?.id)); } catch { /* ignore */ }
     }
   };
 

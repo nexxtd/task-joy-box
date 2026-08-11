@@ -758,18 +758,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
             {/* Tags */}
             <div>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
-                <button
-                  onClick={() => setNewTagPickerOpen(true)}
-                  className="flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
-                >
-                  <Tag className="w-3.5 h-3.5" />
-                  {newTaskLabels.length > 0 ? `${newTaskLabels.length} tag${newTaskLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-                </button>
-              </div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
               {newTaskLabels.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {newTaskLabels.map(label => (
                     <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${LABEL_COLORS[label.color]} text-primary-foreground flex-shrink-0`}>
                       {label.name}
@@ -780,6 +771,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   ))}
                 </div>
               )}
+              <button
+                onClick={() => setNewTagPickerOpen(true)}
+                className="mt-2 flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+              >
+                <Tag className="w-3.5 h-3.5" />
+                {newTaskLabels.length > 0 ? 'Add more tags' : 'Add tags'}
+              </button>
             </div>
       <TagsModal
         open={newTagPickerOpen}

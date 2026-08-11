@@ -176,9 +176,23 @@ export function useWidgetGrid<T extends string>({
     const active: GridWidget<T> = g.mode === 'panel'
       ? { id: '__dragging__', type: g.def.type, title: g.def.title, col: rect.col, row: rect.row, w: rect.w, h: rect.h }
       : { ...g.w, col: rect.col, row: rect.row, w: rect.w, h: rect.h };
-    const packed = packLayout([...others, active]);
-    const solved = packed.find(o => o.id === active.id) ?? active;
-    return { widgets: packed, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
+    // Place the dragged widget at its target first and push colliding widgets
+    // down, so moving upward never fights the user.
+    const rest = [...others].sort((a, b) => (a.row - b.row) || (a.col - b.col));
+    const placed: GridWidget<T>[] = [active];
+    for (const w of rest) {
+      let cur = { ...w };
+      let guard = 0;
+      while (guard < 200) {
+        const hit = placed.find(o => intersects(cur, o));
+        if (!hit) break;
+        cur.row = hit.row + hit.h;
+        guard += 1;
+      }
+      placed.push(cur);
+    }
+    const solved = placed.find(o => o.id === active.id) ?? active;
+    return { widgets: placed, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
   }, []);
 
   const stopAutoScroll = useCallback(() => {

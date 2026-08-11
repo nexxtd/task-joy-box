@@ -3,8 +3,9 @@ import { Router, Response, Request } from 'express';
 import OpenAI from 'openai';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { users, tasks, boards, columns, aiRequests } from '../../shared/schema';
+import { users, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema';
 import { eq, desc } from 'drizzle-orm';
+import { getCalendarEventsForAI } from './calendar';
 
 const router = Router();
 
@@ -671,13 +672,35 @@ function defaultReplyFor(action: string): string {
   }
 }
 
-function localChatFallback(message: string, context: { tasks?: any[]; columns?: any[] } | undefined) {
+function localChatFallback(
+  message: string,
+  context: { tasks?: any[]; columns?: any[] } | undefined,
+  calendar?: { todayStr: string; tasksToday: any[]; eventsToday: any[] },
+) {
   const m = message.toLowerCase();
   const tasks = context?.tasks || [];
   const columns = context?.columns || [];
   const firstColumn = columns[0];
   const quotedTitle = message.match(/["“]([^"”]+)["”]/);
   const quoted = quotedTitle ? quotedTitle[1] : null;
+
+  if (/\bcalendar\b/.test(m) && /(today|tonight|what|show|list|have|on|schedule|events?)/.test(m)) {
+    if (calendar) {
+      const parts: string[] = [];
+      const { tasksToday, eventsToday, todayStr } = calendar;
+      if (tasksToday.length === 0 && eventsToday.length === 0) {
+        parts.push(`Nothing is scheduled for today (${todayStr}).`);
+      }
+      if (tasksToday.length > 0) {
+        parts.push(`Tasks due today: ${tasksToday.map((t: any) => `"${t.title}"${t.dueTime ? ` at ${t.dueTime}` : ''}`).join(', ')}.`);
+      }
+      if (eventsToday.length > 0) {
+        parts.push(`Calendar events today: ${eventsToday.map((ev: any) => `"${ev.title}"${ev.startTime ? ` at ${ev.startTime}` : ''}`).join(', ')}.`);
+      }
+      return { action: 'chat', message: parts.join(' ') + ' (The AI service is busy — this is a live snapshot of your calendar.)' };
+    }
+    return { action: 'chat', message: 'I can see your calendar, but the AI service is busy right now. Try again in a few seconds.' };
+  }
 
   if (/(show|list|find|check).*\boverdue\b/.test(m)) return { action: 'show_overdue' };
   if (/\bduplicates?\b/.test(m) && /(find|remove|delete|check)/.test(m)) return { action: 'find_duplicates' };
@@ -757,6 +780,9 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
           description: tasks.description,
           priority: tasks.priority,
           dueDate: tasks.dueDate,
+          dueTime: tasks.dueTime,
+          completed: tasks.completed,
+          completedAt: tasks.completedAt,
           createdAt: tasks.createdAt,
           updatedAt: tasks.updatedAt,
           order: tasks.order,
@@ -777,6 +803,9 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
         description: row.tasks.description || '',
         priority: row.tasks.priority,
         dueDate: row.tasks.dueDate || null,
+        dueTime: row.tasks.dueTime || null,
+        completed: Boolean(row.tasks.completed),
+        completedAt: row.tasks.completedAt || null,
         createdAt: row.tasks.createdAt,
         updatedAt: row.tasks.updatedAt,
         columnId: row.tasks.columnId,
@@ -789,6 +818,84 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
   } catch (dbErr: any) {
     console.error('AI chat context query failed:', dbErr?.message || dbErr);
     userData = { tasks: [] };
+  }
+
+  const localDateKey = (d: Date) => {
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return local.toISOString().split('T')[0];
+  };
+  const todayStr = localDateKey(new Date());
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + 7);
+  const maxDateStr = localDateKey(maxDate);
+
+  // Pull the rest of the user's data — goals, habits, notes, projects — plus a
+  // computed insights snapshot so the assistant can answer about anything.
+  let extraData: { goals: any[]; habits: any[]; notes: any[]; projects: any[] } = { goals: [], habits: [], notes: [], projects: [] };
+  try {
+    const [goalRows, habitRows, noteRows, projectRows] = await Promise.all([
+      db.select().from(goals).where(eq(goals.userId, req.userId!)),
+      db.select().from(habits).where(eq(habits.userId, req.userId!)),
+      db.select().from(notes).where(eq(notes.userId, req.userId!)),
+      db.select().from(projects).where(eq(projects.ownerId, req.userId!)),
+    ]);
+    extraData = { goals: goalRows, habits: habitRows, notes: noteRows, projects: projectRows };
+  } catch (extraErr) {
+    console.error('AI chat extra context query failed:', extraErr);
+  }
+
+  const doneTasks = userData.tasks.filter((t: any) => t.completed);
+  const openCount = userData.tasks.length - doneTasks.length;
+  const overdueCount = userData.tasks.filter((t: any) => t.dueDate && t.dueDate < todayStr && !t.completed).length;
+  const completionPct = userData.tasks.length > 0 ? Math.round((doneTasks.length / userData.tasks.length) * 100) : 0;
+  const userDataLines: string[] = [];
+  if (extraData.goals.length > 0) {
+    userDataLines.push(`Goals (${extraData.goals.length}): ${extraData.goals.map((g: any) => `"${g.title}" ${g.progress}/${g.target} ${g.unit}${g.completed ? ' (completed)' : ''}`).join('; ')}`);
+  } else {
+    userDataLines.push('Goals: none');
+  }
+  if (extraData.habits.length > 0) {
+    userDataLines.push(`Habits (${extraData.habits.length}): ${extraData.habits.map((h: any) => `"${h.title}" streak ${h.streak} day(s)`).join('; ')}`);
+  } else {
+    userDataLines.push('Habits: none');
+  }
+  if (extraData.notes.length > 0) {
+    userDataLines.push(`Notes (${extraData.notes.length}): ${extraData.notes.slice(0, 10).map((n: any) => `"${n.title}"`).join(', ')}`);
+  }
+  if (extraData.projects.length > 0) {
+    userDataLines.push(`Projects (${extraData.projects.length}): ${extraData.projects.filter((p: any) => !p.archived).map((p: any) => `"${p.name}"`).join(', ')}`);
+  }
+  userDataLines.push(`Insights: ${userData.tasks.length} tasks total (${openCount} open, ${doneTasks.length} completed, ${overdueCount} overdue), completion rate ${completionPct}%.`);
+
+  // Build a compact calendar snapshot: tasks with due dates (with times) plus
+  // connected Google Calendar events, for today and the next 7 days.
+  let calendarData: { connected: boolean; events: Array<{ title: string; startDate: string | null; endDate: string | null; startTime: string | null; endTime: string | null; allDay: boolean }> } = { connected: false, events: [] };
+  try {
+    calendarData = await getCalendarEventsForAI(req.userId!);
+  } catch (calErr) {
+    console.error('AI calendar context fetch failed:', calErr);
+  }
+  const todayTasks = userData.tasks.filter((t: any) => t.dueDate === todayStr);
+  const upcomingTasks = userData.tasks.filter((t: any) => t.dueDate && t.dueDate > todayStr && t.dueDate <= maxDateStr);
+  const todayEvents = calendarData.events.filter(ev => ev.startDate === todayStr);
+  const upcomingEvents = calendarData.events.filter(ev => ev.startDate && ev.startDate > todayStr && ev.startDate <= maxDateStr);
+  const fmtTime = (t: string | null) => (t ? ` at ${t}` : '');
+  const calendarLines: string[] = [`Today's date: ${todayStr}`];
+  if (todayTasks.length === 0 && todayEvents.length === 0) {
+    calendarLines.push('Calendar today: nothing scheduled.');
+  } else {
+    if (todayTasks.length > 0) {
+      calendarLines.push(`Tasks due today: ${todayTasks.map((t: any) => `"${t.title}"${fmtTime(t.dueTime)}${t.priority && t.priority !== 'none' ? ` (${t.priority})` : ''}`).join('; ')}`);
+    }
+    if (todayEvents.length > 0) {
+      calendarLines.push(`Google Calendar events today: ${todayEvents.map((ev: any) => `"${ev.title}"${ev.startTime ? ` ${ev.startTime}${ev.endTime ? `-${ev.endTime}` : ''}` : ' (all day)'}`).join('; ')}`);
+    }
+  }
+  if (upcomingTasks.length > 0) {
+    calendarLines.push(`Tasks due in the next 7 days: ${upcomingTasks.map((t: any) => `"${t.title}" on ${t.dueDate}${fmtTime(t.dueTime)}`).join('; ')}`);
+  }
+  if (upcomingEvents.length > 0) {
+    calendarLines.push(`Google Calendar events in the next 7 days: ${upcomingEvents.map((ev: any) => `"${ev.title}" on ${ev.startDate}${ev.startTime ? ` ${ev.startTime}` : ''}`).join('; ')}`);
   }
 
   const safeMessage = sanitize(message);
@@ -807,10 +914,15 @@ If the user asks for a board action, you MUST reply with ONLY a JSON object like
 {"action": "chat", "message": "your helpful reply"}
 Available columns: ${(context?.columns || []).map((c: any) => c.title).join(', ') || 'none'}
 Current tasks: ${JSON.stringify(userData.tasks.slice(0, 15))}
+User data snapshot (goals, habits, notes, projects, insights):
+${userDataLines.join('\n')}
+Calendar context:
+${calendarLines.join('\n')}
 Rules:
 - For ordinary questions or conversation, respond with {"action": "chat", "message": "your answer"}.
 - Only use an action key when you actually must perform that board action based on the user's request.
 - Never invent tasks that don't exist. If a task name is unclear, use action "chat" and ask the user to confirm.
+- You HAVE full access to ALL the user's data: tasks, columns, goals, habits, notes, projects, insights, and their calendar (tasks with due dates plus connected Google Calendar events). When asked about any of these — the calendar, today's schedule, goal progress, habit streaks, notes, productivity insights — answer directly from the data above. Never claim you lack access to the user's data or that they must show it to you; it is already provided.
 - Keep messages concise, friendly, without markdown bold/italics.
 - Reply with ONLY the JSON object, no code fences, no extra text.`.trim();
 
@@ -889,7 +1001,7 @@ Rules:
     if (aiOk && parsed) {
       reply = defaultReplyFor(action);
     } else {
-      const fallback = localChatFallback(message, context);
+      const fallback = localChatFallback(message, context, { todayStr, tasksToday: todayTasks, eventsToday: todayEvents });
       action = fallback.action;
       actionData = fallback.action === 'chat' ? null : fallback.data || null;
       reply = fallback.message || defaultReplyFor(fallback.action);
@@ -1490,13 +1602,11 @@ router.post('/premium/ai-prioritize', requireAuth, async (req: AuthRequest, res:
   }
 });
 
-// Pro AI dashboard widgets - powers the AI Productivity Score, AI Task Prioritizer,
+// AI dashboard widgets - powers the AI Productivity Score, AI Task Prioritizer,
 // AI Bottleneck Detector and AI Weekly Summary widgets on the dashboard.
+// Analysis is available on all tiers; the AI widgets themselves remain Pro-gated client-side.
 router.post('/pro/dashboard-widgets', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await requireProTier(req, res);
-    if (!user) return;
-
     const client = getOpenRouter();
     if (!client) {
       return res.status(503).json({

@@ -55,6 +55,19 @@ const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
   { tier: 'pro', label: 'Pro' },
 ];
 
+const LockedAiWidget: React.FC<{ onUpgrade: () => void }> = ({ onUpgrade }) => (
+  <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+    <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+      <Lock className="w-4 h-4 text-muted-foreground" />
+    </div>
+    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Pro widget</p>
+    <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">Upgrade your plan to unlock this widget on your insights board.</p>
+    <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
+      Upgrade
+    </button>
+  </div>
+);
+
 const Insights: React.FC = () => {
   const navigate = useNavigate();
   const { board } = useBoardContext();
@@ -91,12 +104,16 @@ const Insights: React.FC = () => {
   const [scoreError, setScoreError] = useState<string | null>(null);
   const [bottlenecks, setBottlenecks] = useState<Array<{ id: string; reason: string; suggestion?: string }> | null>(null);
   const [scoreData, setScoreData] = useState<AiScoreData['data']>(null);
+  const [lastAnalysis, setLastAnalysis] = useState<{ text: string; time: string; error: boolean } | null>(null);
   const aiFetchedRef = useRef(false);
 
   const runAi = useCallback(async () => {
     setAiLoading(true);
     setBottleneckError(null);
     setScoreError(null);
+    const markDone = (text: string, error: boolean) => {
+      setLastAnalysis({ text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error });
+    };
     try {
       const res = await fetch('/api/ai/pro/dashboard-widgets', {
         method: 'POST',
@@ -114,24 +131,35 @@ const Insights: React.FC = () => {
         setBottleneckError(msg);
         setBottlenecks(null);
         setScoreData(fallback);
+        markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
         return;
       }
       const data = await res.json();
-      setBottlenecks(Array.isArray(data.bottlenecks) ? data.bottlenecks : []);
+      const bns = Array.isArray(data.bottlenecks) ? data.bottlenecks : [];
+      setBottlenecks(bns);
       const ps = data.productivityScore || {};
       const s = Number(ps.score);
+      const focusAreas = Array.isArray(ps.focusAreas) ? ps.focusAreas.map(String) : [];
+      const finalScore = Number.isFinite(s) ? Math.round(s) : fallback.overallScore;
       setScoreData({
-        overallScore: Number.isFinite(s) ? Math.round(s) : fallback.overallScore,
+        overallScore: finalScore,
         scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
         contributors: fallback.contributors,
         penalties: fallback.penalties,
-        insights: Array.isArray(ps.focusAreas) && ps.focusAreas.length > 0 ? ps.focusAreas.map(String) : fallback.insights,
+        insights: focusAreas.length > 0 ? focusAreas : fallback.insights,
         recommendations: fallback.recommendations,
       });
+      const parts: string[] = [`Score ${finalScore}/100`];
+      if (focusAreas.length > 0) parts.push(`Focus: ${focusAreas.slice(0, 3).join(', ')}`);
+      if (bns.length > 0) parts.push(`${bns.length} bottleneck${bns.length !== 1 ? 's' : ''} detected`);
+      if (typeof ps.summary === 'string' && ps.summary) parts.push(ps.summary);
+      markDone(parts.join(' · '), false);
     } catch {
       setBottleneckError('Could not reach the AI service. Check your connection and try again.');
       setBottlenecks(null);
-      setScoreData(buildAiScoreFallback(tasks, ctx));
+      const fb = buildAiScoreFallback(tasks, ctx);
+      setScoreData(fb);
+      markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
     } finally {
       setAiLoading(false);
     }
@@ -187,8 +215,10 @@ const Insights: React.FC = () => {
       case 'custom-report':
         return <CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
       case 'ai-bottlenecks':
+        if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
         return <AiBottlenecksBody tasks={tasks} ctx={ctx} aiData={aiWidgetsData} />;
       case 'ai-score':
+        if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
         return <AiScoreBody scoreData={aiScoreData} />;
     }
   };
@@ -202,15 +232,13 @@ const Insights: React.FC = () => {
             <h1 className="text-xl font-bold text-foreground mt-0.5">Insights & Analytics</h1>
           </div>
           <div className="flex items-center gap-2">
-            {tier === 'pro' && (
-              <button
-                onClick={runAi}
-                disabled={aiLoading}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
-              </button>
-            )}
+            <button
+              onClick={runAi}
+              disabled={aiLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
+            </button>
             <button
               onClick={() => setShowCustomize(true)}
               className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
@@ -220,6 +248,33 @@ const Insights: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {lastAnalysis && (
+        <div className="px-6 pt-4">
+          <div className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 ${lastAnalysis.error ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card/60'}`}>
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                {lastAnalysis.error
+                  ? <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                  : <Sparkles className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-purple))' }} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+                  AI Analysis · {lastAnalysis.time}
+                  {aiLoading && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" />}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{lastAnalysis.text}</p>
+                <p className="text-[11px] text-muted-foreground/70 mt-1">
+                  Details are in the AI Productivity Score and AI Bottleneck Detector widgets — add them via Customize Insights.
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setLastAnalysis(null)} className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="p-6">
         {layout.length === 0 && !previewLayout ? (
