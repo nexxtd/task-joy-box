@@ -12,6 +12,7 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { TaskDropdownExpanded, PriorityBadge } from '@/pages/Tasks';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
+import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return null;
@@ -74,7 +75,7 @@ interface BoardColumnProps {
 }
 
 const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true }) => {
-  const { board, addTask, deleteColumn, updateColumn, updateTask, moveTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
+  const { board, addTask, deleteColumn, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -249,7 +250,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 {task.title}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -508,7 +509,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[44rem]">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[52rem]">
           <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
               {column.icon && <span className="text-base">{column.icon}</span>}
@@ -539,7 +540,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   className="text-sm font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               ) : (
-                <h3 className="text-lg font-bold text-foreground tracking-tight truncate">{column.title}</h3>
+                <h3 className="text-base font-semibold text-foreground tracking-tight truncate">{column.title}</h3>
               )}
               <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-bold">{tasks.length}</span>
             </div>
@@ -641,7 +642,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
                       <button
                         onClick={() => setCompletedCollapsed(prev => !prev)}
-                        className="w-full flex items-center justify-between px-4 py-2"
+                        className="w-full flex items-center justify-between px-4 py-3"
                       >
                         <span className="text-sm font-semibold text-label-green flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4" />
@@ -650,11 +651,15 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                         {completedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                       </button>
                       {!completedCollapsed && (
-                        <div className="border-t border-border/60 px-2 py-2 space-y-3">
-                          {completedTasks.map((task, taskIndex) => (
-                            <Draggable key={task.id} draggableId={task.id} index={uncompletedTasks.length + taskIndex} isDragDisabled={!canEdit}>
-                              {(taskProvided, taskSnapshot) => renderTaskRow(task, taskProvided, taskSnapshot.isDragging)}
-                            </Draggable>
+                        <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
+                          {completedTasks.map(task => (
+                            <CompletedTaskRow
+                              key={task.id}
+                              task={task}
+                              onToggleComplete={canEdit ? (t) => updateTask(t.id, { completed: false, completedAt: undefined }) : undefined}
+                              onOpenTask={onTaskClick}
+                              onDeleteTask={canEdit ? (t) => deleteTask(t.id) : undefined}
+                            />
                           ))}
                         </div>
                       )}

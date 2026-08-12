@@ -425,7 +425,7 @@ const AdminDashboard = () => {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="h-full flex items-center justify-center p-8">
         <div className="text-center">
           <Activity className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
           <p className="text-lg font-medium">Loading admin dashboard...</p>
@@ -437,7 +437,7 @@ const AdminDashboard = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-8">
+      <div className="h-full flex items-center justify-center p-8">
         <div className="max-w-md text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-4">
             <ShieldCheck className="w-8 h-8 text-destructive" />
@@ -458,7 +458,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background/50 p-8 pt-12 relative">
+    <div className="h-full overflow-y-auto bg-background/50 p-8 pt-12 relative">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

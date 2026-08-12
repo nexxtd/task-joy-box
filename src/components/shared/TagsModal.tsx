@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Trash2 } from 'lucide-react';
 import { LabelColor, LABEL_COLORS } from '@/types/board';
 
@@ -48,7 +49,40 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState('');
   const [colorPickerId, setColorPickerId] = useState<string | null>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [pickerRect, setPickerRect] = useState<DOMRect | null>(null);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const closeColorPicker = () => {
+    setColorPickerId(null);
+    setAnchorEl(null);
+    setPickerRect(null);
+  };
+
+  useLayoutEffect(() => {
+    if (!anchorEl) { setPickerRect(null); return; }
+    const update = () => setPickerRect(anchorEl.getBoundingClientRect());
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [anchorEl]);
+
+  useEffect(() => {
+    if (!colorPickerId) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (pickerRef.current && pickerRef.current.contains(target)) return;
+      if ((target as HTMLElement).closest?.('[data-color-trigger]')) return;
+      closeColorPicker();
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [colorPickerId]);
 
   if (!open) return null;
 
@@ -117,6 +151,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
             return (
               <div
                 key={tag.id}
+                data-tag-row
                 className={`relative flex items-center gap-2 rounded-xl border px-3 py-2 ${
                   active ? 'border-primary/30 bg-primary/5' : 'border-border/60'
                 }`}
@@ -142,33 +177,21 @@ const TagsModal: React.FC<TagsModalProps> = ({
                 ) : (
                   <>
                     <button
+                      data-color-trigger
                       onClick={e => {
                         e.stopPropagation();
-                        if (onColorChange) setColorPickerId(colorPickerId === tag.id ? null : tag.id);
+                        if (!onColorChange) return;
+                        if (colorPickerId === tag.id) {
+                          closeColorPicker();
+                        } else {
+                          setColorPickerId(tag.id);
+                          const row = (e.currentTarget.closest('[data-tag-row]') as HTMLElement) || e.currentTarget;
+                          setAnchorEl(row);
+                        }
                       }}
                       title="Change tag color"
                       className={`h-4 w-4 flex-shrink-0 rounded-full border border-black/10 transition-transform hover:scale-110 ${LABEL_COLORS[tag.color]}`}
                     />
-                    {colorPickerId === tag.id && onColorChange && (
-                      <>
-                        <div className="fixed inset-0 z-[60]" onClick={() => setColorPickerId(null)} />
-                        <div className="absolute left-5 top-1/2 z-[70] flex -translate-y-1/2 items-center gap-1.5 rounded-xl border border-border bg-card p-2 shadow-xl">
-                          {TAG_COLOR_OPTIONS.map(color => (
-                            <button
-                              key={color}
-                              title={color}
-                              onClick={() => {
-                                onColorChange(tag.id, color);
-                                setColorPickerId(null);
-                              }}
-                              className={`h-4 w-4 rounded-full border transition-all ${LABEL_COLORS[color]} ${
-                                tag.color === color ? 'scale-110 border-foreground/60' : 'border-transparent hover:scale-105'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
                   </>
                 )}
                 {isRenaming ? null : (
@@ -206,6 +229,36 @@ const TagsModal: React.FC<TagsModalProps> = ({
             );
           })}
         </div>
+
+        {colorPickerId && onColorChange && pickerRect && (() => {
+          const activeTag = tags.find(t => t.id === colorPickerId);
+          if (!activeTag) return null;
+          return createPortal(
+            <div
+              ref={pickerRef}
+              className="fixed z-[100]"
+              style={{ top: pickerRect.bottom + 6, left: pickerRect.left }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-2 shadow-xl">
+                {TAG_COLOR_OPTIONS.map(color => (
+                  <button
+                    key={color}
+                    title={color}
+                    onClick={() => {
+                      onColorChange(activeTag.id, color);
+                      closeColorPicker();
+                    }}
+                    className={`h-4 w-4 rounded-full border transition-all ${LABEL_COLORS[color]} ${
+                      activeTag.color === color ? 'scale-110 border-foreground/60' : 'border-transparent hover:scale-105'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>,
+            document.body
+          );
+        })()}
 
         {showCreate && onCreate && (
           <div className="border-t border-border pt-4">

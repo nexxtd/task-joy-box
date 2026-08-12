@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
+import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 interface ListViewProps {
@@ -361,7 +362,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                 {task.title}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -599,7 +600,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                           <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
                             <button
                               onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
-                              className="w-full flex items-center justify-between px-4 py-2"
+                              className="w-full flex items-center justify-between px-4 py-3"
                             >
                               <span className="text-sm font-semibold text-label-green flex items-center gap-2">
                                 <CheckCircle2 className="w-4 h-4" />
@@ -609,14 +610,14 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                             </button>
                             {!isCompletedCollapsed && (
                               <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
-                                {columnCompleted.map((task, taskIndex) => (
-                                  <Draggable key={task.id} draggableId={task.id} index={columnActive.length + taskIndex}>
-                                    {(taskProvided, taskSnapshot) => (
-                                      <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                                        {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
-                                      </div>
-                                    )}
-                                  </Draggable>
+                                {columnCompleted.map(task => (
+                                  <CompletedTaskRow
+                                    key={task.id}
+                                    task={task}
+                                    onToggleComplete={toggleTaskCompletion}
+                                    onOpenTask={onTaskClick}
+                                    onDeleteTask={(t) => deleteTask(t.id)}
+                                  />
                                 ))}
                               </div>
                             )}

@@ -13,11 +13,13 @@ import {
   GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw,
   Flame, Crown, Lock, CheckCircle2, Pencil
 } from 'lucide-react';
-import { PRIORITY_CONFIG, Priority, Task, LABEL_COLORS, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
+import { PRIORITY_CONFIG, Priority, Task, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import { buildTags } from '@/components/insights/insightData';
+import { CollapsibleRow, useExpanded, CollapseAllToggle } from '@/components/insights/InsightWidgets';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -147,6 +149,33 @@ const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
     result.push(cur);
   }
   return result;
+};
+
+// Guarantee no two widgets intersect. If a `movedId` is supplied the moved
+// widget keeps its target position and every colliding widget is pushed down
+// beneath it; otherwise the whole set is packed (pulled up + pushed down).
+// This is the single source of truth for non-overlapping placement and is
+// applied to every layout-affecting operation and to the rendered layout.
+const resolveCollisions = (widgets: DashboardWidget[], movedId?: string): DashboardWidget[] => {
+  if (movedId) {
+    const moved = widgets.find(w => w.id === movedId);
+    if (!moved) return packLayout(widgets);
+    const rest = widgets.filter(w => w.id !== movedId).sort((a, b) => (a.row - b.row) || (a.col - b.col));
+    const placed: DashboardWidget[] = [{ ...moved }];
+    for (const w of rest) {
+      let cur = { ...w };
+      let guard = 0;
+      while (guard < 200) {
+        const hit = placed.find(o => intersects(cur, o));
+        if (!hit) break;
+        cur.row = hit.row + hit.h;
+        guard += 1;
+      }
+      placed.push(cur);
+    }
+    return placed;
+  }
+  return packLayout(widgets);
 };
 
 type Gesture =
@@ -589,18 +618,6 @@ const Dashboard: React.FC = () => {
     }));
   }, [activeTasks]);
 
-  const tagsOverview = useMemo(() => {
-    const counts = new Map<string, { label: Task['labels'][number]; count: number }>();
-    for (const t of activeTasks) {
-      for (const label of t.labels) {
-        const cur = counts.get(label.id) || { label, count: 0 };
-        cur.count += 1;
-        counts.set(label.id, cur);
-      }
-    }
-    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 8);
-  }, [activeTasks]);
-
   const advancedInsights = useMemo(() => {
     const completedWithDates: Array<{ start: number; end: number; weekday: number }> = [];
     for (const t of board.tasks) {
@@ -749,7 +766,7 @@ const Dashboard: React.FC = () => {
 
   const removeWidget = (id: string) => setLayout(prev => packLayout(prev.filter(w => w.id !== id)));
   const updateWidget = (id: string, patch: Partial<DashboardWidget>) =>
-    setLayout(prev => prev.map(w => w.id === id ? { ...w, ...patch } : w));
+    setLayout(prev => resolveCollisions(prev.map(w => w.id === id ? { ...w, ...patch } : w), id));
 
   const solveLayout = (g: NonNullable<typeof gestureRef.current>, rect: Rect) => {
     const others = layoutRef.current.filter(o => g.mode === 'panel' || o.id !== g.w.id);
@@ -1335,26 +1352,7 @@ style={{ background: 'hsl(var(--primary))' }}>
         );
       }
       case 'tags-overview':
-        return (
-          <div className="mt-1">
-            {tagsOverview.length === 0 ? (
-              <div className="text-center py-6">
-                <Tags className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No tags on active tasks yet</p>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {tagsOverview.map(t => (
-                  <button key={t.label.id} onClick={() => setTagsModalOpen(true)} className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full cursor-pointer transition-colors hover:bg-muted"
-                    style={{ background: 'hsl(var(--muted) / 0.5)', border: '1px solid hsl(var(--border))' }}>
-                    <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--${LABEL_COLORS[t.label.color].replace('bg-', '')}))` }} />
-                    {t.label.name} <span className="text-muted-foreground">·</span> {t.count}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        );
+        return <TagsOverviewWidget tasks={board.tasks} doneColIds={doneColIds} />;
       case 'advanced-insights': {
         const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
         return (
@@ -1596,7 +1594,7 @@ style={{ background: 'hsl(var(--primary))' }}>
   };
 
   const gridHeight = useMemo(() => {
-    const src = previewLayout ?? layout;
+    const src = previewLayout ?? safeLayout;
     const bottom = src.reduce((mx, w) => Math.max(mx, (w.row - 1) * CELL_H + w.h * ROW_PX + (w.h - 1) * GAP_PX), 0);
     return bottom + GAP_PX;
   }, [layout, previewLayout]);
@@ -1612,6 +1610,12 @@ style={{ background: 'hsl(var(--primary))' }}>
     }
     return out;
   }, [layout, previewLayout]);
+
+  // Final safety net: never render overlapping widgets, no matter how the
+  // layout state was produced (load, resize, move, remove, edit, or a stale
+  // persisted layout). Both previewLayout (during a gesture) and the committed
+  // layout are guaranteed collision-free here.
+  const safeLayout = useMemo(() => resolveCollisions(layout), [layout]);
 
   return (
     <>
@@ -1673,7 +1677,7 @@ style={{ background: 'hsl(var(--primary))' }}>
               className="relative"
               style={{ height: gridHeight }}
             >
-              {(previewLayout ?? layout).map(widget => {
+              {(previewLayout ?? safeLayout).map(widget => {
                 const def = WIDGET_DEFS.find(d => d.type === widget.type);
                 const accent = def?.accent || 'label-blue';
                 const isDisplaced = displacedIds.has(widget.id);
@@ -1950,6 +1954,57 @@ style={{ background: 'hsl(var(--primary))' }}>
         <CreateTaskModal open={showAddTask} onClose={() => setShowAddTask(false)} />
       )}
     </>
+  );
+};
+
+const TagsOverviewWidget: React.FC<{ tasks: Task[]; doneColIds: string[] }> = ({ tasks, doneColIds }) => {
+  const tags = useMemo(() => buildTags(tasks, { doneColIds }), [tasks, doneColIds]);
+  const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
+
+  if (tags.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <Tags className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--label-pink))` }} />
+        <p className="text-sm text-muted-foreground">No tags on tasks yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-muted-foreground">{tags.length} tag{tags.length !== 1 ? 's' : ''} in use</p>
+        <CollapseAllToggle ids={tags.map(t => t.id)} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
+      </div>
+      {tags.slice(0, 12).map(t => (
+        <CollapsibleRow
+          key={t.id}
+          id={t.id}
+          expanded={expanded.includes(t.id)}
+          onToggle={() => toggle(t.id)}
+          title={(
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--label-${t.color}))` }} />
+              {t.name}
+            </span>
+          )}
+          subtitle={`${t.count} task${t.count > 1 ? 's' : ''} · ${t.openCount} open`}
+          badge={<span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: `hsl(var(--label-${t.color}))` }}>{t.count}</span>}
+        >
+          {t.tasks.map(task => (
+            <div key={task.id} className="flex items-center gap-2 text-xs">
+              {isTaskDone(task, doneColIds) ? (
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+              ) : (
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_CONFIG[task.priority]?.className || 'bg-muted'}`} />
+              )}
+              <span className={`flex-1 min-w-0 truncate ${isTaskDone(task, doneColIds) ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
+              {task.projectName && <span className="text-[10px] text-muted-foreground shrink-0">{task.projectName}</span>}
+            </div>
+          ))}
+        </CollapsibleRow>
+      ))}
+    </div>
   );
 };
 
