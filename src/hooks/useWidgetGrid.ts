@@ -45,11 +45,19 @@ export const packLayout = <T extends GridWidget>(widgets: T[]): T[] => {
     const cur = { ...w };
     let guard = 0;
     // Pull the widget up to the highest free position so gaps above get filled.
-    while (guard < 200) {
-      if (cur.row <= 1) break;
+    while (guard < 200 && cur.row > 1) {
       const up = { ...cur, row: cur.row - 1 };
       if (result.some(o => intersects(up, o))) break;
       cur.row = up.row;
+      guard += 1;
+    }
+    // Resolve any remaining overlap with already-placed widgets by pushing
+    // down below the blocker — this heals overlapping stored layouts too.
+    guard = 0;
+    while (guard < 200) {
+      const hit = result.find(o => intersects(cur, o));
+      if (!hit) break;
+      cur.row = hit.row + hit.h;
       guard += 1;
     }
     result.push(cur);
@@ -118,6 +126,7 @@ export function useWidgetGrid<T extends string>({
   const scrollElRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<Gesture<T> | null>(null);
   const draftRef = useRef<GridRect | null>(null);
+  const solvedLayoutRef = useRef<GridWidget<T>[] | null>(null);
   const layoutRef = useRef<GridWidget<T>[]>([]);
   const bodyRefs = useRef(new Map<string, HTMLDivElement | null>());
   const panelPendingRef = useRef<{ def: GridWidgetDef<T>; sx: number; sy: number } | null>(null);
@@ -170,7 +179,7 @@ export function useWidgetGrid<T extends string>({
   }, []);
 
   const updateWidget = useCallback((id: string, patch: Partial<GridWidget<T>> & Record<string, unknown>) => {
-    setLayout(prev => prev.map(w => w.id === id ? { ...w, ...patch } : w));
+    setLayout(prev => packLayout(prev.map(w => w.id === id ? { ...w, ...patch } : w)));
   }, []);
 
   const solveLayout = useCallback((g: NonNullable<Gesture<T>>, rect: GridRect) => {
@@ -232,10 +241,10 @@ export function useWidgetGrid<T extends string>({
     g.lastY = e.clientY;
     const bounds = el.getBoundingClientRect();
     const tol = 24;
-    // Allow dragging below the grid's bottom edge so widgets can be moved
-    // beneath everything else (the grid grows as the drag goes further down).
-    if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol ||
-        e.clientY < bounds.top - tol) {
+    // Allow dragging beyond the grid's top/bottom edges so widgets can be
+    // moved to the very top or beneath everything else — the grid auto-scrolls
+    // and the layout grows while the drag continues.
+    if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol) {
       cancelGesture();
       return;
     }
@@ -252,6 +261,7 @@ export function useWidgetGrid<T extends string>({
       rect = { col, row, w: g.ww, h: g.hh };
     }
     const { widgets, activeRect } = solveLayout(g, rect);
+    solvedLayoutRef.current = widgets;
     draftRef.current = activeRect;
     setDraft(activeRect);
     setPreviewLayout(widgets);
@@ -269,6 +279,7 @@ export function useWidgetGrid<T extends string>({
     gestureRef.current = null;
     panelPendingRef.current = null;
     draftRef.current = null;
+    solvedLayoutRef.current = null;
     setDraft(null);
     setPreviewLayout(null);
     setActiveDragId(null);
@@ -285,8 +296,10 @@ export function useWidgetGrid<T extends string>({
     window.removeEventListener('keydown', onGestureKey);
     stopAutoScroll();
     const finalRect = draftRef.current;
+    const solved = solvedLayoutRef.current;
     gestureRef.current = null;
     draftRef.current = null;
+    solvedLayoutRef.current = null;
     setDraft(null);
     setPreviewLayout(null);
     setActiveDragId(null);
@@ -295,6 +308,10 @@ export function useWidgetGrid<T extends string>({
         const def = g.def;
         const widget: GridWidget<T> = { id: genKey(), type: def.type, title: def.title, col: finalRect.col, row: finalRect.row, w: def.w, h: def.h };
         setLayout(prev => packLayout([...prev, widget]));
+      } else if (solved) {
+        // Commit exactly what the preview showed, so a move-up actually
+        // swaps the widget instead of being re-derived (and undone) by packing.
+        setLayout(solved);
       } else {
         setLayout(prev => packLayout(prev.map(wg => wg.id === g.w.id
           ? { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h }
@@ -344,6 +361,7 @@ export function useWidgetGrid<T extends string>({
       setSuppressMotion(false);
       const rect: GridRect = { col: clamp(cell.col - Math.round((p.def.w - 1) / 2), 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row - Math.round((p.def.h - 1) / 2)), w: p.def.w, h: p.def.h };
       const solved = solveLayout(gestureRef.current, rect);
+      solvedLayoutRef.current = solved.widgets;
       draftRef.current = solved.activeRect;
       setDraft(solved.activeRect);
       setPreviewLayout(solved.widgets);
