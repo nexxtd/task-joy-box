@@ -133,6 +133,17 @@ const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
       cur.row = up.row;
       guard += 1;
     }
+    // If it still overlaps a previously placed (upper) widget — because it could
+    // not move up — push it down below that widget so nothing stacks on top of
+    // another. Without this, dropped/removed/loaded layouts can leave widgets
+    // overlapping ("hovering" on one another).
+    guard = 0;
+    while (guard < 200) {
+      const hit = result.find(o => intersects(cur, o));
+      if (!hit) break;
+      cur.row = hit.row + hit.h;
+      guard += 1;
+    }
     result.push(cur);
   }
   return result;
