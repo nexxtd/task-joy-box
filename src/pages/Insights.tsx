@@ -71,11 +71,19 @@ const LockedAiWidget: React.FC<{ onUpgrade: () => void }> = ({ onUpgrade }) => (
 
 // Module-level cache so the analysis survives page navigation: the request keeps
 // running in the background and the result is restored if the user comes back.
-let analysisCache: {
+// Persisted to sessionStorage so a full page reload also restores the last result.
+type AnalysisCache = {
   bottlenecks: Array<{ id: string; reason: string; suggestion?: string }> | null;
   scoreData: AiScoreData['data'];
   lastAnalysis: { text: string; time: string; error: boolean } | null;
-} | null = null;
+};
+const ANALYSIS_CACHE_KEY = 'insights-analysis-cache-v1';
+let analysisCache: AnalysisCache | null = null;
+try {
+  const raw = sessionStorage.getItem(ANALYSIS_CACHE_KEY);
+  if (raw) analysisCache = JSON.parse(raw) as AnalysisCache;
+} catch { /* corrupt or unavailable storage */ }
+let analysisInFlight: Promise<void> | null = null;
 
 const Insights: React.FC = () => {
   const navigate = useNavigate();
@@ -117,72 +125,86 @@ const Insights: React.FC = () => {
   const aiFetchedRef = useRef(false);
 
   const runAi = useCallback(async () => {
-    setAiLoading(true);
-    setBottleneckError(null);
-    setScoreError(null);
-    const markDone = (text: string, error: boolean) => {
-      const info = { text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error };
-      setLastAnalysis(info);
-      return info;
-    };
-    const commit = (result: { bottlenecks: Array<{ id: string; reason: string; suggestion?: string }> | null; scoreData: AiScoreData['data']; lastAnalysis: { text: string; time: string; error: boolean } | null }) => {
-      analysisCache = result;
-    };
-    try {
-      const res = await fetch('/api/ai/pro/dashboard-widgets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ tasks }),
-      });
-      const fallback = buildAiScoreFallback(tasks, ctx);
-      if (!res.ok) {
-        let msg = 'AI service is currently unavailable.';
-        try {
-          const j = await res.json();
-          if (j?.error) msg = String(j.error);
-        } catch { /* ignore */ }
-        setBottleneckError(msg);
-        setBottlenecks(null);
-        setScoreData(fallback);
-        const info = markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
-        commit({ bottlenecks: null, scoreData: fallback, lastAnalysis: info });
-        toast({ title: 'AI analysis finished', description: `${info.text}`, variant: 'destructive' });
-        return;
-      }
-      const data = await res.json();
-      const bns = Array.isArray(data.bottlenecks) ? data.bottlenecks : [];
-      setBottlenecks(bns);
-      const ps = data.productivityScore || {};
-      const s = Number(ps.score);
-      const focusAreas = Array.isArray(ps.focusAreas) ? ps.focusAreas.map(String) : [];
-      const finalScore = Number.isFinite(s) ? Math.round(s) : fallback.overallScore;
-      const scoreResult: AiScoreData['data'] = {
-        overallScore: finalScore,
-        scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
-        contributors: fallback.contributors,
-        penalties: fallback.penalties,
-        insights: focusAreas.length > 0 ? focusAreas : fallback.insights,
-        recommendations: fallback.recommendations,
+    // Reuse the request already in flight so navigating back to this page
+    // mid-analysis never starts a duplicate AI call.
+    if (analysisInFlight) return analysisInFlight;
+    const run = (async () => {
+      setAiLoading(true);
+      setBottleneckError(null);
+      setScoreError(null);
+      const markDone = (text: string, error: boolean) => {
+        const info = { text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error };
+        setLastAnalysis(info);
+        return info;
       };
-      setScoreData(scoreResult);
-      const parts: string[] = [`Score ${finalScore}/100`];
-      if (focusAreas.length > 0) parts.push(`Focus: ${focusAreas.slice(0, 3).join(', ')}`);
-      if (bns.length > 0) parts.push(`${bns.length} bottleneck${bns.length !== 1 ? 's' : ''} detected`);
-      if (typeof ps.summary === 'string' && ps.summary) parts.push(ps.summary);
-      const info = markDone(parts.join(' · '), false);
-      commit({ bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
-      toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
-    } catch {
-      setBottleneckError('Could not reach the AI service. Check your connection and try again.');
-      setBottlenecks(null);
-      const fb = buildAiScoreFallback(tasks, ctx);
-      setScoreData(fb);
-      const info = markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
-      commit({ bottlenecks: null, scoreData: fb, lastAnalysis: info });
-      toast({ title: 'AI analysis failed', description: 'Could not reach the AI service. Showing the offline score instead.', variant: 'destructive' });
+      const commit = (result: AnalysisCache) => {
+        analysisCache = result;
+        try {
+          sessionStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(result));
+        } catch { /* storage may be unavailable */ }
+      };
+      try {
+        const res = await fetch('/api/ai/pro/dashboard-widgets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ tasks }),
+        });
+        const fallback = buildAiScoreFallback(tasks, ctx);
+        if (!res.ok) {
+          let msg = 'AI service is currently unavailable.';
+          try {
+            const j = await res.json();
+            if (j?.error) msg = String(j.error);
+          } catch { /* ignore */ }
+          setBottleneckError(msg);
+          setBottlenecks(null);
+          setScoreData(fallback);
+          const info = markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
+          commit({ bottlenecks: null, scoreData: fallback, lastAnalysis: info });
+          toast({ title: 'AI analysis finished', description: `${info.text}`, variant: 'destructive' });
+          return;
+        }
+        const data = await res.json();
+        const bns = Array.isArray(data.bottlenecks) ? data.bottlenecks : [];
+        setBottlenecks(bns);
+        const ps = data.productivityScore || {};
+        const s = Number(ps.score);
+        const focusAreas = Array.isArray(ps.focusAreas) ? ps.focusAreas.map(String) : [];
+        const finalScore = Number.isFinite(s) ? Math.round(s) : fallback.overallScore;
+        const scoreResult: AiScoreData['data'] = {
+          overallScore: finalScore,
+          scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
+          contributors: fallback.contributors,
+          penalties: fallback.penalties,
+          insights: focusAreas.length > 0 ? focusAreas : fallback.insights,
+          recommendations: fallback.recommendations,
+        };
+        setScoreData(scoreResult);
+        const parts: string[] = [`Score ${finalScore}/100`];
+        if (focusAreas.length > 0) parts.push(`Focus: ${focusAreas.slice(0, 3).join(', ')}`);
+        if (bns.length > 0) parts.push(`${bns.length} bottleneck${bns.length !== 1 ? 's' : ''} detected`);
+        if (typeof ps.summary === 'string' && ps.summary) parts.push(ps.summary);
+        const info = markDone(parts.join(' · '), false);
+        commit({ bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
+        toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
+      } catch {
+        setBottleneckError('Could not reach the AI service. Check your connection and try again.');
+        setBottlenecks(null);
+        const fb = buildAiScoreFallback(tasks, ctx);
+        setScoreData(fb);
+        const info = markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
+        commit({ bottlenecks: null, scoreData: fb, lastAnalysis: info });
+        toast({ title: 'AI analysis failed', description: 'Could not reach the AI service. Showing the offline score instead.', variant: 'destructive' });
+      } finally {
+        setAiLoading(false);
+      }
+    })();
+    analysisInFlight = run;
+    try {
+      await run;
     } finally {
-      setAiLoading(false);
+      if (analysisInFlight === run) analysisInFlight = null;
     }
   }, [tasks, ctx]);
 
@@ -203,7 +225,21 @@ const Insights: React.FC = () => {
   useEffect(() => {
     if (wantsAi && !aiFetchedRef.current) {
       aiFetchedRef.current = true;
-      runAi();
+      if (analysisInFlight) {
+        // The user navigated back while the previous run is still going —
+        // wait for it and rehydrate from the cache it commits.
+        setAiLoading(true);
+        analysisInFlight.then(() => {
+          setAiLoading(false);
+          if (analysisCache) {
+            setBottlenecks(analysisCache.bottlenecks);
+            setScoreData(analysisCache.scoreData);
+            setLastAnalysis(analysisCache.lastAnalysis);
+          }
+        });
+      } else {
+        runAi();
+      }
     }
   }, [wantsAi, runAi]);
 
@@ -250,7 +286,7 @@ const Insights: React.FC = () => {
         return <CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
       case 'ai-bottlenecks':
         if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
-        return <AiBottlenecksBody tasks={tasks} ctx={ctx} aiData={aiWidgetsData} />;
+        return <AiBottlenecksBody tasks={tasks} aiData={aiWidgetsData} />;
       case 'ai-score':
         if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
         return <AiScoreBody scoreData={aiScoreData} />;

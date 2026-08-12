@@ -434,8 +434,7 @@ export function CustomReportBody({
 // 13. AI Bottleneck Detector
 // ---------------------------------------------------------------------------
 
-export function AiBottlenecksBody({ tasks, ctx, aiData }: { tasks: Task[]; ctx: DoneCtx; aiData: AiWidgetsData }) {
-  const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
+export function AiBottlenecksBody({ tasks, aiData }: { tasks: Task[]; aiData: AiWidgetsData }) {
   const bottlenecks = aiData.bottlenecks;
 
   if (aiData.loading) {
@@ -463,12 +462,9 @@ export function AiBottlenecksBody({ tasks, ctx, aiData }: { tasks: Task[]; ctx: 
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-muted-foreground">{bottlenecks.length} stalling task{bottlenecks.length !== 1 ? 's' : ''} flagged</p>
-        <div className="flex items-center gap-2">
-          <button onClick={aiData.onRetry} className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
-            <RefreshCw className="w-3 h-3" /> Refresh
-          </button>
-          <CollapseAllToggle ids={bottlenecks.map(b => b.id)} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
-        </div>
+        <button onClick={aiData.onRetry} className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors">
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </button>
       </div>
       {bottlenecks.length === 0 ? (
         <EmptyState icon={CheckCircle2} text="No bottlenecks detected — the AI found no tasks that appear to be stalling." />
@@ -476,27 +472,12 @@ export function AiBottlenecksBody({ tasks, ctx, aiData }: { tasks: Task[]; ctx: 
         <div className="space-y-1.5">
           {bottlenecks.map(b => {
             const task = tasks.find(t => String(t.id) === String(b.id));
-            const due = task ? dueEnd(task) : null;
-            const lastTouched = task ? daysSince(task.updatedAt || task.createdAt) : null;
             return (
-              <CollapsibleRow
-                key={b.id}
-                id={b.id}
-                expanded={expanded.includes(b.id)}
-                onToggle={() => toggle(b.id)}
-                title={task?.title || 'Task'}
-                subtitle={task ? `${task.projectName || 'No project'}${due ? ` · due ${formatDate(task.dueDate)}` : ' · no due date'}${lastTouched != null ? ` · last activity ${lastTouched === 0 ? 'today' : `${lastTouched}d ago`}` : ''}` : ''}
-                tone="bad"
-                badge={<span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Bottleneck</span>}
-              >
-                <p className="text-xs text-muted-foreground leading-relaxed">{b.reason}</p>
-                <div className="pt-1 px-2 py-2 rounded-lg" style={{ background: 'hsl(var(--primary) / 0.05)', border: '1px solid hsl(var(--primary) / 0.15)' }}>
-                  <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Suggested next step</p>
-                  <p className="text-xs text-foreground leading-relaxed">
-                    {b.suggestion || suggestNextStep(task, due)}
-                  </p>
-                </div>
-              </CollapsibleRow>
+              <div key={b.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-red-500/20 bg-red-500/5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                <span className="text-xs font-semibold text-foreground truncate flex-1">{task?.title || 'Task'}</span>
+                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Bottleneck</span>
+              </div>
             );
           })}
         </div>
@@ -504,26 +485,6 @@ export function AiBottlenecksBody({ tasks, ctx, aiData }: { tasks: Task[]; ctx: 
     </div>
   );
 }
-
-function suggestNextStep(task: Task | undefined, due: Date | null): string {
-  if (!task) return 'Open the task and decide whether to finish it, re-date it, or cut it from the active set.';
-  const { subtaskTotal, subDone, checklistTotal, checklistDone } = breakdownOf(task);
-  const openWork = (subtaskTotal - subDone) + (checklistTotal - checklistDone);
-  if (due && due.getTime() < Date.now()) return 'Re-date it within the next 2-3 days, or downscope it and close it out this week.';
-  if (openWork > 0) return `Start on its ${openWork} open item${openWork > 1 ? 's' : ''} this week — momentum is the only thing that breaks a stall.`;
-  if (!task.dueDate) return 'Give it a concrete due date within the next week, or consciously park it until it has one.';
-  return 'Break it into smaller steps or set a deadline, then restart it this week.';
-}
-
-const breakdownOf = (t: Task) => {
-  const legacy = t.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
-  const subtasks = (t.subtasks && t.subtasks.length > 0) ? t.subtasks : (legacy?.items || []);
-  const subDone = subtasks.filter(s => s.completed).length;
-  const lists = t.checklists.filter(list => list.id !== legacy?.id);
-  const checklistTotal = lists.reduce((s, l) => s + l.items.length, 0);
-  const checklistDone = lists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-  return { subtaskTotal: subtasks.length, subDone, checklistTotal, checklistDone };
-};
 
 // ---------------------------------------------------------------------------
 // 14. AI Productivity Score & Insights
