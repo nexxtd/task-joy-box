@@ -1522,6 +1522,27 @@ const Tasks: React.FC = () => {
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
 
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
@@ -1975,6 +1996,7 @@ const Tasks: React.FC = () => {
               }}
               onDelete={tagId => deleteTagEverywhere(tagId)}
               onRename={renameTagEverywhere}
+              onColorChange={changeTagColorEverywhere}
               emptyText="No tags yet. Create one below."
             />
           </div>
@@ -3428,6 +3450,7 @@ const Tasks: React.FC = () => {
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           onRenameTagEverywhere={renameTagEverywhere}
+          onColorChangeTagEverywhere={changeTagColorEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToTask={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -3670,6 +3693,7 @@ const Tasks: React.FC = () => {
             }}
             onDelete={tagId => deleteTagEverywhere(tagId)}
             onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+            onColorChange={(tagId, color) => changeTagColorEverywhere(tagId, color)}
           />
         );
       })()}
@@ -3693,6 +3717,7 @@ export interface TaskFullViewProps {
   onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
   onDeleteTagEverywhere: (tagId: string) => void;
   onRenameTagEverywhere: (tagId: string, newName: string) => void;
+  onColorChangeTagEverywhere: (tagId: string, color: LabelColor) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToTask?: (taskId: string) => void;
@@ -4405,6 +4430,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   onCreateTag,
   onDeleteTagEverywhere,
   onRenameTagEverywhere,
+  onColorChangeTagEverywhere,
   isPremium,
   isPro,
   onJumpToTask,
@@ -4959,6 +4985,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               }}
               onDelete={tagId => onDeleteTagEverywhere(tagId)}
               onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
+              onColorChange={(tagId, color) => onColorChangeTagEverywhere(tagId, color)}
             />
           )}
           {tagDeleteConfirm && (

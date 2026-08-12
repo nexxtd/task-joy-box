@@ -265,6 +265,28 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setNewTaskLabels(prev => prev.map(label => label.id === tagId ? { ...label, name } : label));
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+    setNewTaskLabels(prev => prev.map(label => label.id === tagId ? { ...label, color } : label));
+  };
+
   const deleteTagEverywhere = async (tagId: string) => {
     if (tagId.startsWith(SHARED_TAG_PREFIX)) {
       const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
@@ -801,6 +823,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         }}
         onDelete={tagId => deleteTagEverywhere(tagId)}
         onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+        onColorChange={(tagId, color) => changeTagColorEverywhere(tagId, color)}
       />
 
             {/* Sub-tasks */}

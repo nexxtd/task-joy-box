@@ -11,7 +11,7 @@ import {
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles,
   AlertTriangle, Flag, History, PieChart, Tags, LineChart, SlidersHorizontal,
   GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw,
-  Flame, Crown, Lock, CheckCircle2
+  Flame, Crown, Lock, CheckCircle2, Pencil
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority, Task, LABEL_COLORS, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -301,6 +301,27 @@ const Dashboard: React.FC = () => {
     board.tasks.forEach(t => {
       if (t.labels.some(label => label.id === tagId)) {
         updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
+
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, color } : label) });
       }
     });
   };
@@ -1668,6 +1689,15 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
                       </div>
                       <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                        {widget.type === 'tags-overview' && (
+                          <button
+                            onClick={() => setTagsModalOpen(true)}
+                            className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"
+                            title="Edit tags"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onPointerDown={e => startGesture(e, widget, 'move')}
                           className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
@@ -1831,6 +1861,7 @@ style={{ background: 'hsl(var(--primary))' }}>
           onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
           onDelete={deleteTagEverywhere}
           onRename={renameTagEverywhere}
+          onColorChange={changeTagColorEverywhere}
           emptyText="No tags yet. Create one below."
         />
       )}

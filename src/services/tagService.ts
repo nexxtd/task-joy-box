@@ -22,7 +22,7 @@ export async function createTag(data: { name: string; color?: string }): Promise
   return res.json();
 }
 
-export async function updateTag(id: number, data: { name: string }): Promise<SharedTag> {
+export async function updateTag(id: number, data: { name?: string; color?: string }): Promise<SharedTag> {
   const res = await fetch(`/api/tags/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

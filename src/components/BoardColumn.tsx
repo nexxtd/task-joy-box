@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task, LABEL_COLORS, Label, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, ChevronDown, ChevronRight, ChevronUp, Calendar, Brain, Clock3, GripVertical, Tag } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, Sparkles, Lock, X, ChevronDown, ChevronRight, ChevronUp, Calendar, Brain, Clock3, GripVertical, Tag, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -102,6 +102,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [columnIcon, setColumnIcon] = useState(column.icon || '');
 
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [completedCollapsed, setCompletedCollapsed] = useState(false);
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
   const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
@@ -179,6 +180,25 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+        }
+      }
+    }
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
   const deleteTagEverywhere = async (tagId: string) => {
     if (tagId.startsWith(SHARED_TAG_PREFIX)) {
       const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
@@ -212,99 +232,103 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
         ref={taskProvided.innerRef}
         {...taskProvided.draggableProps}
         onClick={() => onTaskClick(task)}
-        className={`cursor-pointer rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60' : ''}`}
+        className={`cursor-pointer rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60 border-label-green/30 bg-label-green/5' : ''}`}
       >
-        <div className="flex items-center gap-1.5 px-3.5 py-3.5">
+        <div className="flex items-center gap-1.5 px-3 py-3">
           <div {...taskProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-            <GripVertical className="w-5 h-5" />
+            <GripVertical className="w-4 h-4" />
           </div>
           <CircleToggle
             completed={task.completed || false}
             onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
             size="md"
           />
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            <span className={`text-[15px] font-medium text-foreground truncate flex-1 min-w-0 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-              {task.title}
-            </span>
-            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
-              <PriorityBadge
-                task={task}
-                onUpdate={(priority) => updateTask(task.id, { priority })}
-                isOpen={priorityEditTaskId === task.id}
-                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
-              />
-            )}
-            {taskDurFmt && (
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`text-sm font-medium text-foreground truncate flex-1 min-w-0 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                {task.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+                <PriorityBadge
+                  task={task}
+                  onUpdate={(priority) => updateTask(task.id, { priority })}
+                  isOpen={priorityEditTaskId === task.id}
+                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+                />
+              )}
+              {taskDurFmt && (
+                <button
+                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  {taskDurFmt}
+                </button>
+              )}
               <button
-                onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                  setDateEditField(prev => prev === 'start' ? null : 'start');
+                }}
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
               >
-                {taskDurFmt}
+                <Calendar className="w-2.5 h-2.5" />
+                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
               </button>
-            )}
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
-                setDateEditField(prev => prev === 'start' ? null : 'start');
-              }}
-              className="text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-            >
-              <Calendar className="w-3 h-3" />
-              {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
-            </button>
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
-                setDateEditField(prev => prev === 'due' ? null : 'due');
-              }}
-              className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                task.dueDate
-                  ? warning === 'overdue'
-                    ? 'bg-destructive/10 text-destructive'
-                    : warning === 'imminent' || warning === 'soon'
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'bg-muted text-muted-foreground'
-                  : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              <Calendar className="w-3 h-3" />
-              {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
-            </button>
-            {checklistTotal > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
-            {subtaskCount > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {subtaskDone}/{subtaskCount} sub task
-              </span>
-            )}
-            {taskTags.map(label => (
-              <span key={label.id} className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                {label.name}
-              </span>
-            ))}
-            {task.labels.length > taskTags.length && (
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                  setDateEditField(prev => prev === 'due' ? null : 'due');
+                }}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  task.dueDate
+                    ? warning === 'overdue'
+                      ? 'bg-destructive/10 text-destructive'
+                      : warning === 'imminent' || warning === 'soon'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                        : 'bg-muted text-muted-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+              </button>
+              {checklistTotal > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {checklistDone}/{checklistTotal} checklist
+                </span>
+              )}
+              {subtaskCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {subtaskDone}/{subtaskCount} sub task
+                </span>
+              )}
+              {taskTags.map(label => (
+                <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                  {label.name}
+                </span>
+              ))}
+              {task.labels.length > taskTags.length && (
+                <button
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  +{task.labels.length - taskTags.length}
+                </button>
+              )}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
               >
-                +{task.labels.length - taskTags.length}
+                <Tag className="w-2.5 h-2.5" />
+                {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
-            )}
-            <button
-              onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-              className={`text-[11px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              <Tag className="w-3 h-3" />
-              {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
-            </button>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -613,13 +637,28 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 
                 {/* Completed tasks section */}
                 {!tasksCollapsed && completedTasks.length > 0 && (
-                  <div className="pt-2 border-t border-border/50">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-2 px-1">Completed ({completedTasks.length})</p>
-                    {completedTasks.map((task, taskIndex) => (
-                      <Draggable key={task.id} draggableId={task.id} index={uncompletedTasks.length + taskIndex} isDragDisabled={!canEdit}>
-                        {(taskProvided, taskSnapshot) => renderTaskRow(task, taskProvided, taskSnapshot)}
-                      </Draggable>
-                    ))}
+                  <div className="pt-2">
+                    <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
+                      <button
+                        onClick={() => setCompletedCollapsed(prev => !prev)}
+                        className="w-full flex items-center justify-between px-4 py-2"
+                      >
+                        <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Completed ({completedTasks.length})
+                        </span>
+                        {completedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                      </button>
+                      {!completedCollapsed && (
+                        <div className="border-t border-border/60 px-2 py-2 space-y-3">
+                          {completedTasks.map((task, taskIndex) => (
+                            <Draggable key={task.id} draggableId={task.id} index={uncompletedTasks.length + taskIndex} isDragDisabled={!canEdit}>
+                              {(taskProvided, taskSnapshot) => renderTaskRow(task, taskProvided, taskSnapshot.isDragging)}
+                            </Draggable>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 
@@ -863,6 +902,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           }}
           onDelete={tagId => deleteTagEverywhere(tagId)}
           onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+          onColorChange={(tagId, color) => changeTagColorEverywhere(tagId, color)}
         />
       );
     })()}

@@ -105,6 +105,27 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
   const currentColumn = board.columns.find(c => c.id === task.columnId);
 
   const saveTitle = () => {
@@ -317,6 +338,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 }}
                 onDelete={deleteTagEverywhere}
                 onRename={renameTagEverywhere}
+                onColorChange={changeTagColorEverywhere}
                 emptyText="No tags yet. Create one below."
               />
             )}

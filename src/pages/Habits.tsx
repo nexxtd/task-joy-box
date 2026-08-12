@@ -1325,6 +1325,27 @@ const Habits: React.FC = () => {
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(habit => {
+      if (habit.labels.some(label => label.id === tagId)) {
+        updateTask(habit.id, { labels: habit.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
 
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
@@ -1793,6 +1814,7 @@ const Habits: React.FC = () => {
                 onCreate={async (name, color) => { await createSharedHabitLabel(name, color); }}
                 onDelete={deleteTagEverywhere}
                 onRename={renameTagEverywhere}
+                onColorChange={changeTagColorEverywhere}
                 emptyText="No tags yet. Create one below."
               />
             )}
@@ -2226,6 +2248,7 @@ const Habits: React.FC = () => {
                   }}
                   onDelete={deleteTagEverywhere}
                   onRename={renameTagEverywhere}
+                  onColorChange={changeTagColorEverywhere}
                   emptyText="No tags yet. Create one below."
                 />
               )}
@@ -2865,6 +2888,7 @@ const Habits: React.FC = () => {
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           onRenameTagEverywhere={renameTagEverywhere}
+          onColorChangeTagEverywhere={changeTagColorEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToHabit={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -3105,6 +3129,7 @@ const Habits: React.FC = () => {
             }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
             emptyText="No tags yet. Create one below."
           />
         );
@@ -3129,6 +3154,7 @@ interface HabitFullViewProps {
   onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
   onDeleteTagEverywhere: (tagId: string) => void;
   onRenameTagEverywhere: (tagId: string, newName: string) => void;
+  onColorChangeTagEverywhere: (tagId: string, color: LabelColor) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToHabit?: (taskId: string) => void;
@@ -3646,6 +3672,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
   onCreateTag,
   onDeleteTagEverywhere,
   onRenameTagEverywhere,
+  onColorChangeTagEverywhere,
   isPremium,
   isPro,
   onJumpToHabit,
@@ -4199,6 +4226,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
               onCreate={(name, color) => { onCreateTag(habit.id, name, color); }}
               onDelete={onDeleteTagEverywhere}
               onRename={onRenameTagEverywhere}
+              onColorChange={onColorChangeTagEverywhere}
               emptyText="No tags yet. Create one below."
             />
           )}

@@ -1263,6 +1263,27 @@ const Notes: React.FC = () => {
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        updateTask(note.id, { labels: note.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
   };
@@ -1695,6 +1716,7 @@ const Notes: React.FC = () => {
                 onCreate={async (name, color) => { await createSharedNoteLabel(name, color); }}
                 onDelete={deleteTagEverywhere}
                 onRename={renameTagEverywhere}
+                onColorChange={changeTagColorEverywhere}
                 emptyText="No tags yet. Create one below."
               />
             )}
@@ -2128,6 +2150,7 @@ const Notes: React.FC = () => {
                   }}
                   onDelete={deleteTagEverywhere}
                   onRename={renameTagEverywhere}
+                  onColorChange={changeTagColorEverywhere}
                   emptyText="No tags yet. Create one below."
                 />
               )}
@@ -2907,6 +2930,7 @@ const Notes: React.FC = () => {
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           onRenameTagEverywhere={renameTagEverywhere}
+          onColorChangeTagEverywhere={changeTagColorEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToNote={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -3146,6 +3170,7 @@ const Notes: React.FC = () => {
             }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
             emptyText="No tags yet. Create one below."
           />
         );
@@ -3170,6 +3195,7 @@ interface NoteFullViewProps {
   onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
   onDeleteTagEverywhere: (tagId: string) => void;
   onRenameTagEverywhere: (tagId: string, newName: string) => void;
+  onColorChangeTagEverywhere: (tagId: string, color: LabelColor) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToNote?: (taskId: string) => void;
@@ -3701,6 +3727,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   onCreateTag,
   onDeleteTagEverywhere,
   onRenameTagEverywhere,
+  onColorChangeTagEverywhere,
   isPremium,
   isPro,
   onJumpToNote,
@@ -4129,6 +4156,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
               onCreate={(name, color) => { onCreateTag(note.id, name, color); }}
               onDelete={onDeleteTagEverywhere}
               onRename={onRenameTagEverywhere}
+              onColorChange={onColorChangeTagEverywhere}
               emptyText="No tags yet. Create one below."
             />
           )}

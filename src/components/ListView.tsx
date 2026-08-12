@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { DEFAULT_LABELS, Label, LabelColor, Priority, Task, LABEL_COLORS } from '@/types/board';
-import { Brain, Calendar, ChevronDown, ChevronUp, Clock3, GripVertical, Plus, Tag, Trash2, X } from 'lucide-react';
+import { Brain, Calendar, ChevronDown, ChevronUp, Clock3, GripVertical, Plus, Tag, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAuth } from '@/context/AuthContext';
@@ -152,6 +152,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>(() => {
     try { const v = localStorage.getItem('tasks-collapsed-columns'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
+  const [collapsedCompletedCols, setCollapsedCompletedCols] = useState<string[]>([]);
   const [editingColumn, setEditingColumn] = useState<{ id: string; name: string; color: string; icon: string } | null>(null);
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
   const [quickEditField, setQuickEditField] = useState<'duration' | null>(null);
@@ -271,6 +272,26 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+    board.tasks.forEach(task => {
+      if (task.labels.some(label => label.id === tagId)) {
+        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
   const deleteTagEverywhere = async (tagId: string) => {
     if (tagId.startsWith(SHARED_TAG_PREFIX)) {
       const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
@@ -315,7 +336,9 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDragging
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
-            : 'border-border hover:border-border/80 hover:shadow-sm'
+            : task.completed
+              ? 'border-label-green/30 bg-label-green/5 hover:border-label-green/40'
+              : 'border-border hover:border-border/80 hover:shadow-sm'
         } ${task.completed ? 'opacity-60' : ''}`}
       >
         <div className="flex items-center gap-1 px-3 py-3">
@@ -534,6 +557,9 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
             const tasks = board.tasks
               .filter(t => t.columnId === column.id && (projectId === undefined ? true : t.projectId === projectId))
               .sort((a, b) => a.order - b.order);
+            const columnActive = tasks.filter(t => !t.completed);
+            const columnCompleted = tasks.filter(t => t.completed);
+            const isCompletedCollapsed = collapsedCompletedCols.includes(column.id);
 
             return (
               <div key={column.id} className="mb-3">
@@ -553,14 +579,14 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                     className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
                   >
                     <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
-                    <span className="text-[10px] text-muted-foreground/40">({tasks.length})</span>
+                    <span className="text-[10px] text-muted-foreground/40">({columnActive.length})</span>
                   </button>
                 </div>
                 {!isColumnCollapsed && (
                   <Droppable droppableId={column.id}>
                     {(dropProvided) => (
                       <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-4 space-y-1.5">
-                        {tasks.map((task, taskIndex) => (
+                        {columnActive.map((task, taskIndex) => (
                           <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
                             {(taskProvided, taskSnapshot) => (
                               <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
@@ -569,6 +595,33 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                             )}
                           </Draggable>
                         ))}
+                        {columnCompleted.length > 0 && (
+                          <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
+                            <button
+                              onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
+                              className="w-full flex items-center justify-between px-4 py-2"
+                            >
+                              <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4" />
+                                Completed ({columnCompleted.length})
+                              </span>
+                              {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                            </button>
+                            {!isCompletedCollapsed && (
+                              <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
+                                {columnCompleted.map((task, taskIndex) => (
+                                  <Draggable key={task.id} draggableId={task.id} index={columnActive.length + taskIndex}>
+                                    {(taskProvided, taskSnapshot) => (
+                                      <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                        {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {dropProvided.placeholder}
                       </div>
                     )}
@@ -669,6 +722,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
             }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
             emptyText="No tags yet. Create one below."
           />
         );

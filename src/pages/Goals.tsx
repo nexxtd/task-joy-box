@@ -1316,6 +1316,27 @@ const Goals: React.FC = () => {
     });
   };
 
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(goal => {
+      if (goal.labels.some(label => label.id === tagId)) {
+        updateTask(goal.id, { labels: goal.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
+
   const toggleTagFilter = (tagId: string) => {
     setTagFilterIds(prev => prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]);
   };
@@ -1757,6 +1778,7 @@ const Goals: React.FC = () => {
                 onCreate={async (name, color) => { await createSharedGoalLabel(name, color); }}
                 onDelete={deleteTagEverywhere}
                 onRename={renameTagEverywhere}
+                onColorChange={changeTagColorEverywhere}
                 emptyText="No tags yet. Create one below."
               />
             )}
@@ -2190,6 +2212,7 @@ const Goals: React.FC = () => {
                   }}
                   onDelete={deleteTagEverywhere}
                   onRename={renameTagEverywhere}
+                  onColorChange={changeTagColorEverywhere}
                   emptyText="No tags yet. Create one below."
                 />
               )}
@@ -3088,6 +3111,7 @@ const Goals: React.FC = () => {
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           onRenameTagEverywhere={renameTagEverywhere}
+          onColorChangeTagEverywhere={changeTagColorEverywhere}
           isPremium={isPremium}
           isPro={isPro}
           onJumpToGoal={id => { setOpenTaskId(null); setTimeout(() => setOpenTaskId(id), 50); }}
@@ -3327,6 +3351,7 @@ const Goals: React.FC = () => {
             }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
             emptyText="No tags yet. Create one below."
           />
         );
@@ -3351,6 +3376,7 @@ interface GoalFullViewProps {
   onCreateTag: (taskId: string, name: string, color: LabelColor) => void;
   onDeleteTagEverywhere: (tagId: string) => void;
   onRenameTagEverywhere: (tagId: string, newName: string) => void;
+  onColorChangeTagEverywhere: (tagId: string, color: LabelColor) => void;
   isPremium: boolean;
   isPro: boolean;
   onJumpToGoal?: (taskId: string) => void;
@@ -4060,6 +4086,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
   onCreateTag,
   onDeleteTagEverywhere,
   onRenameTagEverywhere,
+  onColorChangeTagEverywhere,
   isPremium,
   isPro,
   onJumpToGoal,
@@ -4611,6 +4638,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               onCreate={(name, color) => { onCreateTag(goal.id, name, color); }}
               onDelete={onDeleteTagEverywhere}
               onRename={onRenameTagEverywhere}
+              onColorChange={onColorChangeTagEverywhere}
               emptyText="No tags yet. Create one below."
             />
           )}

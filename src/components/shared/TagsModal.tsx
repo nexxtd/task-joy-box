@@ -18,6 +18,7 @@ export interface TagsModalProps {
   onCreate?: (name: string, color: LabelColor) => void | Promise<void>;
   onDelete?: (tagId: string) => void;
   onRename?: (tagId: string, newName: string) => void;
+  onColorChange?: (tagId: string, color: LabelColor) => void | Promise<void>;
   emptyText?: string;
   showCreate?: boolean;
 }
@@ -37,6 +38,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
   onCreate,
   onDelete,
   onRename,
+  onColorChange,
   emptyText = 'No tags yet. Create one below.',
   showCreate = true,
 }) => {
@@ -45,6 +47,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState('');
+  const [colorPickerId, setColorPickerId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   if (!open) return null;
@@ -114,7 +117,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
             return (
               <div
                 key={tag.id}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${
+                className={`relative flex items-center gap-2 rounded-xl border px-3 py-2 ${
                   active ? 'border-primary/30 bg-primary/5' : 'border-border/60'
                 }`}
               >
@@ -137,12 +140,43 @@ const TagsModal: React.FC<TagsModalProps> = ({
                     className="flex-1 rounded-lg border border-primary bg-muted/40 px-2 py-1 text-sm outline-none"
                   />
                 ) : (
+                  <>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (onColorChange) setColorPickerId(colorPickerId === tag.id ? null : tag.id);
+                      }}
+                      title="Change tag color"
+                      className={`h-4 w-4 flex-shrink-0 rounded-full border border-black/10 transition-transform hover:scale-110 ${LABEL_COLORS[tag.color]}`}
+                    />
+                    {colorPickerId === tag.id && onColorChange && (
+                      <>
+                        <div className="fixed inset-0 z-[60]" onClick={() => setColorPickerId(null)} />
+                        <div className="absolute left-5 top-1/2 z-[70] flex -translate-y-1/2 items-center gap-1.5 rounded-xl border border-border bg-card p-2 shadow-xl">
+                          {TAG_COLOR_OPTIONS.map(color => (
+                            <button
+                              key={color}
+                              title={color}
+                              onClick={() => {
+                                onColorChange(tag.id, color);
+                                setColorPickerId(null);
+                              }}
+                              className={`h-4 w-4 rounded-full border transition-all ${LABEL_COLORS[color]} ${
+                                tag.color === color ? 'scale-110 border-foreground/60' : 'border-transparent hover:scale-105'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {isRenaming ? null : (
                   <button
                     onClick={() => onToggle && onToggle(tag.id)}
                     disabled={!onToggle}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <span className={`h-3 w-3 flex-shrink-0 rounded-full ${LABEL_COLORS[tag.color]}`} />
                     <span
                       onClick={onRename
                         ? e => {

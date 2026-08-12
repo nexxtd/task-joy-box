@@ -1,6 +1,9 @@
-import { useState, useMemo } from 'react';
-import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays } from 'lucide-react';
-import { Task, Column, Priority } from '@/types/board';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays, Pencil } from 'lucide-react';
+import { Task, Column, Priority, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
+import { fetchTags, createTag, deleteTag, updateTag, type SharedTag } from '@/services/tagService';
+import TagsModal from '@/components/shared/TagsModal';
+import { useBoardContext } from '@/context/BoardContext';
 import {
   DoneCtx, isTaskDone, dueEnd, formatDate, formatDateTime, formatDuration, PRIORITY_LABEL, ReportMetric,
   buildCompletionOverview, buildOverdue, buildPriorityGroups, buildWeeklyActivity,
@@ -432,49 +435,172 @@ function ProjectBreakdownBody({ tasks, columns, ctx }: { tasks: Task[]; columns:
 // 6. Tags Overview
 // ---------------------------------------------------------------------------
 
+const SHARED_TAG_PREFIX = 'shared-tag-';
+const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const sharedTagToLabel = (tag: SharedTag): Label => ({
+  id: `${SHARED_TAG_PREFIX}${tag.id}`,
+  name: tag.name,
+  color: tag.color as LabelColor,
+});
+
 function TagsOverviewBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
   const tags = useMemo(() => buildTags(tasks, ctx), [tasks, ctx]);
   const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
+  const { board, updateTask } = useBoardContext();
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fetched = await fetchTags();
+        if (!cancelled) setSharedTags(fetched);
+      } catch (error) {
+        console.error('Failed to load shared tags:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const allTags = useMemo<Label[]>(() => {
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
+    sharedTags.forEach(tag => byName.set(normalizeTagName(tag.name).toLowerCase(), sharedTagToLabel(tag)));
+    return Array.from(byName.values());
+  }, [sharedTags]);
+
+  const updateTaskLabels = useCallback((tagId: string, patch: (label: Label) => Label) => {
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? patch(label) : label) });
+      }
+    });
+  }, [board.tasks, updateTask]);
+
+  const deleteTagEverywhere = useCallback(async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  }, [board.tasks, updateTask]);
+  const renameTagEverywhere = useCallback(async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch (error) {
+          console.error('Failed to rename shared tag:', error);
+          return;
+        }
+      }
+    }
+    updateTaskLabels(tagId, label => ({ ...label, name }));
+  }, [updateTaskLabels]);
+
+  const changeTagColorEverywhere = useCallback(async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+    updateTaskLabels(tagId, label => ({ ...label, color }));
+  }, [updateTaskLabels]);
+
+  const handleCreateTag = useCallback(async (name: string, color: LabelColor) => {
+    await createTag({ name, color });
+    const fetched = await fetchTags();
+    setSharedTags(fetched);
+  }, []);
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground">{tags.length} tag{tags.length !== 1 ? 's' : ''} in use</p>
-        <CollapseAllToggle ids={tags.map(t => t.id)} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
-      </div>
-      {tags.length === 0 ? (
-        <EmptyState icon={Tag} text="No tags yet. Add tags to your tasks and they will be grouped here." />
-      ) : (
-        <div className="space-y-1.5">
-          {tags.slice(0, 12).map(t => (
-            <CollapsibleRow
-              key={t.id}
-              id={t.id}
-              expanded={expanded.includes(t.id)}
-              onToggle={() => toggle(t.id)}
-              title={
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--label-${t.color}))` }} />
-                  {t.name}
-                </span>
-              }
-              subtitle={`${t.count} task${t.count > 1 ? 's' : ''} · ${t.openCount} open`}
-              badge={<span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: `hsl(var(--label-${t.color}))` }}>{t.count}</span>}
+    <>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground">{tags.length} tag{tags.length !== 1 ? 's' : ''} in use</p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setTagsModalOpen(true)}
+              className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              title="Edit tags"
             >
-              {t.tasks.map(task => (
-                <div key={task.id} className="flex items-center gap-2 text-xs">
-                  {isTaskDone(task, ctx)
-                    ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                    : <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: PRIORITY_COLORS[task.priority] }} />}
-                  <span className={`flex-1 min-w-0 truncate ${isTaskDone(task, ctx) ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
-                  {task.projectName && <span className="text-[10px] text-muted-foreground shrink-0">{task.projectName}</span>}
-                </div>
-              ))}
-            </CollapsibleRow>
-          ))}
+              <Pencil className="w-3 h-3" /> Edit
+            </button>
+            <CollapseAllToggle ids={tags.map(t => t.id)} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
+          </div>
         </div>
-      )}
-    </div>
+        {tags.length === 0 ? (
+          <EmptyState icon={Tag} text="No tags yet. Add tags to your tasks and they will be grouped here." />
+        ) : (
+          <div className="space-y-1.5">
+            {tags.slice(0, 12).map(t => (
+              <CollapsibleRow
+                key={t.id}
+                id={t.id}
+                expanded={expanded.includes(t.id)}
+                onToggle={() => toggle(t.id)}
+                title={
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--label-${t.color}))` }} />
+                    {t.name}
+                  </span>
+                }
+                subtitle={`${t.count} task${t.count > 1 ? 's' : ''} · ${t.openCount} open`}
+                badge={<span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: `hsl(var(--label-${t.color}))` }}>{t.count}</span>}
+              >
+                {t.tasks.map(task => (
+                  <div key={task.id} className="flex items-center gap-2 text-xs">
+                    {isTaskDone(task, ctx)
+                      ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                      : <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: PRIORITY_COLORS[task.priority] }} />}
+                    <span className={`flex-1 min-w-0 truncate ${isTaskDone(task, ctx) ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
+                    {task.projectName && <span className="text-[10px] text-muted-foreground shrink-0">{task.projectName}</span>}
+                  </div>
+                ))}
+              </CollapsibleRow>
+            ))}
+          </div>
+        )}
+      </div>
+      <TagsModal
+        open={tagsModalOpen}
+        onClose={() => setTagsModalOpen(false)}
+        title="Tags"
+        tags={allTags}
+        selectedIds={[]}
+        onToggle={() => {}}
+        onCreate={handleCreateTag}
+        onDelete={deleteTagEverywhere}
+        onRename={renameTagEverywhere}
+        onColorChange={changeTagColorEverywhere}
+        emptyText="No tags yet. Create one below."
+      />
+    </>
   );
 }
 
