@@ -1143,7 +1143,7 @@ const Projects: React.FC = () => {
         </div>
         <div
           ref={boardCanvasRef}
-          className="flex-1 relative overflow-hidden"
+          className="flex-1 relative overflow-hidden select-none"
           onPointerDown={handleBoardPointerDown}
           style={{
             backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
@@ -1166,7 +1166,7 @@ const Projects: React.FC = () => {
             >
               <Droppable droppableId="board" type="column" direction="horizontal">
                 {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start" data-no-pan="true">
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start">
                     {projectColumns.map((column, index) => {
                       const tasks = projectTasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
                       return (
@@ -1188,7 +1188,7 @@ const Projects: React.FC = () => {
                     {provided.placeholder}
 
                     {addingColumn ? (
-                      <div className="flex-shrink-0 w-80 animate-fade-in bg-card border border-border rounded-2xl p-4">
+                      <div className="flex-shrink-0 w-80 animate-fade-in bg-card border border-border rounded-2xl p-4" data-no-pan="true">
                         <input
                           autoFocus
                           value={newColTitle}
@@ -1208,6 +1208,7 @@ const Projects: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => setAddingColumn(true)}
+                        data-no-pan="true"
                         className="flex-shrink-0 w-80 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
                       >
                         <Plus className="w-4 h-4" />
@@ -1320,10 +1321,10 @@ const Projects: React.FC = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary flex-shrink-0">
                 <FolderKanban className="h-4 w-4" />
               </div>
-              <div className="min-w-0 leading-tight">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
-                <h2 className="text-sm font-semibold text-foreground truncate leading-tight">Your workspace</h2>
-              </div>
+<div className="flex items-baseline gap-2 min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground whitespace-nowrap">Projects</p>
+              <h2 className="text-sm font-semibold text-foreground truncate">Your workspace</h2>
+            </div>
             </div>
           )}
           <button

@@ -479,9 +479,9 @@ const AIChat: React.FC = () => {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10 shrink-0">
                 <Wand2 className="w-4 h-4 text-primary" />
               </div>
-              <div>
-                <h1 className="text-base font-bold text-foreground leading-tight">Planora</h1>
-                <p className="text-[11px] text-muted-foreground leading-tight">Your AI productivity partner</p>
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h1 className="text-base font-bold text-foreground whitespace-nowrap">Planora</h1>
+                <p className="text-[11px] text-muted-foreground whitespace-nowrap">Your AI productivity partner</p>
               </div>
             </div>
             <div className="flex items-center gap-2">

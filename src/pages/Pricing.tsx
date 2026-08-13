@@ -228,8 +228,8 @@ const Pricing: React.FC = () => {
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Crown className="w-5 h-5 text-primary" />
           </div>
-          <div className="min-w-0">
-            <h1 className="text-base font-black text-foreground leading-tight truncate">Select Your Power Plan</h1>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h1 className="text-base font-black text-foreground truncate">Select Your Power Plan</h1>
             <p className="text-xs text-muted-foreground truncate">Elevate your productivity with tailored solutions.</p>
           </div>
         </div>

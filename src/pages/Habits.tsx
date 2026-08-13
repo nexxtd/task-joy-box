@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import {
   DragDropContext,
   Droppable,
@@ -118,15 +119,6 @@ const imageToDataUrl = async (file: File): Promise<string> => {
     }
   }
   return fileToDataUrl(file);
-};
-
-const daysUntilAutoDelete = (completedAt?: string) => {
-  if (!completedAt) return 5;
-  const started = new Date(completedAt);
-  if (Number.isNaN(started.getTime())) return 5;
-  const expires = new Date(started);
-  expires.setDate(expires.getDate() + 5);
-  return Math.max(0, Math.ceil((expires.getTime() - Date.now()) / 86400000));
 };
 
 type DueWarningLevel = null | 'soon' | 'imminent' | 'overdue';
@@ -2050,59 +2042,20 @@ const Habits: React.FC = () => {
                 {completedOpen && (
                   <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
                     {filtered.completed.map(habit => (
-                      <div
+                      <CompletedTaskRow
                         key={habit.id}
-                        onClick={() => {
-                          if (isDeleteMode) {
-                            setSelectedDeleteTaskIds(prev =>
-                              prev.includes(habit.id) ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
-                            );
-                          } else {
-                            setOpenTaskId(habit.id);
-                          }
-                        }}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group ${
-                          isDeleteMode
-                            ? selectedDeleteTaskIds.includes(habit.id)
-                              ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
-                              : 'border-border bg-background/50 hover:bg-muted/20'
-                            : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
-                        }`}
-                      >
-                        {isDeleteMode ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedDeleteTaskIds.includes(habit.id)}
-                            onChange={() => {
-                              setSelectedDeleteTaskIds(prev =>
-                                prev.includes(habit.id) ? prev.filter(id => id !== habit.id) : [...prev, habit.id]
-                              );
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
-                          />
-                        ) : (
-                          <CircleToggle
-                            completed
-                            onClick={e => { e.stopPropagation(); toggleHabitCompletion(habit); }}
-                            size="md"
-                            title="Mark active"
-                          />
-                        )}
-                        <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
-                          {habit.title}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
-                          Auto-delete in {daysUntilAutoDelete(habit.completedAt)} day{daysUntilAutoDelete(habit.completedAt) === 1 ? '' : 's'}
-                        </span>
-                        <button
-                          onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(habit.id); }}
-                          className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                          title="Delete habit"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                        task={habit}
+                        onToggleComplete={(t) => toggleHabitCompletion(t)}
+                        onOpenTask={(t) => setOpenTaskId(t.id)}
+                        onDeleteTask={(t) => setSingleDeleteTaskId(t.id)}
+                        isDeleteMode={isDeleteMode}
+                        isSelected={selectedDeleteTaskIds.includes(habit.id)}
+                        onToggleSelect={(t) =>
+                          setSelectedDeleteTaskIds(prev =>
+                            prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                          )
+                        }
+                      />
                     ))}
                   </div>
                 )}

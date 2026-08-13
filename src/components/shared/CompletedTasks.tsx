@@ -17,6 +17,9 @@ interface CompletedTaskRowProps {
   onToggleComplete?: (task: Task) => void;
   onOpenTask?: (task: Task) => void;
   onDeleteTask?: (task: Task) => void;
+  isDeleteMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (task: Task) => void;
 }
 
 export const CompletedTaskRow: React.FC<CompletedTaskRowProps> = ({
@@ -24,19 +27,38 @@ export const CompletedTaskRow: React.FC<CompletedTaskRowProps> = ({
   onToggleComplete,
   onOpenTask,
   onDeleteTask,
+  isDeleteMode = false,
+  isSelected = false,
+  onToggleSelect,
 }) => {
   return (
     <div
-      onClick={() => onOpenTask?.(task)}
-      className="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group border-label-green/15 bg-background/70 hover:bg-muted/40"
+      onClick={() => (isDeleteMode ? onToggleSelect?.(task) : onOpenTask?.(task))}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group ${
+        isDeleteMode
+          ? isSelected
+            ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+            : 'border-border bg-background/50 hover:bg-muted/20'
+          : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
+      }`}
     >
-      <CircleToggle
-        completed
-        onClick={(e) => { e.stopPropagation(); onToggleComplete?.(task); }}
-        size="md"
-        title="Mark active"
-      />
-      <span className="text-sm text-left flex-1 text-muted-foreground/80 line-through">
+      {isDeleteMode ? (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect?.(task)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+        />
+      ) : (
+        <CircleToggle
+          completed
+          onClick={(e) => { e.stopPropagation(); onToggleComplete?.(task); }}
+          size="md"
+          title="Mark active"
+        />
+      )}
+      <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
         {task.title}
       </span>
       <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">

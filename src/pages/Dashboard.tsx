@@ -1592,11 +1592,17 @@ style={{ background: 'hsl(var(--primary))' }}>
     }
   };
 
+  // Final safety net: never render overlapping widgets, no matter how the
+  // layout state was produced (load, resize, move, remove, edit, or a stale
+  // persisted layout). Both previewLayout (during a gesture) and the committed
+  // layout are guaranteed collision-free here.
+  const safeLayout = useMemo(() => resolveCollisions(layout), [layout]);
+
   const gridHeight = useMemo(() => {
     const src = previewLayout ?? safeLayout;
     const bottom = src.reduce((mx, w) => Math.max(mx, (w.row - 1) * CELL_H + w.h * ROW_PX + (w.h - 1) * GAP_PX), 0);
     return bottom + GAP_PX;
-  }, [layout, previewLayout]);
+  }, [layout, previewLayout, safeLayout]);
 
   const displacedIds = useMemo(() => {
     if (!previewLayout) return new Set<string>();
@@ -1610,12 +1616,6 @@ style={{ background: 'hsl(var(--primary))' }}>
     return out;
   }, [layout, previewLayout]);
 
-  // Final safety net: never render overlapping widgets, no matter how the
-  // layout state was produced (load, resize, move, remove, edit, or a stale
-  // persisted layout). Both previewLayout (during a gesture) and the committed
-  // layout are guaranteed collision-free here.
-  const safeLayout = useMemo(() => resolveCollisions(layout), [layout]);
-
   return (
     <>
       <div
@@ -1626,9 +1626,9 @@ style={{ background: 'hsl(var(--primary))' }}>
         <header className="px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between"
           style={{ borderColor: 'hsl(var(--border))' }}
         >
-          <div className="min-w-0">
-            <h1 className="text-base font-bold text-foreground truncate animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h1 className="text-base font-bold text-foreground whitespace-nowrap animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
+            <p className="text-xs text-muted-foreground truncate">
               {dateStr} · You have <span className="text-primary font-medium">{activeTasks.length} tasks</span> active. Let's make it productive!
             </p>
           </div>
