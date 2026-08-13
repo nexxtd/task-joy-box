@@ -513,7 +513,7 @@ const Collaboration: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <header className="px-6 py-4 border-b border-border">
+      <header className="px-6 h-16 border-b border-border flex items-center">
         <h1 className="text-base font-bold text-foreground">Collaboration</h1>
       </header>
 

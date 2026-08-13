@@ -1309,20 +1309,20 @@ const Projects: React.FC = () => {
   );
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-gradient-to-br from-background via-background to-muted/30 lg:flex-row">
+    <div className="flex flex-1 min-h-0 flex-col bg-gradient-to-br from-background via-background to-muted/30 lg:flex-row">
       <aside className={cn(
         'flex flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:border-b-0 lg:border-r transition-all duration-300',
         sidebarCollapsed ? 'lg:w-16' : 'lg:w-80 w-full'
       )}>
-        <div className="border-b border-border/70 p-5 flex items-center justify-between">
+        <div className="border-b border-border/70 px-5 h-16 flex items-center justify-between flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary flex-shrink-0">
-                <FolderKanban className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary flex-shrink-0">
+                <FolderKanban className="h-4 w-4" />
               </div>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
-                <h2 className="text-lg font-semibold text-foreground truncate">Your workspace</h2>
+              <div className="min-w-0 leading-tight">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Projects</p>
+                <h2 className="text-sm font-semibold text-foreground truncate leading-tight">Your workspace</h2>
               </div>
             </div>
           )}
@@ -1432,14 +1432,17 @@ const Projects: React.FC = () => {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {!selectedProject ? (
-          <div className="flex flex-1 flex-col items-center justify-center bg-background p-8 text-center">
-            <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm">Collaboration boards, tasks, and notes are available once you enter or create a project.</p>
+          <div className="flex flex-1 flex-col bg-background">
+            <div className="h-16 border-b border-border/70 shrink-0" />
+            <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+              <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
+              <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm">Collaboration boards, tasks, and notes are available once you enter or create a project.</p>
+            </div>
           </div>
         ) : (
           <>
-            <header className="border-b border-border/70 bg-background/80 px-5 py-3 backdrop-blur-xl lg:px-8">
+            <header className="h-16 border-b border-border/70 bg-background/80 px-5 backdrop-blur-xl lg:px-8">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <button

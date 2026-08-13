@@ -435,7 +435,7 @@ const AIChat: React.FC = () => {
     <div className="flex h-full overflow-hidden">
       {/* ── Sidebar: chat list ── */}
       <aside className="w-60 shrink-0 border-r border-border bg-card flex flex-col">
-        <div className="p-3 border-b border-border">
+        <div className="h-16 px-3 border-b border-border flex items-center flex-shrink-0">
           <button
             onClick={newChat}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors"
@@ -473,7 +473,7 @@ const AIChat: React.FC = () => {
       {/* ── Main panel ── */}
       <div className="flex-1 flex flex-col min-w-0 bg-background/40">
         {/* Header */}
-        <header className="px-6 py-4 border-b border-border bg-card shrink-0">
+        <header className="px-6 h-16 border-b border-border bg-card shrink-0 flex items-center">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10 shrink-0">

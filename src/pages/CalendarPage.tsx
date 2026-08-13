@@ -276,14 +276,14 @@ const CalendarPage: React.FC = () => {
   };
 
   return (
-    <div className="flex w-full h-[calc(100vh-64px)] overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">
+    <div className="flex w-full h-full overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">
       {/* Left Sidebar */}
       <CalendarSidebar onTaskClick={setSelectedTask} />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-background/80 backdrop-blur-sm relative">
         {/* Top Navigation Bar */}
-        <header className="px-6 py-4 flex items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
+        <header className="px-6 h-16 flex items-center justify-between border-b border-border/60 bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
               <h1 className="text-lg font-bold text-foreground tracking-tight">{headerTitle()}</h1>

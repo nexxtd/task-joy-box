@@ -18,8 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import CreateTaskModal from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
-import { buildTags } from '@/components/insights/insightData';
-import { CollapsibleRow, useExpanded, CollapseAllToggle } from '@/components/insights/InsightWidgets';
+import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -1352,7 +1351,7 @@ style={{ background: 'hsl(var(--primary))' }}>
         );
       }
       case 'tags-overview':
-        return <TagsOverviewWidget tasks={board.tasks} doneColIds={doneColIds} />;
+        return <TagsOverviewBody tasks={board.tasks} ctx={{ doneColIds }} />;
       case 'advanced-insights': {
         const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
         return (
@@ -1624,17 +1623,15 @@ style={{ background: 'hsl(var(--primary))' }}>
         className="flex-1 overflow-y-auto"
         style={{ background: 'hsl(var(--background))' }}
       >
-        <header className="px-6 py-4 border-b border-border bg-card/30 backdrop-blur-sm"
+        <header className="px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between"
           style={{ borderColor: 'hsl(var(--border))' }}
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">{dateStr}</p>
-              <h1 className="text-xl font-bold text-foreground mt-0.5 animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                You have <span className="text-primary font-medium">{activeTasks.length} tasks</span> active. Let's make it productive!
-              </p>
-            </div>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold text-foreground truncate animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {dateStr} · You have <span className="text-primary font-medium">{activeTasks.length} tasks</span> active. Let's make it productive!
+            </p>
+          </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowCustomize(true)}
@@ -1655,7 +1652,6 @@ style={{ background: 'hsl(var(--primary))' }}>
                 <Plus className="w-4 h-4" /> Add Task
               </button>
             </div>
-          </div>
         </header>
 
         <div className="p-6">
@@ -1954,57 +1950,6 @@ style={{ background: 'hsl(var(--primary))' }}>
         <CreateTaskModal open={showAddTask} onClose={() => setShowAddTask(false)} />
       )}
     </>
-  );
-};
-
-const TagsOverviewWidget: React.FC<{ tasks: Task[]; doneColIds: string[] }> = ({ tasks, doneColIds }) => {
-  const tags = useMemo(() => buildTags(tasks, { doneColIds }), [tasks, doneColIds]);
-  const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
-
-  if (tags.length === 0) {
-    return (
-      <div className="text-center py-6">
-        <Tags className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--label-pink))` }} />
-        <p className="text-sm text-muted-foreground">No tags on tasks yet</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-1 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground">{tags.length} tag{tags.length !== 1 ? 's' : ''} in use</p>
-        <CollapseAllToggle ids={tags.map(t => t.id)} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
-      </div>
-      {tags.slice(0, 12).map(t => (
-        <CollapsibleRow
-          key={t.id}
-          id={t.id}
-          expanded={expanded.includes(t.id)}
-          onToggle={() => toggle(t.id)}
-          title={(
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full" style={{ background: `hsl(var(--label-${t.color}))` }} />
-              {t.name}
-            </span>
-          )}
-          subtitle={`${t.count} task${t.count > 1 ? 's' : ''} · ${t.openCount} open`}
-          badge={<span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: `hsl(var(--label-${t.color}))` }}>{t.count}</span>}
-        >
-          {t.tasks.map(task => (
-            <div key={task.id} className="flex items-center gap-2 text-xs">
-              {isTaskDone(task, doneColIds) ? (
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-              ) : (
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_CONFIG[task.priority]?.className || 'bg-muted'}`} />
-              )}
-              <span className={`flex-1 min-w-0 truncate ${isTaskDone(task, doneColIds) ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
-              {task.projectName && <span className="text-[10px] text-muted-foreground shrink-0">{task.projectName}</span>}
-            </div>
-          ))}
-        </CollapsibleRow>
-      ))}
-    </div>
   );
 };
 

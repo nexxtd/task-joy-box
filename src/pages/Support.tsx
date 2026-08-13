@@ -22,7 +22,7 @@ const FAQsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const current = FAQS.find(f => f.id === selected)!;
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
             <BookOpen className="w-4 h-4 text-primary" />
@@ -80,7 +80,7 @@ const ResourcesView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
             <FileText className="w-4 h-4 text-primary" />
@@ -180,7 +180,7 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
             <Send className="w-4 h-4 text-primary" />
@@ -323,12 +323,12 @@ const Support: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
-      <header className="px-8 py-4 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
             <LifeBuoy className="w-5 h-5 text-primary" />
           </div>
-          <h1 className="text-xl font-bold text-foreground">Support</h1>
+          <h1 className="text-base font-bold text-foreground">Support</h1>
         </div>
       </header>
       <div className="p-8 max-w-3xl mx-auto">

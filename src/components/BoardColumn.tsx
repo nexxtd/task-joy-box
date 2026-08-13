@@ -221,36 +221,39 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
 
   const renderTaskRow = (task: Task, taskProvided: any, taskSnapshot: any) => {
     const isExpanded = expandedTaskIds.includes(task.id);
+    const subtaskCount = task.subtasks?.length || 0;
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-    const subtaskCount = task.subtasks?.length || 0;
-    const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
     const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
-    const warning = getDueTimeWarning(task);
     return (
       <div
         ref={taskProvided.innerRef}
         {...taskProvided.draggableProps}
         onClick={() => onTaskClick(task)}
-        className={`cursor-pointer rounded-xl border bg-card transition-[opacity,box-shadow,border-color] duration-200 hover:border-border/80 hover:shadow-sm ${taskSnapshot.isDragging ? 'border-primary/40 shadow-lg rotate-[2deg]' : ''} ${task.completed ? 'opacity-60 border-label-green/30 bg-label-green/5' : ''}`}
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
+          taskSnapshot.isDragging
+            ? 'border-primary/40 shadow-lg rotate-[2deg]'
+            : 'border-border hover:border-border/80 hover:shadow-sm'
+        }`}
       >
-        <div className="flex items-center gap-1.5 px-3 py-3">
+        <div className="flex items-center gap-1 px-3 py-3">
           <div {...taskProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
-          <CircleToggle
-            completed={task.completed || false}
-            onClick={(e) => { e.stopPropagation(); handleToggleComplete(e, task); }}
-            size="md"
-          />
+          <div onClick={e => { e.stopPropagation(); handleToggleComplete(e, task); }}>
+            <CircleToggle
+              completed={task.completed || false}
+              onClick={e => { e.stopPropagation(); handleToggleComplete(e, task); }}
+              size="md"
+              title="Mark complete"
+            />
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className={`text-sm font-medium text-foreground break-words flex-1 min-w-0 leading-snug ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                {task.title}
-              </span>
+              <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
             </div>
-              <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -286,11 +289,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   task.dueDate
-                    ? warning === 'overdue'
-                      ? 'bg-destructive/10 text-destructive'
-                      : warning === 'imminent' || warning === 'soon'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'bg-muted text-muted-foreground'
+                    ? (() => {
+                        const warning = getDueTimeWarning(task);
+                        return warning === 'overdue'
+                          ? 'bg-destructive/10 text-destructive'
+                          : warning === 'imminent' || warning === 'soon'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground';
+                      })()
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
@@ -302,13 +308,19 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
-              {subtaskCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {subtaskDone}/{subtaskCount} sub task
-                </span>
-              )}
+              {subtaskCount > 0 && (() => {
+                const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+                return (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                    {subtaskDone}/{subtaskCount} sub task
+                  </span>
+                );
+              })()}
               {taskTags.map(label => (
-                <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
                   {label.name}
                 </span>
               ))}
@@ -333,18 +345,18 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
-              onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+              onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); openDeepFocus(task); }}
+              onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
               className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
               title="Open Deep Focus"
             >
-              <Brain className="w-4 h-4" />
+              <Brain className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -509,7 +521,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[52rem]">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[58rem]">
           <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
               {column.icon && <span className="text-base">{column.icon}</span>}
@@ -540,7 +552,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   className="text-sm font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               ) : (
-                <h3 className="text-base font-semibold text-foreground tracking-tight truncate">{column.title}</h3>
+                <h3 className="text-sm font-semibold text-foreground tracking-tight truncate">{column.title}</h3>
               )}
               <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-bold">{tasks.length}</span>
             </div>

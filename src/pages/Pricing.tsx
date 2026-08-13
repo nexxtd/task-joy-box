@@ -223,14 +223,14 @@ const Pricing: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
-      <header className="px-8 py-6 border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Crown className="w-6 h-6 text-primary" />
+      <header className="px-8 h-16 border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10 flex items-center">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Crown className="w-5 h-5 text-primary" />
           </div>
-          <div>
-            <h1 className="text-2xl font-black text-foreground">Select Your Power Plan</h1>
-            <p className="text-sm text-muted-foreground">Elevate your productivity with tailored solutions.</p>
+          <div className="min-w-0">
+            <h1 className="text-base font-black text-foreground leading-tight truncate">Select Your Power Plan</h1>
+            <p className="text-xs text-muted-foreground truncate">Elevate your productivity with tailored solutions.</p>
           </div>
         </div>
       </header>

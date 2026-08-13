@@ -1813,10 +1813,10 @@ const Tasks: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-6 py-4 border-b border-border flex items-center justify-between bg-card/30">
-        <div>
-          <h1 className="text-lg font-bold text-foreground">All Tasks</h1>
-          <p className="text-xs text-muted-foreground">{matchingCount} tasks matching filters</p>
+      <header className="px-6 h-16 border-b border-border flex items-center justify-between bg-card/30">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h1 className="text-base font-bold text-foreground whitespace-nowrap">All Tasks</h1>
+          <p className="text-xs text-muted-foreground truncate">{matchingCount} tasks matching filters</p>
         </div>
         <div className="flex items-center gap-2">
 

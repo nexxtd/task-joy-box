@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart3, Bot, CalendarClock, CalendarDays, Clock, Crown, FileText,
   FolderOpen, Gauge, GitCompare, GripVertical, Layers, LayoutDashboard, ListChecks,
-  Lock, RefreshCw, Sparkles, Tag, Target, TrendingUp, X,
+  Lock, Pencil, RefreshCw, Sparkles, Tag, Target, TrendingUp, X,
 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { DoneCtx, buildAiScoreFallback } from '@/components/insights/insightData';
+import TagsModal from '@/components/shared/TagsModal';
+import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
+import { Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import {
   InsightWidget, InsightWidgetType,
   CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody,
@@ -20,6 +23,16 @@ import {
   AiWidgetsData, AiScoreData,
 } from '@/components/insights/InsightPremiumWidgets';
 import { GridWidgetDef, useWidgetGrid, cellStyle, WidgetTier } from '@/hooks/useWidgetGrid';
+
+const SHARED_TAG_PREFIX = 'shared-tag-';
+
+const normalizeTagName = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const sharedTagToLabel = (tag: SharedTag): Label => ({
+  id: `${SHARED_TAG_PREFIX}${tag.id}`,
+  name: tag.name,
+  color: tag.color as LabelColor,
+});
 
 const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
   { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 4, h: 3, tier: 'free' },
@@ -87,7 +100,7 @@ let analysisInFlight: Promise<void> | null = null;
 
 const Insights: React.FC = () => {
   const navigate = useNavigate();
-  const { board } = useBoardContext();
+  const { board, updateTask } = useBoardContext();
   const { user } = useAuth();
   const tier: WidgetTier = user?.subscriptionTier === 'pro'
     ? 'pro'
@@ -123,6 +136,95 @@ const Insights: React.FC = () => {
   const [scoreData, setScoreData] = useState<AiScoreData['data']>(null);
   const [lastAnalysis, setLastAnalysis] = useState<{ text: string; time: string; error: boolean } | null>(null);
   const aiFetchedRef = useRef(false);
+
+  // ---- Global tags manager (open from the Tags Overview widget header) ----
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const tags = await fetchTags();
+        if (!cancelled) setSharedTags(tags);
+      } catch (error) {
+        console.error('Failed to load shared tags:', error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const allTags = useMemo<Label[]>(() => {
+    const byName = new Map<string, Label>();
+    DEFAULT_LABELS.forEach(label => byName.set(normalizeTagName(label.name).toLowerCase(), label));
+    sharedTags.forEach(tag => byName.set(normalizeTagName(tag.name).toLowerCase(), sharedTagToLabel(tag)));
+    return Array.from(byName.values());
+  }, [sharedTags]);
+
+  const deleteTagEverywhere = async (tagId: string) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          await deleteTag(sharedTagId);
+        } catch (error) {
+          console.error('Failed to delete shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.filter(label => label.id !== tagId) });
+      }
+    });
+  };
+
+  const renameTagEverywhere = async (tagId: string, newName: string) => {
+    const name = normalizeTagName(newName);
+    if (!name) return;
+
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { name });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, name: updated.name } : tag));
+        } catch (error) {
+          console.error('Failed to rename shared tag:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
+  };
+
+  const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
+    if (tagId.startsWith(SHARED_TAG_PREFIX)) {
+      const sharedTagId = Number(tagId.slice(SHARED_TAG_PREFIX.length));
+      if (!Number.isNaN(sharedTagId)) {
+        try {
+          const updated = await updateTag(sharedTagId, { color });
+          setSharedTags(prev => prev.map(tag => tag.id === sharedTagId ? { ...tag, color: updated.color } : tag));
+        } catch (error) {
+          console.error('Failed to update tag color:', error);
+          return;
+        }
+      }
+    }
+
+    board.tasks.forEach(t => {
+      if (t.labels.some(label => label.id === tagId)) {
+        updateTask(t.id, { labels: t.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+  };
 
   const runAi = useCallback(async () => {
     // Reuse the request already in flight so navigating back to this page
@@ -295,27 +397,25 @@ const Insights: React.FC = () => {
 
   return (
     <div ref={scrollElRef} className="flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
-      <header className="px-6 py-4 border-b border-border bg-card/30 backdrop-blur-sm shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground">Live analytics — recalculated on every change</p>
-            <h1 className="text-xl font-bold text-foreground mt-0.5">Insights & Analytics</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={runAi}
-              disabled={aiLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
-            </button>
-            <button
-              onClick={() => setShowCustomize(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-            >
-              <LayoutDashboard className="w-4 h-4" /> Customize Insights
-            </button>
-          </div>
+      <header className="px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h1 className="text-base font-bold text-foreground whitespace-nowrap">Insights &amp; Analytics</h1>
+          <p className="text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={runAi}
+            disabled={aiLoading}
+            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
+          </button>
+          <button
+            onClick={() => setShowCustomize(true)}
+            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+          >
+            <LayoutDashboard className="w-4 h-4" /> Customize Insights
+          </button>
         </div>
       </header>
 
@@ -393,6 +493,15 @@ const Insights: React.FC = () => {
                       <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
                     </div>
                     <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                      {widget.type === 'tags-overview' && (
+                        <button
+                          onClick={() => setTagsModalOpen(true)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"
+                          title="Edit tags"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onPointerDown={e => startGesture(e, widget, 'move')}
                         className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
@@ -542,6 +651,22 @@ const Insights: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {tagsModalOpen && (
+        <TagsModal
+          open={tagsModalOpen}
+          onClose={() => setTagsModalOpen(false)}
+          title="Tags"
+          tags={allTags}
+          selectedIds={[]}
+          onToggle={() => {}}
+          onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
+          onDelete={deleteTagEverywhere}
+          onRename={renameTagEverywhere}
+          onColorChange={changeTagColorEverywhere}
+          emptyText="No tags yet. Create one below."
+        />
       )}
     </div>
   );

@@ -58,7 +58,7 @@ const AppSidebar: React.FC = () => {
       }`}
     >
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-border flex items-center justify-between">
+      <div className="px-4 h-16 border-b border-border flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-4 h-4 text-primary-foreground" />
