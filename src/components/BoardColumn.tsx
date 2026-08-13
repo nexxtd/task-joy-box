@@ -246,7 +246,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className={`text-sm font-medium text-foreground truncate flex-1 min-w-0 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+              <span className={`text-sm font-medium text-foreground break-words flex-1 min-w-0 leading-snug ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                 {task.title}
               </span>
             </div>
