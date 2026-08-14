@@ -582,22 +582,6 @@ export async function initDatabase() {
     await addColumnIfNotExists('task_templates', 'attachments', "TEXT DEFAULT '[]'");
     console.log('Task templates table verified');
 
-    // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
-    const rlsTables = [
-      'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
-      'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
-      'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
-      'habit_snapshots',
-    ];
-    for (const tbl of rlsTables) {
-      try {
-        await pool.query(`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY;`);
-        await pool.query(`DROP POLICY IF EXISTS allow_all ON ${tbl};`);
-        await pool.query(`CREATE POLICY allow_all ON ${tbl} USING (true) WITH CHECK (true);`);
-      } catch { /* table may not exist */ }
-    }
-    console.log('RLS enabled on all public tables');
-
     // Project chat messages
     await pool.query(`
       CREATE TABLE IF NOT EXISTS project_chat_messages (
@@ -610,6 +594,22 @@ export async function initDatabase() {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS project_chat_messages_project_id_idx ON project_chat_messages(project_id);`);
     console.log('Project chat messages table verified');
+
+    // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
+    const rlsTables = [
+      'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
+      'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
+      'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
+      'habit_snapshots', 'project_chat_messages',
+    ];
+    for (const tbl of rlsTables) {
+      try {
+        await pool.query(`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY;`);
+        await pool.query(`DROP POLICY IF EXISTS allow_all ON ${tbl};`);
+        await pool.query(`CREATE POLICY allow_all ON ${tbl} USING (true) WITH CHECK (true);`);
+      } catch { /* table may not exist */ }
+    }
+    console.log('RLS enabled on all public tables');
 
   } catch (error) {
     console.error('Database initialization error:', error);
