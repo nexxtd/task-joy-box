@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, BarChart3, Bot, CalendarClock, CalendarDays, Clock, Crown, FileText,
+  AlertTriangle, BarChart3, Battery, Bot, CalendarClock, CalendarDays, Clock, Crown, FileText,
   FolderOpen, Gauge, GitCompare, GripVertical, Layers, LayoutDashboard, ListChecks,
   Lock, Pencil, RefreshCw, Sparkles, Tag, Target, TrendingUp, X,
 } from 'lucide-react';
@@ -23,6 +23,7 @@ import {
   AiWidgetsData, AiScoreData,
 } from '@/components/insights/InsightPremiumWidgets';
 import { GridWidgetDef, useWidgetGrid, cellStyle, WidgetTier } from '@/hooks/useWidgetGrid';
+import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -47,6 +48,7 @@ const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
   { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 4, h: 4, tier: 'premium' },
   { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 4, h: 4, tier: 'premium' },
   { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 4, h: 4, tier: 'premium' },
+  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
   { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 4, h: 4, tier: 'pro' },
   { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 4, h: 4, tier: 'pro' },
 ];
@@ -61,6 +63,7 @@ const defaultLayout = (): InsightWidget[] => [
   w('w4', 'weekly-activity', 'Weekly Activity', 1, 4, 4, 3),
   w('w5', 'project-breakdown', 'Project Breakdown', 5, 4, 4, 3),
   w('w6', 'tags-overview', 'Tags Overview', 9, 4, 4, 3),
+  w('w9', 'energy-insights', 'Energy Insights', 1, 7, 4, 4),
 ];
 
 const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
@@ -69,12 +72,12 @@ const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
   { tier: 'pro', label: 'Pro' },
 ];
 
-const LockedAiWidget: React.FC<{ onUpgrade: () => void }> = ({ onUpgrade }) => (
+const LockedAiWidget: React.FC<{ onUpgrade: () => void; label?: string }> = ({ onUpgrade, label = 'Pro' }) => (
   <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
     <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
       <Lock className="w-4 h-4 text-muted-foreground" />
     </div>
-    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Pro widget</p>
+    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{label} widget</p>
     <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">Upgrade your plan to unlock this widget on your insights board.</p>
     <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
       Upgrade
@@ -386,6 +389,9 @@ const Insights: React.FC = () => {
         return <SubtaskHealthBody tasks={tasks} ctx={ctx} />;
       case 'custom-report':
         return <CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
+      case 'energy-insights':
+        if (!canAccessTier('premium')) return <LockedAiWidget label="Premium" onUpgrade={() => navigate('/pricing')} />;
+        return <EnergyInsightsBody />;
       case 'ai-bottlenecks':
         if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
         return <AiBottlenecksBody tasks={tasks} aiData={aiWidgetsData} />;

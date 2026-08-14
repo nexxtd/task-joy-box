@@ -15,7 +15,7 @@ export type InsightWidgetType =
   | 'completion-overview' | 'active-vs-overdue' | 'tasks-by-priority' | 'weekly-activity'
   | 'project-breakdown' | 'tags-overview' | 'completion-trend' | 'avg-completion-time'
   | 'busiest-days-times' | 'multi-project-comparison' | 'subtask-checklist-health'
-  | 'custom-report' | 'ai-bottlenecks' | 'ai-score';
+  | 'custom-report' | 'energy-insights' | 'ai-bottlenecks' | 'ai-score';
 
 export interface InsightWidget {
   id: string;

@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
-import EnergyInsights from '@/components/EnergyInsights';
+import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
@@ -964,7 +964,7 @@ const SettingsPage: React.FC = () => {
                   <p className="text-xs text-muted-foreground mt-1">Peak times, consistency and recommendations from your logged energy</p>
                 </div>
                 <div className="p-5">
-                  <EnergyInsights />
+                  <EnergyInsightsBody />
                 </div>
               </div>
             </div>
