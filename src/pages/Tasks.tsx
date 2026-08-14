@@ -730,7 +730,7 @@ const Tasks: React.FC = () => {
   useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
   useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
 
-  const [completedOpen, setCompletedOpen] = useState(true);
+  const [collapsedCompletedSections, setCollapsedCompletedSections] = useState<Record<string, boolean>>({});
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
@@ -876,19 +876,21 @@ const Tasks: React.FC = () => {
   const projectTaskGroups = useMemo(() => {
     return projects.map(project => {
       const tasks = filtered.active.filter(t => t.projectId === project.id);
-      if (tasks.length === 0) return null;
       const columns = board.columns
         .filter(col => (col as any).projectId === project.id)
         .sort((a, b) => a.order - b.order);
       const columnGroups = columns.map(col => ({
         column: col,
         tasks: tasks.filter(t => t.columnId === col.id).sort((a, b) => (a.order || 0) - (b.order || 0)),
-      })).filter(cg => cg.tasks.length > 0);
+        completed: filtered.completed.filter(t => t.projectId === project.id && t.columnId === col.id),
+      })).filter(cg => cg.tasks.length > 0 || cg.completed.length > 0);
       const columnIds = new Set(columns.map(c => c.id));
       const uncategorized = tasks.filter(t => !columnIds.has(t.columnId));
-      return { project, tasks, columnGroups, uncategorized };
-    }).filter(Boolean) as Array<{ project: ProjectMeta; tasks: Task[]; columnGroups: Array<{ column: any; tasks: Task[] }>; uncategorized: Task[] }>;
-  }, [filtered.active, projects, board.columns]);
+      const uncategorizedCompleted = filtered.completed.filter(t => t.projectId === project.id && !columnIds.has(t.columnId));
+      if (tasks.length === 0 && columnGroups.length === 0 && uncategorizedCompleted.length === 0) return null;
+      return { project, tasks, columnGroups, uncategorized, uncategorizedCompleted };
+    }).filter(Boolean) as Array<{ project: ProjectMeta; tasks: Task[]; columnGroups: Array<{ column: any; tasks: Task[]; completed: Task[] }>; uncategorized: Task[]; uncategorizedCompleted: Task[] }>;
+  }, [filtered.active, filtered.completed, projects, board.columns]);
 
   const matchingCount = filtered.active.length + filtered.completed.length;
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
@@ -1811,6 +1813,86 @@ const Tasks: React.FC = () => {
     );
   };
 
+  const renderCompletedTaskRow = (task: Task) => (
+    <div
+      key={task.id}
+      onClick={() => {
+        if (isDeleteMode) {
+          setSelectedDeleteTaskIds(prev =>
+            prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
+          );
+        } else {
+          setOpenTaskId(task.id);
+        }
+      }}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group ${
+        isDeleteMode
+          ? selectedDeleteTaskIds.includes(task.id)
+            ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
+            : 'border-border bg-background/50 hover:bg-muted/20'
+          : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
+      }`}
+    >
+      {isDeleteMode ? (
+        <input
+          type="checkbox"
+          checked={selectedDeleteTaskIds.includes(task.id)}
+          onChange={() => {
+            setSelectedDeleteTaskIds(prev =>
+              prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
+            );
+          }}
+          onClick={e => e.stopPropagation()}
+          className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+        />
+      ) : (
+        <CircleToggle
+          completed
+          onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
+          size="md"
+          title="Mark active"
+        />
+      )}
+      <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
+        {task.title}
+      </span>
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
+        Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
+      </span>
+      <button
+        onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
+        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+        title="Delete task"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
+  const renderCompletedSection = (sectionKey: string, tasks: Task[]) => {
+    if (tasks.length === 0) return null;
+    const collapsed = collapsedCompletedSections[sectionKey] ?? false;
+    return (
+      <div className="mt-1.5 border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
+        <button
+          onClick={() => setCollapsedCompletedSections(prev => ({ ...prev, [sectionKey]: !collapsed }))}
+          className="w-full flex items-center justify-between px-3 py-2"
+        >
+          <span className="text-[11px] font-semibold text-label-green flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Completed ({tasks.length})
+          </span>
+          {collapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/60" />}
+        </button>
+        {!collapsed && (
+          <div className="border-t border-label-green/15 px-2 py-2 space-y-1.5">
+            {tasks.map(task => renderCompletedTaskRow(task))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="px-6 h-16 border-b border-border flex items-center justify-between bg-card/30">
@@ -2121,10 +2203,12 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
+          {renderCompletedSection('my-tasks', filtered.completed.filter(t => !t.projectId))}
+
           {myTasksGroup.length > 0 && projectTaskGroups.length > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
 
           {/* Project sections */}
-          {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized }, idx) => {
+          {projectTaskGroups.map(({ project, tasks, columnGroups, uncategorized, uncategorizedCompleted }, idx) => {
             const isProjectCollapsed = collapsedProjects.includes(project.id);
             return (
               <div key={project.id} className="mb-3">
@@ -2187,6 +2271,7 @@ const Tasks: React.FC = () => {
                               )}
                             </Droppable>
                           )}
+                          {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
                         </div>
                       );
                     })}
@@ -2208,88 +2293,12 @@ const Tasks: React.FC = () => {
                         )}
                       </Droppable>
                     )}
+                    {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
                   </div>
                 )}
               </div>
             );
           })}
-
-
-          {filtered.completed.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border/80">
-              <div className="border border-label-green/20 rounded-xl bg-label-green/5">
-                <button
-                  onClick={() => setCompletedOpen(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Completed ({filtered.completed.length})
-                  </span>
-                  {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {completedOpen && (
-                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                    {filtered.completed.map(task => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          if (isDeleteMode) {
-                            setSelectedDeleteTaskIds(prev =>
-                              prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
-                            );
-                          } else {
-                            setOpenTaskId(task.id);
-                          }
-                        }}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all group ${
-                          isDeleteMode
-                            ? selectedDeleteTaskIds.includes(task.id)
-                              ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
-                              : 'border-border bg-background/50 hover:bg-muted/20'
-                            : 'border-label-green/15 bg-background/70 hover:bg-muted/40'
-                        }`}
-                      >
-                        {isDeleteMode ? (
-                          <input
-                            type="checkbox"
-                            checked={selectedDeleteTaskIds.includes(task.id)}
-                            onChange={() => {
-                              setSelectedDeleteTaskIds(prev =>
-                                prev.includes(task.id) ? prev.filter(id => id !== task.id) : [...prev, task.id]
-                              );
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
-                          />
-                        ) : (
-                          <CircleToggle
-                            completed
-                            onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
-                            size="md"
-                            title="Mark active"
-                          />
-                        )}
-                        <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
-                          {task.title}
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
-                          Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
-                        </span>
-                        <button
-                          onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
-                          className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                          title="Delete task"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
         </DragDropContext>
 
@@ -3515,30 +3524,54 @@ const Tasks: React.FC = () => {
         const col = board.columns.find(c => c.id === columnEditId);
         if (!col) return null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setColumnEditId(null)}>
-            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-foreground">Edit Column</h3>
-                <button onClick={() => setColumnEditId(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setColumnEditId(null)}>
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+            <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-base font-bold text-foreground">Edit Column</span>
+                <button onClick={() => setColumnEditId(null)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Name</label>
-                <input value={columnEditName} onChange={e => setColumnEditName(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Color</label>
-                <div className="flex flex-wrap gap-2">
-                  {COLUMN_COLORS.map(c => (
-                    <button key={c} onClick={() => setColumnEditColor(c)} className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${columnEditColor === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`} style={{ backgroundColor: c }} />
-                  ))}
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                  <input
+                    autoFocus
+                    value={columnEditName}
+                    onChange={e => setColumnEditName(e.target.value)}
+                    className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                  />
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Icon</label>
-                <div className="flex gap-2">
-                  <input value={columnEditIcon} onChange={e => setColumnEditIcon(e.target.value)} placeholder="e.g. 📋 or 🚀" className="flex-1 bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm" />
-                  <button onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">Save</button>
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Color</label>
+                  <div className="flex flex-wrap gap-2">
+                    {COLUMN_COLORS.map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setColumnEditColor(c)}
+                        className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${columnEditColor === c ? 'border-foreground ring-2 ring-primary/30' : 'border-transparent'}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Icon</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={columnEditIcon}
+                      onChange={e => setColumnEditIcon(e.target.value)}
+                      placeholder="e.g. 📁 or 🚀"
+                      className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                    />
+                    <button
+                      onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }}
+                      className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

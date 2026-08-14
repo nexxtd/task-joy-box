@@ -486,13 +486,14 @@ const Insights: React.FC = () => {
                   }}
                 >
                   <div className="flex items-center justify-between px-4 pt-3 pb-1 select-none shrink-0">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
-                        {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
-                      </div>
-                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
-                    </div>
-                    <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                    <div className={`flex items-center gap-0.5 min-w-0 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                      <button
+                        onPointerDown={e => startGesture(e, widget, 'move')}
+                        className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
+                        title="Move"
+                      >
+                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
                       {widget.type === 'tags-overview' && (
                         <button
                           onClick={() => setTagsModalOpen(true)}
@@ -502,13 +503,14 @@ const Insights: React.FC = () => {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      <button
-                        onPointerDown={e => startGesture(e, widget, 'move')}
-                        className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
-                        title="Move"
-                      >
-                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
-                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                        {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
+                      </div>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
+                    </div>
+                    <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                       <button
                         onClick={() => removeWidget(widget.id)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"

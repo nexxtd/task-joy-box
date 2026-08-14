@@ -1154,7 +1154,7 @@ const Projects: React.FC = () => {
         >
           <div
             style={{ transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
-            className="min-w-max min-h-max"
+            className="min-w-max min-h-max select-none"
           >
             <DragDropContext
               onDragEnd={(result) => {
@@ -1166,7 +1166,7 @@ const Projects: React.FC = () => {
             >
               <Droppable droppableId="board" type="column" direction="horizontal">
                 {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start">
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start select-none">
                     {projectColumns.map((column, index) => {
                       const tasks = projectTasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
                       return (
@@ -1315,7 +1315,7 @@ const Projects: React.FC = () => {
         'flex flex-col border-b border-border/70 bg-card/70 backdrop-blur-xl lg:border-b-0 lg:border-r transition-all duration-300',
         sidebarCollapsed ? 'lg:w-16' : 'lg:w-80 w-full'
       )}>
-        <div className="border-b border-border/70 px-5 h-16 flex items-center justify-between flex-shrink-0">
+        <div className="border-b border-border px-5 h-16 flex items-center justify-between flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary flex-shrink-0">
@@ -1434,7 +1434,7 @@ const Projects: React.FC = () => {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {!selectedProject ? (
           <div className="flex flex-1 flex-col bg-background">
-            <div className="h-16 border-b border-border/70 shrink-0" />
+            <div className="h-16 border-b border-border shrink-0" />
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
               <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
               <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
@@ -1443,8 +1443,8 @@ const Projects: React.FC = () => {
           </div>
         ) : (
           <>
-            <header className="h-16 border-b border-border/70 bg-background/80 px-5 backdrop-blur-xl lg:px-8">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            <header className="h-16 border-b border-border bg-background/80 px-5 backdrop-blur-xl lg:px-8 flex items-center">
+              <div className="flex items-center justify-between gap-2 min-w-0 w-full">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {

@@ -230,8 +230,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
       <div
         ref={taskProvided.innerRef}
         {...taskProvided.draggableProps}
+        data-no-pan="true"
         onClick={() => onTaskClick(task)}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text ${
           taskSnapshot.isDragging
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'
@@ -415,7 +416,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           </div>
         )}
         {isExpanded && (
-          <div className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               task={task}
               onUpdateTask={updateTask}
@@ -521,8 +522,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} data-no-pan="true" className="flex-shrink-0 w-[58rem] select-text">
-          <div {...provided.dragHandleProps} className="flex items-center justify-between px-2 py-2 mb-2">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[80rem] select-none">
+          <div {...provided.dragHandleProps} data-no-pan="true" className="flex items-center justify-between px-2 py-2 mb-2">
             <div className="flex items-center gap-2">
               {column.icon && <span className="text-base">{column.icon}</span>}
               <div className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: column.color }} />
@@ -549,10 +550,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                       setEditingColumnName(false);
                     }
                   }}
-                  className="text-sm font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="text-xs font-bold text-foreground bg-muted border border-border rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               ) : (
-                <h3 className="text-sm font-semibold text-foreground tracking-tight truncate">{column.title}</h3>
+                <h3 className="text-xs font-semibold text-foreground tracking-tight truncate">{column.title}</h3>
               )}
               <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-bold">{tasks.length}</span>
             </div>
@@ -650,7 +651,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 
                 {/* Completed tasks section */}
                 {!tasksCollapsed && completedTasks.length > 0 && (
-                  <div className="pt-2">
+                  <div className="pt-2" data-no-pan="true">
                     <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
                       <button
                         onClick={() => setCompletedCollapsed(prev => !prev)}
@@ -685,7 +686,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           </Droppable>
 
           {isAdding ? (
-            <div className={`${tasksCollapsed ? 'mt-0' : 'mt-3'} p-4 bg-card border-2 border-primary/20 rounded-2xl shadow-xl animate-in slide-in-from-top-2 duration-300 overflow-hidden`}>
+            <div data-no-pan="true" className={`${tasksCollapsed ? 'mt-0' : 'mt-3'} p-4 bg-card border-2 border-primary/20 rounded-2xl shadow-xl animate-in slide-in-from-top-2 duration-300 overflow-hidden`}>
 
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -883,6 +884,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           ) : null}
           {canEdit && (
             <button
+              data-no-pan="true"
               onClick={() => {
                 if (onAddClick) { onAddClick(); return; }
                 if (!canCreateTasks) return;
