@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
@@ -33,6 +34,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -713,6 +715,7 @@ const Tasks: React.FC = () => {
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(() => localStorage.getItem('tasks-mytasks-collapsed') === 'true');
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
+  const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
   const [columnEditName, setColumnEditName] = useState('');
   const [columnEditColor, setColumnEditColor] = useState('');
   const [columnEditIcon, setColumnEditIcon] = useState('');
@@ -2231,25 +2234,25 @@ const Tasks: React.FC = () => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
-                          <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
+                          <div className="column-header-row flex items-center gap-1.5 w-full px-2 py-2 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
                                 prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id]
                               )}
-                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all"
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
                             >
                               {isColumnCollapsed
-                                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                                : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
-                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-                              {column.icon && <span className="text-xs">{column.icon}</span>}
+                                ? <ChevronDown className="w-5 h-5 text-muted-foreground/70" />
+                                : <ChevronUp className="w-5 h-5 text-muted-foreground/70" />}
+                              <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+                              {column.icon && <span className="text-xl leading-none">{column.icon}</span>}
                             </button>
                             <button
-                              onClick={() => { setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
-                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
+                              onClick={(e) => { openColumnEdit(e.currentTarget.closest('.column-header-row') as HTMLElement); setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all text-left"
                             >
-                              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
-                              <span className="text-[10px] text-muted-foreground/40">({colTasks.length})</span>
+                              <span className="text-sm font-bold tracking-wide text-muted-foreground/80">{column.title}</span>
+                              <span className="text-xs text-muted-foreground/50">({colTasks.length})</span>
                             </button>
                           </div>
                           {!isColumnCollapsed && (
@@ -3525,16 +3528,16 @@ const Tasks: React.FC = () => {
         />
       )}
 
-      {columnEditId && (() => {
+      {columnEditId && columnEditPos && (() => {
         const col = board.columns.find(c => c.id === columnEditId);
         if (!col) return null;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setColumnEditId(null)}>
+        return createPortal(
+          <div className="fixed inset-0 z-50" onClick={() => { setColumnEditId(null); closeColumnEdit(); }}>
             <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <span className="text-base font-bold text-foreground">Edit Column</span>
-                <button onClick={() => setColumnEditId(null)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <button onClick={() => { setColumnEditId(null); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -3571,7 +3574,7 @@ const Tasks: React.FC = () => {
                       className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                     />
                     <button
-                      onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }}
+                      onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); closeColumnEdit(); }}
                       className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
                     >
                       Save
@@ -3580,7 +3583,8 @@ const Tasks: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
       {aiBuilderOpen && (

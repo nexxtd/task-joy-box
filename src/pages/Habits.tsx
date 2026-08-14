@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useHabitsContext } from '@/context/HabitsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Habit, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react';
 
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import {
   DragDropContext,
@@ -417,6 +419,7 @@ const Habits: React.FC = () => {
 
   const [myHabitsCollapsed, setMyHabitsCollapsed] = useState(false);
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
+  const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
   const [columnEditName, setColumnEditName] = useState('');
   const [columnEditColor, setColumnEditColor] = useState('');
   const [columnEditIcon, setColumnEditIcon] = useState('');
@@ -1959,25 +1962,25 @@ const Habits: React.FC = () => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
-                          <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
+                          <div className="column-header-row flex items-center gap-1.5 w-full px-2 py-2 mb-1 group">
                             <button
                               onClick={() => setCollapsedColumns(prev =>
                                 prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id]
                               )}
-                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all"
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
                             >
                               {isColumnCollapsed
-                                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                                : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
-                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-                              {column.icon && <span className="text-xs">{column.icon}</span>}
+                                ? <ChevronDown className="w-5 h-5 text-muted-foreground/70" />
+                                : <ChevronUp className="w-5 h-5 text-muted-foreground/70" />}
+                              <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+                              {column.icon && <span className="text-xl leading-none">{column.icon}</span>}
                             </button>
                             <button
-                              onClick={() => { setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
-                              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
+                              onClick={(e) => { openColumnEdit(e.currentTarget.closest('.column-header-row') as HTMLElement); setColumnEditId(column.id); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all text-left"
                             >
-                              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
-                              <span className="text-[10px] text-muted-foreground/40">({colHabits.length})</span>
+                              <span className="text-sm font-bold tracking-wide text-muted-foreground/80">{column.title}</span>
+                              <span className="text-xs text-muted-foreground/50">({colHabits.length})</span>
                             </button>
                           </div>
                           {!isColumnCollapsed && (
@@ -2903,16 +2906,16 @@ const Habits: React.FC = () => {
         />
       )}
 
-      {columnEditId && (() => {
+      {columnEditId && columnEditPos && (() => {
         const col = board.columns.find(c => c.id === columnEditId);
         if (!col) return null;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setColumnEditId(null)}>
+        return createPortal(
+          <div className="fixed inset-0 z-50" onClick={() => { setColumnEditId(null); closeColumnEdit(); }}>
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full space-y-4" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">Edit Column</h3>
-                <button onClick={() => setColumnEditId(null)} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setColumnEditId(null); closeColumnEdit(); }} className="p-1 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Name</label>
@@ -2930,11 +2933,12 @@ const Habits: React.FC = () => {
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Icon</label>
                 <div className="flex gap-2">
                   <input value={columnEditIcon} onChange={e => setColumnEditIcon(e.target.value)} placeholder="e.g. 📋 or 🚀" className="flex-1 bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm" />
-                  <button onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">Save</button>
+                  <button onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); closeColumnEdit(); }} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold">Save</button>
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
       {aiBuilderOpen && (

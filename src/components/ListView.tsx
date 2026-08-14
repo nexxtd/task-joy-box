@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { DEFAULT_LABELS, Label, LabelColor, Priority, Task, LABEL_COLORS } from '@/types/board';
 import { Brain, Calendar, ChevronDown, ChevronUp, Clock3, GripVertical, Plus, Tag, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
@@ -155,6 +157,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   });
   const [collapsedCompletedCols, setCollapsedCompletedCols] = useState<string[]>([]);
   const [editingColumn, setEditingColumn] = useState<{ id: string; name: string; color: string; icon: string } | null>(null);
+  const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
   const [quickEditField, setQuickEditField] = useState<'duration' | null>(null);
   const [quickEditDuration, setQuickEditDuration] = useState(0);
@@ -564,23 +567,23 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
 
             return (
               <div key={column.id} className="mb-3 pl-4">
-                <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
+                <div className="column-header-row flex items-center gap-1.5 w-full px-2 py-2 mb-1 group">
                   <button
                     onClick={() => toggleColumnCollapse(column.id)}
-                    className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all"
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
                   >
                     {isColumnCollapsed
-                      ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                      : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-                    {column.icon && <span className="text-xs">{column.icon}</span>}
+                      ? <ChevronDown className="w-5 h-5 text-muted-foreground/70" />
+                      : <ChevronUp className="w-5 h-5 text-muted-foreground/70" />}
+                    <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+                    {column.icon && <span className="text-xl leading-none">{column.icon}</span>}
                   </button>
                   <button
-                    onClick={() => setEditingColumn({ id: column.id, name: column.title, color: column.color || '', icon: column.icon || '' })}
-                    className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
+                    onClick={(e) => { openColumnEdit(e.currentTarget.closest('.column-header-row') as HTMLElement); setEditingColumn({ id: column.id, name: column.title, color: column.color || '', icon: column.icon || '' }); }}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all text-left"
                   >
-                    <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
-                    <span className="text-[10px] text-muted-foreground/40">({columnActive.length})</span>
+                    <span className="text-sm font-bold tracking-wide text-muted-foreground/80">{column.title}</span>
+                    <span className="text-xs text-muted-foreground/50">({columnActive.length})</span>
                   </button>
                 </div>
                 {!isColumnCollapsed && (
@@ -645,13 +648,13 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
         </div>
     </div>
 
-      {editingColumn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setEditingColumn(null)}>
+      {editingColumn && columnEditPos && createPortal(
+        <div className="fixed inset-0 z-50" onClick={() => { setEditingColumn(null); closeColumnEdit(); }}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <span className="text-base font-bold text-foreground">Edit Column</span>
-              <button onClick={() => setEditingColumn(null)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+              <button onClick={() => { setEditingColumn(null); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -693,6 +696,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                         updateColumn(editingColumn.id, { title: editingColumn.name.trim(), color: editingColumn.color, icon: editingColumn.icon || undefined });
                       }
                       setEditingColumn(null);
+                      closeColumnEdit();
                     }}
                     className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
                   >
@@ -702,7 +706,8 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {tagPopupTaskId && (() => {

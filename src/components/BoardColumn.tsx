@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task, LABEL_COLORS, Label, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CircleToggle } from '@/components/ToggleComponents';
 
 import { useDeepFocus } from '@/hooks/useDeepFocus';
+import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { TaskDropdownExpanded, PriorityBadge } from '@/pages/Tasks';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
@@ -100,6 +102,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const [columnEditColor, setColumnEditColor] = useState(column.color);
   const [columnEditIcon, setColumnEditIcon] = useState(column.icon || '');
   const [columnIcon, setColumnIcon] = useState(column.icon || '');
+
+  const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
 
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
   const [completedCollapsed, setCompletedCollapsed] = useState(false);
@@ -522,24 +526,24 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
         <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[80rem] select-none">
-          <div {...provided.dragHandleProps} data-no-pan="true" className="flex items-center gap-1 px-1 py-1.5 mb-2 group">
+          <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-2 mb-2 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
-              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all"
               title={tasksCollapsed ? 'Show tasks' : 'Hide tasks'}
             >
               {tasksCollapsed
-                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                : <ChevronUp className="w-3 h-3 text-muted-foreground/60" />}
-              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
-              {column.icon && <span className="text-xs">{column.icon}</span>}
+                ? <ChevronDown className="w-5 h-5 text-muted-foreground/70" />
+                : <ChevronUp className="w-5 h-5 text-muted-foreground/70" />}
+              <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: column.color }} />
+              {column.icon && <span className="text-xl leading-none">{column.icon}</span>}
             </button>
             <button
-              onClick={() => { setColumnEditOpen(true); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
-              className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left min-w-0"
+              onClick={(e) => { openColumnEdit(e.currentTarget.closest('.column-header-row') as HTMLElement); setColumnEditOpen(true); setColumnEditName(column.title); setColumnEditColor(column.color); setColumnEditIcon(column.icon || ''); }}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted/30 transition-all text-left min-w-0"
             >
-              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80 truncate">{column.title}</span>
-              <span className="text-[10px] text-muted-foreground/40 flex-shrink-0">({uncompletedTasks.length})</span>
+              <span className="text-sm font-bold tracking-wide text-muted-foreground/80 truncate">{column.title}</span>
+              <span className="text-xs text-muted-foreground/50 flex-shrink-0">({uncompletedTasks.length})</span>
             </button>
           </div>
 
@@ -865,13 +869,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
         </div>
       </div>
     )}
-    {columnEditOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setColumnEditOpen(false)}>
+    {columnEditOpen && columnEditPos && createPortal(
+      <div className="fixed inset-0 z-50" onClick={() => { setColumnEditOpen(false); closeColumnEdit(); }}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-        <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+        <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-5">
             <span className="text-base font-bold text-foreground">Edit Column</span>
-            <button onClick={() => setColumnEditOpen(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
+            <button onClick={() => { setColumnEditOpen(false); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -908,7 +912,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                 />
                 <button
-                  onClick={() => { updateColumn(column.id, { title: columnEditName.trim() || column.title, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditOpen(false); }}
+                  onClick={() => { updateColumn(column.id, { title: columnEditName.trim() || column.title, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditOpen(false); closeColumnEdit(); }}
                   className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
                 >
                   Save
@@ -917,7 +921,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </div>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
     </>
   );
