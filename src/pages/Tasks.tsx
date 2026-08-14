@@ -2170,7 +2170,7 @@ const Tasks: React.FC = () => {
           )}
 
           {/* MY TASKS section */}
-          {myTasksGroup.length > 0 && (
+          {(myTasksGroup.length > 0 || filtered.completed.some(t => !t.projectId)) && (
             <div className="mb-3">
               <button
                 onClick={() => setMyTasksCollapsed(prev => !prev)}
@@ -2200,10 +2200,9 @@ const Tasks: React.FC = () => {
                   )}
                 </Droppable>
               )}
+              {!myTasksCollapsed && renderCompletedSection('my-tasks', filtered.completed.filter(t => !t.projectId))}
             </div>
           )}
-
-          {renderCompletedSection('my-tasks', filtered.completed.filter(t => !t.projectId))}
 
           {myTasksGroup.length > 0 && projectTaskGroups.length > 0 && <div className="w-full h-0.5 bg-border/40 my-4" />}
 
@@ -2254,24 +2253,28 @@ const Tasks: React.FC = () => {
                             </button>
                           </div>
                           {!isColumnCollapsed && (
-                            <Droppable droppableId={"col-" + column.id}>
-                              {(dropProvided, snapshot) => (
-                                <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
-                                  {colTasks.map((task, index) => (
-                                    <Draggable key={task.id} draggableId={task.id} index={index}>
-                                      {(taskProvided, taskSnapshot) => (
-                                        <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                                          {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
-                                        </div>
-                                      )}
-                                    </Draggable>
-                                  ))}
-                                  {dropProvided.placeholder}
-                                </div>
-                              )}
-                            </Droppable>
+                            <>
+                              <Droppable droppableId={"col-" + column.id}>
+                                {(dropProvided, snapshot) => (
+                                  <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
+                                    {colTasks.map((task, index) => (
+                                      <Draggable key={task.id} draggableId={task.id} index={index}>
+                                        {(taskProvided, taskSnapshot) => (
+                                          <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                            {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    ))}
+                                    {dropProvided.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                              <div className="pl-3">
+                                {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
+                              </div>
+                            </>
                           )}
-                          {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
                         </div>
                       );
                     })}
@@ -2293,7 +2296,9 @@ const Tasks: React.FC = () => {
                         )}
                       </Droppable>
                     )}
-                    {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
+                    <div className="pl-3">
+                      {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
+                    </div>
                   </div>
                 )}
               </div>

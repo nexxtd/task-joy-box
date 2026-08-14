@@ -563,7 +563,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
             const isCompletedCollapsed = collapsedCompletedCols.includes(column.id);
 
             return (
-              <div key={column.id} className="mb-3">
+              <div key={column.id} className="mb-3 pl-4">
                 <div className="flex items-center gap-1 w-full px-1 py-1.5 mb-1 group">
                   <button
                     onClick={() => toggleColumnCollapse(column.id)}
@@ -586,7 +586,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                 {!isColumnCollapsed && (
                   <Droppable droppableId={column.id}>
                     {(dropProvided) => (
-                      <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-4 space-y-1.5">
+                      <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
                         {columnActive.map((task, taskIndex) => (
                           <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
                             {(taskProvided, taskSnapshot) => (
