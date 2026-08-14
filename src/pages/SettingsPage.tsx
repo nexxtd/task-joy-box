@@ -895,19 +895,15 @@ const SettingsPage: React.FC = () => {
 
 {activeSection === 'energy' && (
             <div className="space-y-6">
-              <div className="bg-gradient-to-r from-blue-50 to-amber-50 dark:from-blue-950/20 dark:to-amber-950/20 border border-border/50 rounded-2xl p-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-amber-500 flex items-center justify-center flex-shrink-0">
-                    <Battery className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Track your energy three times a day and match tasks to your natural rhythms.
-                      High-energy periods are perfect for demanding tasks, while low-energy times are ideal for routine work.
-                    </p>
-                  </div>
-                </div>
+              <div className="bg-card border border-border rounded-2xl p-6">
+                <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Log how you're feeling at three daily checks — 8:00am, 12:00pm and 4:00pm.
+                  Each answer is saved to your energy history, which MyPlanner uses to build your
+                  energy profile: your peak hours, how consistent your energy is day to day, and
+                  recommendations for scheduling demanding tasks during your high-energy periods
+                  while keeping routine work for low-energy ones.
+                </p>
               </div>
 
               <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
