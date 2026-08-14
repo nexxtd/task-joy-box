@@ -22,7 +22,7 @@ type ViewMode = 'day' | 'week' | 'month';
 const CalendarPage: React.FC = () => {
   const { user } = useAuth();
   const { board, updateTask, addTask } = useBoardContext();
-  const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const isPro = user?.subscriptionTier === 'pro';
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -175,7 +175,7 @@ const CalendarPage: React.FC = () => {
 
   const runAI = async (mode: 'schedule' | 'plan') => {
     if (!isPro) {
-      setAiError('Pro or Premium subscription required');
+      setAiError('Pro subscription required');
       return;
     }
     if (aiLoading || aiRunningRef.current || aiCooldownRef.current) return;

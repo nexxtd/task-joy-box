@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Palette, Bell, Globe, Calendar, Battery,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp
 } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
-import EnergyAnalytics from '@/components/EnergyAnalytics';
+import EnergyInsights from '@/components/EnergyInsights';
+import EnergyLog from '@/components/EnergyLog';
+import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
@@ -24,8 +26,8 @@ const THEMES = [
 const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
 const LANGUAGES = [
-  'English', 'Español', 'Français', 'Deutsch', 'Português',
-  'العربية', 'עברית', '中文', 'हिन्दी', 'Русский', '日本語', '한국어',
+  'English', 'EspaÃ±ol', 'FranÃ§ais', 'Deutsch', 'PortuguÃªs',
+  'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©', '×¢×‘×¨×™×ª', 'ä¸­æ–‡', 'à¤¹à¤¿à¤¨à¥à¤¦à¥€', 'Ð ÑƒÑÑÐºÐ¸Ð¹', 'æ—¥æœ¬èªž', 'í•œêµ­ì–´',
 ];
 
 const hexToHsl = (hex: string) => {
@@ -77,9 +79,11 @@ const SettingsPage: React.FC = () => {
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#000000');
   const [smartAlerts, setSmartAlerts] = useState(() => localStorage.getItem('smartAlerts') !== 'false');
   const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('emailNotifs') !== 'false');
-  const [energyMorning, setEnergyMorning] = useState(() => localStorage.getItem('energyMorning') || 'medium');
-  const [energyAfternoon, setEnergyAfternoon] = useState(() => localStorage.getItem('energyAfternoon') || 'high');
-  const [energyEvening, setEnergyEvening] = useState(() => localStorage.getItem('energyEvening') || 'low');
+  const [energyTrackerEnabled, setEnergyTrackerEnabled] = useState(() => localStorage.getItem('energyTrackerEnabled') !== 'false');
+  const [customPickerOpen, setCustomPickerOpen] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default'>(() =>
+    notificationsSupported() ? notificationPermission() : 'denied'
+  );
   const [saved, setSaved] = useState(false);
 
   const [calendarConnected, setCalendarConnected] = useState(false);
@@ -121,7 +125,7 @@ const SettingsPage: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setUserTickets(data);
-        // Only ever transition false → true, never hide the nav item once visible
+        // Only ever transition false â†’ true, never hide the nav item once visible
         if (data.length > 0) setHasTickets(true);
       }
     } catch {}
@@ -194,9 +198,6 @@ const SettingsPage: React.FC = () => {
         if (data.language) setLanguage(data.language);
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
-        if (data.energyMorning) setEnergyMorning(data.energyMorning);
-        if (data.energyAfternoon) setEnergyAfternoon(data.energyAfternoon);
-        if (data.energyEvening) setEnergyEvening(data.energyEvening);
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -422,31 +423,6 @@ const SettingsPage: React.FC = () => {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const saveEnergyLevels = async () => {
-    localStorage.setItem('energyMorning', energyMorning);
-    localStorage.setItem('energyAfternoon', energyAfternoon);
-    localStorage.setItem('energyEvening', energyEvening);
-    
-    // Save to backend for all users (settings table exists for everyone)
-    try {
-      await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          energyMorning,
-          energyAfternoon,
-          energyEvening,
-        }),
-      });
-      showSaved();
-    } catch (error) {
-      console.error('Error saving energy levels:', error);
-      // Still show saved since localStorage was updated
-      showSaved();
-    }
-  };
-
   const saveNotificationSettings = async () => {
     localStorage.setItem('smartAlerts', String(smartAlerts));
     localStorage.setItem('emailNotifs', String(emailNotifs));
@@ -474,9 +450,7 @@ const SettingsPage: React.FC = () => {
     // Reset local state
     setSmartAlerts(true);
     setEmailNotifs(true);
-    setEnergyMorning('medium');
-    setEnergyAfternoon('high');
-    setEnergyEvening('low');
+    setEnergyTrackerEnabled(true);
     setLanguage('English');
     setFont('Inter');
     setAccentColor('#000000');
@@ -497,9 +471,7 @@ const SettingsPage: React.FC = () => {
     // Apply default settings to localStorage
     localStorage.setItem('smartAlerts', 'true');
     localStorage.setItem('emailNotifs', 'true');
-    localStorage.setItem('energyMorning', 'medium');
-    localStorage.setItem('energyAfternoon', 'high');
-    localStorage.setItem('energyEvening', 'low');
+    localStorage.setItem('energyTrackerEnabled', 'true');
     localStorage.setItem('language', 'English');
     localStorage.setItem('font', 'Inter');
     localStorage.setItem('accentColor', '#000000');
@@ -526,9 +498,6 @@ const SettingsPage: React.FC = () => {
           language: 'English',
           smartAlerts: true,
           emailNotifs: true,
-          energyMorning: 'medium',
-          energyAfternoon: 'high',
-          energyEvening: 'low',
         }),
       });
     } catch (error) {
@@ -541,67 +510,6 @@ const SettingsPage: React.FC = () => {
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : '?';
-
-  const EnergySelector = ({ value, onChange, label, time }: { value: string; onChange: (v: string) => void; label: string; time: string }) => (
-    <div className="flex items-center justify-between py-4">
-      <div className="flex-1">
-        <p className="text-sm font-semibold text-foreground">{label}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{time}</p>
-      </div>
-      <div className="flex items-center gap-2 bg-muted/30 rounded-xl p-1">
-        {(['low', 'medium', 'high'] as const).map((level, index) => {
-          const isSelected = value === level;
-          const levelConfig = {
-            low: { 
-              icon: <Battery className="w-5 h-5" />, 
-              color: isSelected ? 'bg-blue-500' : 'bg-blue-100', 
-              textColor: isSelected ? 'text-white' : 'text-blue-700',
-              borderColor: isSelected ? 'border-blue-500' : 'border-transparent',
-              label: 'Low Energy'
-            },
-            medium: { 
-              icon: <><Battery className="w-4 h-4" /><Battery className="w-4 h-4 -ml-1" /></>, 
-              color: isSelected ? 'bg-amber-500' : 'bg-amber-100', 
-              textColor: isSelected ? 'text-white' : 'text-amber-700',
-              borderColor: isSelected ? 'border-amber-500' : 'border-transparent',
-              label: 'Medium Energy'
-            },
-            high: { 
-              icon: <><Battery className="w-3 h-3" /><Battery className="w-3 h-3 -ml-1" /><Battery className="w-3 h-3 -ml-1" /></>, 
-              color: isSelected ? 'bg-green-500' : 'bg-green-100', 
-              textColor: isSelected ? 'text-white' : 'text-green-700',
-              borderColor: isSelected ? 'border-green-500' : 'border-transparent',
-              label: 'High Energy'
-            },
-          };
-          
-          const config = levelConfig[level];
-          
-          return (
-            <button
-              key={level}
-              onClick={() => onChange(level)}
-              data-testid={`button-energy-${label.toLowerCase()}-${level}`}
-              className={`
-                relative flex flex-col items-center justify-center px-4 py-3 rounded-lg transition-all duration-200 font-medium
-                ${isSelected 
-                  ? `${config.color} ${config.textColor} shadow-lg scale-105 border-2 ${config.borderColor}` 
-                  : `${config.color} ${config.textColor} hover:scale-105 border-2 border-transparent`
-                }
-              `}
-              title={config.label}
-            >
-              <div className="text-lg mb-1">{config.icon}</div>
-              <div className="text-xs font-bold uppercase tracking-wide">{level}</div>
-              {isSelected && (
-                <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 
   const tasksWithDates = board.tasks.filter(t => t.dueDate).length;
 
@@ -662,39 +570,63 @@ const SettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-sm font-semibold text-foreground mb-3">Accent Color</h2>
                 <div className="flex gap-3 flex-wrap items-center">
-                  <div className={`relative w-10 h-10 rounded-full overflow-hidden border-2 border-border flex-shrink-0 transition-transform shadow-sm ${isPaid ? 'cursor-pointer hover:scale-105' : 'opacity-50 cursor-not-allowed'}`} title={isPaid ? "Custom Color Picker" : "Paid Feature"}>
-                    <input 
-                      type="color" 
-                      disabled={!isPaid}
+                  {ACCENT_COLORS.map(c => (
+                    <button
+                      key={c.hex}
+                      onClick={() => applyAccentColor(c.hex, c.hsl)}
+                      title={c.label}
+                      className={`w-8 h-8 rounded-full transition-all duration-200 ${
+                        accentColor.toUpperCase() === c.hex.toUpperCase() ? 'ring-2 ring-offset-2 ring-offset-background scale-110 ring-foreground/30' : 'hover:scale-110'
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!isPaid) {
+                      window.location.href = '/pricing';
+                      return;
+                    }
+                    setCustomPickerOpen(o => !o);
+                  }}
+                  className={`mt-3 flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all duration-200 ${
+                    isPaid
+                      ? 'border-primary/30 text-foreground hover:border-primary/60'
+                      : 'border-border text-muted-foreground opacity-70'
+                  }`}
+                >
+                  {isPaid ? <Palette className="w-4 h-4 text-primary" /> : <Sparkles className="w-3 h-3 text-primary" />}
+                  Custom Colour
+                  <span className="w-3.5 h-3.5 rounded-full border border-border flex-shrink-0" style={{ backgroundColor: accentColor }} />
+                </button>
+
+                {isPaid && customPickerOpen && (
+                  <div className="mt-3 p-4 bg-card border border-border rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Choose any colour with the wheel</p>
+                      <span className="text-xs font-mono text-muted-foreground">{accentColor}</span>
+                    </div>
+                    <input
+                      type="color"
                       value={accentColor}
                       onChange={(e) => {
                         const hex = e.target.value;
                         applyAccentColor(hex, hexToHsl(hex));
                       }}
-                      className="absolute inset-[-20px] w-20 h-20 cursor-pointer p-0 border-0 disabled:cursor-not-allowed"
+                      className="w-full h-10 cursor-pointer rounded-lg border border-border"
                     />
                   </div>
-                  <div className="h-6 w-px bg-border mx-1"></div>
-                  {ACCENT_COLORS.map(c => (
-                    <button
-                      key={c.hex}
-                      onClick={() => isPaid ? applyAccentColor(c.hex, c.hsl) : window.location.href = '/pricing'}
-                      title={c.label}
-                      className={`w-8 h-8 rounded-full transition-all duration-200 ${
-                        accentColor.toUpperCase() === c.hex.toUpperCase() ? 'ring-2 ring-offset-2 ring-offset-background scale-110 ring-foreground/30' : 'hover:scale-110'
-                      } ${!isPaid && 'opacity-50 cursor-not-allowed'}`}
-                      style={{ backgroundColor: c.hex }}
-                    />
-                  ))}
-                </div>
+                )}
+
                 {!isPaid && (
                   <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
                     <p className="text-xs text-primary font-medium flex items-center gap-2">
-                      <Sparkles className="w-3 h-3" /> Paid Feature: Customize your workspace with any accent color.
+                      <Sparkles className="w-3 h-3" /> Premium Feature: pick any custom accent colour with the colour wheel.
                     </p>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-3">Click the color wheel to choose any custom color. Default is Black.</p>
               </div>
 
               <div>
@@ -765,32 +697,92 @@ const SettingsPage: React.FC = () => {
           {activeSection === 'notifications' && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-foreground mb-3">Notification Preferences</h2>
-              {[
-                { key: 'smartAlerts', label: 'Smart Alerts', desc: 'Task reminders and deadline nudges', value: smartAlerts, set: setSmartAlerts, paid: true },
-                { key: 'emailNotifs', label: 'Email Notifications', desc: 'Receive weekly productivity summaries', value: emailNotifs, set: setEmailNotifs, paid: true },
-              ].map(item => (
-                <div key={item.key} className={`flex items-center justify-between p-4 bg-card border border-border rounded-xl ${item.paid && !isPaid && 'opacity-70'}`}>
-                  <div>
+
+              <div className={`p-4 bg-card border border-border rounded-xl ${!isPaid && 'opacity-70'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
                     <p className="text-sm text-foreground font-medium flex items-center gap-2">
-                       {item.label}
-                       {item.paid && !isPaid && <Sparkles className="w-3 h-3 text-primary" />}
+                      Smart Alerts
+                      {!isPaid && <Sparkles className="w-3 h-3 text-primary" />}
                     </p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Real device notifications for energy checks, overdue tasks and upcoming deadlines
+                    </p>
                   </div>
                   <button
                     onClick={() => {
-                      if (item.paid && !isPaid) {
+                      if (!isPaid) {
                         window.location.href = '/pricing';
                         return;
                       }
-                      item.set(!item.value);
+                      const next = !smartAlerts;
+                      setSmartAlerts(next);
+                      if (next && notificationsSupported() && notificationPermission() !== 'granted') {
+                        requestNotificationPermission().then(() => setNotifPermission(notificationPermission()));
+                      }
                     }}
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative ${item.value ? 'bg-primary' : 'bg-muted'}`}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${smartAlerts ? 'bg-primary' : 'bg-muted'}`}
                   >
-                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${item.value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${smartAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
-              ))}
+                {isPaid && smartAlerts && (
+                  <div className="mt-3 text-xs flex items-center gap-2">
+                    {!notificationsSupported() ? (
+                      <span className="text-muted-foreground">Device notifications aren't supported in this browser.</span>
+                    ) : notifPermission === 'granted' ? (
+                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5" /> Device notifications are enabled
+                      </span>
+                    ) : notifPermission === 'denied' ? (
+                      <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                        <Bell className="w-3.5 h-3.5" /> Notifications are blocked in your browser. Enable them from your browser settings to receive Smart Alerts.
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Bell className="w-3.5 h-3.5" /> Allow device notifications to receive Smart Alerts on this device.
+                      </span>
+                    )}
+                  </div>
+                )}
+                {!isPaid && (
+                  <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
+                    <Sparkles className="w-3 h-3" /> Premium Feature — upgrade to unlock Smart Alerts
+                  </p>
+                )}
+              </div>
+
+              <div className={`p-4 bg-card border border-border rounded-xl ${!isTopTier && 'opacity-70'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-foreground font-medium flex items-center gap-2">
+                      Email Notifications
+                      {!isTopTier && <Sparkles className="w-3 h-3 text-primary" />}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Receive a weekly AI summary of your productivity
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!isTopTier) {
+                        window.location.href = '/pricing';
+                        return;
+                      }
+                      setEmailNotifs(!emailNotifs);
+                    }}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${emailNotifs ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${emailNotifs ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                {!isTopTier && (
+                  <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
+                    <Sparkles className="w-3 h-3" /> Pro Feature — upgrade to unlock weekly AI emails
+                  </p>
+                )}
+              </div>
+
               <button onClick={saveNotificationSettings} data-testid="button-save-notifications" className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
                 Save Preferences
               </button>
@@ -857,7 +849,7 @@ const SettingsPage: React.FC = () => {
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
                       <SiGoogle className="w-4 h-4" />
-                      {calendarLoading ? 'Connecting…' : 'Connect Google Calendar'}
+                      {calendarLoading ? 'Connectingâ€¦' : 'Connect Google Calendar'}
                     </button>
                   ) : (
                     <>
@@ -868,7 +860,7 @@ const SettingsPage: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                       >
                         <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing to Google…' : `Sync ${tasksWithDates} Task${tasksWithDates !== 1 ? 's' : ''} to GC`}
+                        {calendarLoading ? 'Syncing to Googleâ€¦' : `Sync ${tasksWithDates} Task${tasksWithDates !== 1 ? 's' : ''} to GC`}
                       </button>
                       <button
                         onClick={syncFromGoogle}
@@ -877,7 +869,7 @@ const SettingsPage: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
                       >
                         <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing from Google…' : 'Import from Google Calendar'}
+                        {calendarLoading ? 'Syncing from Googleâ€¦' : 'Import from Google Calendar'}
                       </button>
                       <button
                         onClick={disconnectCalendar}
@@ -901,7 +893,7 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeSection === 'energy' && (
+{activeSection === 'energy' && (
             <div className="space-y-6">
               <div className="bg-gradient-to-r from-blue-50 to-amber-50 dark:from-blue-950/20 dark:to-amber-950/20 border border-border/50 rounded-2xl p-6">
                 <div className="flex items-start gap-4">
@@ -911,7 +903,7 @@ const SettingsPage: React.FC = () => {
                   <div className="flex-1">
                     <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Optimize your productivity by matching tasks to your energy levels throughout the day. 
+                      Track your energy three times a day and match tasks to your natural rhythms.
                       High-energy periods are perfect for demanding tasks, while low-energy times are ideal for routine work.
                     </p>
                   </div>
@@ -922,36 +914,62 @@ const SettingsPage: React.FC = () => {
                 <div className="bg-gradient-to-r from-muted/50 to-muted/30 px-6 py-4 border-b border-border">
                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <Zap className="w-4 h-4 text-amber-500" />
-                    Daily Energy Schedule
+                    Energy Tracker
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">Configure your energy patterns for optimal task scheduling</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Log your energy at 8:00am, 12:00pm and 4:00pm. Disabling pauses the checks — they resume at the next due slot.
+                  </p>
                 </div>
-                
-                <div className="divide-y divide-border/50">
-                  <EnergySelector value={energyMorning} onChange={setEnergyMorning} label="Morning" time="07:00 – 12:00" />
-                  <EnergySelector value={energyAfternoon} onChange={setEnergyAfternoon} label="Afternoon" time="12:00 – 17:00" />
-                  <EnergySelector value={energyEvening} onChange={setEnergyEvening} label="Evening" time="17:00 – 22:00" />
+                <div className={`p-5 flex items-center justify-between ${!isPaid && 'opacity-70'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Battery className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Daily Energy Checks</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isPaid
+                          ? energyTrackerEnabled
+                            ? 'Pop-ups are enabled — log your energy at each check'
+                            : 'Pop-ups are paused — they resume at the next due slot'
+                          : 'Upgrade to log your energy and unlock insights'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!isPaid) {
+                        window.location.href = '/pricing';
+                        return;
+                      }
+                      const next = !energyTrackerEnabled;
+                      setEnergyTrackerEnabled(next);
+                      localStorage.setItem('energyTrackerEnabled', String(next));
+                      showSaved();
+                    }}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${energyTrackerEnabled ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${energyTrackerEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
                 </div>
+                {!isPaid && (
+                  <p className="px-5 pb-5 -mt-2 text-xs text-primary font-medium flex items-center gap-2">
+                    <Sparkles className="w-3 h-3" /> Premium Feature — upgrade to enable the Energy Tracker
+                  </p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between bg-muted/30 rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Smart Scheduling</p>
-                    <p className="text-xs text-muted-foreground">AI will use these patterns to optimize your task schedule</p>
-                  </div>
+              <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-muted/50 to-muted/30 px-6 py-4 border-b border-border">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                    Energy Insights
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">Peak times, consistency and recommendations from your logged energy</p>
                 </div>
-                <button 
-                  onClick={saveEnergyLevels} 
-                  data-testid="button-save-energy" 
-                  className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all duration-200 shadow-sm hover:shadow-md"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Save Energy Levels
-                </button>
+                <div className="p-5">
+                  <EnergyInsights />
+                </div>
               </div>
             </div>
           )}
@@ -979,13 +997,13 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {historyTab === 'energy' && (
-                <EnergyAnalytics />
+                <EnergyLog />
               )}
 
               {historyTab === 'deepfocus' && (
                 <div className="space-y-3">
                   {deepFocusLoading ? (
-                    <div className="text-sm text-muted-foreground py-4 text-center">Loading sessions…</div>
+                    <div className="text-sm text-muted-foreground py-4 text-center">Loading sessionsâ€¦</div>
                   ) : deepFocusSessions.length === 0 ? (
                     <div className="text-center py-10">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
@@ -1129,7 +1147,7 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={ticketSearch}
                       onChange={e => setTicketSearch(e.target.value)}
-                      placeholder="Search tickets…"
+                      placeholder="Search ticketsâ€¦"
                       className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                     {ticketSearch && (
@@ -1191,7 +1209,7 @@ const SettingsPage: React.FC = () => {
               <div className="space-y-3">
                 {[
                   { label: 'Passwords hashed with bcrypt (cost 12)', desc: 'Your password is never stored in plain text' },
-                  { label: 'Session via httpOnly cookies', desc: 'JWT tokens are invisible to JavaScript — XSS protected' },
+                  { label: 'Session via httpOnly cookies', desc: 'JWT tokens are invisible to JavaScript â€” XSS protected' },
                   { label: 'Google OAuth verified server-side', desc: 'Google sign-in tokens are verified server-side only' },
                   { label: 'Input validation on every route', desc: 'All inputs are validated and sanitized with Zod' },
                   { label: '10kb request body limit', desc: 'Prevents large payload denial-of-service attacks' },
