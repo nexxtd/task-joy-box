@@ -277,7 +277,7 @@ export async function initDatabase() {
         id SERIAL PRIMARY KEY,
         project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        role TEXT NOT NULL DEFAULT 'member',
+        role TEXT NOT NULL DEFAULT 'edit',
         created_at TIMESTAMP DEFAULT NOW() NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
         UNIQUE(project_id, user_id)

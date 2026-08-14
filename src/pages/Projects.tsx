@@ -78,6 +78,13 @@ interface ProjectMeta {
 const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899'];
 const PROJECT_COLOR_OPTIONS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'];
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
+const ROLE_OPTIONS = [
+  { value: 'view', label: 'View only', description: 'Read-only access — can view tasks, milestones and project details, but can\'t create or edit anything.' },
+  { value: 'edit', label: 'Edit', description: 'Can create, edit and complete tasks and milestones, but can\'t manage members or delete the project.' },
+  { value: 'full edit', label: 'Full Edit', description: 'Everything in Edit, plus full board control — assign, label and organise tasks across columns.' },
+  { value: 'admin', label: 'Admin', description: 'Everything in Full Edit — the highest collaborator role below the project owner.' },
+  { value: 'owner', label: 'Owner', description: 'Full control — manages members, invites, project settings, archiving and deletion.' },
+];
 
 const Projects: React.FC = () => {
   const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
@@ -1657,19 +1664,17 @@ const Projects: React.FC = () => {
                   disabled={selectedMember.id === selectedProject.ownerId}
                 >
                   <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl p-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer h-10">
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue>{ROLE_OPTIONS.find(r => r.value === selectedMember.role)?.label ?? selectedMember.role.charAt(0).toUpperCase() + selectedMember.role.slice(1)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner">Owner</SelectItem>
-                    <SelectItem value="view">View only</SelectItem>
-                    <SelectItem value="edit">Edit</SelectItem>
-                    <SelectItem value="full edit">Full Edit</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {ROLE_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value} className="py-2 pr-3">
+                        <span className="block text-xs font-semibold text-foreground">{option.label}</span>
+                        <span className="block text-[10px] leading-snug text-muted-foreground mt-0.5">{option.description}</span>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground ml-1 mt-1">
-                  View only members can read but cannot edit tasks, descriptions, or milestones.
-                </p>
               </div>
             </div>
 

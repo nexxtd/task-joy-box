@@ -13,7 +13,7 @@ const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
   pro: 20,
 };
 
-type ProjectRole = 'owner' | 'member';
+type ProjectRole = 'owner' | 'member' | 'view' | 'edit' | 'full edit' | 'admin';
 
 function getPlanTier(tier?: string | null): 'free' | 'premium' | 'pro' {
   if (tier === 'pro') return 'pro';
@@ -224,7 +224,7 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
     await db.insert(projectMembers).values({
       projectId,
       userId: recipient.id,
-      role: 'member',
+      role: 'edit',
     });
 
     const projectData = await serializeProject(projectId);
@@ -266,7 +266,7 @@ router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Resp
     await db.insert(projectMembers).values({
       projectId,
       userId: req.userId!,
-      role: 'member',
+      role: 'edit',
     });
 
     res.json({ project: await serializeProject(projectId) });
