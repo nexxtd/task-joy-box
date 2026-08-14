@@ -16,6 +16,7 @@ import { notificationsSupported, notificationPermission, requestNotificationPerm
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
+import { ColorPicker, ConfigProvider, theme as antdTheme } from 'antd';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -80,7 +81,6 @@ const SettingsPage: React.FC = () => {
   const [smartAlerts, setSmartAlerts] = useState(() => localStorage.getItem('smartAlerts') !== 'false');
   const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('emailNotifs') !== 'false');
   const [energyTrackerEnabled, setEnergyTrackerEnabled] = useState(() => localStorage.getItem('energyTrackerEnabled') !== 'false');
-  const [customPickerOpen, setCustomPickerOpen] = useState(false);
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'default'>(() =>
     notificationsSupported() ? notificationPermission() : 'denied'
   );
@@ -581,44 +581,49 @@ const SettingsPage: React.FC = () => {
                       style={{ backgroundColor: c.hex }}
                     />
                   ))}
-                </div>
 
-                <button
-                  onClick={() => {
-                    if (!isPaid) {
-                      window.location.href = '/pricing';
-                      return;
-                    }
-                    setCustomPickerOpen(o => !o);
-                  }}
-                  className={`mt-3 flex items-center gap-2 px-4 py-2 text-sm rounded-lg border transition-all duration-200 ${
-                    isPaid
-                      ? 'border-primary/30 text-foreground hover:border-primary/60'
-                      : 'border-border text-muted-foreground opacity-70'
-                  }`}
-                >
-                  {isPaid ? <Palette className="w-4 h-4 text-primary" /> : <Sparkles className="w-3 h-3 text-primary" />}
-                  Custom Colour
-                  <span className="w-3.5 h-3.5 rounded-full border border-border flex-shrink-0" style={{ backgroundColor: accentColor }} />
-                </button>
-
-                {isPaid && customPickerOpen && (
-                  <div className="mt-3 p-4 bg-card border border-border rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">Choose any colour with the wheel</p>
-                      <span className="text-xs font-mono text-muted-foreground">{accentColor}</span>
-                    </div>
-                    <input
-                      type="color"
-                      value={accentColor}
-                      onChange={(e) => {
-                        const hex = e.target.value;
-                        applyAccentColor(hex, hexToHsl(hex));
+                  {isPaid ? (
+                    <ConfigProvider
+                      theme={{
+                        algorithm: document.documentElement.classList.contains('dark')
+                          ? antdTheme.darkAlgorithm
+                          : antdTheme.defaultAlgorithm,
+                        token: { borderRadius: 12 },
                       }}
-                      className="w-full h-10 cursor-pointer rounded-lg border border-border"
-                    />
-                  </div>
-                )}
+                    >
+                      <ColorPicker
+                        value={accentColor}
+                        onChange={(color) => {
+                          const hex = color.toHexString();
+                          applyAccentColor(hex, hexToHsl(hex));
+                        }}
+                        showText={false}
+                        disabledAlpha
+                        defaultFormat="hex"
+                        presets={[{ label: 'Presets', colors: ACCENT_COLORS.map(c => c.hex) }]}
+                      >
+                        <button
+                          type="button"
+                          title="Pick a custom colour"
+                          className="w-8 h-8 rounded-full transition-all duration-200 ring-2 ring-offset-2 ring-offset-background ring-foreground/20 hover:scale-110"
+                          style={{ backgroundColor: accentColor }}
+                        />
+                      </ColorPicker>
+                    </ConfigProvider>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { window.location.href = '/pricing'; }}
+                      title="Custom colour (Premium)"
+                      className="relative w-8 h-8 rounded-full transition-all duration-200 hover:scale-110"
+                      style={{ backgroundColor: accentColor }}
+                    >
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Sparkles className="w-2.5 h-2.5" />
+                      </span>
+                    </button>
+                  )}
+                </div>
 
                 {!isPaid && (
                   <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
