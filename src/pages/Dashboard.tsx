@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
-import { getPeakEnergyHours } from '@/utils/energyTaskScheduler';
+import { useEnergyAnalysis, isEnergyTrackerEnabled, ENERGY_SLOTS } from '@/utils/energyStats';
 import {
   CheckSquare, Clock, Plus, ArrowRight,
   TrendingUp, Bot, Calendar, Zap, X,
@@ -70,8 +70,8 @@ const WIDGET_DEFS: WidgetDef[] = [
   { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 4, h: 3, tier: 'free' },
   { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 4, h: 3, tier: 'free' },
   { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 4, h: 2, tier: 'free' },
-  { type: 'energy', title: 'Energy-Aware Recommendations', desc: 'Tasks best matched to your energy today', icon: Zap, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
-  { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Times of day when you work best', icon: Clock, accent: 'label-green', w: 4, h: 1, tier: 'free' },
+  { type: 'energy', title: 'Energy-Aware Recommendations', desc: 'Top open tasks scheduled into your logged peak windows', icon: Zap, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
+  { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Your strongest window, built from your real energy logs', icon: Clock, accent: 'label-green', w: 4, h: 1, tier: 'free' },
   { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 4, h: 2, tier: 'free' },
   { type: 'account', title: 'Account Status', desc: 'Your plan and completed work', icon: Bot, accent: 'label-blue', w: 4, h: 1, tier: 'free' },
   { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 4, h: 2, tier: 'free' },
@@ -268,12 +268,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
-  const [energySettings, setEnergySettings] = useState({
-    energyMorning: 'medium' as 'low' | 'medium' | 'high',
-    energyAfternoon: 'high' as 'low' | 'medium' | 'high',
-    energyEvening: 'low' as 'low' | 'medium' | 'high',
-  });
-  const [energyConfigured, setEnergyConfigured] = useState(false);
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
@@ -423,46 +417,23 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    const morning = localStorage.getItem('energyMorning');
-    const afternoon = localStorage.getItem('energyAfternoon');
-    const evening = localStorage.getItem('energyEvening');
-    if (morning || afternoon || evening) {
-      setEnergyConfigured(true);
-      setEnergySettings({
-        energyMorning: (morning as 'low' | 'medium' | 'high') || 'medium',
-        energyAfternoon: (afternoon as 'low' | 'medium' | 'high') || 'medium',
-        energyEvening: (evening as 'low' | 'medium' | 'high') || 'medium',
-      });
-    }
-    fetch('/api/settings', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: any) => {
-        if (!data || cancelled) return;
-        const hasAny = data.energyMorning || data.energyAfternoon || data.energyEvening;
-        if (hasAny) setEnergyConfigured(true);
-        setEnergySettings(prev => ({
-          energyMorning: data.energyMorning || prev.energyMorning,
-          energyAfternoon: data.energyAfternoon || prev.energyAfternoon,
-          energyEvening: data.energyEvening || prev.energyEvening,
-        }));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
     fetch('/api/deep-focus/sessions/today', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then((data: any) => {
         if (data) setDeepFocusMinutes(Number(data.minutes) || 0);
       })
       .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const energyAnalysis = useEnergyAnalysis();
+  const energyEnabled = isEnergyTrackerEnabled();
+  const energyPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
   const doneColIds = useMemo(() =>
     board.columns.filter(c => /done|completed|finish/i.test(c.title)).map(c => c.id),
@@ -516,10 +487,7 @@ const Dashboard: React.FC = () => {
     return [...map.values()];
   }, [board, doneColIds]);
 
-  const peakHours = useMemo(() => getPeakEnergyHours(energySettings), [energySettings]);
-
-  const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const weeklyData = useMemo(() => {
+  const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];  const weeklyData = useMemo(() => {
     const data = new Array(7).fill(0);
     const today = new Date();
     const dayOfWeek = today.getDay();
@@ -1132,17 +1100,90 @@ style={{ background: 'hsl(var(--primary))' }}>
         );
       case 'peak-hours':
         return (
-          <div className="flex flex-wrap gap-2 mt-1">
-            {!energyConfigured ? (
-              <p className="text-sm text-muted-foreground">Set your energy preferences in Settings to see your peak hours.</p>
-            ) : peakHours.length > 0 ? (
-              peakHours.map((h, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-bold shadow-sm" style={{ background: 'hsl(var(--label-green))' }}>
-                  <Zap className="w-3 h-3" /> {h}
-                </div>
-              ))
+          <div className="space-y-2.5 mt-1">
+            {!energyPremium ? (
+              <div className="flex flex-col items-center justify-center py-4 text-center gap-1.5">
+                <Lock className="w-5 h-5 text-muted-foreground opacity-60" />
+                <p className="text-xs text-muted-foreground max-w-[230px] leading-snug">
+                  Peak hours unlock with Premium — energy checks at 8am, 12pm and 4pm reveal your strongest windows.
+                </p>
+                <button onClick={() => navigate('/pricing')} className="mt-1 text-[11px] font-bold text-primary hover:underline">
+                  Upgrade
+                </button>
+              </div>
+            ) : !energyEnabled ? (
+              <p className="text-xs text-muted-foreground text-center py-4 px-2 leading-snug">
+                Turn on the Energy Tracker in Settings to reveal your peak hours from real logs.
+              </p>
+            ) : energyAnalysis.daysLogged === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4 px-2 leading-snug">
+                No energy logs yet — complete the daily checks and your peak window will appear here.
+              </p>
             ) : (
-              <p className="text-sm text-muted-foreground">No peak energy hours detected</p>
+              <>
+                {energyAnalysis.peak && (() => {
+                  const peak = ENERGY_SLOTS.find(s => s.id === energyAnalysis.peak);
+                  if (!peak) return null;
+                  const avg = energyAnalysis.slots[peak.id].avg;
+                  return (
+                    <div
+                      className="flex items-center gap-2 p-3 rounded-xl text-white"
+                      style={{
+                        background: `linear-gradient(135deg, hsl(var(--${peak.accent})) 0%, hsl(var(--${peak.accent}) / 0.72) 130%)`,
+                        boxShadow: '0 10px 24px -16px hsl(228 25% 25% / 0.5)',
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black uppercase tracking-wide opacity-90">Peak window</p>
+                        <p className="text-sm font-black leading-tight truncate">{peak.label} · {peak.window}</p>
+                      </div>
+                      <span className="ml-auto text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 shrink-0">
+                        {avg.toFixed(1)}/3 avg
+                      </span>
+                    </div>
+                  );
+                })()}
+                <div className="grid grid-cols-3 gap-2">
+                  {ENERGY_SLOTS.map(s => {
+                    const st = energyAnalysis.slots[s.id];
+                    const isPeak = energyAnalysis.peak === s.id;
+                    return (
+                      <div
+                        key={s.id}
+                        className="rounded-xl px-2 py-2 text-center"
+                        style={{
+                          background: isPeak ? `hsl(var(--${s.accent}) / 0.12)` : 'hsl(var(--muted) / 0.35)',
+                          border: isPeak ? `1px solid hsl(var(--${s.accent}) / 0.4)` : '1px solid hsl(var(--border))',
+                        }}
+                      >
+                        <p
+                          className="text-[9px] font-black uppercase tracking-wide"
+                          style={{ color: isPeak ? `hsl(var(--${s.accent}))` : undefined }}
+                        >
+                          {s.label}
+                        </p>
+                        <p className={`text-sm font-black mt-0.5 ${isPeak ? '' : 'text-foreground'}`}>
+                          {st.logged > 0 ? `${st.avg.toFixed(1)}/3` : '—'}
+                        </p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">
+                          {st.logged > 0 ? `${st.logged} logged` : 'No logs'}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  {energyAnalysis.daysLogged} of the last 7 days logged ·{' '}
+                  {energyAnalysis.trendDelta >= 0.15
+                    ? `energy up ${energyAnalysis.trendDelta.toFixed(1)}/3 since last week`
+                    : energyAnalysis.trendDelta <= -0.15
+                      ? `energy down ${(-energyAnalysis.trendDelta).toFixed(1)}/3 since last week`
+                      : 'energy steady since last week'}
+                </p>
+              </>
             )}
           </div>
         );
@@ -1586,7 +1627,13 @@ style={{ background: 'hsl(var(--primary))' }}>
         );
       }
       case 'energy':
-        return <EnergyTaskRecommendations tasks={board.tasks} energySettings={energySettings} configured={energyConfigured} />;
+        return (
+          <EnergyTaskRecommendations
+            tasks={activeTasks}
+            tier={user?.subscriptionTier}
+            onUpgrade={() => navigate('/pricing')}
+          />
+        );
       default:
         return null;
     }

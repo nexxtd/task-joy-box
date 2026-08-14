@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Battery } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { ENERGY_UPDATED_EVENT } from '@/utils/energyStats';
 
 type Slot = 'morning' | 'midday' | 'afternoon';
 type Level = 'low' | 'medium' | 'high';
@@ -44,6 +45,7 @@ function loadHistory(): EnergyEntry[] {
 
 function saveHistory(entries: EnergyEntry[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  window.dispatchEvent(new Event(ENERGY_UPDATED_EVENT));
 }
 
 const isPremiumTier = (tier?: string) => tier === 'pro' || tier === 'premium';

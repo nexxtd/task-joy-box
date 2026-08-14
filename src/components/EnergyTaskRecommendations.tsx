@@ -1,183 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import { Zap, Clock, Calendar, TrendingUp } from 'lucide-react';
-import { Task } from '@/types/board';
-import { getOptimalTimeBlocks, rankTasksByOptimalTiming, getPeakEnergyHours } from '@/utils/energyTaskScheduler';
+import { Zap, Clock, Lock, Settings, TrendingUp, Calendar } from 'lucide-react';
+import { Task, PRIORITY_CONFIG } from '@/types/board';
+import { ENERGY_SLOTS, EnergySlot, useEnergyAnalysis, isEnergyTrackerEnabled, isEnergyPremiumTier } from '@/utils/energyStats';
 
 interface EnergyTaskRecommendationsProps {
   tasks: Task[];
-  energySettings: {
-    energyMorning: 'low' | 'medium' | 'high';
-    energyAfternoon: 'low' | 'medium' | 'high';
-    energyEvening: 'low' | 'medium' | 'high';
-  };
-  configured?: boolean;
+  tier?: string;
+  onUpgrade?: () => void;
 }
+
+type Intensity = 'deep' | 'steady' | 'light';
+
+interface RankedTask {
+  task: Task;
+  slot: EnergySlot;
+  intensity: Intensity;
+  reason: string;
+}
+
+const INTENSITY_RANK: Record<Intensity, number> = { deep: 0, steady: 1, light: 2 };
+const PRIORITY_VALUE: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1, none: 0 };
+
+const getIntensity = (priority?: string): Intensity =>
+  priority === 'urgent' || priority === 'high'
+    ? 'deep'
+    : priority === 'medium'
+      ? 'steady'
+      : 'light';
+
+const slotGradient = (accent: string) =>
+  `linear-gradient(135deg, hsl(var(--${accent})) 0%, hsl(var(--${accent}) / 0.72) 130%)`;
 
 const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
   tasks,
-  energySettings,
-  configured = true,
+  tier,
+  onUpgrade,
 }) => {
-  const [recommendedTasks, setRecommendedTasks] = useState<Task[]>([]);
-  const [peakHours, setPeakHours] = useState<string[]>([]);
+  const analysis = useEnergyAnalysis();
+  const enabled = isEnergyTrackerEnabled();
+  const premium = isEnergyPremiumTier(tier);
+  const openTasks = tasks.filter(t => !t.completed);
+  const peak = analysis.peak ? ENERGY_SLOTS.find(s => s.id === analysis.peak) : null;
+  const trough = analysis.trough ? ENERGY_SLOTS.find(s => s.id === analysis.trough) : null;
 
-  useEffect(() => {
-    // Filter out completed tasks
-    const incompleteTasks = tasks.filter(task => !task.completed);
-    
-    // Rank tasks by optimal timing
-    const rankedTasks = rankTasksByOptimalTiming(incompleteTasks, energySettings);
-    setRecommendedTasks(rankedTasks.slice(0, 5)); // Show top 5 recommendations
-    
-    // Get peak energy hours
-    setPeakHours(getPeakEnergyHours(energySettings));
-  }, [tasks, energySettings]);
+  const ranked: RankedTask[] = openTasks.map(task => {
+    const intensity = getIntensity(task.priority);
+    let slot: EnergySlot | null = null;
+    let reason = '';
 
-  const getEnergyFill = (level: string) => {
-    switch (level) {
-      case 'high': return { background: 'hsl(var(--label-green))', color: '#ffffff' };
-      case 'medium': return { background: 'hsl(var(--label-yellow))', color: '#2c2c1c' };
-      case 'low': return { background: 'hsl(var(--label-red))', color: '#ffffff' };
-      default: return { background: 'hsl(var(--label-blue))', color: '#ffffff' };
+    if (intensity === 'deep') {
+      slot = peak ? peak.id : (['morning', 'midday', 'afternoon'] as EnergySlot[]).find(s => analysis.slots[s].logged > 0) ?? null;
+      const meta = slot ? ENERGY_SLOTS.find(s => s.id === slot) : null;
+      reason = meta
+        ? `Logs show you're strongest here (${meta.window}) — save this task for your peak window.`
+        : 'Once energy logs build up, your strongest tasks will be scheduled into your peak window.';
+    } else if (intensity === 'steady') {
+      const steady = (['morning', 'midday', 'afternoon'] as EnergySlot[]).find(
+        s => analysis.slots[s].avg >= 2 && analysis.slots[s].logged > 0
+      );
+      slot = steady ?? (peak ? peak.id : null);
+      const meta = slot ? ENERGY_SLOTS.find(s => s.id === slot) : null;
+      reason = meta
+        ? `Steady-focus work fits your ${meta.label.toLowerCase()} window (${meta.window}) — solid energy without peak demand.`
+        : 'A medium-energy slot will show up here once you log a few checks.';
+    } else {
+      slot = trough && trough.id !== peak?.id ? trough.id : peak ? peak.id : 'afternoon';
+      const meta = ENERGY_SLOTS.find(s => s.id === slot);
+      reason = peak
+        ? `Light work fits ${meta?.label.toLowerCase()} (${meta?.window}) — keep your peak window free for demanding tasks.`
+        : 'Low-energy work can land in any window once logs exist.';
     }
-  };
 
-  const getPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'Urgent';
-      case 'high': return 'High';
-      case 'medium': return 'Medium';
-      case 'low': return 'Low';
-      default: return 'Medium';
-    }
-  };
+    return { task, slot, intensity, reason };
+  }).sort((a, b) => {
+    const i = INTENSITY_RANK[a.intensity] - INTENSITY_RANK[b.intensity];
+    if (i !== 0) return i;
+    const p = PRIORITY_VALUE[b.task.priority ?? 'none'] - PRIORITY_VALUE[a.task.priority ?? 'none'];
+    if (p !== 0) return p;
+    return (a.task.dueDate || '').localeCompare(b.task.dueDate || '');
+  });
 
-  const getPriorityFill = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return { background: 'hsl(var(--priority-urgent))', color: '#ffffff' };
-      case 'high': return { background: 'hsl(var(--priority-high))', color: '#ffffff' };
-      case 'low': return { background: 'hsl(var(--priority-low))', color: '#ffffff' };
-      default: return { background: 'hsl(var(--priority-medium))', color: '#2c2c1c' };
-    }
-  };
+  if (!premium) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+        <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+          <Lock className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Premium feature</p>
+        <p className="text-xs text-muted-foreground max-w-[230px] leading-snug">
+          Daily energy checks at 8am, 12pm and 4pm reveal your peak windows — unlock them with Premium.
+        </p>
+        {onUpgrade && (
+          <button
+            onClick={onUpgrade}
+            className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all"
+          >
+            Upgrade
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!enabled) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+        <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+          <Settings className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Energy Tracker is off</p>
+        <p className="text-xs text-muted-foreground max-w-[230px] leading-snug">
+          Turn on the Energy Tracker in Settings — your 8am, 12pm and 4pm checks power these recommendations.
+        </p>
+      </div>
+    );
+  }
+
+  if (analysis.daysLogged === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+        <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+          <Zap className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">No energy logs yet</p>
+        <p className="text-xs text-muted-foreground max-w-[240px] leading-snug">
+          Complete the 8am, 12pm and 4pm energy checks and your top tasks will be scheduled into your strongest windows here.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      {!configured && (
-        <p className="text-sm text-muted-foreground p-3 rounded-xl bg-muted/40 border border-border">
-          Set your energy preferences in Settings to get personalized recommendations.
-        </p>
-      )}
-      {configured && (
-      <div className="bg-card p-4 rounded-2xl border border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-orange) / 0.12)' }}>
-            <Zap className="w-4 h-4" style={{ color: 'hsl(var(--label-orange))' }} />
-          </div>
-          <h3 className="font-semibold text-foreground">Energy-Aware Recommendations</h3>
-        </div>
-        
-        <p className="text-sm text-muted-foreground mb-4">
-          Tasks scheduled during your peak energy hours for maximum productivity
-        </p>
-        
-        <div className="space-y-3">
-          {recommendedTasks.length > 0 ? (
-            recommendedTasks.map(task => {
-              const timeBlocks = getOptimalTimeBlocks(task, energySettings);
-              const hasPriority = task.priority && task.priority !== 'none';
-              
-              return (
-                <div 
-                  key={task.id} 
-                  className="p-3 bg-background/50 border border-border rounded-xl hover:bg-muted/30 hover:shadow-sm transition-all"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground truncate">{task.title}</h4>
-                      <div className="flex items-center gap-3 mt-1">
-                        {hasPriority && (
-                        <span
-                          className="text-[10px] font-bold uppercase px-2 py-1 rounded-full text-primary-foreground"
-                          style={getPriorityFill(task.priority || 'medium')}
-                        >
-                          {getPriorityLabel(task.priority || 'medium')}
-                        </span>
-                        )}
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {timeBlocks.length > 0 
-                              ? `${timeBlocks.length} optimal time${timeBlocks.length > 1 ? 's' : ''}` 
-                              : 'No optimal times'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {timeBlocks.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-border/60">
-                      <div className="flex flex-wrap gap-1">
-                        {timeBlocks.map((block, idx) => (
-                          <span 
-                            key={idx} 
-                            className="text-xs px-2.5 py-1 rounded-full font-medium text-white"
-                            style={getEnergyFill(block.energyLevel)}
-                          >
-                            {block.period} ({block.startTime}-{block.endTime})
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="py-6 text-center">
-              <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-2">
-                <TrendingUp className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">No tasks to recommend</p>
-              <p className="text-xs text-muted-foreground/70 mt-1">Add tasks to get personalized recommendations</p>
+    <div className="space-y-3">
+      {peak && (
+        <div
+          className="p-3 rounded-xl text-white"
+          style={{ background: slotGradient(peak.accent), boxShadow: '0 10px 24px -16px hsl(228 25% 25% / 0.5)' }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/20">
+              <Zap className="w-4 h-4" />
             </div>
-          )}
-        </div>
-      </div>
-      )}
-      
-      {configured && (
-      <div className="bg-card p-4 rounded-2xl border border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-green) / 0.12)' }}>
-            <Calendar className="w-4 h-4" style={{ color: 'hsl(var(--label-green))' }} />
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-wide opacity-90">Peak window</p>
+              <p className="text-sm font-black leading-tight truncate">
+                {peak.label} · {peak.window}
+              </p>
+            </div>
+            <span className="ml-auto text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 shrink-0">
+              {analysis.slots[peak.id].avg.toFixed(1)}/3 avg
+            </span>
           </div>
-          <h3 className="font-semibold text-foreground">Your Peak Hours</h3>
+          <p className="text-[10px] text-white/90 leading-snug mt-1.5">
+            Schedule urgent and high-priority work here — {analysis.slots[peak.id].logged} check
+            {analysis.slots[peak.id].logged !== 1 ? 's' : ''} logged in the last 7 days.
+          </p>
         </div>
-        
-        <div className="flex flex-wrap gap-2">
-          {peakHours.length > 0 ? (
-            peakHours.map((hour, idx) => (
-              <div 
-                key={idx} 
-                className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-lg shadow-sm"
-                style={{ background: 'hsl(var(--label-green))' }}
-              >
-                <Zap className="w-3 h-3" />
-                {hour}
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No peak energy hours detected</p>
-          )}
-        </div>
-        
-        <p className="text-xs text-muted-foreground mt-3">
-          Schedule high-priority tasks during these times for optimal performance
-        </p>
-      </div>
       )}
+
+      <div className="grid grid-cols-3 gap-2">
+        {ENERGY_SLOTS.map(s => {
+          const level = analysis.today[s.id];
+          const hour = new Date().getHours();
+          const pending = level === null && hour >= s.hour;
+          return (
+            <div
+              key={s.id}
+              className="rounded-xl px-2 py-1.5 text-center"
+              style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
+            >
+              <p className="text-[9px] font-black uppercase tracking-wide text-muted-foreground">{s.label}</p>
+              {level ? (
+                <p
+                  className="text-[10px] font-bold mt-0.5"
+                  style={{ color: level === 'high' ? 'hsl(var(--label-green))' : level === 'medium' ? 'hsl(var(--label-yellow))' : 'hsl(var(--label-red))' }}
+                >
+                  {level[0].toUpperCase() + level.slice(1)}
+                </p>
+              ) : (
+                <p className={`text-[10px] mt-0.5 ${pending ? 'text-primary font-semibold' : 'text-muted-foreground/50'}`}>
+                  {pending ? 'Pending' : '—'}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {ranked.length === 0 ? (
+        <div className="py-5 text-center">
+          <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-2">
+            <TrendingUp className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">No open tasks to schedule</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Add tasks and they will be ranked by energy here.</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {ranked.slice(0, 5).map(({ task, slot, intensity, reason }) => {
+            const meta = ENERGY_SLOTS.find(s => s.id === slot);
+            const cfg = task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
+            return (
+              <div key={task.id} className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                <div className="flex items-center gap-2">
+                  {cfg && (
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>
+                      {cfg.label}
+                    </span>
+                  )}
+                  <span className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task.title}</span>
+                </div>
+                {meta && (
+                  <div className="mt-1.5 flex items-start gap-1.5">
+                    <span
+                      className="mt-0.5 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-white shrink-0"
+                      style={{ background: slotGradient(meta.accent) }}
+                    >
+                      <Clock className="w-2.5 h-2.5" /> {meta.label} · {meta.window}
+                    </span>
+                    <p className="text-[10px] text-muted-foreground leading-snug">{reason}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <Calendar className="w-3 h-3" />
+        {analysis.daysLogged} day{analysis.daysLogged !== 1 ? 's' : ''} logged ·{' '}
+        {analysis.trendDelta >= 0.15
+          ? `energy up ${analysis.trendDelta.toFixed(1)}/3 over the last two weeks`
+          : analysis.trendDelta <= -0.15
+            ? `energy down ${(-analysis.trendDelta).toFixed(1)}/3 over the last two weeks`
+            : 'energy steady over the last two weeks'}
+      </p>
     </div>
   );
 };
