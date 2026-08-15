@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  LifeBuoy, Bot, BookOpen, FileText, Send, X, ChevronRight,
+  LifeBuoy, BookOpen, FileText, Send, X, ChevronRight,
   ChevronDown, ChevronUp, Loader2, CheckCircle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { FAQS, RESOURCES } from '@/data/supportContent';
+import SupportContent from '@/components/SupportContent';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type View = 'main' | 'faqs' | 'resources' | 'submit';
@@ -17,8 +18,10 @@ const TYPE_TOASTS: Record<string, string> = {
   support: 'Thank you for reaching out. A member of our team will get back to you soon.',
 };
 
-const FAQsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [selected, setSelected] = useState(FAQS[0].id);
+const FAQsView: React.FC<{ onClose: () => void; initialFaqId?: string }> = ({ onClose, initialFaqId }) => {
+  const [selected, setSelected] = useState(() =>
+    initialFaqId && FAQS.some(f => f.id === initialFaqId) ? initialFaqId : FAQS[0].id
+  );
   const current = FAQS.find(f => f.id === selected)!;
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -59,11 +62,15 @@ const FAQsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-const ResourcesView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(['getting-started']));
-  const [selectedGuide, setSelectedGuide] = useState<{ catId: string; guideId: string } | null>({
-    catId: 'getting-started',
-    guideId: 'gs-welcome',
+const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; initialGuideId?: string }> = ({ onClose, initialCatId, initialGuideId }) => {
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set([initialCatId || 'getting-started']));
+  const [selectedGuide, setSelectedGuide] = useState<{ catId: string; guideId: string } | null>(() => {
+    const cat = RESOURCES.find(c => c.id === initialCatId);
+    if (cat) {
+      const guideOk = initialGuideId && cat.guides.some(g => g.id === initialGuideId);
+      return { catId: cat.id, guideId: guideOk ? initialGuideId as string : cat.guides[0]?.id || '' };
+    }
+    return { catId: 'getting-started', guideId: 'gs-welcome' };
   });
 
   const toggleCat = (id: string) => {
@@ -269,56 +276,36 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-const CARDS = [
-  {
-    id: 'ai',
-    icon: Bot,
-    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
-    iconColor: 'text-blue-600 dark:text-blue-400',
-    title: 'AI Assistant',
-    description: 'Get intelligent task suggestions, automated prioritisation, and productivity insights.',
-    buttonLabel: 'Open AI Chat',
-  },
-  {
-    id: 'faqs',
-    icon: BookOpen,
-    iconBg: 'bg-purple-100 dark:bg-purple-900/30',
-    iconColor: 'text-purple-600 dark:text-purple-400',
-    title: 'FAQs',
-    description: 'Find answers to common questions.',
-    buttonLabel: 'View FAQs',
-  },
-  {
-    id: 'resources',
-    icon: FileText,
-    iconBg: 'bg-green-100 dark:bg-green-900/30',
-    iconColor: 'text-green-600 dark:text-green-400',
-    title: 'Resources',
-    description: 'How-to guides and walkthroughs for every feature.',
-    buttonLabel: 'View Resources',
-  },
-  {
-    id: 'submit',
-    icon: Send,
-    iconBg: 'bg-orange-100 dark:bg-orange-900/30',
-    iconColor: 'text-orange-600 dark:text-orange-400',
-    title: 'Submit',
-    description: 'Submit a suggestion, bug, report, or support request.',
-    buttonLabel: 'Submit',
-  },
-];
-
 const Support: React.FC = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState<View>('main');
+  const [searchParams] = useSearchParams();
+  const urlView = searchParams.get('view');
+  const urlFaq = searchParams.get('faq');
+  const urlCat = searchParams.get('cat');
+  const urlGuide = searchParams.get('guide');
 
-  const handleCardClick = (id: string) => {
-    if (id === 'ai') { navigate('/ai-chat'); return; }
-    setView(id as View);
-  };
+  const [view, setView] = useState<View>(() =>
+    urlView === 'faqs' || urlView === 'resources' || urlView === 'submit' ? urlView : 'main'
+  );
+  const [initialFaqId, setInitialFaqId] = useState<string | undefined>(() =>
+    urlView === 'faqs' && urlFaq && FAQS.some(f => f.id === urlFaq) ? urlFaq : undefined
+  );
+  const [initialCatId, setInitialCatId] = useState<string | undefined>(() =>
+    urlView === 'resources' && urlCat && RESOURCES.some(c => c.id === urlCat) ? urlCat : undefined
+  );
+  const [initialGuideId, setInitialGuideId] = useState<string | undefined>(() => {
+    if (urlView !== 'resources' || !urlGuide) return undefined;
+    const cat = RESOURCES.find(c => c.id === urlCat);
+    return cat && cat.guides.some(g => g.id === urlGuide) ? urlGuide : undefined;
+  });
 
-  if (view === 'faqs') return <FAQsView onClose={() => setView('main')} />;
-  if (view === 'resources') return <ResourcesView onClose={() => setView('main')} />;
+  const openFaqs = (faqId?: string) => { setInitialFaqId(faqId); setView('faqs'); };
+  const openResources = (catId?: string, guideId?: string) => { setInitialCatId(catId); setInitialGuideId(guideId); setView('resources'); };
+  const openSubmit = () => { setView('submit'); };
+  const openAi = () => { navigate('/ai-chat'); };
+
+  if (view === 'faqs') return <FAQsView onClose={() => setView('main')} initialFaqId={initialFaqId} />;
+  if (view === 'resources') return <ResourcesView onClose={() => setView('main')} initialCatId={initialCatId} initialGuideId={initialGuideId} />;
   if (view === 'submit') return <SubmitView onClose={() => setView('main')} />;
 
   return (
@@ -332,26 +319,12 @@ const Support: React.FC = () => {
         </div>
       </header>
       <div className="p-8 max-w-3xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {CARDS.map(card => (
-            <div
-              key={card.id}
-              className="bg-card border border-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group flex flex-col"
-            >
-              <div className={`w-10 h-10 rounded-xl ${card.iconBg} ${card.iconColor} flex items-center justify-center mb-4 transition-transform group-hover:scale-110`}>
-                <card.icon className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-foreground">{card.title}</h3>
-              <p className="text-xs text-muted-foreground mt-1 mb-6 flex-1">{card.description}</p>
-              <button
-                onClick={() => handleCardClick(card.id)}
-                className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:opacity-90 transition-all"
-              >
-                {card.buttonLabel}
-              </button>
-            </div>
-          ))}
-        </div>
+        <SupportContent
+          onOpenAi={openAi}
+          onOpenFaqs={openFaqs}
+          onOpenResources={openResources}
+          onOpenSubmit={openSubmit}
+        />
       </div>
     </div>
   );

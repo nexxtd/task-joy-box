@@ -12,6 +12,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
+import SupportContent from '@/components/SupportContent';
 import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -116,7 +117,7 @@ const SettingsPage: React.FC = () => {
     { id: 'history', label: 'History', icon: History },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
-    ...(hasTickets ? [{ id: 'tickets', label: 'Tickets', icon: MessageSquare }] : []),
+    { id: 'tickets', label: 'Tickets', icon: MessageSquare },
   ];
 
   const fetchUserTickets = async () => {
@@ -1095,7 +1096,7 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeSection === 'tickets' && (() => {
+          {activeSection === 'tickets' && (hasTickets ? (() => {
             const TICKET_CATEGORIES = ['all', 'support', 'bug', 'suggestion', 'report'];
             const typeColor = (type: string) =>
               type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
@@ -1200,9 +1201,20 @@ const SettingsPage: React.FC = () => {
                     ))}
                   </div>
                 )}
+                <div className="mt-6 pt-6 border-t border-border">
+                  <SupportContent />
+                </div>
               </div>
             );
-          })()}
+          })() : (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
+              <p className="text-xs text-muted-foreground">
+                You don't have any tickets yet. Need help? Explore the support hub below.
+              </p>
+              <SupportContent />
+            </div>
+          ))}
 
           {activeSection === 'security' && (
             <div className="space-y-4">

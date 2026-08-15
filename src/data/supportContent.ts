@@ -299,3 +299,55 @@ export const RESOURCES: ResourceCategory[] = [
     ],
   },
 ];
+
+export const WHATS_NEW = [
+  {
+    date: 'Aug 14',
+    title: 'Energy Tracker upgrades',
+    desc: 'Log your energy in the morning, midday and afternoon — dashboard widgets now use your real energy logs to recommend tasks for each energy window.',
+  },
+  {
+    date: 'Aug 12',
+    title: 'AI chat renaming',
+    desc: 'Rename any conversation inline from the chat list — hover the title and click the pencil icon.',
+  },
+  {
+    date: 'Aug 11',
+    title: 'Smarter board dragging',
+    desc: 'Completed tasks stay pinned at the bottom of every column, and drag previews no longer clip at the edge of the screen.',
+  },
+  {
+    date: 'Aug 10',
+    title: 'Custom accent colour',
+    desc: 'Pick any accent colour in Settings with the new colour picker — the hex value is fully editable.',
+  },
+  {
+    date: 'Aug 8',
+    title: 'Deep Focus history',
+    desc: 'Review every focus session with totals in Settings > History > Deep Focus.',
+  },
+  {
+    date: 'Aug 5',
+    title: 'Tidy boards by default',
+    desc: 'Completed tasks are automatically cleared from columns after 5 days to keep your boards clean.',
+  },
+];
+
+export interface QuickLink {
+  kind: 'faq' | 'guide';
+  faqId?: string;
+  catId?: string;
+  guideId?: string;
+  label: string;
+}
+
+export const QUICK_LINKS: QuickLink[] = [
+  { kind: 'faq', faqId: 'create-task', label: 'How do I create a task?' },
+  { kind: 'faq', faqId: 'deep-focus', label: 'What is deep focus?' },
+  { kind: 'faq', faqId: 'free-vs-premium', label: 'Free vs premium plans' },
+  { kind: 'guide', catId: 'projects', guideId: 'projects-columns', label: 'Managing board columns' },
+  { kind: 'guide', catId: 'calendar', guideId: 'cal-google', label: 'Connect Google Calendar' },
+  { kind: 'guide', catId: 'ai', guideId: 'ai-chat', label: 'Using the AI assistant' },
+  { kind: 'guide', catId: 'goals', guideId: 'goals-create', label: 'Creating and tracking goals' },
+  { kind: 'guide', catId: 'habits', guideId: 'habits-streaks', label: 'Understanding streaks' },
+];
