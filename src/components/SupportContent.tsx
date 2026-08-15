@@ -8,6 +8,7 @@ interface SupportContentProps {
   onOpenFaqs?: (faqId?: string) => void;
   onOpenResources?: (catId?: string, guideId?: string) => void;
   onOpenSubmit?: () => void;
+  showWhatsNew?: boolean;
 }
 
 interface CardDef {
@@ -84,7 +85,7 @@ const CARDS: CardDef[] = [
   },
 ];
 
-const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, onOpenResources, onOpenSubmit }) => {
+const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, onOpenResources, onOpenSubmit, showWhatsNew = true }) => {
   const navigate = useNavigate();
 
   const openAi = () => { if (onOpenAi) { onOpenAi(); } else { navigate('/ai-chat'); } };
@@ -130,25 +131,27 @@ const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, o
         ))}
       </div>
 
-      <div className="mt-10">
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles className="w-4 h-4 text-amber-500" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">What's New</h2>
-        </div>
-        <div className="space-y-2">
-          {WHATS_NEW.map(item => (
-            <div key={item.title} className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/60 p-3.5 transition-colors hover:bg-card">
-              <span className="mt-0.5 flex-shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                {item.date}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground">{item.title}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+      {showWhatsNew && (
+        <div className="mt-10">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">What's New</h2>
+          </div>
+          <div className="space-y-2">
+            {WHATS_NEW.map(item => (
+              <div key={item.title} className="flex items-start gap-3 rounded-xl border border-border/70 bg-card/60 p-3.5 transition-colors hover:bg-card">
+                <span className="mt-0.5 flex-shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                  {item.date}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-3">

@@ -1202,7 +1202,7 @@ const SettingsPage: React.FC = () => {
                   </div>
                 )}
                 <div className="mt-6 pt-6 border-t border-border">
-                  <SupportContent />
+                  <SupportContent showWhatsNew={false} />
                 </div>
               </div>
             );
@@ -1212,7 +1212,7 @@ const SettingsPage: React.FC = () => {
               <p className="text-xs text-muted-foreground">
                 You don't have any tickets yet. Need help? Explore the support hub below.
               </p>
-              <SupportContent />
+              <SupportContent showWhatsNew={false} />
             </div>
           ))}
 
