@@ -536,11 +536,17 @@ const Projects: React.FC = () => {
     () => [...projectTasks]
       .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
       .slice(0, 10)
-      .map(task => ({
-        id: task.id,
-        text: `${task.title}${task.completed ? ' was completed' : ' was updated'}`,
-        time: task.updatedAt || task.createdAt,
-      })),
+      .map(task => {
+        const lastEntry = (task.activityLog || []).slice(-1)[0];
+        return {
+          id: task.id,
+          text: lastEntry
+            ? `${task.title}: ${lastEntry.text}`
+            : `${task.title}${task.completed ? ' was completed' : ' was updated'}`,
+          time: lastEntry?.createdAt || task.updatedAt || task.createdAt,
+          actor: lastEntry?.actor,
+        };
+      }),
     [projectTasks],
   );
 
@@ -1110,7 +1116,10 @@ const Projects: React.FC = () => {
                 <Clock3 className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
                   <p className="text-sm text-foreground">{activity.text}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(activity.time).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {activity.actor && <><span className="font-semibold">{activity.actor}</span> · </>}
+                    {new Date(activity.time).toLocaleString()}
+                  </p>
                 </div>
               </div>
             )) : <EmptyState title="No recent activity" description="Changes and updates will appear here." />}

@@ -4544,8 +4544,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
   const activityEntries = useMemo(() => {
-    const entries = [
-      ...(task.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt })),
+    const entries: Array<{ id: string; text: string; createdAt: string; actor?: string }> = [
+      ...(task.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt, actor: entry.actor })),
       { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
       ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
       ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
@@ -5487,7 +5487,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               {activityEntries.map(entry => (
                 <div key={entry.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                   <p className="text-sm text-foreground">{entry.text}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{new Date(entry.createdAt).toLocaleString()}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {entry.actor && <><span className="font-semibold">{entry.actor}</span> · </>}
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </p>
                 </div>
               ))}
             </div>

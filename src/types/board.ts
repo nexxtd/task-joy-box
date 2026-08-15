@@ -46,6 +46,7 @@ export interface TaskActivity {
   id: string;
   text: string;
   createdAt: string;
+  actor?: string;
 }
 
 export interface Task {

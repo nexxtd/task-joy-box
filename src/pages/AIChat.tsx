@@ -3,7 +3,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import {
   Wand2, Send, Loader2, Plus, Trash2, Search, Copy,
   XCircle, AlertTriangle, ChevronRight,
-  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare
+  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare, Pencil
 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { useAuth } from '@/context/AuthContext';
@@ -71,6 +71,8 @@ const AIChat: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const feedEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const didLoad = useRef(false);
@@ -157,6 +159,19 @@ const AIChat: React.FC = () => {
       setEphemeral([]);
       try { localStorage.removeItem(getActiveKey(user?.id)); } catch { /* ignore */ }
     }
+    if (renamingChatId === id) setRenamingChatId(null);
+  };
+
+  const startRename = (chat: Chat) => {
+    setRenameValue(chat.title || '');
+    setRenamingChatId(chat.id);
+  };
+
+  const commitRename = (id: string) => {
+    const value = renameValue.trim();
+    setRenamingChatId(null);
+    if (!value) return;
+    commitChats(prev => prev.map(c => c.id === id ? { ...c, title: value } : c));
   };
 
   const stripMarkdown = (text: string = '') =>
@@ -457,7 +472,38 @@ const AIChat: React.FC = () => {
               className={`group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${activeChatId === chat.id ? 'bg-primary/10' : 'hover:bg-muted/70'}`}
             >
               <MessageSquare className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <span className="flex-1 truncate text-[13px] text-foreground/90">{chat.title || 'New chat'}</span>
+              {renamingChatId === chat.id ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  onFocus={e => e.currentTarget.select()}
+                  onKeyDown={e => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') commitRename(chat.id);
+                    else if (e.key === 'Escape') { setRenamingChatId(null); setRenameValue(''); }
+                  }}
+                  onBlur={() => { if (renamingChatId === chat.id) commitRename(chat.id); }}
+                  placeholder="Chat name"
+                  className="flex-1 min-w-0 bg-muted/60 border border-primary/40 rounded-md px-1.5 py-0.5 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+              ) : (
+                <button
+                  onClick={e => { e.stopPropagation(); startRename(chat); }}
+                  className="flex-1 min-w-0 truncate text-left text-[13px] text-foreground/90 hover:underline decoration-dotted underline-offset-2"
+                  title="Click to rename chat"
+                >
+                  {chat.title || 'New chat'}
+                </button>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); startRename(chat); }}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                title="Rename chat"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"

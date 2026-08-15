@@ -3739,8 +3739,8 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   const noteProject = note.projectId ? projects.find(project => project.id === note.projectId) || null : null;
 
   const activityEntries = useMemo(() => {
-    const entries = [
-      ...(note.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt })),
+    const entries: Array<{ id: string; text: string; createdAt: string; actor?: string }> = [
+      ...(note.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt, actor: entry.actor })),
       { id: 'created', text: `Created ${new Date(note.createdAt).toLocaleDateString()}`, createdAt: note.createdAt },
       ...(note.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(note.updatedAt).toLocaleDateString()}`, createdAt: note.updatedAt }] : []),
       ...(note.projectId ? [{ id: 'project', text: `Assigned to ${noteProject?.name || 'project'}`, createdAt: note.updatedAt || note.createdAt }] : []),
@@ -4503,7 +4503,10 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
               {activityEntries.map(entry => (
                 <div key={entry.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
                   <p className="text-sm text-foreground">{entry.text}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{new Date(entry.createdAt).toLocaleString()}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {entry.actor && <><span className="font-semibold">{entry.actor}</span> · </>}
+                    {new Date(entry.createdAt).toLocaleString()}
+                  </p>
                 </div>
               ))}
             </div>

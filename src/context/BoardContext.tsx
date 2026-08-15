@@ -207,11 +207,11 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...prev,
       tasks: prev.tasks.map(t =>
         t.id === taskId
-          ? { ...t, updatedAt: new Date().toISOString(), activityLog: [...(t.activityLog || []), { id: genId(), text, createdAt: new Date().toISOString() }] }
+          ? { ...t, updatedAt: new Date().toISOString(), activityLog: [...(t.activityLog || []), { id: genId(), text, createdAt: new Date().toISOString(), actor: user?.name }] }
           : t
       ),
     }));
-  }, []);
+  }, [user?.name]);
 
   const persist = useCallback((updater: (b: Board) => Board) => {
     setBoard(prev => {
@@ -289,11 +289,11 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         comments: details.comments || [],
         projectId: details.projectId,
         projectName: details.projectName,
-        activityLog: [{ id: genId(), text: 'Task created', createdAt: now }],
+        activityLog: [{ id: genId(), text: 'Task created', createdAt: now, actor: user?.name }],
       };
       return { ...b, tasks: [...b.tasks, newTask] };
     });
-  }, [persist]);
+  }, [persist, user?.name]);
 
   const updateTask = useCallback((taskId: string, updates: Partial<Task>) => {
     const activityTexts: string[] = [];
