@@ -599,6 +599,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                             )}
                           </Draggable>
                         ))}
+                        {dropProvided.placeholder}
                         {columnCompleted.length > 0 && (
                           <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
                             <button
@@ -626,7 +627,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                             )}
                           </div>
                         )}
-                        {dropProvided.placeholder}
                       </div>
                     )}
                   </Droppable>

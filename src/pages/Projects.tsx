@@ -1194,6 +1194,7 @@ const Projects: React.FC = () => {
                           onTaskClick={setSelectedTask}
                           canCreateTasks={canCreateTasks}
                           canEdit={canEdit}
+                          boardZoom={boardZoom}
                           onAddClick={canCreateTasks ? () => {
                             setCreateModalColumnId(column.id);
                             setShowCreateModal(true);

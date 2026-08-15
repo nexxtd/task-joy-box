@@ -74,9 +74,10 @@ interface BoardColumnProps {
   canCreateTasks?: boolean;
   onAddClick?: () => void;
   canEdit?: boolean;
+  boardZoom?: number;
 }
 
-const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true }) => {
+const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, boardZoom = 1 }) => {
   const { board, addTask, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -435,6 +436,41 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     );
   };
 
+  const renderTaskClone = (taskProvided: any, taskSnapshot: any, rubric: any) => {
+    const draggedTask = uncompletedTasks[rubric.source.index];
+    if (!draggedTask) return null;
+    const style = taskProvided.draggableProps.style as any;
+    const zoom = boardZoom || 1;
+    const match = String(style?.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+    const dx = match ? Number(match[1]) : 0;
+    const dy = match ? Number(match[2]) : 0;
+    return (
+      <div
+        {...taskProvided.draggableProps}
+        {...taskProvided.dragHandleProps}
+        ref={taskProvided.innerRef}
+        style={{
+          position: 'fixed',
+          top: style?.top ?? 0,
+          left: style?.left ?? 0,
+          boxSizing: 'border-box',
+          width: (style?.width ?? 0) / zoom,
+          height: (style?.height ?? 0) / zoom,
+          zIndex: style?.zIndex ?? 5000,
+          opacity: typeof style?.opacity === 'number' ? style.opacity : undefined,
+          transition: style?.transition,
+          transform: `translate(${dx}px, ${dy}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={{ width: '100%', height: '100%' }}>
+          {renderTaskRow(draggedTask, taskProvided, taskSnapshot)}
+        </div>
+      </div>
+    );
+  };
+
   const toggleExpand = (taskId: string) => {
     setExpandedTaskIds(prev =>
       prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
@@ -547,7 +583,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </button>
           </div>
 
-          <Droppable droppableId={column.id} type="task">
+          <Droppable droppableId={column.id} type="task" renderClone={renderTaskClone}>
             {(dropProvided, snapshot) => (
               <div
                 ref={dropProvided.innerRef}
@@ -560,6 +596,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     {(taskProvided, taskSnapshot) => renderTaskRow(task, taskProvided, taskSnapshot)}
                   </Draggable>
                 ))}
+
+                {!tasksCollapsed && dropProvided.placeholder}
                 
                 {/* Completed tasks section */}
                 {!tasksCollapsed && completedTasks.length > 0 && (
@@ -591,8 +629,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     </div>
                   </div>
                 )}
-                
-                {!tasksCollapsed && dropProvided.placeholder}
               </div>
             )}
           </Droppable>
