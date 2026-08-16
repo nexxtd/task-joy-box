@@ -46,7 +46,7 @@ function getOpenRouter(): OpenAI | null {
   }
 }
 
-const AI_MODEL = process.env.AI_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const AI_MODEL = process.env.AI_MODEL || 'openrouter/free';
 
 // Helper function to create cache key based on request parameters
 function createCacheKey(input: string, model: string): string {
