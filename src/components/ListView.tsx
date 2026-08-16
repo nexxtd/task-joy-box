@@ -11,6 +11,7 @@ import { TaskDropdownExpanded } from '@/pages/Tasks';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
+import CenteredDragClone from '@/components/CenteredDragClone';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 interface ListViewProps {
@@ -587,7 +588,23 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                   </button>
                 </div>
                 {!isColumnCollapsed && (
-                  <Droppable droppableId={column.id}>
+                  <Droppable
+                    droppableId={column.id}
+                    renderClone={(cloneProvided, cloneSnapshot, rubric) => {
+                      const task = board.tasks.find(t => t.id === rubric.draggableId);
+                      if (!task) return null;
+                      return (
+                        <CenteredDragClone
+                          draggableProps={cloneProvided.draggableProps}
+                          dragHandleProps={cloneProvided.dragHandleProps}
+                          innerRef={cloneProvided.innerRef}
+                          style={cloneProvided.draggableProps.style as any}
+                        >
+                          {renderTaskRow(task, cloneProvided.dragHandleProps, cloneSnapshot.isDragging)}
+                        </CenteredDragClone>
+                      );
+                    }}
+                  >
                     {(dropProvided) => (
                       <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
                         {columnActive.map((task, taskIndex) => (

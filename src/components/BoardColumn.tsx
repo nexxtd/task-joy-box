@@ -15,6 +15,7 @@ import { TaskDropdownExpanded, PriorityBadge } from '@/pages/Tasks';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
+import CenteredDragClone from '@/components/CenteredDragClone';
 
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return null;
@@ -441,33 +442,16 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     if (!draggedTask) return null;
     const style = taskProvided.draggableProps.style as any;
     const zoom = boardZoom || 1;
-    const match = String(style?.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-    const dx = match ? Number(match[1]) : 0;
-    const dy = match ? Number(match[2]) : 0;
     return (
-      <div
-        {...taskProvided.draggableProps}
-        {...taskProvided.dragHandleProps}
-        ref={taskProvided.innerRef}
-        style={{
-          position: 'fixed',
-          top: style?.top ?? 0,
-          left: style?.left ?? 0,
-          boxSizing: 'border-box',
-          width: (style?.width ?? 0) / zoom,
-          height: (style?.height ?? 0) / zoom,
-          zIndex: style?.zIndex ?? 5000,
-          opacity: typeof style?.opacity === 'number' ? style.opacity : undefined,
-          transition: style?.transition,
-          transform: `translate(${dx}px, ${dy}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          pointerEvents: 'none',
-        }}
+      <CenteredDragClone
+        draggableProps={taskProvided.draggableProps}
+        dragHandleProps={taskProvided.dragHandleProps}
+        innerRef={taskProvided.innerRef}
+        style={style}
+        zoom={zoom}
       >
-        <div style={{ width: '100%', height: '100%' }}>
-          {renderTaskRow(draggedTask, taskProvided, taskSnapshot)}
-        </div>
-      </div>
+        {renderTaskRow(draggedTask, taskProvided, taskSnapshot)}
+      </CenteredDragClone>
     );
   };
 

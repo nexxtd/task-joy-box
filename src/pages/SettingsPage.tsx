@@ -582,49 +582,56 @@ const SettingsPage: React.FC = () => {
                       style={{ backgroundColor: c.hex }}
                     />
                   ))}
+                </div>
 
-                  {isPaid ? (
-                    <ConfigProvider
-                      theme={{
-                        algorithm: document.documentElement.classList.contains('dark')
-                          ? antdTheme.darkAlgorithm
-                          : antdTheme.defaultAlgorithm,
-                        token: { borderRadius: 12 },
+                {isPaid ? (
+                  <ConfigProvider
+                    theme={{
+                      algorithm: document.documentElement.classList.contains('dark')
+                        ? antdTheme.darkAlgorithm
+                        : antdTheme.defaultAlgorithm,
+                      token: { borderRadius: 12 },
+                    }}
+                  >
+                    <ColorPicker
+                      value={accentColor}
+                      onChange={(color) => {
+                        const hex = color.toHexString();
+                        applyAccentColor(hex, hexToHsl(hex));
                       }}
+                      showText={false}
+                      disabledAlpha
+                      defaultFormat="hex"
+                      presets={[{ label: 'Presets', colors: ACCENT_COLORS.map(c => c.hex) }]}
                     >
-                      <ColorPicker
-                        value={accentColor}
-                        onChange={(color) => {
-                          const hex = color.toHexString();
-                          applyAccentColor(hex, hexToHsl(hex));
-                        }}
-                        showText={false}
-                        disabledAlpha
-                        defaultFormat="hex"
-                        presets={[{ label: 'Presets', colors: ACCENT_COLORS.map(c => c.hex) }]}
+                      <button
+                        type="button"
+                        title="Pick a custom colour"
+                        className="mt-3 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/40 transition-all"
                       >
-                        <button
-                          type="button"
-                          title="Pick a custom colour"
-                          className="w-8 h-8 rounded-full transition-all duration-200 ring-2 ring-offset-2 ring-offset-background ring-foreground/20 hover:scale-110"
+                        <span
+                          className="w-4 h-4 rounded-full ring-2 ring-offset-1 ring-offset-background"
                           style={{ backgroundColor: accentColor }}
                         />
-                      </ColorPicker>
-                    </ConfigProvider>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => { window.location.href = '/pricing'; }}
-                      title="Custom colour (Premium)"
-                      className="relative w-8 h-8 rounded-full transition-all duration-200 hover:scale-110"
+                        <span className="text-sm font-medium text-foreground">Custom Colour</span>
+                      </button>
+                    </ColorPicker>
+                  </ConfigProvider>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { window.location.href = '/pricing'; }}
+                    title="Custom colour (Premium)"
+                    className="mt-3 flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-border bg-card hover:border-primary/40 transition-all"
+                  >
+                    <span
+                      className="w-4 h-4 rounded-full ring-2 ring-offset-1 ring-offset-background"
                       style={{ backgroundColor: accentColor }}
-                    >
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Sparkles className="w-2.5 h-2.5" />
-                      </span>
-                    </button>
-                  )}
-                </div>
+                    />
+                    <span className="text-sm font-medium text-foreground">Custom Colour</span>
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  </button>
+                )}
 
                 {!isPaid && (
                   <div className="mt-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">

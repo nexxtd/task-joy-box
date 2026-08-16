@@ -45,6 +45,7 @@ import {
   DropResult,
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import CenteredDragClone from '@/components/CenteredDragClone';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -1816,6 +1817,21 @@ const Tasks: React.FC = () => {
     );
   };
 
+  const renderTaskClone = (cloneProvided: any, cloneSnapshot: any, rubric: any) => {
+    const task = board.tasks.find(t => t.id === rubric.draggableId);
+    if (!task) return null;
+    return (
+      <CenteredDragClone
+        draggableProps={cloneProvided.draggableProps}
+        dragHandleProps={cloneProvided.dragHandleProps}
+        innerRef={cloneProvided.innerRef}
+        style={cloneProvided.draggableProps.style as any}
+      >
+        {renderTaskRow(task, cloneProvided.dragHandleProps, cloneSnapshot.isDragging)}
+      </CenteredDragClone>
+    );
+  };
+
   const renderCompletedTaskRow = (task: Task) => (
     <div
       key={task.id}
@@ -2186,7 +2202,7 @@ const Tasks: React.FC = () => {
                 <span className="text-[10px] text-muted-foreground/50 ml-1">({myTasksGroup.length})</span>
               </button>
               {!myTasksCollapsed && (
-                <Droppable droppableId="my-tasks">
+                <Droppable droppableId="my-tasks" renderClone={renderTaskClone}>
                   {(dropProvided, snapshot) => (
                     <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
                       {myTasksGroup.map((task, index) => (
@@ -2257,7 +2273,7 @@ const Tasks: React.FC = () => {
                           </div>
                           {!isColumnCollapsed && (
                             <>
-                              <Droppable droppableId={"col-" + column.id}>
+                              <Droppable droppableId={"col-" + column.id} renderClone={renderTaskClone}>
                                 {(dropProvided, snapshot) => (
                                   <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
                                     {colTasks.map((task, index) => (
@@ -2282,7 +2298,7 @@ const Tasks: React.FC = () => {
                       );
                     })}
                     {uncategorized.length > 0 && (
-                      <Droppable droppableId={"uncat-" + project.id}>
+                      <Droppable droppableId={"uncat-" + project.id} renderClone={renderTaskClone}>
                         {(dropProvided, snapshot) => (
                           <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
                             {uncategorized.map((task, index) => (
