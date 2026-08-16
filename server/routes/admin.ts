@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones } from '../../shared/schema';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones } from '../../shared/schema';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
@@ -289,38 +289,6 @@ router.delete('/coupon-groups/:id', async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Failed to delete coupon group:', error);
     res.status(500).json({ error: 'Failed to delete coupon group' });
-  }
-});
-
-// System Settings (Feature Flags & Prices)
-router.get('/settings', async (req: AuthRequest, res: Response) => {
-  try {
-    const settings = await db.select().from(systemSettings);
-    res.json(settings);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch system settings' });
-  }
-});
-
-router.patch('/settings', async (req: AuthRequest, res: Response) => {
-  try {
-    const { key, value } = req.body;
-
-    // Check if setting exists
-    const existing = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
-
-    if (existing.length > 0) {
-      await db.update(systemSettings)
-        .set({ value, updatedAt: sql`NOW()` })
-        .where(eq(systemSettings.key, key));
-    } else {
-      await db.insert(systemSettings).values({ key, value, description: null });
-    }
-
-    res.json({ success: true, key, value });
-  } catch (error) {
-    console.error('Failed to update setting:', error);
-    res.status(500).json({ error: 'Failed to update setting' });
   }
 });
 

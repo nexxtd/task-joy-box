@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck, DollarSign, Users, CreditCard, Ticket, TrendingUp, Calendar,
-  Trash2, Plus, Settings, Check, Activity, X, Target, CheckSquare, BarChart3,
+  Trash2, Plus, Activity, X, Target, CheckSquare, BarChart3,
   MessageSquare, ChevronDown, ChevronUp, ChevronRight, Send, Loader2, BookOpen,
   Zap, User, LayoutDashboard, Sparkles, Tag, Gift, Star, Heart, Rocket, Crown,
   Trophy, Package, Save, Globe, Eye,
@@ -59,13 +59,6 @@ interface CouponGroup {
   createdAt: string;
 }
 
-interface SystemSetting {
-  id: number;
-  key: string;
-  value: string;
-  description: string;
-}
-
 interface UserRow {
   id: number;
   name: string;
@@ -88,27 +81,6 @@ const GROUP_ICONS: Record<string, any> = {
   tag: Tag, gift: Gift, star: Star, heart: Heart, rocket: Rocket, zap: Zap,
   crown: Crown, sparkles: Sparkles, trophy: Trophy, package: Package,
 };
-
-const SETTINGS_ROWS: { key: string; label: string; desc: string; type: 'number' | 'currency' | 'select' | 'boolean' | 'text'; options?: string[]; def?: string; suffix?: string }[] = [
-  { key: 'price_pro_monthly', label: 'Pro Tier Price (Monthly)', desc: 'Set the monthly price for the Pro subscription tier.', type: 'currency', def: '9.99' },
-  { key: 'price_premium_monthly', label: 'Premium Tier Price (Monthly)', desc: 'Set the monthly price for the Premium subscription tier.', type: 'currency', def: '14.99' },
-  { key: 'feature_ai_tier', label: 'AI Features Gating', desc: 'Minimum tier required for AI Insights and Assistant.', type: 'select', options: ['free', 'pro', 'premium'], def: 'pro' },
-  { key: 'feature_collaboration_tier', label: 'Collaboration Gating', desc: 'Minimum tier required for Team Workspaces and Collaboration.', type: 'select', options: ['free', 'pro', 'premium'], def: 'pro' },
-  { key: 'feature_whiteboard_tier', label: 'Whiteboards Gating', desc: 'Minimum tier required for the Whiteboards feature.', type: 'select', options: ['free', 'pro', 'premium'], def: 'free' },
-  { key: 'feature_deepfocus_tier', label: 'Deep Focus Gating', desc: 'Minimum tier required for Deep Focus sessions.', type: 'select', options: ['free', 'pro', 'premium'], def: 'free' },
-  { key: 'signup_open', label: 'Allow New Signups', desc: 'Toggles whether new users can register on the platform.', type: 'boolean', def: 'true' },
-  { key: 'maintenance_mode', label: 'Maintenance Mode', desc: 'When enabled, users see a maintenance notice instead of the app.', type: 'boolean', def: 'false' },
-  { key: 'trial_days', label: 'Free Trial Length (days)', desc: 'Number of days a new account keeps trial access.', type: 'number', def: '7', suffix: ' days' },
-  { key: 'free_tier_task_limit', label: 'Free Tier Task Limit', desc: 'Maximum active tasks allowed on the free tier.', type: 'number', def: '40' },
-  { key: 'free_tier_goal_limit', label: 'Free Tier Goal Limit', desc: 'Maximum active goals allowed on the free tier.', type: 'number', def: '5' },
-  { key: 'free_tier_habit_limit', label: 'Free Tier Habit Limit', desc: 'Maximum active habits allowed on the free tier.', type: 'number', def: '4' },
-  { key: 'max_attachment_mb', label: 'Max Attachment Size (MB)', desc: 'Largest single file a user can attach.', type: 'number', def: '25', suffix: ' MB' },
-  { key: 'min_password_length', label: 'Minimum Password Length', desc: 'Shortest password allowed at registration.', type: 'number', def: '6', suffix: ' chars' },
-  { key: 'session_timeout_hours', label: 'Session Timeout (hours)', desc: 'How long a user stays signed in before re-authentication.', type: 'number', def: '24', suffix: ' h' },
-  { key: 'refund_days', label: 'Refund Window (days)', desc: 'Number of days after purchase a refund is granted.', type: 'number', def: '14', suffix: ' days' },
-  { key: 'default_language', label: 'Default Language', desc: 'Default UI language for new user accounts.', type: 'select', options: ['en', 'fr', 'es', 'de'], def: 'en' },
-  { key: 'support_contact_email', label: 'Support Contact Email', desc: 'Public support email shown across the product.', type: 'text', def: 'support@myplanner.app' },
-];
 
 const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: string; sections: { heading: string; body: string }[] }[] }[] = [
   {
@@ -288,11 +260,10 @@ const AUTO_MSG_TEMPLATES: Record<string, (v: { userName: string; ticketType: str
 };
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'settings' | 'users' | 'tickets'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'users' | 'tickets'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponGroups, setCouponGroups] = useState<CouponGroup[]>([]);
-  const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -323,21 +294,19 @@ const AdminDashboard = () => {
     setLoading(true);
     setError(null);
     try {
-      const [statsRes, couponsRes, settingsRes, usersRes, groupsRes] = await Promise.all([
+      const [statsRes, couponsRes, usersRes, groupsRes] = await Promise.all([
         fetch('/api/admin/stats', { credentials: 'include' }),
         fetch('/api/admin/coupons', { credentials: 'include' }),
-        fetch('/api/admin/settings', { credentials: 'include' }),
         fetch('/api/admin/users', { credentials: 'include' }),
         fetch('/api/admin/coupon-groups', { credentials: 'include' }),
       ]);
 
-      if ([statsRes, couponsRes, settingsRes, usersRes, groupsRes].some(res => !res.ok)) {
+      if ([statsRes, couponsRes, usersRes, groupsRes].some(res => !res.ok)) {
         throw new Error('One or more API requests failed');
       }
 
       if (statsRes.ok) setStats(await statsRes.json());
       if (couponsRes.ok) setCoupons(await couponsRes.json());
-      if (settingsRes.ok) setSettings(await settingsRes.json());
       if (usersRes.ok) setUsers(await usersRes.json());
       if (groupsRes.ok) setCouponGroups(await groupsRes.json());
     } catch (error) {
@@ -616,26 +585,6 @@ const AdminDashboard = () => {
       if (!res.ok) fetchData();
     } catch {
       fetchData();
-    }
-  };
-
-  const handleUpdateSetting = async (key: string, value: string) => {
-    try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ key, value })
-      });
-      if (res.ok) {
-        toast({ title: 'Success', description: 'Setting updated' });
-        fetchData();
-      } else {
-        const errorData = await res.json();
-        toast({ title: 'Error', description: errorData.error || 'Failed to update setting', variant: 'destructive' });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update setting', variant: 'destructive' });
     }
   };
 
@@ -949,74 +898,6 @@ if (loading && !stats) {
     );
   };
 
-  const renderSettingsRow = (setting: typeof SETTINGS_ROWS[number]) => {
-    const dbSetting = settings.find(s => s.key === setting.key);
-    const value = dbSetting?.value ?? setting.def ?? '';
-    if (setting.type === 'boolean') {
-      const on = value === 'true';
-      return (
-        <button
-          onClick={() => handleUpdateSetting(setting.key, on ? 'false' : 'true')}
-          className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${on ? 'bg-primary' : 'bg-muted'}`}
-        >
-          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${on ? 'left-5' : 'left-1'}`} />
-        </button>
-      );
-    }
-    if (setting.type === 'select') {
-      return (
-        <Select value={value} onValueChange={(v) => handleUpdateSetting(setting.key, v)}>
-          <SelectTrigger className="bg-background border border-white/10 rounded-xl px-4 py-2 font-medium h-9">
-            <SelectValue placeholder="Select" />
-          </SelectTrigger>
-          <SelectContent>
-            {setting.options?.map(opt => (
-              <SelectItem key={opt} value={opt}>{opt.toUpperCase()}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      );
-    }
-    const inputCommon = "bg-background border border-white/10 rounded-xl px-4 py-2 font-bold text-center outline-none focus:border-primary transition-colors";
-    if (setting.type === 'currency') {
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">$</span>
-          <input
-            type="number" step="0.01"
-            className={`${inputCommon} w-24`}
-            defaultValue={value}
-            onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          />
-        </div>
-      );
-    }
-    if (setting.type === 'number') {
-      return (
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            className={`${inputCommon} w-24`}
-            defaultValue={value}
-            onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          />
-          {setting.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{setting.suffix}</span>}
-        </div>
-      );
-    }
-    return (
-      <input
-        type="text"
-        className={`${inputCommon} w-64 text-left`}
-        defaultValue={value}
-        onBlur={(e) => handleUpdateSetting(setting.key, e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      />
-    );
-  };
-
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background/50">
       {/* Header - aligned with the rest of the app (h-16, inline with the MyPlanner brand row) */}
@@ -1028,7 +909,7 @@ if (loading && !stats) {
           <h1 className="text-lg font-bold text-foreground whitespace-nowrap">Admin Center</h1>
         </div>
         <div className="flex items-center gap-1 bg-muted p-1 rounded-xl flex-shrink-0">
-          {(['overview', 'coupons', 'settings', 'users', 'tickets'] as const).map(tab => (
+          {(['overview', 'coupons', 'users', 'tickets'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1233,39 +1114,7 @@ if (loading && !stats) {
           </div>
         )}
 
-{activeTab === 'settings' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="glass rounded-[2rem] overflow-hidden border-white/10 shadow-2xl">
-              <div className="p-8 bg-primary/5 border-b border-white/5">
-                <h2 className="text-2xl font-black italic flex items-center gap-2">
-                  <Settings className="w-6 h-6 text-primary" />
-                  System Configuration & Feature Gating
-                </h2>
-                <p className="text-muted-foreground">Adjust platform parameters and control feature access levels in real-time. Every change saves immediately.</p>
-              </div>
-
-              <div className="divide-y divide-white/5 p-4">
-                {SETTINGS_ROWS.map((setting) => (
-                  <div key={setting.key} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-white/5 transition-all">
-                    <div className="max-w-md">
-                      <h4 className="font-bold text-lg">{setting.label}</h4>
-                      <p className="text-sm text-muted-foreground italic">{setting.desc}</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {renderSettingsRow(setting)}
-                      <span className="text-emerald-500 flex items-center gap-1 text-xs font-bold">
-                        <Check className="w-4 h-4" />
-                        Live
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'users' && (
+{activeTab === 'users' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             {activeUserView ? (
               <div className="glass rounded-[2rem] overflow-hidden border-white/10 shadow-2xl">
@@ -1689,12 +1538,6 @@ if (loading && !stats) {
                     <SelectItem value="Free">Free</SelectItem>
                     <SelectItem value="Premium">Premium</SelectItem>
                     <SelectItem value="Pro">Pro</SelectItem>
-                    <SelectItem value="Premium Family">Premium Family</SelectItem>
-                    <SelectItem value="Pro Family">Pro Family</SelectItem>
-                    <SelectItem value="School Premium">School Premium</SelectItem>
-                    <SelectItem value="School Pro">School Pro</SelectItem>
-                    <SelectItem value="Business Premium">Business Premium</SelectItem>
-                    <SelectItem value="Business Pro">Business Pro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1863,12 +1706,6 @@ if (loading && !stats) {
                     <SelectItem value="Free">Free</SelectItem>
                     <SelectItem value="Premium">Premium</SelectItem>
                     <SelectItem value="Pro">Pro</SelectItem>
-                    <SelectItem value="Premium Family">Premium Family</SelectItem>
-                    <SelectItem value="Pro Family">Pro Family</SelectItem>
-                    <SelectItem value="School Premium">School Premium</SelectItem>
-                    <SelectItem value="School Pro">School Pro</SelectItem>
-                    <SelectItem value="Business Premium">Business Premium</SelectItem>
-                    <SelectItem value="Business Pro">Business Pro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
