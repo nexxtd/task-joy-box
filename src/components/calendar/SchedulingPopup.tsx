@@ -135,14 +135,14 @@ const SchedulingPopup: React.FC<SchedulingPopupProps> = ({
                 {type === 'task' ? 'Sub-task to focus on' : 'Sub-goal to focus on'}
               </label>
               <Select
-                value={selectedSubId || ''}
-                onValueChange={v => setSelectedSubId(v || null)}
+                value={selectedSubId || 'none'}
+                onValueChange={v => setSelectedSubId(v === 'none' ? null : v)}
               >
                 <SelectTrigger className="w-full px-3.5 py-3 bg-background border border-border/60 rounded-xl text-sm h-auto">
                   <SelectValue placeholder="None — work on main item" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None — work on main item</SelectItem>
+                  <SelectItem value="none">None — work on main item</SelectItem>
                   {subItems.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
                   ))}

@@ -98,9 +98,10 @@ app.use((req, res, next) => {
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
 });
 
 const authLimiter = rateLimit({

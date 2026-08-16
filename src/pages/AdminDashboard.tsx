@@ -301,7 +301,7 @@ const AdminDashboard = () => {
   const [isAddingCoupon, setIsAddingCoupon] = useState(false);
   const [newCoupon, setNewCoupon] = useState({
     code: '', discountType: 'percentage', discountValue: 0, maxUses: '', restrictedToEmail: '',
-    restrictedToPlan: 'all', startDate: '', expiresAt: '', oneTimePerUser: false, groupId: '',
+    restrictedToPlan: 'all', startDate: '', expiresAt: '', oneTimePerUser: false, groupId: 'none',
   });
 
   // Coupon tab state
@@ -364,13 +364,13 @@ const AdminDashboard = () => {
           restrictedToEmail: newCoupon.restrictedToEmail || null,
           startDate: newCoupon.startDate || null,
           expiresAt: newCoupon.expiresAt || null,
-          groupId: newCoupon.groupId || null,
+          groupId: newCoupon.groupId === 'none' ? null : Number(newCoupon.groupId),
         })
       });
       if (res.ok) {
         toast({ title: 'Success', description: 'Coupon created successfully' });
         setIsAddingCoupon(false);
-        setNewCoupon({ code: '', discountType: 'percentage', discountValue: 0, maxUses: '', restrictedToEmail: '', restrictedToPlan: 'all', startDate: '', expiresAt: '', oneTimePerUser: false, groupId: '' });
+        setNewCoupon({ code: '', discountType: 'percentage', discountValue: 0, maxUses: '', restrictedToEmail: '', restrictedToPlan: 'all', startDate: '', expiresAt: '', oneTimePerUser: false, groupId: 'none' });
         fetchData();
       } else {
         const errorData = await res.json();
@@ -1588,23 +1588,23 @@ if (loading && !stats) {
                 <p className="text-xs text-muted-foreground mt-1">Code will be converted to uppercase</p>
               </div>
 
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Group</label>
-                <Select value={newCoupon.groupId} onValueChange={(value) => setNewCoupon({ ...newCoupon, groupId: value })}>
-                  <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
-                    <SelectValue placeholder="Select group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">No group</SelectItem>
-                    {couponGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+<div>
+                  <label className="text-sm font-medium text-foreground mb-2 block">Group</label>
+                  <Select value={newCoupon.groupId} onValueChange={(value) => setNewCoupon({ ...newCoupon, groupId: value })}>
+                    <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
+                      <SelectValue placeholder="Select group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No group</SelectItem>
+                      {couponGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-2 block">Discount type</label>
-                  <Select value={newCoupon.discountType} onValueChange={(value) => setNewCoupon({ ...newCoupon, discountType: value as any })}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">Discount type</label>
+                    <Select value={newCoupon.discountType} onValueChange={(value) => setNewCoupon({ ...newCoupon, discountType: value as any })}>
                     <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -1767,12 +1767,12 @@ if (loading && !stats) {
 
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Group</label>
-                <Select value={editingCoupon.groupId ? String(editingCoupon.groupId) : ''} onValueChange={(value) => setEditingCoupon({ ...editingCoupon, groupId: value ? Number(value) : null })}>
+                <Select value={editingCoupon.groupId ? String(editingCoupon.groupId) : 'none'} onValueChange={(value) => setEditingCoupon({ ...editingCoupon, groupId: value === 'none' ? null : Number(value) })}>
                   <SelectTrigger className="w-full bg-background border border-input rounded-lg px-4 py-3 h-9">
                     <SelectValue placeholder="Select group" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No group</SelectItem>
+                    <SelectItem value="none">No group</SelectItem>
                     {couponGroups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1815,7 +1815,7 @@ if (loading && !stats) {
                   min="1"
                   placeholder="Leave empty for unlimited"
                   className="w-full bg-background border border-input rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                  value={editingCoupon.maxUses}
+                  value={editingCoupon.maxUses || ''}
                   onChange={e => setEditingCoupon({ ...editingCoupon, maxUses: e.target.value === '' ? null : Number(e.target.value) })}
                 />
               </div>

@@ -185,7 +185,7 @@ function delay(ms: number): Promise<void> {
 }
 
 // Add AI request function with retry and caching
-async function generateContentWithRetry(prompt: string, retries = 1, useFallback = true, forceFresh = false) {
+async function generateContentWithRetry(prompt: string, retries = 2, useFallback = true, forceFresh = false) {
   // Create cache key for this request
   const cacheKey = createCacheKey(prompt, AI_MODEL);
   const cached = requestCache.get(cacheKey);
@@ -224,10 +224,9 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
     } catch (error: any) {
       // Handle rate limit errors specifically
       if (error.status === 429) {
-        // Reduced delay for faster retries in professional environment
-        const delayMs = 3000; 
+        const delayMs = 3000 * (i + 1);
 
-        console.log(`Rate limit exceeded, retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries})`);
+        console.log(`Rate limit exceeded, retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries + 1})`);
         await delay(delayMs);
         continue;
       }
@@ -236,6 +235,14 @@ async function generateContentWithRetry(prompt: string, retries = 1, useFallback
       throw error;
     }
   }
+
+  // All retries exhausted — fall back to the last known-good response so the
+  // UI never shows an "AI unavailable" error for a previously-answered prompt.
+  if (cached) {
+    console.warn('AI request failed after retries; serving stale cached response.');
+    return cached.response;
+  }
+  throw new Error('Rate limit exceeded for AI requests');
 }
 
 // Enhanced route to get user data for AI

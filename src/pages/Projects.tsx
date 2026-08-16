@@ -552,18 +552,24 @@ const Projects: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const response = await fetch('/api/projects', { credentials: 'include' });
-        if (!response.ok) throw new Error(String(response.status));
-        const data = await response.json();
-        const loaded: ProjectMeta[] = data.projects || [];
-        setProjects(loaded);
-        if (!selectedProjectId && loaded[0]) setSelectedProjectId(loaded[0].id);
-        if (loaded.length === 0) setSelectedProjectId(null);
-      } catch (error) {
-        console.error('Failed to load projects:', error);
-        toast({ title: 'Projects unavailable', description: 'Could not load your projects.' });
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetch('/api/projects', { credentials: 'include' });
+          if (!response.ok) throw new Error(String(response.status));
+          const data = await response.json();
+          const loaded: ProjectMeta[] = data.projects || [];
+          setProjects(loaded);
+          if (!selectedProjectId && loaded[0]) setSelectedProjectId(loaded[0].id);
+          if (loaded.length === 0) setSelectedProjectId(null);
+          return;
+        } catch (error) {
+          lastError = error;
+          if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1500));
+        }
       }
+      console.error('Failed to load projects:', lastError);
+      toast({ title: 'Projects unavailable', description: 'Could not load your projects.' });
     };
     load();
   }, []);

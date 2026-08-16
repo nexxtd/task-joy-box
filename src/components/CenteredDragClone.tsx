@@ -20,11 +20,17 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    const onMove = (e: PointerEvent) => {
+    const onMove = (e: any) => {
       pointerRef.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener('pointermove', onMove, { passive: true });
-    return () => window.removeEventListener('pointermove', onMove);
+    window.addEventListener('dragover', onMove, { passive: true });
+    window.addEventListener('dragenter', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('dragover', onMove);
+      window.removeEventListener('dragenter', onMove);
+    };
   }, []);
 
   const match = String(style?.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
@@ -34,8 +40,9 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   const renderedW = style?.width ?? 0;
   const renderedH = style?.height ?? 0;
   const p = pointerRef.current;
-  const tx = p ? p.x - renderedW / 2 - (style?.left ?? 0) : dx;
-  const ty = p ? p.y - renderedH / 2 - (style?.top ?? 0) : dy;
+  const anchored = p !== null;
+  const tx = anchored ? p.x - renderedW / 2 : dx + (style?.left ?? 0);
+  const ty = anchored ? p.y - renderedH / 2 : dy + (style?.top ?? 0);
 
   return (
     <div
@@ -44,14 +51,14 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
       ref={innerRef}
       style={{
         position: 'fixed',
-        top: style?.top ?? 0,
-        left: style?.left ?? 0,
+        top: 0,
+        left: 0,
         boxSizing: 'border-box',
         width: renderedW / zoom,
         height: renderedH / zoom,
         zIndex: style?.zIndex ?? 5000,
         opacity: typeof style?.opacity === 'number' ? style.opacity : undefined,
-        transition: style?.transition,
+        transition: 'none',
         transform: `translate(${tx}px, ${ty}px) scale(${zoom})`,
         transformOrigin: '0 0',
         pointerEvents: 'none',

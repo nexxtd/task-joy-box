@@ -228,7 +228,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
             </button>
             {expandedPages.has(p.id) && (
               <div className="px-3 pb-2 pt-0.5">
-                {pageSections.map(sec => (
+                {(sections[p.id] || []).map(sec => (
                   <button
                     key={sec.id}
                     onClick={() => toggleSections(sec.id)}
