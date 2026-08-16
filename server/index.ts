@@ -31,6 +31,7 @@ import supportRoutes from './routes/support';
 import milestonesRoutes from './routes/milestones';
 import taskTemplatesRoutes from './routes/taskTemplates';
 import noteTemplatesRoutes from './routes/noteTemplates';
+import dashboardRoutes from './routes/dashboard';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
 import { pool } from './db';
@@ -252,6 +253,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/milestones', milestonesRoutes);
 app.use('/api/task-templates', taskTemplatesRoutes);
 app.use('/api/note-templates', noteTemplatesRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {

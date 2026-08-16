@@ -439,6 +439,20 @@ export async function initDatabase() {
     await addColumnIfNotExists('coupons', 'one_time_per_user', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('coupons', 'sort_order', 'INTEGER DEFAULT 0');
 
+    // --- COUPON GROUPS TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS coupon_groups (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT 'hsl(var(--muted-foreground))',
+        icon TEXT,
+        sort_order INTEGER DEFAULT 0 NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await addColumnIfNotExists('coupons', 'group_id', 'INTEGER REFERENCES coupon_groups(id) ON DELETE SET NULL');
+    console.log('Coupon groups table verified');
+
     // --- COUPON REDEMPTIONS TABLE ---
     await pool.query(`
       CREATE TABLE IF NOT EXISTS coupon_redemptions (
@@ -595,12 +609,30 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS project_chat_messages_project_id_idx ON project_chat_messages(project_id);`);
     console.log('Project chat messages table verified');
 
+    // --- USER PROFILE COLUMNS ---
+    await addColumnIfNotExists('users', 'location', 'TEXT');
+    await addColumnIfNotExists('users', 'last_active_at', 'TIMESTAMP');
+    console.log('User profile columns verified');
+
+    // --- DASHBOARD WIDGET USAGE TABLE ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS dashboard_widget_usage (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        widget_type TEXT NOT NULL,
+        count INTEGER DEFAULT 0 NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(user_id, widget_type)
+      );
+    `);
+    console.log('Dashboard widget usage table verified');
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     const rlsTables = [
       'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
       'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
-      'habit_snapshots', 'project_chat_messages',
+      'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
     ];
     for (const tbl of rlsTables) {
       try {

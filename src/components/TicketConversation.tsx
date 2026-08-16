@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Loader2, User } from 'lucide-react';
+import { X, Send, Loader2, User, Maximize2, Minimize2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export interface TicketMessage {
@@ -36,6 +36,8 @@ interface Props {
   onUserNameClick?: () => void;
   sending?: boolean;
   leftPanel?: React.ReactNode;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -56,6 +58,8 @@ export const TicketConversation: React.FC<Props> = ({
   onUserNameClick,
   sending = false,
   leftPanel,
+  expanded = false,
+  onToggleExpand,
 }) => {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -86,13 +90,18 @@ export const TicketConversation: React.FC<Props> = ({
   const headerLabel = viewAs === 'admin' ? ticket.userName || 'User' : 'Support Team';
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex gap-3" style={{ maxHeight: '85vh' }}>
+    <div
+      className={expanded
+        ? 'fixed inset-3 z-50 flex gap-3'
+        : 'fixed bottom-4 right-4 z-50 flex gap-3'}
+      style={expanded ? { maxHeight: 'none' } : { maxHeight: '85vh' }}
+    >
       {leftPanel && (
-        <div className="w-[520px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className={`${expanded ? 'flex-1 h-full' : 'w-[520px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>
           {leftPanel}
         </div>
       )}
-      <div className={`${leftPanel ? 'w-[420px]' : 'w-[400px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col`}>
+      <div className={`${expanded ? 'flex-1 h-full' : (leftPanel ? 'w-[420px]' : 'w-[400px]')} bg-card border border-border rounded-2xl shadow-2xl flex flex-col`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-mono text-muted-foreground flex-shrink-0">#{ticket.id}</span>
@@ -111,6 +120,15 @@ export const TicketConversation: React.FC<Props> = ({
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {onToggleExpand && (
+            <button
+              onClick={onToggleExpand}
+              title={expanded ? 'Exit full view' : 'Expand to full view'}
+              className="p-1.5 hover:bg-muted rounded-lg transition-colors"
+            >
+              {expanded ? <Minimize2 className="w-4 h-4 text-muted-foreground" /> : <Maximize2 className="w-4 h-4 text-muted-foreground" />}
+            </button>
+          )}
           {viewAs === 'admin' && onCloseTicket && !isClosed && (
             <button
               onClick={onCloseTicket}

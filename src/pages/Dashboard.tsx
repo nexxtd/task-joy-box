@@ -377,6 +377,20 @@ const Dashboard: React.FC = () => {
 
   const layoutKey = `dash_widgets_v2_${user?.id ?? 'anon'}`;
 
+  const reportedRef = useRef(false);
+  useEffect(() => {
+    if (!user || reportedRef.current || layout.length === 0) return;
+    reportedRef.current = true;
+    const types = layout.map((w: DashboardWidget) => w.type);
+    fetch('/api/dashboard/widget-usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ widgetTypes: types }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, user]);
+
   const defaultLayout = (): DashboardWidget[] => {
     const w = (type: DashboardWidgetType, title: string, col: number, row: number, wd: number, ht: number, projectId?: number | null): DashboardWidget => ({
       id: `${type}-${row}-${col}-${genKey()}`, type, title, col, row, w: wd, h: ht, projectId,

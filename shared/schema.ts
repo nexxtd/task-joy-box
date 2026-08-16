@@ -12,6 +12,8 @@ export const users = pgTable('users', {
   subscriptionTier: text('subscription_tier').default('free'),
   subscriptionStatus: text('subscription_status').default('inactive'),
   subscriptionEndsAt: text('subscription_ends_at'),
+  location: text('location'),
+  lastActiveAt: timestamp('last_active_at', { mode: 'string' }),
 });
 
 export const sessions = pgTable('sessions', {
@@ -403,6 +405,15 @@ export const taskAttachments = pgTable('task_attachments', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const couponGroups = pgTable('coupon_groups', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  color: text('color').default('hsl(var(--muted-foreground))').notNull(),
+  icon: text('icon'),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const coupons = pgTable('coupons', {
   id: serial('id').primaryKey(),
   code: text('code').notNull().unique(),
@@ -417,6 +428,7 @@ export const coupons = pgTable('coupons', {
   oneTimePerUser: boolean('one_time_per_user').default(false).notNull(),
   active: boolean('active').default(true).notNull(),
   sortOrder: integer('sort_order').default(0).notNull(),
+  groupId: integer('group_id').references(() => couponGroups.id),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -495,6 +507,14 @@ export const deepFocusSessions = pgTable('deep_focus_sessions', {
   durationMinutes: integer('duration_minutes').notNull(),
   completed: boolean('completed').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const dashboardWidgetUsage = pgTable('dashboard_widget_usage', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  widgetType: text('widget_type').notNull(),
+  count: integer('count').default(0).notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const supportTickets = pgTable('support_tickets', {
