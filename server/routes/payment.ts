@@ -3,6 +3,7 @@ import { db } from '../db';
 import { users, organizations, coupons, couponRedemptions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { getSettingNumber } from '../lib/settings';
 
 const router = Router();
 const frontendUrl = process.env.FRONTEND_URL || '';
@@ -150,8 +151,14 @@ const PRICING_TIERS = {
   },
 };
 
-router.get('/pricing', (_req: Request, res: Response) => {
-  res.json(PRICING_TIERS);
+router.get('/pricing', async (_req: Request, res: Response) => {
+  const proPrice = await getSettingNumber('price_pro_monthly', PRICING_TIERS.pro.price);
+  const premiumPrice = await getSettingNumber('price_premium_monthly', PRICING_TIERS.premium.price);
+  res.json({
+    ...PRICING_TIERS,
+    pro: { ...PRICING_TIERS.pro, price: proPrice },
+    premium: { ...PRICING_TIERS.premium, price: premiumPrice },
+  });
 });
 
 // Validate a coupon code

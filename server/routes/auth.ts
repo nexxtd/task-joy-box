@@ -5,10 +5,16 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import { db } from '../db';
-import { users, passwordResetTokens } from '../../shared/schema';
+import { users, passwordResetTokens, userSettings } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { isAdmin } from '../lib/adminUtils'; // Import the new utility
+import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings';
+
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch' };
+function languageNameFromCode(code: string): string {
+  return LANGUAGE_NAMES[code] || 'English';
+}
 
 const router = Router();
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
@@ -19,17 +25,18 @@ const COOKIE_OPTS_BASE = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production', // Secure in production only
   sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const, // Important for cross-site requests in production
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  maxAge: 24 * 60 * 60 * 1000, // default 24h; overridden with session_timeout_hours
 };
 
 // Function to issue JWT token
-function issueToken(res: Response, userId: number, email: string) {
+async function issueToken(res: Response, userId: number, email: string) {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) throw new Error('JWT_SECRET is not configured');
-  const token = jwt.sign({ userId, email }, jwtSecret, { expiresIn: '7d' });
+  const sessionHours = await getSettingNumber('session_timeout_hours', 24);
+  const token = jwt.sign({ userId, email }, jwtSecret, { expiresIn: `${sessionHours}h` });
   
   // In production, we need secure cookies with SameSite=None for cross-site requests
-  const cookieOpts = { ...COOKIE_OPTS_BASE };
+  const cookieOpts = { ...COOKIE_OPTS_BASE, maxAge: sessionHours * 60 * 60 * 1000 };
   
   // Set the token as HTTP-only cookie
   res.cookie('token', token, cookieOpts);
@@ -47,15 +54,28 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     if (!name || !email || !password) return res.status(400).json({ error: 'All fields are required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email' });
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+    if (!(await getSettingBoolean('signup_open', true))) {
+      return res.status(403).json({ error: 'Registrations are currently closed. Please try again later.' });
+    }
+
+    const minPasswordLength = await getSettingNumber('min_password_length', 8);
+    if (password.length < minPasswordLength) {
+      return res.status(400).json({ error: `Password must be at least ${minPasswordLength} characters` });
+    }
 
     const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (existing.length > 0) return res.status(400).json({ error: 'Email already in use' });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const [user] = await db.insert(users).values({ name, email, passwordHash }).returning();
+    const trialDays = await getSettingNumber('trial_days', 0);
+    const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
+    const insertValues: Record<string, any> = { name, email, passwordHash };
+    if (trialDays > 0) insertValues.subscriptionStatus = 'trialing';
+    const [user] = await db.insert(users).values(insertValues as any).returning();
+    await db.insert(userSettings).values({ userId: user.id, language: defaultLanguage }).onConflictDoNothing();
 
-    issueToken(res, user.id, user.email);
+    await issueToken(res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
@@ -86,7 +106,17 @@ router.post('/login', async (req: Request, res: Response) => {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
-    issueToken(res, user.id, user.email);
+    // Trial enforcement: once the trial window has passed, fall back to free/inactive.
+    const trialDays = await getSettingNumber('trial_days', 0);
+    if (user.subscriptionStatus === 'trialing' && trialDays > 0 && user.createdAt) {
+      const trialEnd = new Date(new Date(user.createdAt).getTime() + trialDays * 24 * 60 * 60 * 1000);
+      if (new Date() > trialEnd && user.subscriptionTier === 'free') {
+        await db.update(users).set({ subscriptionStatus: 'inactive' }).where(eq(users.id, user.id));
+        user.subscriptionStatus = 'inactive';
+      }
+    }
+
+    await await issueToken(res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
@@ -132,14 +162,22 @@ router.post('/google', async (req: Request, res: Response) => {
 
     let [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (!user) {
+      if (!(await getSettingBoolean('signup_open', true))) {
+        return res.status(403).json({ error: 'Registrations are currently closed. Please try again later.' });
+      }
       // Create new user if doesn't exist
-      [user] = await db.insert(users).values({ name, email, googleId, avatarUrl }).returning();
+      const trialDays = await getSettingNumber('trial_days', 0);
+      const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
+      const googleInsert: Record<string, any> = { name, email, googleId, avatarUrl };
+      if (trialDays > 0) googleInsert.subscriptionStatus = 'trialing';
+      [user] = await db.insert(users).values(googleInsert as any).returning();
+      await db.insert(userSettings).values({ userId: user.id, language: defaultLanguage }).onConflictDoNothing();
     } else if (!user.googleId) {
       // Update existing user with Google ID if not already set
       await db.update(users).set({ googleId, avatarUrl }).where(eq(users.id, user.id));
     }
 
-    issueToken(res, user.id, user.email);
+    await issueToken(res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
@@ -194,7 +232,8 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ error: 'Token and password required' });
-    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const resetMinLength = await getSettingNumber('min_password_length', 8);
+    if (password.length < resetMinLength) return res.status(400).json({ error: `Password must be at least ${resetMinLength} characters` });
 
     const [resetRecord] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token)).limit(1);
     if (!resetRecord || resetRecord.used || new Date(resetRecord.expiresAt) < new Date()) {

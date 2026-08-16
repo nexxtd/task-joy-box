@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { habits, tags, habitTagAssignments, activityLogs, type InsertHabit } from '../../shared/schema';
+import { habits, tags, habitTagAssignments, activityLogs, users, type InsertHabit } from '../../shared/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { getSettingNumber } from '../lib/settings';
 
 const router = Router();
 
@@ -74,6 +75,23 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const freeLimit = await getSettingNumber('free_tier_habit_limit', 4);
+    if (freeLimit > 0) {
+      const [user] = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, req.userId!)).limit(1);
+      if ((user?.subscriptionTier || 'free') === 'free') {
+        const counts = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(habits)
+          .where(eq(habits.userId, req.userId!));
+        if (counts[0]?.count !== undefined && Number(counts[0].count) >= freeLimit) {
+          return res.status(403).json({
+            error: 'LIMIT_REACHED',
+            message: `Free plan allows up to ${freeLimit} habits. Upgrade to add more.`,
+            limit: freeLimit,
+          });
+        }
+      }
+    }
     const { title, category, color, checklists, subtasks, status, projectId, columnId, dailyTarget, dailyLogs, targetPeriod } = req.body;
     if (!title) return res.status(400).json({ error: 'Title is required' });
 

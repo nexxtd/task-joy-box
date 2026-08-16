@@ -1,10 +1,31 @@
 import express from 'express';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
-import { whiteboards, whiteboardItems, whiteboardConnections } from '../../shared/schema';
+import { whiteboards, whiteboardItems, whiteboardConnections, users } from '../../shared/schema';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { getSetting } from '../lib/settings';
+import { tierRank } from '../lib/tier';
 
 const router = express.Router();
+
+async function requireWhiteboardTier(req: AuthRequest, res: express.Response): Promise<boolean> {
+  const requiredTier = (await getSetting('feature_whiteboard_tier', 'free')) || 'free';
+  if (requiredTier === 'free') return true;
+  const [user] = await db.select({ subscriptionTier: users.subscriptionTier, subscriptionStatus: users.subscriptionStatus })
+    .from(users).where(eq(users.id, req.userId!)).limit(1);
+  const userTier = user?.subscriptionTier?.toLowerCase() || 'free';
+  const active = ['active', 'trialing'].includes(user?.subscriptionStatus || '');
+  if (tierRank(userTier) < tierRank(requiredTier) || !active) {
+    res.status(403).json({
+      error: 'Feature locked',
+      message: `${requiredTier.charAt(0).toUpperCase() + requiredTier.slice(1)} or higher subscription required for whiteboards`,
+      currentTier: userTier,
+      requiredTier,
+    });
+    return false;
+  }
+  return true;
+}
 
 // Get all whiteboards for the authenticated user
 router.get('/', requireAuth, async (req: AuthRequest, res) => {
@@ -67,6 +88,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
 // Create a new whiteboard
 router.post('/', requireAuth, async (req: AuthRequest, res) => {
   try {
+    if (!(await requireWhiteboardTier(req, res))) return;
     const { name, description, items = [], connections = [] } = req.body;
     const userId = req.userId!;
     

@@ -279,6 +279,7 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 const Support: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [supportEmail, setSupportEmail] = useState<string | null>(null);
   const urlView = searchParams.get('view');
   const urlFaq = searchParams.get('faq');
   const urlCat = searchParams.get('cat');
@@ -304,6 +305,21 @@ const Support: React.FC = () => {
   const openSubmit = () => { setView('submit'); };
   const openAi = () => { navigate('/ai-chat'); };
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.support_email) setSupportEmail(data.support_email);
+      } catch {
+        // Ignore — email just won't render.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   if (view === 'faqs') return <FAQsView onClose={() => setView('main')} initialFaqId={initialFaqId} />;
   if (view === 'resources') return <ResourcesView onClose={() => setView('main')} initialCatId={initialCatId} initialGuideId={initialGuideId} />;
   if (view === 'submit') return <SubmitView onClose={() => setView('main')} />;
@@ -319,6 +335,14 @@ const Support: React.FC = () => {
         </div>
       </header>
       <div className="p-8 max-w-3xl mx-auto">
+        {supportEmail && (
+          <div className="mb-4 text-sm text-muted-foreground flex items-center gap-2">
+            <span>Prefer email? Reach us directly at</span>
+            <a href={`mailto:${supportEmail}`} className="text-primary font-medium hover:underline">
+              {supportEmail}
+            </a>
+          </div>
+        )}
         <SupportContent
           onOpenAi={openAi}
           onOpenFaqs={openFaqs}

@@ -6,6 +6,8 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 import paypalSdk from 'paypal-rest-sdk';
 import crypto from 'crypto';
 import { encrypt, decrypt } from '../lib/encryption';
+import { getSetting } from '../lib/settings';
+import { tierRank } from '../lib/tier';
 
 const router = Router();
 
@@ -145,12 +147,13 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const userTier = userResult[0].subscriptionTier?.toLowerCase() || 'free';
     const userStatus = userResult[0].subscriptionStatus;
 
-    // Require Premium or higher for workspace creation
-    if (userTier === 'free' || (userTier !== 'premium' && userTier !== 'pro')) {
+    // Require the feature tier (from admin settings) for workspace creation
+    const requiredTier = (await getSetting('feature_collaboration_tier', 'pro')) || 'pro';
+    if (tierRank(userTier) < tierRank(requiredTier)) {
       return res.status(402).json({
         error: 'UPGRADE_REQUIRED',
-        message: 'Premium or higher subscription required to create workspaces',
-        requiredTier: 'premium',
+        message: `${requiredTier.charAt(0).toUpperCase() + requiredTier.slice(1)} or higher subscription required to create workspaces`,
+        requiredTier,
         currentTier: userTier,
       });
     }

@@ -28,6 +28,7 @@ import habitBoardRoutes from './routes/habitBoards';
 import whiteboardsRoutes from './routes/whiteboards';
 import deepFocusRoutes from './routes/deepFocus';
 import supportRoutes from './routes/support';
+import { getSettingBoolean, getSetting } from './lib/settings';
 import milestonesRoutes from './routes/milestones';
 import taskTemplatesRoutes from './routes/taskTemplates';
 import noteTemplatesRoutes from './routes/noteTemplates';
@@ -270,6 +271,18 @@ app.get('/api/health', async (_req, res) => {
       ok: false, 
       database: 'failed',
     });
+  }
+});
+
+// Public maintenance status - consumed by the client boot check
+app.get('/api/status', async (_req, res) => {
+  try {
+    const maintenanceMode = await getSettingBoolean('maintenance_mode', false);
+    const message = maintenanceMode ? await getSetting('maintenance_message', 'We are currently performing scheduled maintenance. Please check back shortly.') : null;
+    const supportEmail = await getSetting('support_contact_email', 'support@myplanner.app');
+    res.json({ maintenance_mode: maintenanceMode, message, support_email: supportEmail });
+  } catch (error) {
+    res.status(500).json({ maintenance_mode: false, message: null });
   }
 });
 

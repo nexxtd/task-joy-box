@@ -1,10 +1,31 @@
 import { Router } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { db } from '../db';
-import { deepFocusSessions } from '../../shared/schema';
+import { deepFocusSessions, users } from '../../shared/schema';
 import { eq, desc, sql } from 'drizzle-orm';
+import { getSetting } from '../lib/settings';
+import { tierRank } from '../lib/tier';
 
 const router = Router();
+
+async function requireFocusTier(req: AuthRequest, res: any): Promise<boolean> {
+  const requiredTier = (await getSetting('feature_deepfocus_tier', 'free')) || 'free';
+  if (requiredTier === 'free') return true;
+  const [user] = await db.select({ subscriptionTier: users.subscriptionTier, subscriptionStatus: users.subscriptionStatus })
+    .from(users).where(eq(users.id, req.userId!)).limit(1);
+  const userTier = user?.subscriptionTier?.toLowerCase() || 'free';
+  const active = ['active', 'trialing'].includes(user?.subscriptionStatus || '');
+  if (tierRank(userTier) < tierRank(requiredTier) || !active) {
+    res.status(403).json({
+      error: 'Feature locked',
+      message: `${requiredTier.charAt(0).toUpperCase() + requiredTier.slice(1)} or higher subscription required for Deep Focus`,
+      currentTier: userTier,
+      requiredTier,
+    });
+    return false;
+  }
+  return true;
+}
 
 router.get('/sessions', requireAuth, async (req: AuthRequest, res) => {
   try {
@@ -46,6 +67,7 @@ router.get('/sessions/today', requireAuth, async (req: AuthRequest, res) => {
 
 router.post('/sessions', requireAuth, async (req: AuthRequest, res) => {
   try {
+    if (!(await requireFocusTier(req, res))) return;
     const userId = req.userId!;
     const { taskId, taskName, durationMinutes, completed } = req.body;
 

@@ -6,6 +6,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { getSettingNumber } from '../lib/settings';
 
 const router = Router();
 
@@ -33,9 +34,11 @@ const storage = multer.diskStorage({
   },
 });
 
+// multer needs a static limit at load time; use a generous sandbag here and
+// enforce the configured max_attachment_mb setting inside the route handler.
 const upload = multer({ 
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
@@ -61,6 +64,16 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
     const taskId = parseInt(req.params.taskId);
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const maxMb = await getSettingNumber('max_attachment_mb', 25);
+    if (req.file.size > Math.max(1, maxMb) * 1024 * 1024) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(413).json({
+        error: 'FILE_TOO_LARGE',
+        message: `Attachment exceeds the ${maxMb} MB limit`,
+        limitMb: maxMb,
+      });
     }
 
     if (!await verifyTaskOwnership(taskId, req.userId!)) {

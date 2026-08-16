@@ -29,7 +29,7 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import Tutorial from "@/pages/Tutorial";
 import NotFound from "@/pages/NotFound";
 import WhiteboardPage from "@/pages/WhiteboardPage";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
@@ -129,6 +129,22 @@ const queryClient = new QueryClient();
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
+  const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setMaintenance(data);
+      } catch {
+        // Ignore — the app stays available if the status endpoint fails.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   if (loading) {
     return (
@@ -139,6 +155,16 @@ function ProtectedRoutes() {
   }
 
   if (!user) return <LoginPage />;
+
+  if (maintenance.maintenance_mode && !user.isAdmin) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <h1 className="text-2xl font-semibold">Under Maintenance</h1>
+        <p className="text-muted-foreground max-w-md">{maintenance.message || "We are currently performing scheduled maintenance. Please check back shortly."}</p>
+      </div>
+    );
+  }
 
   // Check if tutorial should be shown
   const shouldShowTutorial = user && !localStorage.getItem('tutorial_completed');

@@ -6,6 +6,8 @@ import { db } from '../db';
 import { users, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema';
 import { eq, desc } from 'drizzle-orm';
 import { getCalendarEventsForAI } from './calendar';
+import { getSetting } from '../lib/settings';
+import { tierRank } from '../lib/tier';
 
 const router = Router();
 
@@ -171,12 +173,15 @@ async function requireProTier(req: AuthRequest, res: Response) {
   const user = await getAuthenticatedUser(req, res);
   if (!user) return null;
 
-  if (user.subscriptionTier !== 'pro' && user.subscriptionTier !== 'premium' && user.subscriptionStatus !== 'active') {
+  const requiredTier = (await getSetting('feature_ai_tier', 'pro')) || 'pro';
+  const userTier = user.subscriptionTier?.toLowerCase() || 'free';
+  const active = ['active', 'trialing'].includes(user.subscriptionStatus || '');
+  if (tierRank(userTier) < tierRank(requiredTier) || !active) {
     res.status(403).json({
       error: 'Pro subscription required',
-      currentTier: user.subscriptionTier || 'free',
+      currentTier: userTier,
       currentStatus: user.subscriptionStatus || 'inactive',
-      requiredTier: 'pro',
+      requiredTier,
     });
     return null;
   }
@@ -188,12 +193,15 @@ async function requirePremiumTier(req: AuthRequest, res: Response) {
   const user = await getAuthenticatedUser(req, res);
   if (!user) return null;
 
-  if (user.subscriptionTier !== 'premium' && user.subscriptionTier !== 'pro' && user.subscriptionStatus !== 'active') {
+  const requiredTier = (await getSetting('feature_ai_tier', 'premium')) || 'premium';
+  const userTier = user.subscriptionTier?.toLowerCase() || 'free';
+  const active = ['active', 'trialing'].includes(user.subscriptionStatus || '');
+  if (tierRank(userTier) < tierRank(requiredTier) || !active) {
     res.status(403).json({
       error: 'Premium subscription required',
-      currentTier: user.subscriptionTier || 'free',
+      currentTier: userTier,
       currentStatus: user.subscriptionStatus || 'inactive',
-      requiredTier: 'premium',
+      requiredTier,
     });
     return null;
   }

@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { db } from '../db';
-import { boardSnapshots } from '../../shared/schema';
+import { boardSnapshots, users } from '../../shared/schema';
 import { eq, desc } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
+import { getSettingNumber } from '../lib/settings';
 
 const router = Router();
 
@@ -39,6 +40,19 @@ router.post('/snapshot', requireAuth, async (req: AuthRequest, res: Response) =>
     const { boardData } = req.body;
     if (!boardData) {
       return res.status(400).json({ error: 'Invalid board data' });
+    }
+
+    const freeLimit = await getSettingNumber('free_tier_task_limit', 40);
+    if (freeLimit > 0) {
+      const [user] = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, userId)).limit(1);
+      const incomingTasks = Array.isArray(boardData.tasks) ? boardData.tasks.length : 0;
+      if ((user?.subscriptionTier || 'free') === 'free' && incomingTasks > freeLimit) {
+        return res.status(403).json({
+          error: 'LIMIT_REACHED',
+          message: `Free plan allows up to ${freeLimit} tasks. Upgrade to add more.`,
+          limit: freeLimit,
+        });
+      }
     }
 
     // Delete old snapshots to keep only the latest (simple approach)
