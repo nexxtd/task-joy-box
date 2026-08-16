@@ -48,6 +48,28 @@ function getOpenRouter(): OpenAI | null {
 
 const AI_MODEL = process.env.AI_MODEL || 'openrouter/free';
 
+// Free-tier rotation: `openrouter/free` auto-routes to whichever free model has
+// capacity, but each free model has its own rate limit. When one is exhausted
+// or flaky, cycle through the other live free models so a single model's quota
+// can't take down the whole AI service.
+const FREE_MODEL_ROTATION = [
+  'openrouter/free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'dots-studio/dots-3-note-preview:free',
+  'openai/gpt-oss-20b:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'google/gemma-4-26b-a4b-it:free',
+];
+
+function modelForAttempt(attempt: number): string {
+  const pool = AI_MODEL === 'openrouter/free'
+    ? FREE_MODEL_ROTATION
+    : [AI_MODEL, ...FREE_MODEL_ROTATION.filter(m => m !== AI_MODEL)];
+  return pool[attempt % pool.length];
+}
+
 // Helper function to create cache key based on request parameters
 function createCacheKey(input: string, model: string): string {
   // Create a hash-like key from the input and model
@@ -202,10 +224,11 @@ async function generateContentWithRetry(prompt: string, retries = 2, useFallback
   }
 
   for (let i = 0; i <= retries; i++) {
+    const model = modelForAttempt(i);
     try {
       const completion = await client.chat.completions.create({
         messages: [{ role: 'user', content: prompt }],
-        model: AI_MODEL,
+        model,
         temperature: 0.7,
         max_tokens: 4000,
       });
@@ -222,11 +245,11 @@ async function generateContentWithRetry(prompt: string, retries = 2, useFallback
 
       return responseText;
     } catch (error: any) {
-      // Handle rate limit errors specifically
-      if (error.status === 429) {
-        const delayMs = 3000 * (i + 1);
+      // Rate limit / transient upstream errors: back off, then move to the next model
+      if (error.status === 429 || (error.status >= 500 && error.status <= 599)) {
+        const delayMs = 3000;
 
-        console.log(`Rate limit exceeded, retrying in ${delayMs}ms... (Attempt ${i + 1}/${retries + 1})`);
+        console.log(`AI request failed (${error.status}) on ${model}; retrying with ${modelForAttempt(i + 1)} in ${delayMs}ms... (Attempt ${i + 1}/${retries + 1})`);
         await delay(delayMs);
         continue;
       }
@@ -986,11 +1009,14 @@ Rules:
     const client = getOpenRouter();
     if (client) {
       try {
-        let completion: any;
-        for (let attempt = 0; attempt <= 2; attempt++) {
+        // Try up to 4 attempts across different free models so a single model's
+        // rate limit or outage can't force the offline fallback reply.
+        const maxAttempts = 4;
+        for (let attempt = 0; attempt < maxAttempts && !aiOk; attempt++) {
+          const model = modelForAttempt(attempt);
           try {
-            completion = await client.chat.completions.create({
-              model: AI_MODEL,
+            const completion = await client.chat.completions.create({
+              model,
               temperature: 0.6,
               max_tokens: 1600,
               messages: [
@@ -998,22 +1024,24 @@ Rules:
                 { role: 'user', content: safeMessage }
               ],
             });
-            break;
+            responseText = completion?.choices?.[0]?.message?.content || '';
+            aiOk = Boolean(responseText.trim());
+            if (aiOk) {
+              console.log(`AI chat succeeded with model ${model}`);
+            } else {
+              console.warn(`AI chat attempt ${attempt + 1}/${maxAttempts}: empty response from ${model}; trying next model.`);
+            }
           } catch (err: any) {
             const status = err?.status || err?.error?.status;
-            if (attempt < 2 && (status === 429 || (status >= 500 && status <= 599))) {
-              await delay(2500 * (attempt + 1));
-              continue;
+            if (status === 429 || (status >= 500 && status <= 599)) {
+              console.warn(`AI chat attempt ${attempt + 1}/${maxAttempts} failed (${status}) on ${model}; trying next model.`);
+              if (attempt < maxAttempts - 1) {
+                await delay(2500);
+              }
+            } else {
+              throw err;
             }
-            throw err;
           }
-        }
-
-        if (!completion?.choices?.length) {
-          console.error('AI chat: empty choices response');
-        } else {
-          responseText = completion.choices[0].message?.content || '';
-          aiOk = Boolean(responseText.trim());
         }
       } catch (e: any) {
         console.error('AI chat upstream request failed:', e?.message || e);
