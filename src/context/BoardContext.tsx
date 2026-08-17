@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem } from '@/types/board';
 import { emptyBoard } from '@/data/initialBoard';
 import { useAuth } from '@/context/AuthContext';
@@ -110,6 +110,25 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
 
+  // Latest board + dirty flag for debounced background saves (avoid uploading the full
+  // board for every keystroke/mutation, and never upload anything while the user is idle)
+  const boardRef = useRef<Board>({ ...emptyBoard });
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushBoardSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (!dirtyRef.current || !user) return;
+    const boardToSave = boardRef.current;
+    dirtyRef.current = false;
+    saveBoard(user.id, boardToSave).then(ok => {
+      if (ok) setLastSyncTime(new Date());
+    });
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       setLoading(true);
@@ -155,19 +174,36 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [user?.id, loading, board?.id]);
 
-  // Periodic sync to server (every 30 seconds) for cross-device consistency
+  // Periodic safety-net sync to server (every 30 seconds) — only uploads when the
+  // board actually changed since the last save (dirty flag), so idle tabs upload nothing
   useEffect(() => {
     if (!user) return;
 
-    const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, board);
-      if (success) {
-        setLastSyncTime(new Date());
-      }
-    }, 30000); // Sync every 30 seconds
+    const syncInterval = setInterval(() => {
+      flushBoardSave();
+    }, 30000);
 
     return () => clearInterval(syncInterval);
-  }, [user?.id, board]);
+  }, [user?.id, flushBoardSave]);
+
+  // Flush pending changes when the tab is hidden/closed so nothing is lost
+  useEffect(() => {
+    if (!user) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushBoardSave();
+    };
+    const handlePageHide = () => flushBoardSave();
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      flushBoardSave();
+    };
+  }, [user?.id, flushBoardSave]);
 
   // Sync when window regains focus (user returns from another device/tab)
   useEffect(() => {
@@ -217,10 +253,13 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const persist = useCallback((updater: (b: Board) => Board) => {
     setBoard(prev => {
       const next = updater(prev);
-      if (user) saveBoard(user.id, next);
+      boardRef.current = next;
+      dirtyRef.current = true;
       return next;
     });
-  }, [user]);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushBoardSave, 1500);
+  }, [flushBoardSave]);
 
   const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
     const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';

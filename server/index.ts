@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
@@ -86,6 +87,9 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+
+// Gzip-compress JSON API and static responses (base64 image JSON compresses ~10-15%)
+app.use(compression());
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -290,7 +294,18 @@ app.get('/api/status', async (_req, res) => {
 if (isProduction) {
   const distPath = path.join(process.cwd(), 'dist');
   if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        const normalized = filePath.replace(/\\/g, '/');
+        // Vite emits content-hashed filenames — safe to cache forever
+        if (normalized.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          // index.html etc. must revalidate to pick up new hashed asset names
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }));
     app.get('*', (req, res) => {
       // Don't serve index.html for API routes
       if (!req.path.startsWith('/api/')) {

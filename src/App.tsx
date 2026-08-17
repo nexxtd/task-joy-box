@@ -12,24 +12,25 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
-import Dashboard from "@/pages/Dashboard";
-import Projects from "@/pages/Projects";
-import Tasks from "@/pages/Tasks";
-import CalendarPage from "@/pages/CalendarPage";
-import Insights from "@/pages/Insights";
-import Notes from "@/pages/Notes";
-import Goals from "@/pages/Goals";
-import Collaboration from "@/pages/Collaboration";
-import Pricing from "@/pages/Pricing";
-import SettingsPage from "@/pages/SettingsPage";
-import AIChat from "@/pages/AIChat";
-import Habits from "@/pages/Habits";
-import Support from "@/pages/Support";
-import AdminDashboard from "@/pages/AdminDashboard";
-import Tutorial from "@/pages/Tutorial";
-import NotFound from "@/pages/NotFound";
-import WhiteboardPage from "@/pages/WhiteboardPage";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Projects = lazy(() => import("@/pages/Projects"));
+const Tasks = lazy(() => import("@/pages/Tasks"));
+const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
+const Insights = lazy(() => import("@/pages/Insights"));
+const Notes = lazy(() => import("@/pages/Notes"));
+const Goals = lazy(() => import("@/pages/Goals"));
+const Collaboration = lazy(() => import("@/pages/Collaboration"));
+const Pricing = lazy(() => import("@/pages/Pricing"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const AIChat = lazy(() => import("@/pages/AIChat"));
+const Habits = lazy(() => import("@/pages/Habits"));
+const Support = lazy(() => import("@/pages/Support"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const Tutorial = lazy(() => import("@/pages/Tutorial"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const WhiteboardPage = lazy(() => import("@/pages/WhiteboardPage"));
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
@@ -177,26 +178,26 @@ function ProtectedRoutes() {
             <Notifier />
             <AppearanceSync />
             <EnergyPopup />
-            {shouldShowTutorial && <Tutorial />}
+            {shouldShowTutorial && <Suspense fallback={null}><Tutorial /></Suspense>}
             {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
             <Routes>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/projects" element={<Projects />} />
-                <Route path="/tasks" element={<Tasks />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/insights" element={<Insights />} />
-                <Route path="/notes" element={<Notes />} />
-                <Route path="/goals" element={<Goals />} />
-                <Route path="/habits" element={<Habits />} />
-                <Route path="/support" element={<Support />} />
-                <Route path="/collaboration" element={<Collaboration />} />
-                <Route path="/ai-chat" element={<AIChat />} />
-                <Route path="/pricing" element={<Pricing />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
+                <Route path="/projects" element={<Suspense fallback={<PageLoader />}><Projects /></Suspense>} />
+                <Route path="/tasks" element={<Suspense fallback={<PageLoader />}><Tasks /></Suspense>} />
+                <Route path="/calendar" element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
+                <Route path="/insights" element={<Suspense fallback={<PageLoader />}><Insights /></Suspense>} />
+                <Route path="/notes" element={<Suspense fallback={<PageLoader />}><Notes /></Suspense>} />
+                <Route path="/goals" element={<Suspense fallback={<PageLoader />}><Goals /></Suspense>} />
+                <Route path="/habits" element={<Suspense fallback={<PageLoader />}><Habits /></Suspense>} />
+                <Route path="/support" element={<Suspense fallback={<PageLoader />}><Support /></Suspense>} />
+                <Route path="/collaboration" element={<Suspense fallback={<PageLoader />}><Collaboration /></Suspense>} />
+                <Route path="/ai-chat" element={<Suspense fallback={<PageLoader />}><AIChat /></Suspense>} />
+                <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><Pricing /></Suspense>} />
+                <Route path="/settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
+                <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
               </Route>
-              <Route path="/whiteboard/:id" element={<WhiteboardPage />} />
+              <Route path="/whiteboard/:id" element={<Suspense fallback={<PageLoader />}><WhiteboardPage /></Suspense>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </HabitsProvider>
@@ -205,6 +206,12 @@ function ProtectedRoutes() {
     </BoardProvider>
   );
 }
+
+const PageLoader = () => (
+  <div className="h-screen flex items-center justify-center bg-background">
+    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 const App = () => (
   <ThemeProvider>
