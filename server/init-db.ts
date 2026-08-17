@@ -609,6 +609,25 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS project_chat_messages_project_id_idx ON project_chat_messages(project_id);`);
     console.log('Project chat messages table verified');
 
+    // --- PENDING PAYMENTS (PayPal order intent tracking) ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        order_id TEXT NOT NULL UNIQUE,
+        tier TEXT NOT NULL,
+        plan_type TEXT,
+        seats INTEGER,
+        org_id INTEGER,
+        coupon_id INTEGER,
+        amount_cents INTEGER NOT NULL,
+        status TEXT DEFAULT 'pending' NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS pending_payments_user_id_idx ON pending_payments(user_id);`);
+    console.log('Pending payments table verified');
+
     // --- USER PROFILE COLUMNS ---
     await addColumnIfNotExists('users', 'location', 'TEXT');
     await addColumnIfNotExists('users', 'last_active_at', 'TIMESTAMP');

@@ -83,8 +83,9 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
         ...(normalized ? { name: normalized } : {}),
         ...(typeof color === 'string' && color ? { color } : {}),
       })
-      .where(eq(tags.id, tagId))
+      .where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)))
       .returning();
+    if (!updated) { res.status(404).json({ error: 'Tag not found' }); return; }
     res.json(updated);
   } catch (error) {
     console.error('Rename tag error:', error);

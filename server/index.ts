@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
@@ -51,6 +52,7 @@ sessionStore.on('error', (error: any) => {
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
+app.disable('x-powered-by');
 const isProduction = process.env.NODE_ENV === 'production';
 // Use the RENDER_EXTERNAL_URL if available, otherwise default to a standard URL
 const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || 'https://task-joy-box.onrender.com';
@@ -196,9 +198,11 @@ if (fs.existsSync(path.join(process.cwd(), 'uploads'))) {
     if (!token) {
       return res.status(401).json({ error: 'Authentication required' });
     }
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ error: 'Server configuration error' });
+    }
     try {
-      const jwt = require('jsonwebtoken');
-      jwt.verify(token, process.env.JWT_SECRET || '');
+      jwt.verify(token, process.env.JWT_SECRET);
       next();
     } catch {
       return res.status(401).json({ error: 'Invalid token' });

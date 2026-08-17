@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { users, organizations, coupons, couponRedemptions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
+import { users, organizations, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth';
 import { getSettingNumber } from '../lib/settings';
@@ -274,6 +274,21 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
 
     const { approvalUrl, paymentId } = await createPayPalOrder(paymentData);
     console.log('PayPal order created successfully:', { paymentId, approvalUrl });
+
+    // Record the exact purchase intent so the return URL can't be tampered with
+    // (tier/seats/coupon are read back from this record, never from the query string).
+    await db.insert(pendingPayments).values({
+      userId: req.userId!,
+      orderId: paymentId,
+      tier,
+      planType,
+      couponId,
+      amountCents: Math.round(adjustedPrice * 100),
+    }).onConflictDoUpdate({
+      target: pendingPayments.orderId,
+      set: { userId: req.userId!, tier, planType, couponId, amountCents: Math.round(adjustedPrice * 100), status: 'pending' },
+    });
+
     res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating checkout session:', error);
@@ -314,6 +329,20 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
       cancelUrl: `${appBaseUrl}/collaboration?org_payment=cancelled`,
       description: `Organization Seats — ${selectedTier.name} (${parsedSeats} seats)`,
     });
+
+    await db.insert(pendingPayments).values({
+      userId: req.userId!,
+      orderId: paymentId,
+      tier: tier as string,
+      planType: 'org',
+      seats: parsedSeats,
+      orgId: parsedOrgId,
+      amountCents: Math.round(total * 100),
+    }).onConflictDoUpdate({
+      target: pendingPayments.orderId,
+      set: { userId: req.userId!, tier: tier as string, planType: 'org', seats: parsedSeats, orgId: parsedOrgId, amountCents: Math.round(total * 100), status: 'pending' },
+    });
+
     res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating org checkout session:', error);
@@ -329,8 +358,14 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
   const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
   if (!paymentId) return res.status(400).json({ error: 'Missing payment parameters' });
 
-  const tier = (req.query.tier as SubscriptionTier) || 'pro';
-  const couponId = req.query.couponId;
+  // The tier/coupon come from the recorded intent, never from the query string
+  const [intent] = await db.select().from(pendingPayments).where(eq(pendingPayments.orderId, paymentId)).limit(1);
+  if (!intent || intent.userId !== req.userId!) {
+    return res.status(403).json({ error: 'Payment session not found for this account. Please contact support.' });
+  }
+  if (intent.status !== 'pending') {
+    return res.status(409).json({ error: 'This payment has already been processed' });
+  }
 
   try {
     await capturePayPalOrder(paymentId);
@@ -345,22 +380,21 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
   try {
     await db.update(users)
       .set({
-        subscriptionTier: tier,
+        subscriptionTier: intent.tier,
         subscriptionStatus: 'active',
         subscriptionEndsAt: null,
       } as UpdateUser)
       .where(eq(users.id, req.userId!));
 
-    // Track coupon redemption
-    if (couponId) {
-      const parsedCouponId = parseInt(couponId as string);
+    // Track coupon redemption from the recorded intent
+    if (intent.couponId) {
       await db.insert(couponRedemptions).values({
-        couponId: parsedCouponId,
+        couponId: intent.couponId,
         userId: req.userId!,
       });
 
       // Increment used count
-      const [coupon] = await db.select().from(coupons).where(eq(coupons.id, parsedCouponId)).limit(1);
+      const [coupon] = await db.select().from(coupons).where(eq(coupons.id, intent.couponId)).limit(1);
       if (coupon) {
         const newUsedCount = coupon.usedCount + 1;
         const updateData: any = { usedCount: newUsedCount };
@@ -370,9 +404,22 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
           updateData.active = false;
         }
 
-        await db.update(coupons).set(updateData).where(eq(coupons.id, parsedCouponId));
+        await db.update(coupons).set(updateData).where(eq(coupons.id, intent.couponId));
       }
     }
+
+    // Record the completed transaction for revenue tracking
+    await db.insert(transactions).values({
+      userId: req.userId!,
+      amount: intent.amountCents,
+      currency: 'USD',
+      status: 'completed',
+      provider: 'paypal',
+      providerTransactionId: paymentId,
+      couponId: intent.couponId || null,
+    }).onConflictDoNothing({ target: transactions.providerTransactionId });
+
+    await db.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
 
     res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
   } catch (dbError) {
@@ -384,11 +431,16 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
 // Execute PayPal organization payment
 router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Response) => {
   const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
-  const { orgId, tier, seats } = req.query;
-  if (!paymentId || !orgId) return res.status(400).json({ error: 'Missing parameters' });
+  if (!paymentId) return res.status(400).json({ error: 'Missing parameters' });
 
-  const parsedOrgId = parseInt(orgId as string);
-  const parsedSeats = parseInt(seats as string);
+  // Seats/org/tier come from the recorded intent, never from the query string
+  const [intent] = await db.select().from(pendingPayments).where(eq(pendingPayments.orderId, paymentId)).limit(1);
+  if (!intent || intent.userId !== req.userId! || !intent.orgId) {
+    return res.status(403).json({ error: 'Payment session not found for this account. Please contact support.' });
+  }
+  if (intent.status !== 'pending') {
+    return res.status(409).json({ error: 'This payment has already been processed' });
+  }
 
   try {
     await capturePayPalOrder(paymentId);
@@ -399,8 +451,20 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
 
   try {
     await db.update(organizations)
-      .set({ status: 'active', tier: tier as string, maxSeats: parsedSeats } as UpdateOrganization)
-      .where(eq(organizations.id, parsedOrgId));
+      .set({ status: 'active', tier: intent.tier, maxSeats: intent.seats || 1 } as UpdateOrganization)
+      .where(eq(organizations.id, intent.orgId));
+
+    await db.insert(transactions).values({
+      userId: req.userId!,
+      amount: intent.amountCents,
+      currency: 'USD',
+      status: 'completed',
+      provider: 'paypal',
+      providerTransactionId: paymentId,
+    }).onConflictDoNothing({ target: transactions.providerTransactionId });
+
+    await db.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+
     res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
   } catch {
     res.status(500).json({ error: 'Failed to activate organization' });

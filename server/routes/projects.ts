@@ -354,6 +354,12 @@ router.post('/:projectId/leave', requireAuth, async (req: AuthRequest, res: Resp
 router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
+
     const result = await pool.query(
       `SELECT pcm.id, pcm.user_id as "userId", pcm.message, pcm.created_at as "createdAt", u.name as "authorName"
        FROM project_chat_messages pcm
@@ -373,6 +379,12 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
 router.post('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
+
     const { message } = req.body;
     if (!message || String(message).trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });

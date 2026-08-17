@@ -160,10 +160,19 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.post('/:id/tags', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const habitId = parseInt(req.params.id);
+    const habitExists = await db.select({ id: habits.id }).from(habits)
+      .where(and(eq(habits.id, habitId), eq(habits.userId, req.userId!))).limit(1);
+    if (habitExists.length === 0) return res.status(404).json({ error: 'Habit not found' });
+
     const { name, color, tagId } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Tag name is required' });
 
     let useTagId = tagId;
+    if (useTagId) {
+      const tagOwned = await db.select({ id: tags.id }).from(tags)
+        .where(and(eq(tags.id, useTagId), eq(tags.userId, req.userId!))).limit(1);
+      if (tagOwned.length === 0) return res.status(404).json({ error: 'Tag not found' });
+    }
     if (!useTagId) {
       const existing = await db.select().from(tags)
         .where(and(eq(tags.userId, req.userId!), eq(tags.name, name.trim().toLowerCase())));

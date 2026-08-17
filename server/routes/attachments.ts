@@ -77,6 +77,7 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
     }
 
     if (!await verifyTaskOwnership(taskId, req.userId!)) {
+      fs.unlink(req.file.path, () => {});
       return res.status(403).json({ error: 'Access denied' });
     }
 

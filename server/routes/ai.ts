@@ -1157,7 +1157,7 @@ router.delete('/chat-history', requireAuth, async (req: AuthRequest, res: Respon
 
 router.post('/pro/weekly-schedule', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    // if (!(await requireProTier(req, res))) return; // Removed Pro restriction
+    if (!(await requireProTier(req, res))) return;
 
     const client = getOpenRouter();
     if (!client) {
@@ -1491,7 +1491,7 @@ Only respond with valid JSON, no markdown.`;
 
 router.post('/pro/task-bundling', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    // if (!(await requireProTier(req, res))) return; // Removed Pro restriction
+    if (!(await requireProTier(req, res))) return;
 
     const client = getOpenRouter();
     if (!client) {

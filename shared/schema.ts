@@ -459,6 +459,22 @@ export const transactions = pgTable('transactions', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+// PayPal order intent — binds a created PayPal order to the exact plan/seats the
+// user paid for, so checkout return URLs can't be tampered with to upgrade tiers.
+export const pendingPayments = pgTable('pending_payments', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  orderId: text('order_id').notNull().unique(),
+  tier: text('tier').notNull(),
+  planType: text('plan_type'),
+  seats: integer('seats'),
+  orgId: integer('org_id'),
+  couponId: integer('coupon_id'),
+  amountCents: integer('amount_cents').notNull(),
+  status: text('status').default('pending').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 // New table for whiteboards
 export const whiteboards = pgTable('whiteboards', {
   id: serial('id').primaryKey(),

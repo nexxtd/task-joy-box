@@ -256,6 +256,11 @@ router.post('/invite', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'You are not a member of this workspace' });
     }
 
+    // Only the workspace owner can invite members
+    if (memberships[0].role !== 'owner') {
+      return res.status(403).json({ error: 'Only the workspace owner can invite members' });
+    }
+
     // Enforce seat limit first
     const currentMembers = await db
       .select()
@@ -324,16 +329,12 @@ router.post('/invite', requireAuth, async (req: AuthRequest, res: Response) => {
     // In a real app, you'd send an email here
     // For now, we'll create a temporary invite record or just return a message
 
-    // Generate a pending invite token
-    const inviteToken = crypto.randomBytes(32).toString('hex');
-
     // TODO: Store pending invite in database and send email
     // For now, return a message that user needs to register first
     res.status(202).json({
       message: 'Invitation prepared for ' + email,
       pending: true,
-      note: 'User will be added to workspace when they register with this email',
-      inviteToken
+      note: 'User will be added to workspace when they register with this email'
     });
   } catch (error) {
     console.error('Invite member to workspace error:', error);

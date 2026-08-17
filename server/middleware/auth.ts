@@ -24,7 +24,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   }
 
   try {
-    const payload = jwt.verify(token, jwtSecret) as { userId: number; email: string };
+    const payload = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { userId: number; email: string };
     req.userId = payload.userId;
     req.userEmail = payload.email;
     next();

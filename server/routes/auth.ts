@@ -116,7 +116,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
-    await await issueToken(res, user.id, user.email);
+    await issueToken(res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
