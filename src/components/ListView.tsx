@@ -666,9 +666,9 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     </div>
 
       {editingColumn && columnEditPos && createPortal(
-        <div className="fixed inset-0 z-50" onClick={() => { setEditingColumn(null); closeColumnEdit(); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setEditingColumn(null); closeColumnEdit(); }}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <span className="text-base font-bold text-foreground">Edit Column</span>
               <button onClick={() => { setEditingColumn(null); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">

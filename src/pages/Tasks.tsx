@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
-import heic2any from 'heic2any';
+import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import {
   ArrowDown,
   ArrowUp,
@@ -386,32 +386,9 @@ const getTaskStatus = (task: Task): TaskStatus => {
 const getStatusLabel = (status: TaskStatus) =>
   STATUS_OPTIONS.find(o => o.value === status)?.label || 'To Do';
 
-export const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+export const fileToDataUrl = (file: File): Promise<string> => dataUrlForFile(file);
 
-const imageToDataUrl = async (file: File): Promise<string> => {
-  const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-  if (isHeic) {
-    try {
-      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
-      const converted = Array.isArray(blob) ? blob[0] : blob;
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(converted);
-      });
-    } catch {
-      return fileToDataUrl(file);
-    }
-  }
-  return fileToDataUrl(file);
-};
+const imageToDataUrl = (file: File): Promise<string> => dataUrlForFile(file);
 
 const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
@@ -636,6 +613,7 @@ const Tasks: React.FC = () => {
     deleteChecklistItem,
     deleteTask,
     updateColumn,
+    reorderTasksInSection,
   } = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
@@ -759,6 +737,8 @@ const Tasks: React.FC = () => {
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
+  const [aiBuilderFiles, setAiBuilderFiles] = useState<File[]>([]);
+  const [aiBuilderImages, setAiBuilderImages] = useState<Attachment[]>([]);
   const [aiTaskDraft, setAiTaskDraft] = useState<CreateTaskInitialValues | null>(null);
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
@@ -1076,7 +1056,7 @@ const Tasks: React.FC = () => {
       const [removed] = ids.splice(result.source.index, 1);
       ids.splice(result.destination.index, 0, removed);
 
-      ids.forEach((id, idx) => updateTask(id, { order: idx }));
+      reorderTasksInSection(ids);
 
       const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
       const sectionIdSet = new Set(sectionTaskIds);
@@ -1410,6 +1390,10 @@ const Tasks: React.FC = () => {
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
+      if (aiBuilderFiles.length > 0) setNewFiles(prev => [...prev, ...aiBuilderFiles]);
+      if (aiBuilderImages.length > 0) setNewTaskImages(prev => [...prev, ...aiBuilderImages]);
+      setAiBuilderFiles([]);
+      setAiBuilderImages([]);
       setAddingTask(true);
     } catch (err: any) {
       setAiBuilderError(err.message || 'Something went wrong');
@@ -3548,9 +3532,9 @@ const Tasks: React.FC = () => {
         const col = board.columns.find(c => c.id === columnEditId);
         if (!col) return null;
         return createPortal(
-          <div className="fixed inset-0 z-50" onClick={() => { setColumnEditId(null); closeColumnEdit(); }}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setColumnEditId(null); closeColumnEdit(); }}>
             <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-            <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
+            <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-5">
                 <span className="text-base font-bold text-foreground">Edit Column</span>
                 <button onClick={() => { setColumnEditId(null); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -3640,7 +3624,7 @@ const Tasks: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-4 max-h-[calc(90vh-88px)] overflow-y-auto">
                 <textarea
                   autoFocus
                   value={aiBuilderInput}
@@ -3652,6 +3636,113 @@ const Tasks: React.FC = () => {
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
+
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <div className="flex items-center gap-2 px-4 py-3">
+                    <Paperclip className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                    {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
+                  </div>
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <Paperclip className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                        <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                      </div>
+                      <input
+                        type="file"
+                        multiple
+                        onChange={e => {
+                          if (!e.target.files) return;
+                          setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                    {aiBuilderFiles.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {aiBuilderFiles.map((file, fileIdx) => (
+                          <div key={`${file.name}-${fileIdx}`} className="relative group/att">
+                            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                <Paperclip className="w-5 h-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                                <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
+                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <div className="flex items-center gap-2 px-4 py-3">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {aiBuilderImages.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderImages.length})</span>}
+                  </div>
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <Image className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Click to upload</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                      </div>
+                      <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                        if (!e.target.files) return;
+                        const files = Array.from(e.target.files);
+                        const newImgs: Attachment[] = [];
+                        for (const file of files) {
+                          const fileUrl = await imageToDataUrl(file);
+                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                          newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                        }
+                        setAiBuilderImages(prev => [...prev, ...newImgs]);
+                        e.target.value = '';
+                      }} className="hidden" />
+                    </label>
+                    {aiBuilderImages.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {aiBuilderImages.map(img => (
+                          <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                            {img.fileUrl.match(/^data:image/) ? (
+                              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                              <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                              {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                            </div>
+                            <button
+                              onClick={() => setAiBuilderImages(prev => prev.filter(x => x.id !== img.id))}
+                              className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setAiBuilderOpen(false)}

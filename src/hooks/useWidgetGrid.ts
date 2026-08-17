@@ -75,8 +75,8 @@ export const cellStyle = (r: GridRect): React.CSSProperties => ({
 });
 
 type Gesture<T extends string> =
-  | { mode: 'move' | 'resize'; w: GridWidget<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number }
-  | { mode: 'panel'; def: GridWidgetDef<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number };
+  | { mode: 'move' | 'resize'; w: GridWidget<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number }
+  | { mode: 'panel'; def: GridWidgetDef<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number };
 
 export interface UseWidgetGridOptions<T extends string> {
   defs: GridWidgetDef<T>[];
@@ -255,6 +255,14 @@ export function useWidgetGrid<T extends string>({
       const dw = Math.round((e.clientX - g.sx) / colW);
       const dh = Math.round((e.clientY - g.sy) / CELL_H);
       rect = { col: g.col, row: g.row, w: clamp(g.ww + dw, 1, GRID_COLS - g.col + 1), h: clamp(g.hh + dh, 1, 30) };
+    } else if (g.mode === 'move') {
+      const colW = bounds.width / GRID_COLS;
+      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
+      const gx = (e.clientX - bounds.left) / colW + 1;
+      const gy = (e.clientY - bounds.top + scrollTop) / CELL_H + 1;
+      const col = clamp(Math.round(gx - g.grabCol), 1, GRID_COLS - g.ww + 1);
+      const row = Math.max(1, Math.round(gy - g.grabRow));
+      rect = { col, row, w: g.ww, h: g.hh };
     } else {
       const col = clamp(cell.col - Math.round((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
       const row = Math.max(1, cell.row - Math.round((g.hh - 1) / 2));
@@ -324,7 +332,17 @@ export function useWidgetGrid<T extends string>({
   const startGesture = useCallback((e: React.PointerEvent, widget: GridWidget<T>, mode: 'move' | 'resize') => {
     if (e.button !== 0) return;
     e.preventDefault();
-    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h };
+    const el = gridRef.current;
+    let grabCol = (widget.w - 1) / 2;
+    let grabRow = (widget.h - 1) / 2;
+    if (el) {
+      const bounds = el.getBoundingClientRect();
+      const colW = bounds.width / GRID_COLS;
+      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
+      grabCol = (e.clientX - bounds.left) / colW + 1 - widget.col;
+      grabRow = (e.clientY - bounds.top + scrollTop) / CELL_H + 1 - widget.row;
+    }
+    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h, grabCol, grabRow };
     const start: GridRect = { col: widget.col, row: widget.row, w: widget.w, h: widget.h };
     draftRef.current = start;
     setDraft(start);
@@ -356,7 +374,7 @@ export function useWidgetGrid<T extends string>({
       setPanelClosing(true);
       window.setTimeout(() => { setShowCustomize(false); setPanelClosing(false); }, 200);
       const cell = cellFromPoint(ev.clientX, ev.clientY);
-      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: p.def.w, hh: p.def.h };
+      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: p.def.w, hh: p.def.h, grabCol: (p.def.w - 1) / 2, grabRow: (p.def.h - 1) / 2 };
       setActiveDragId('__dragging__');
       setSuppressMotion(false);
       const rect: GridRect = { col: clamp(cell.col - Math.round((p.def.w - 1) / 2), 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row - Math.round((p.def.h - 1) / 2)), w: p.def.w, h: p.def.h };

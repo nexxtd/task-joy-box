@@ -86,25 +86,66 @@ interface SystemSetting {
   suffix?: string;
 }
 
-const SETTINGS_ROWS: SystemSetting[] = [
-  { key: 'price_pro_monthly', label: 'Pro plan price', description: 'Monthly price shown on the pricing page for the Pro plan.', type: 'currency', defaultValue: '9.99' },
-  { key: 'price_premium_monthly', label: 'Premium plan price', description: 'Monthly price shown on the pricing page for the Premium plan.', type: 'currency', defaultValue: '14.99' },
-  { key: 'feature_ai_tier', label: 'AI assistant tier gate', description: 'Minimum subscription tier required to use the AI assistant.', type: 'select', options: [ { value: 'free', label: 'Free (all users)' }, { value: 'pro', label: 'Pro' }, { value: 'premium', label: 'Premium' } ], defaultValue: 'pro' },
-  { key: 'feature_collaboration_tier', label: 'Collaboration tier gate', description: 'Minimum subscription tier required to create workspaces.', type: 'select', options: [ { value: 'free', label: 'Free (all users)' }, { value: 'pro', label: 'Pro' }, { value: 'premium', label: 'Premium' } ], defaultValue: 'pro' },
-  { key: 'feature_whiteboard_tier', label: 'Whiteboard tier gate', description: 'Minimum subscription tier required for whiteboards.', type: 'select', options: [ { value: 'free', label: 'Free (all users)' }, { value: 'pro', label: 'Pro' }, { value: 'premium', label: 'Premium' } ], defaultValue: 'free' },
-  { key: 'feature_deepfocus_tier', label: 'Deep Focus tier gate', description: 'Minimum subscription tier required for Deep Focus.', type: 'select', options: [ { value: 'free', label: 'Free (all users)' }, { value: 'pro', label: 'Pro' }, { value: 'premium', label: 'Premium' } ], defaultValue: 'free' },
-  { key: 'signup_open', label: 'Registrations open', description: 'Allow new users to create accounts.', type: 'boolean', defaultValue: 'true' },
-  { key: 'maintenance_mode', label: 'Maintenance mode', description: 'Show a maintenance notice to all non-admin users across the app.', type: 'boolean', defaultValue: 'false' },
-  { key: 'trial_days', label: 'Trial length (days)', description: 'New accounts start a trial of this many days; trial expiry downgrades them to Free.', type: 'number', defaultValue: '7', suffix: 'days' },
-  { key: 'free_tier_task_limit', label: 'Free task limit', description: 'Maximum tasks a Free user can have on their board.', type: 'number', defaultValue: '40' },
-  { key: 'free_tier_goal_limit', label: 'Free goal limit', description: 'Maximum goals a Free user can create.', type: 'number', defaultValue: '5' },
-  { key: 'free_tier_habit_limit', label: 'Free habit limit', description: 'Maximum habits a Free user can create.', type: 'number', defaultValue: '4' },
-  { key: 'max_attachment_mb', label: 'Attachment size limit (MB)', description: 'Maximum upload size for task attachments.', type: 'number', defaultValue: '25', suffix: 'MB' },
-  { key: 'min_password_length', label: 'Minimum password length', description: 'Enforced on signup and password reset.', type: 'number', defaultValue: '8' },
-  { key: 'session_timeout_hours', label: 'Session timeout (hours)', description: 'How long a login session stays valid before users need to sign in again.', type: 'number', defaultValue: '24', suffix: 'hours' },
-  { key: 'refund_days', label: 'Refund window (days)', description: 'Used in the admin refund policy guide.', type: 'number', defaultValue: '14', suffix: 'days' },
-  { key: 'default_language', label: 'Default language', description: 'Applied to the interface language of new accounts.', type: 'select', options: [ { value: 'en', label: 'English' }, { value: 'fr', label: 'Français' }, { value: 'es', label: 'Español' }, { value: 'de', label: 'Deutsch' } ], defaultValue: 'en' },
-  { key: 'support_contact_email', label: 'Support contact email', description: 'Displayed on the Support page.', type: 'text', defaultValue: 'support@myplanner.app' },
+interface SystemSettingGroup {
+  id: string;
+  label: string;
+  description: string;
+  icon: any;
+  rows: SystemSetting[];
+}
+
+const SETTINGS_GROUPS: SystemSettingGroup[] = [
+  {
+    id: 'platform-access',
+    label: 'Platform Access',
+    description: 'Controls who can reach the app and create new accounts.',
+    icon: ShieldCheck,
+    rows: [
+      { key: 'maintenance_mode', label: 'Maintenance mode', description: 'Show a maintenance notice to all non-admin users across the app.', type: 'boolean', defaultValue: 'false' },
+      { key: 'signup_open', label: 'Registrations open', description: 'Allow new users to create accounts.', type: 'boolean', defaultValue: 'true' },
+    ],
+  },
+  {
+    id: 'pricing',
+    label: 'Pricing',
+    description: 'Monthly prices shown on the pricing page.',
+    icon: DollarSign,
+    rows: [
+      { key: 'price_pro_monthly', label: 'Pro plan price', description: 'Monthly price shown on the pricing page for the Pro plan.', type: 'currency', defaultValue: '9.99', suffix: '$/mo' },
+      { key: 'price_premium_monthly', label: 'Premium plan price', description: 'Monthly price shown on the pricing page for the Premium plan.', type: 'currency', defaultValue: '14.99', suffix: '$/mo' },
+    ],
+  },
+  {
+    id: 'usage-limits',
+    label: 'Usage Limits',
+    description: 'Per-plan caps enforced by the server when creating content.',
+    icon: Package,
+    rows: [
+      { key: 'free_tier_task_limit', label: 'Free task limit', description: 'Maximum tasks a Free user can have on their board.', type: 'number', defaultValue: '40' },
+      { key: 'free_tier_goal_limit', label: 'Free goal limit', description: 'Maximum goals a Free user can create.', type: 'number', defaultValue: '5' },
+      { key: 'free_tier_habit_limit', label: 'Free habit limit', description: 'Maximum habits a Free user can create.', type: 'number', defaultValue: '4' },
+      { key: 'max_attachment_mb', label: 'Attachment size limit', description: 'Maximum upload size for task attachments.', type: 'number', defaultValue: '25', suffix: 'MB' },
+    ],
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    description: 'Banners and announcements shown to all users.',
+    icon: MessageSquare,
+    rows: [
+      { key: 'announcement_banner', label: 'Announcement banner', description: 'Show a dismissible announcement banner to all users.', type: 'boolean', defaultValue: 'false' },
+      { key: 'announcement_banner_message', label: 'Announcement message', description: 'The text shown in the announcement banner.', type: 'text', defaultValue: '' },
+    ],
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    description: 'Defaults used by the support and ticket system.',
+    icon: Ticket,
+    rows: [
+      { key: 'support_auto_response_time', label: 'Auto-response time', description: 'Target time within which support replies to a new ticket.', type: 'number', defaultValue: '24', suffix: 'hours' },
+    ],
+  },
 ];
 
 const GROUP_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f43f5e', '#6b7280'];
@@ -2014,76 +2055,98 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
           <div>
             <h2 className="text-xl font-bold flex items-center gap-2">
               <Settings className="w-5 h-5 text-primary" />
               System Settings
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              These settings are enforced by the server in real time — prices, feature gates, signup rules,
-              limits and maintenance mode all take effect immediately (within seconds) after saving.
+              These settings are enforced by the server in real time — prices, usage limits, signup rules
+              and maintenance mode all take effect within seconds of saving.
             </p>
           </div>
-          <div className="space-y-3">
-            {SETTINGS_ROWS.map(row => {
-              const current = settings[row.key] ?? row.defaultValue;
+
+          <div className="space-y-6">
+            {SETTINGS_GROUPS.map(group => {
+              const GroupIcon = group.icon;
               return (
-                <div key={row.key} className="glass rounded-2xl p-5 border-white/10 dark:border-white/5 shadow-xl shadow-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm flex items-center gap-2">
-                      {row.label}
-                      {savingSetting === row.key && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{row.description}</p>
+                <section key={group.id} className="space-y-3">
+                  <div className="flex items-center gap-3 px-1">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                      <GroupIcon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-foreground">{group.label}</h3>
+                      <p className="text-xs text-muted-foreground">{group.description}</p>
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 w-full sm:w-64">
-                    {row.type === 'boolean' ? (
-                      <button
-                        onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
-                        disabled={savingSetting === row.key}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${current === 'true' ? 'bg-primary' : 'bg-muted'}`}
-                      >
-                        <span className={`inline-block h-5 w-5 transform rounded-full bg-background transition-transform ${current === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
-                        <span className="ml-14 text-xs font-medium text-muted-foreground">{current === 'true' ? 'On' : 'Off'}</span>
-                      </button>
-                    ) : row.type === 'select' ? (
-                      <Select
-                        value={current}
-                        onValueChange={v => handleUpdateSetting(row, v)}
-                        disabled={savingSetting === row.key}
-                      >
-                        <SelectTrigger className="w-full bg-background border border-input rounded-xl text-sm h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {row.options?.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          key={current}
-                          type={row.type === 'currency' ? 'number' : row.type === 'number' ? 'number' : 'text'}
-                          step="any"
-                          min="0"
-                          defaultValue={current}
-                          onBlur={e => {
-                            const v = e.target.value.trim();
-                            if (v && v !== current) handleUpdateSetting(row, v);
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                          className="w-full bg-background border border-input rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                        />
-                        {row.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{row.suffix}</span>}
-                      </div>
-                    )}
+                  <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl shadow-black/5">
+                    <div className="divide-y divide-border">
+                      {group.rows.map(row => {
+                        const current = settings[row.key] ?? row.defaultValue;
+                        if (row.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true') return null;
+                        return (
+                          <div key={row.key} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-sm flex items-center gap-2">
+                                {row.label}
+                                {savingSetting === row.key && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{row.description}</p>
+                            </div>
+                            <div className={`flex-shrink-0 w-full ${row.type === 'text' ? 'sm:w-96' : 'sm:w-64'}`}>
+                              {row.type === 'boolean' ? (
+                                <button
+                                  onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
+                                  disabled={savingSetting === row.key}
+                                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${current === 'true' ? 'bg-primary' : 'bg-muted'}`}
+                                >
+                                  <span className={`inline-block h-5 w-5 transform rounded-full bg-background transition-transform ${current === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
+                                  <span className="ml-14 text-xs font-medium text-muted-foreground">{current === 'true' ? 'On' : 'Off'}</span>
+                                </button>
+                              ) : row.type === 'select' ? (
+                                <Select
+                                  value={current}
+                                  onValueChange={v => handleUpdateSetting(row, v)}
+                                  disabled={savingSetting === row.key}
+                                >
+                                  <SelectTrigger className="w-full bg-background border border-input rounded-xl text-sm h-9">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {row.options?.map(opt => (
+                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    key={current}
+                                    type={row.type === 'currency' ? 'number' : row.type === 'number' ? 'number' : 'text'}
+                                    step="any"
+                                    min="0"
+                                    defaultValue={current}
+                                    onBlur={e => {
+                                      const v = e.target.value.trim();
+                                      if (v && v !== current) handleUpdateSetting(row, v);
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
+                                    className="w-full bg-background border border-input rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                                  />
+                                  {row.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{row.suffix}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                </section>
               );
             })}
           </div>

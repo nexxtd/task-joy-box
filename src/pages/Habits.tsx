@@ -6,7 +6,7 @@ import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority,
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
-import heic2any from 'heic2any';
+import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import {
   ArrowDown,
   ArrowUp,
@@ -96,32 +96,9 @@ const getTaskStatus = (habit: Habit): TaskStatus => {
 const getStatusLabel = (status: TaskStatus) =>
   STATUS_OPTIONS.find(o => o.value === status)?.label || 'To Do';
 
-const fileToDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+const fileToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
 
-const imageToDataUrl = async (file: File): Promise<string> => {
-  const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-  if (isHeic) {
-    try {
-      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
-      const converted = Array.isArray(blob) ? blob[0] : blob;
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(converted);
-      });
-    } catch {
-      return fileToDataUrl(file);
-    }
-  }
-  return fileToDataUrl(file);
-};
+const imageToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
 
 type DueWarningLevel = null | 'soon' | 'imminent' | 'overdue';
 

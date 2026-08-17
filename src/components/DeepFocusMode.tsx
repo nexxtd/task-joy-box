@@ -3,6 +3,7 @@ import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, Gr
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import {
   DragDropContext,
   Droppable,
@@ -570,13 +571,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
   }, [addChecklistItemToBoard, perChecklistInput, selectedTask]);
 
-  const fileToDataUrl = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+  const fileToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];

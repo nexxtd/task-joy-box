@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 
 interface CenteredDragCloneProps {
   draggableProps: any;
@@ -17,32 +17,18 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   zoom = 1,
   children,
 }) => {
-  const pointerRef = useRef<{ x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    const onMove = (e: any) => {
-      pointerRef.current = { x: e.clientX, y: e.clientY };
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('dragover', onMove, { passive: true });
-    window.addEventListener('dragenter', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('dragover', onMove);
-      window.removeEventListener('dragenter', onMove);
-    };
-  }, []);
-
   const match = String(style?.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
   const dx = match ? Number(match[1]) : 0;
   const dy = match ? Number(match[2]) : 0;
 
+  // dnd's transform is the offset from where the drag started, and style.left/top
+  // is the element's original layout position. Adding them keeps the exact point
+  // the user grabbed (handle/grip) anchored under the cursor instead of centering.
+  const tx = dx + (style?.left ?? 0);
+  const ty = dy + (style?.top ?? 0);
+
   const renderedW = style?.width ?? 0;
   const renderedH = style?.height ?? 0;
-  const p = pointerRef.current;
-  const anchored = p !== null;
-  const tx = anchored ? p.x - renderedW / 2 : dx + (style?.left ?? 0);
-  const ty = anchored ? p.y - renderedH / 2 : dy + (style?.top ?? 0);
 
   return (
     <div
