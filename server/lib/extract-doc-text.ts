@@ -1,7 +1,13 @@
 import fs from 'fs';
 import { createRequire } from 'module';
 
-const localRequire = createRequire(__filename);
+const localRequire = (() => {
+  try {
+    return createRequire(typeof __filename === 'string' ? __filename : process.cwd() + '/noop.js');
+  } catch {
+    return createRequire(process.cwd() + '/noop.js');
+  }
+})();
 
 const MAX_EXTRACT_CHARS = 300_000;
 
