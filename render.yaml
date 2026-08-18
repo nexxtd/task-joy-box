@@ -11,7 +11,7 @@ services:
       - key: JWT_SECRET
         value: 7f7fd507eb1a291128e98e02aba7986cb500dc80803f2f4bf53322047c5ecd50
       - key: SESSION_SECRET
-        value: myplanner_session_secret
+        value: ab9d468a79b438da15fef57b2e38d2fe06adb159683a44c4a1de9bffe42d4224
       - key: GOOGLE_CLIENT_ID
         value: 920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
