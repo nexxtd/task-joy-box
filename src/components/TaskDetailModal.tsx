@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
+import AttachmentRow from '@/components/AttachmentRow';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -530,31 +531,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
 
               <div className="space-y-1.5 mt-3">
                 {(task.attachments || []).map(a => (
-                  <div key={a.id} className="relative group/att">
-                    <a
-                      href={`/api/attachments/file/${a.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted transition-all group/item"
-                    >
-                      <File className="w-3.5 h-3.5 text-muted-foreground group-hover/item:text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-medium text-foreground truncate group-hover/item:text-primary transition-colors">
-                          {a.fileName}
-                        </p>
-                      </div>
-                    </a>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        deleteAttachment(a.id);
-                      }}
-                      className="absolute top-1 right-1 p-1 rounded bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
+                  <AttachmentRow
+                    key={a.id}
+                    attachment={a}
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    onDelete={() => deleteAttachment(a.id)}
+                  />
                 ))}
               </div>
             </div>

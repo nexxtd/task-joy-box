@@ -628,73 +628,6 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS pending_payments_user_id_idx ON pending_payments(user_id);`);
     console.log('Pending payments table verified');
 
-    // --- CLASSROOMS (SEQTA-inspired) ---
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS classrooms (
-        id SERIAL PRIMARY KEY,
-        teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        subject TEXT,
-        description TEXT,
-        join_code TEXT NOT NULL UNIQUE,
-        color TEXT DEFAULT '#3b82f6',
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS classrooms_teacher_id_idx ON classrooms(teacher_id);`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS classroom_members (
-        id SERIAL PRIMARY KEY,
-        classroom_id INTEGER NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        role TEXT DEFAULT 'student' NOT NULL,
-        joined_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(classroom_id, user_id)
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS classroom_members_user_id_idx ON classroom_members(user_id);`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS classroom_assignments (
-        id SERIAL PRIMARY KEY,
-        classroom_id INTEGER NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
-        title TEXT NOT NULL,
-        description TEXT,
-        due_date TEXT,
-        created_by_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS classroom_assignments_classroom_id_idx ON classroom_assignments(classroom_id);`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS assignment_submissions (
-        id SERIAL PRIMARY KEY,
-        assignment_id INTEGER NOT NULL REFERENCES classroom_assignments(id) ON DELETE CASCADE,
-        student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        content TEXT,
-        status TEXT DEFAULT 'submitted' NOT NULL,
-        score INTEGER,
-        feedback TEXT,
-        submitted_at TIMESTAMP DEFAULT NOW() NOT NULL,
-        UNIQUE(assignment_id, student_id)
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS assignment_submissions_assignment_id_idx ON assignment_submissions(assignment_id);`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS classroom_announcements (
-        id SERIAL PRIMARY KEY,
-        classroom_id INTEGER NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
-        author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS classroom_announcements_classroom_id_idx ON classroom_announcements(classroom_id);`);
-    console.log('Classroom tables verified');
-
     // --- USER PROFILE COLUMNS ---
     await addColumnIfNotExists('users', 'location', 'TEXT');
     await addColumnIfNotExists('users', 'last_active_at', 'TIMESTAMP');
@@ -713,6 +646,27 @@ export async function initDatabase() {
     `);
     console.log('Dashboard widget usage table verified');
 
+    // --- DOCUMENTS (Document Editor) ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        task_id TEXT,
+        task_title TEXT,
+        title TEXT NOT NULL,
+        content TEXT DEFAULT '' NOT NULL,
+        file_name TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        file_url TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS documents_user_id_idx ON documents(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS documents_task_id_idx ON documents(task_id);`);
+    console.log('Documents table verified');
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are
     // needed. Enabling RLS without permissive policies satisfies the linter
@@ -723,8 +677,7 @@ export async function initDatabase() {
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
       'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
-      'classrooms', 'classroom_members', 'classroom_assignments',
-      'assignment_submissions', 'classroom_announcements', 'pending_payments',
+      'pending_payments', 'documents',
     ];
     for (const tbl of rlsTables) {
       try {

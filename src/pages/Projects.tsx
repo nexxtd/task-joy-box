@@ -30,6 +30,12 @@ import {
   X,
   ZoomIn,
   ZoomOut,
+  CheckSquare,
+  Flame,
+  Target,
+  StickyNote,
+  ArrowLeft,
+  Check,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
@@ -38,6 +44,9 @@ import ListView from '@/components/ListView';
 import { TaskFullView } from '@/pages/Tasks';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
+import { useHabitsContext } from '@/context/HabitsContext';
+import { useGoalsContext } from '@/context/GoalsContext';
+import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { Label, LabelColor, DEFAULT_LABELS, Task } from '@/types/board';
@@ -88,6 +97,9 @@ const ROLE_OPTIONS = [
 
 const Projects: React.FC = () => {
   const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
+  const habitsCtx = useHabitsContext();
+  const goalsCtx = useGoalsContext();
+  const notesCtx = useNotesContext();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -137,6 +149,55 @@ const Projects: React.FC = () => {
   // Board "Add Task" popup state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
+
+  // Unified "Add" popup (Task / Habit / Goal / Note)
+  const [addPopupOpen, setAddPopupOpen] = useState(false);
+  const [addPopupType, setAddPopupType] = useState<'task' | 'habit' | 'goal' | 'note' | null>(null);
+  const [addExistingStep, setAddExistingStep] = useState(false);
+  const [addExistingSelected, setAddExistingSelected] = useState<Set<string>>(() => new Set());
+
+  const ADD_TYPES = [
+    { id: 'task', label: 'Task', description: 'To-dos, projects and checklists', icon: CheckSquare, path: '/tasks' },
+    { id: 'habit', label: 'Habit', description: 'Daily routines and streaks', icon: Flame, path: '/habits' },
+    { id: 'goal', label: 'Goal', description: 'Progress towards targets', icon: Target, path: '/goals' },
+    { id: 'note', label: 'Note', description: 'Free-form ideas and docs', icon: StickyNote, path: '/notes' },
+  ] as const;
+
+  const existingItemsFor = (type: 'task' | 'habit' | 'goal' | 'note') => {
+    const all = type === 'task'
+      ? board.tasks
+      : type === 'habit'
+        ? habitsCtx.board.tasks
+        : type === 'goal'
+          ? goalsCtx.board.tasks
+          : notesCtx.board.tasks;
+    return all.filter(t => t.projectId !== selectedProject?.id);
+  };
+
+  const openAddPopup = () => {
+    setAddPopupOpen(true);
+    setAddPopupType(null);
+    setAddExistingStep(false);
+    setAddExistingSelected(new Set());
+  };
+
+  const handleAddExisting = () => {
+    if (!selectedProject) return;
+    const update = addPopupType === 'task'
+      ? updateTask
+      : addPopupType === 'habit'
+        ? habitsCtx.updateTask
+        : addPopupType === 'goal'
+          ? goalsCtx.updateTask
+          : notesCtx.updateTask;
+    addExistingSelected.forEach(id => update(id, { projectId: selectedProject.id, projectName: selectedProject.name }));
+    const count = addExistingSelected.size;
+    toast({ title: count > 1 ? `${count} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });
+    setAddPopupOpen(false);
+    setAddPopupType(null);
+    setAddExistingStep(false);
+    setAddExistingSelected(new Set());
+  };
 
   // Project chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -1508,6 +1569,12 @@ const Projects: React.FC = () => {
                       Share
                     </button>
                   )}
+                  {canEdit && (
+                    <button onClick={openAddPopup} className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
+                      <Plus className="h-3.5 w-3.5" />
+                      Add
+                    </button>
+                  )}
                 </div>
               </div>
             </header>
@@ -1802,6 +1869,116 @@ const Projects: React.FC = () => {
           defaultColumnId={createModalColumnId}
           defaultProjectId={selectedProject?.id}
         />
+      )}
+
+      {addPopupOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-4" onClick={() => setAddPopupOpen(false)}>
+          <div
+            className="bg-card border border-border rounded-2xl shadow-2xl p-6 w-full max-w-md space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            {addPopupType === null ? (
+              <>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Add to {selectedProject?.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">What do you want to add?</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {ADD_TYPES.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setAddPopupType(t.id); setAddExistingStep(false); setAddExistingSelected(new Set()); }}
+                      className="flex flex-col items-start gap-2 p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted hover:border-primary/50 transition-all text-left"
+                    >
+                      <t.icon className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{t.label}</p>
+                        <p className="text-[11px] text-muted-foreground leading-tight">{t.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setAddPopupType(null); setAddExistingStep(false); setAddExistingSelected(new Set()); }} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-all">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">Add {ADD_TYPES.find(t => t.id === addPopupType)?.label}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">{selectedProject?.name}</p>
+                  </div>
+                </div>
+
+                {!addExistingStep ? (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}`)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted hover:border-primary/50 transition-all text-left"
+                    >
+                      <Plus className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground">Add New</p>
+                        <p className="text-[11px] text-muted-foreground">Create a new item — it will be assigned to this project automatically.</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setAddExistingStep(true)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted hover:border-primary/50 transition-all text-left"
+                    >
+                      <Check className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-bold text-foreground">Add Existing</p>
+                        <p className="text-[11px] text-muted-foreground">Pick from your existing items that aren't in this project yet.</p>
+                      </div>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">Select one or more items to add to this project:</p>
+                    <div className="max-h-64 overflow-y-auto space-y-1.5 border border-border rounded-xl p-2">
+                      {existingItemsFor(addPopupType).length === 0 && (
+                        <p className="text-xs text-muted-foreground p-2">Nothing to add — every {addPopupType} is already in this project.</p>
+                      )}
+                      {existingItemsFor(addPopupType).map(item => (
+                        <label key={item.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/60 cursor-pointer transition-all">
+                          <input
+                            type="checkbox"
+                            checked={addExistingSelected.has(item.id)}
+                            onChange={e => {
+                              setAddExistingSelected(prev => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(item.id);
+                                else next.delete(item.id);
+                                return next;
+                              });
+                            }}
+                            className="accent-primary w-4 h-4"
+                          />
+                          <span className="flex-1 min-w-0 text-sm text-foreground truncate">{item.title}</span>
+                          <span className="text-[10px] text-muted-foreground flex-shrink-0">{item.columnId ? 'task' : ''}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleAddExisting}
+                        disabled={addExistingSelected.size === 0}
+                        className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold disabled:opacity-40 transition-all"
+                      >
+                        Add {addExistingSelected.size > 0 ? `(${addExistingSelected.size})` : ''} to project
+                      </button>
+                      <button onClick={() => setAddExistingStep(false)} className="px-4 py-2 bg-muted text-foreground rounded-xl text-sm font-semibold">
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       )}
       
       {currentTask && (

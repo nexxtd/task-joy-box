@@ -361,6 +361,18 @@ const Goals: React.FC = () => {
   const [newGoalDuration, setNewGoalDuration] = useState<number>(60);
   const [newGoalColumnId, setNewGoalColumnId] = useState<string>('');
   const [newGoalProjectId, setNewGoalProjectId] = useState<number | ''>('');
+
+  // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
+  // with the project pre-selected so the new goal is assigned to it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === '1') {
+      const pid = params.get('project');
+      setNewGoalProjectId(pid ? Number(pid) : '');
+      setAddingGoal(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newGoalSubtasks, setNewGoalSubtasks] = useState<NewGoalSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);

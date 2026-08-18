@@ -37,6 +37,7 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
+import AttachmentRow from '@/components/AttachmentRow';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -652,6 +653,19 @@ const Tasks: React.FC = () => {
   const [sortDueDateDesc, setSortDueDateDesc] = useState(false);
 
   const [addingTask, setAddingTask] = useState(false);
+  const [createModalProjectId, setCreateModalProjectId] = useState<number | null | undefined>(undefined);
+
+  // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
+  // with the project pre-selected so the new task is assigned to it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === '1') {
+      const pid = params.get('project');
+      setCreateModalProjectId(pid ? Number(pid) : undefined);
+      setAddingTask(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
@@ -2325,6 +2339,7 @@ const Tasks: React.FC = () => {
           open={addingTask}
           onClose={() => setAddingTask(false)}
           initialValues={aiTaskDraft}
+          defaultProjectId={createModalProjectId}
         />
       )}
 
@@ -5448,34 +5463,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   )}
                   {(task.attachments || []).length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {(task.attachments || []).map(attachment => {
-                        const isServerAtt = /^\d+$/.test(String(attachment.id));
-                        const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
-                        return (
-                          <div key={attachment.id} className="relative group/att">
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all"
-                            >
-                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                                <Paperclip className="w-5 h-5 text-muted-foreground" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{attachment.fileName}</p>
-                                <p className="text-xs text-muted-foreground">{attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
-                              </div>
-                            </a>
-                            <button
-                              onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAttachment(attachment.id); }}
-                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
+                      {(task.attachments || []).map(attachment => (
+                        <AttachmentRow
+                          key={attachment.id}
+                          attachment={attachment}
+                          taskId={task.id}
+                          taskTitle={task.title}
+                          onDelete={() => deleteAttachment(attachment.id)}
+                        />
+                      ))}
                     </div>
                   )}
                 </>

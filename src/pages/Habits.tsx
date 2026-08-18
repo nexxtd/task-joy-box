@@ -365,6 +365,18 @@ const Habits: React.FC = () => {
   const [newDailyTarget, setNewDailyTarget] = useState(1);
   const [newTargetPeriod, setNewTargetPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [newHabitProjectId, setNewHabitProjectId] = useState<number | ''>('');
+
+  // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
+  // with the project pre-selected so the new habit is assigned to it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === '1') {
+      const pid = params.get('project');
+      setNewHabitProjectId(pid ? Number(pid) : '');
+      setAddingHabit(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newHabitSubtasks, setNewHabitSubtasks] = useState<NewHabitSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState<number>(10);

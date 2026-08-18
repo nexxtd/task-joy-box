@@ -354,6 +354,18 @@ const Notes: React.FC = () => {
   const [newNoteDuration, setNewNoteDuration] = useState<number>(60);
   const [newNoteColumnId, setNewNoteColumnId] = useState<string>('');
   const [newNoteProjectId, setNewNoteProjectId] = useState<number | ''>('');
+
+  // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
+  // with the project pre-selected so the new note is assigned to it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === '1') {
+      const pid = params.get('project');
+      setNewNoteProjectId(pid ? Number(pid) : '');
+      setAddingNote(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newChecklistItems, setNewChecklistItems] = useState<{id: string; text: string}[]>([]);
   const [newChecklistText, setNewChecklistText] = useState('');
   const [newChecklistLists, setNewChecklistLists] = useState<{id: string; title: string; items: {id: string; text: string; completed: boolean}[]}[]>([]);

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, Target, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, Brain, LifeBuoy, Flame, ShieldCheck, X, GraduationCap
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, Brain, LifeBuoy, Flame, ShieldCheck, X, FileText
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -30,7 +30,7 @@ const AppSidebar: React.FC = () => {
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: Target, label: T.nav_goals, path: '/goals' },
     { icon: Flame, label: 'Habits', path: '/habits' },
-    { icon: GraduationCap, label: 'Classroom', path: '/classroom' },
+    { icon: FileText, label: 'Documents', path: '/documents' },
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free' 
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),

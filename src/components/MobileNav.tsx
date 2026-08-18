@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, Target, Users, CreditCard, Settings,
-  Menu, X, Sparkles, Wand2, Flame, LifeBuoy, ShieldCheck, GraduationCap
+  Menu, X, Sparkles, Wand2, Flame, LifeBuoy, ShieldCheck, FileText
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -25,7 +25,7 @@ const MobileNav: React.FC = () => {
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: Target, label: T.nav_goals, path: '/goals' },
     { icon: Flame, label: 'Habits', path: '/habits' },
-    { icon: GraduationCap, label: 'Classroom', path: '/classroom' },
+    { icon: FileText, label: 'Documents', path: '/documents' },
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free' 
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),

@@ -17,7 +17,6 @@ import workspaceRoutes from './routes/workspace.js';
 import projectsRoutes from './routes/projects.js';
 import goalsRoutes from './routes/goals.js';
 import habitsRoutes from './routes/habits.js';
-import classroomsRoutes from './routes/classrooms.js';
 import notesRoutes from './routes/notes.js';
 import tagsRoutes from './routes/tags.js';
 import settingsRoutes from './routes/settings.js';
@@ -35,6 +34,7 @@ import milestonesRoutes from './routes/milestones.js';
 import taskTemplatesRoutes from './routes/taskTemplates.js';
 import noteTemplatesRoutes from './routes/noteTemplates.js';
 import dashboardRoutes from './routes/dashboard.js';
+import documentsRoutes from './routes/documents.js';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
 import { pool } from './db.js';
@@ -250,7 +250,7 @@ app.use('/api/milestones', milestonesRoutes);
 app.use('/api/task-templates', taskTemplatesRoutes);
 app.use('/api/note-templates', noteTemplatesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/classrooms', classroomsRoutes);
+app.use('/api/documents', documentsRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -310,7 +310,7 @@ if (isProduction) {
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error occurred:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(err.statusCode || err.status || 500).json({ error: 'Internal server error' });
 });
 
 export { app, allowedOrigins, frontendUrl, isProduction };

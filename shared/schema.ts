@@ -617,51 +617,18 @@ export type InsertGoal = any;
 export type InsertHabit = any;
 export type UpdateUserSettings = any;
 
-// --- CLASSROOMS (SEQTA-inspired) ---
-export const classrooms = pgTable('classrooms', {
+// --- DOCUMENTS (Document Editor) ---
+export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
-  teacherId: integer('teacher_id').references(() => users.id).notNull(),
-  name: text('name').notNull(),
-  subject: text('subject'),
-  description: text('description'),
-  joinCode: text('join_code').notNull().unique(),
-  color: text('color').default('#3b82f6'),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
-export const classroomMembers = pgTable('classroom_members', {
-  id: serial('id').primaryKey(),
-  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
   userId: integer('user_id').references(() => users.id).notNull(),
-  role: text('role').default('student').notNull(), // 'teacher' | 'student'
-  joinedAt: timestamp('joined_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
-export const classroomAssignments = pgTable('classroom_assignments', {
-  id: serial('id').primaryKey(),
-  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
+  taskId: text('task_id'),
+  taskTitle: text('task_title'),
   title: text('title').notNull(),
-  description: text('description'),
-  dueDate: text('due_date'),
-  createdById: integer('created_by_id').references(() => users.id).notNull(),
+  content: text('content').default('').notNull(),
+  fileName: text('file_name').notNull(),
+  fileType: text('file_type').notNull(),
+  fileSize: integer('file_size').notNull(),
+  fileUrl: text('file_url').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
-export const assignmentSubmissions = pgTable('assignment_submissions', {
-  id: serial('id').primaryKey(),
-  assignmentId: integer('assignment_id').references(() => classroomAssignments.id).notNull(),
-  studentId: integer('student_id').references(() => users.id).notNull(),
-  content: text('content'),
-  status: text('status').default('submitted').notNull(), // 'submitted' | 'graded'
-  score: integer('score'),
-  feedback: text('feedback'),
-  submittedAt: timestamp('submitted_at', { mode: 'string' }).defaultNow().notNull(),
-});
-
-export const classroomAnnouncements = pgTable('classroom_announcements', {
-  id: serial('id').primaryKey(),
-  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
-  authorId: integer('author_id').references(() => users.id).notNull(),
-  content: text('content').notNull(),
-  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
