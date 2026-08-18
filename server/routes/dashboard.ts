@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import { db } from '../db';
-import { dashboardWidgetUsage } from '../../shared/schema';
+import { db } from '../db.js';
+import { dashboardWidgetUsage } from '../../shared/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 

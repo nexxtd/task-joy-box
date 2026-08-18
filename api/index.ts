@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import serverless from 'serverless-http';
-import { app } from '../server/app';
-import { initDatabase } from '../server/init-db';
+import { app } from '../server/app.js';
+import { initDatabase } from '../server/init-db.js';
 
 let dbInit: Promise<void> | null = null;
 
@@ -18,7 +18,7 @@ function ensureDatabase(): Promise<void> {
 
 export const config = { maxDuration: 60 };
 
-export const handler = async (req: unknown, context: unknown) => {
+export const handler = async (req: any, context: any) => {
   await ensureDatabase();
   return serverless(app)(req, context);
 };

@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db';
-import { users, organizations, organizationMembers, workspaces, type InsertOrganization, type InsertOrganizationMember } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, organizations, organizationMembers, workspaces, type InsertOrganization, type InsertOrganizationMember } from '../../shared/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 

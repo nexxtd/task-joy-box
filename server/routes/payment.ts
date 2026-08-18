@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db';
-import { users, organizations, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, organizations, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { getSettingNumber } from '../lib/settings';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { getSettingNumber } from '../lib/settings.js';
 
 const router = Router();
 const frontendUrl = process.env.FRONTEND_URL || '';

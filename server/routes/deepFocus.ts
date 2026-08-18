@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { db } from '../db';
-import { deepFocusSessions, users } from '../../shared/schema';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { db } from '../db.js';
+import { deepFocusSessions, users } from '../../shared/schema.js';
 import { eq, desc, sql } from 'drizzle-orm';
-import { getSetting } from '../lib/settings';
-import { tierRank } from '../lib/tier';
+import { getSetting } from '../lib/settings.js';
+import { tierRank } from '../lib/tier.js';
 
 const router = Router();
 

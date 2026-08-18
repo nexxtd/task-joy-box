@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db';
-import { users, workspaces, workspaceMembers, tasks, sharedTasks, chatMessages, groups, groupMembers, type InsertChatMessage } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, workspaces, workspaceMembers, tasks, sharedTasks, chatMessages, groups, groupMembers, type InsertChatMessage } from '../../shared/schema.js';
 import { eq, and, desc, or } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { encrypt, decrypt } from '../lib/encryption';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
 

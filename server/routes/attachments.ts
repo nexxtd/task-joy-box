@@ -1,12 +1,12 @@
 import { Router, Response } from 'express';
-import { db } from '../db';
-import { taskAttachments, tasks, boards, columns } from '../../shared/schema';
+import { db } from '../db.js';
+import { taskAttachments, tasks, boards, columns } from '../../shared/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { getSettingNumber } from '../lib/settings';
+import { getSettingNumber } from '../lib/settings.js';
 
 const router = Router();
 

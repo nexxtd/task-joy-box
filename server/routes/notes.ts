@@ -1,9 +1,9 @@
 import { Router, Response } from 'express';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { db } from '../db';
-import { notes, tags, noteTagAssignments, activityLogs } from '../../shared/schema';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { db } from '../db.js';
+import { notes, tags, noteTagAssignments, activityLogs } from '../../shared/schema.js';
 import { eq, and, desc, asc, sql } from 'drizzle-orm';
-import { encrypt, decrypt } from '../lib/encryption';
+import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
 

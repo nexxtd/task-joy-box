@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
 import { and, eq } from 'drizzle-orm';
-import { db } from '../db';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { milestones, projectMembers, projects } from '../../shared/schema';
+import { db } from '../db.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { milestones, projectMembers, projects } from '../../shared/schema.js';
 
 const router = Router();
 

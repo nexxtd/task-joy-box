@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { app, allowedOrigins, frontendUrl } from './app';
-import { initDatabase } from './init-db';
+import { app, allowedOrigins, frontendUrl } from './app.js';
+import { initDatabase } from './init-db.js';
 
 const PORT = parseInt(process.env.PORT || '3001');
 

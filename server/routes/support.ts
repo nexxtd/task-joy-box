@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import { db } from '../db';
-import { supportTickets, ticketMessages, users } from '../../shared/schema';
+import { db } from '../db.js';
+import { supportTickets, ticketMessages, users } from '../../shared/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 router.use(requireAuth);

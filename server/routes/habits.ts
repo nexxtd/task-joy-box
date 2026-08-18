@@ -1,9 +1,9 @@
 import { Router, Response } from 'express';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { db } from '../db';
-import { habits, tags, habitTagAssignments, activityLogs, users, type InsertHabit } from '../../shared/schema';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { db } from '../db.js';
+import { habits, tags, habitTagAssignments, activityLogs, users, type InsertHabit } from '../../shared/schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { getSettingNumber } from '../lib/settings';
+import { getSettingNumber } from '../lib/settings.js';
 
 const router = Router();
 

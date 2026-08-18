@@ -1,10 +1,10 @@
 import express from 'express';
 import { eq } from 'drizzle-orm';
-import { db } from '../db';
-import { whiteboards, whiteboardItems, whiteboardConnections, users } from '../../shared/schema';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { getSetting } from '../lib/settings';
-import { tierRank } from '../lib/tier';
+import { db } from '../db.js';
+import { whiteboards, whiteboardItems, whiteboardConnections, users } from '../../shared/schema.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { getSetting } from '../lib/settings.js';
+import { tierRank } from '../lib/tier.js';
 
 const router = express.Router();
 

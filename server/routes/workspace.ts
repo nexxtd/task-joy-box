@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../db';
-import { users, workspaces, workspaceMembers, groups, groupMembers, type InsertWorkspace, type InsertWorkspaceMember, type UpdateWorkspace } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, workspaces, workspaceMembers, groups, groupMembers, type InsertWorkspace, type InsertWorkspaceMember, type UpdateWorkspace } from '../../shared/schema.js';
 import { eq, and } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import paypalSdk from 'paypal-rest-sdk';
 import crypto from 'crypto';
-import { encrypt, decrypt } from '../lib/encryption';
-import { getSetting } from '../lib/settings';
-import { tierRank } from '../lib/tier';
+import { encrypt, decrypt } from '../lib/encryption.js';
+import { getSetting } from '../lib/settings.js';
+import { tierRank } from '../lib/tier.js';
 
 const router = Router();
 

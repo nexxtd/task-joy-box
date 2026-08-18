@@ -4,12 +4,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
-import { db } from '../db';
-import { users, passwordResetTokens, userSettings } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, passwordResetTokens, userSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { isAdmin } from '../lib/adminUtils'; // Import the new utility
-import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
+import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
 
 const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch' };
 function languageNameFromCode(code: string): string {

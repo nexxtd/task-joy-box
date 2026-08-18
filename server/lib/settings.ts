@@ -1,5 +1,5 @@
-import { db } from '../db';
-import { systemSettings } from '../../shared/schema';
+import { db } from '../db.js';
+import { systemSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 // Cached reads of system_settings so hot paths (auth, payments, boards) don't

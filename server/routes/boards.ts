@@ -1,9 +1,9 @@
 import { Router, Response } from 'express';
-import { db } from '../db';
-import { boardSnapshots, users } from '../../shared/schema';
+import { db } from '../db.js';
+import { boardSnapshots, users } from '../../shared/schema.js';
 import { eq, desc } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { getSettingNumber } from '../lib/settings';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { getSettingNumber } from '../lib/settings.js';
 
 const router = Router();
 

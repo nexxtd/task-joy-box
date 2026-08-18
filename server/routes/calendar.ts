@@ -2,11 +2,11 @@ import 'dotenv/config';
 import { Router, Response } from 'express';
 import { google } from 'googleapis';
 import crypto from 'crypto';
-import { db } from '../db';
-import { googleCalendarTokens } from '../../shared/schema';
+import { db } from '../db.js';
+import { googleCalendarTokens } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { encrypt, decrypt } from '../lib/encryption';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
 

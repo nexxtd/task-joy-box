@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
-import { db } from '../db';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones } from '../../shared/schema';
+import { db } from '../db.js';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones } from '../../shared/schema.js';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { requireAdmin } from '../middleware/admin';
-import { invalidateSettingCache } from '../lib/settings';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/admin.js';
+import { invalidateSettingCache } from '../lib/settings.js';
 
 const router = Router();
 

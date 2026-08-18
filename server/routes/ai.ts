@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { Router, Response, Request } from 'express';
 import OpenAI from 'openai';
-import { requireAuth, AuthRequest } from '../middleware/auth';
-import { db } from '../db';
-import { users, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { db } from '../db.js';
+import { users, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema.js';
 import { eq, desc } from 'drizzle-orm';
-import { getCalendarEventsForAI } from './calendar';
-import { getSetting } from '../lib/settings';
-import { tierRank } from '../lib/tier';
+import { getCalendarEventsForAI } from './calendar.js';
+import { getSetting } from '../lib/settings.js';
+import { tierRank } from '../lib/tier.js';
 
 const router = Router();
 

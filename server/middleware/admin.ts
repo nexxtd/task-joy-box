@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthRequest } from './auth';
+import { AuthRequest } from './auth.js';
 
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
   const adminEmailsEnv = process.env.ADMIN_EMAILS;

@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { db } from '../db';
-import { userSettings, type UpdateUserSettings } from '../../shared/schema';
+import { db } from '../db.js';
+import { userSettings, type UpdateUserSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
