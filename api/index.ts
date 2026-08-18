@@ -19,6 +19,15 @@ function ensureDatabase(): Promise<void> {
 export const config = { maxDuration: 60 };
 
 export const handler = async (req: any, context: any) => {
-  await ensureDatabase();
-  return serverless(app)(req, context);
+  try {
+    await ensureDatabase();
+    return await serverless(app)(req, context);
+  } catch (err: any) {
+    console.error('Vercel handler crashed:', err);
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: false, error: 'Server failed to initialize', details: err?.message || String(err) }),
+    };
+  }
 };

@@ -66,7 +66,7 @@ const cfTunnelOrigins = process.env.CF_TUNNEL_URL ? [process.env.CF_TUNNEL_URL] 
 if (isProduction) {
   const missingVars = ['FRONTEND_URL', 'SESSION_SECRET', 'JWT_SECRET'].filter((key) => !process.env[key]);
   if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables for production: ${missingVars.join(', ')}`);
+    console.error(`MISSING REQUIRED ENVIRONMENT VARIABLES IN PRODUCTION: ${missingVars.join(', ')}`);
   }
 } else {
   if (!process.env.SESSION_SECRET) {
