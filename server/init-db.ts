@@ -714,17 +714,23 @@ export async function initDatabase() {
     console.log('Dashboard widget usage table verified');
 
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
+    // The app connects as the table owner (RLS bypassed), so no policies are
+    // needed. Enabling RLS without permissive policies satisfies the linter
+    // (0013 rls_disabled, 0024 permissive policies) and locks out any direct
+    // PostgREST/anon access.
     const rlsTables = [
       'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
       'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
+      'classrooms', 'classroom_members', 'classroom_assignments',
+      'assignment_submissions', 'classroom_announcements', 'pending_payments',
     ];
     for (const tbl of rlsTables) {
       try {
         await pool.query(`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY;`);
         await pool.query(`DROP POLICY IF EXISTS allow_all ON ${tbl};`);
-        await pool.query(`CREATE POLICY allow_all ON ${tbl} USING (true) WITH CHECK (true);`);
+        await pool.query(`DROP POLICY IF EXISTS service_all ON ${tbl};`);
       } catch { /* table may not exist */ }
     }
     console.log('RLS enabled on all public tables');
