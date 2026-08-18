@@ -4,7 +4,6 @@ import { createRequire } from 'module';
 const localRequire = createRequire(__filename);
 
 const MAX_EXTRACT_CHARS = 300_000;
-const MAX_PDF_PAGES = 200;
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -28,17 +27,9 @@ export async function extractDocumentText(filePath: string, mimeType: string): P
       const result = await mammoth.convertToHtml({ path: filePath });
       content = result.value;
     } else if (mimeType === 'application/pdf') {
-      const { PDFParse } = require('pdf-parse') as { PDFParse: new (options: { data: Buffer }) => {
-        getText(params: { first?: number }): Promise<{ text: string }>;
-        destroy(): Promise<void>;
-      } };
-      const parser = new PDFParse({ data: fs.readFileSync(filePath) });
-      try {
-        const result = await parser.getText({ first: MAX_PDF_PAGES });
-        content = textToParagraphHtml(result.text);
-      } finally {
-        await parser.destroy();
-      }
+      const pdfParse = localRequire('pdf-parse') as (data: Buffer) => Promise<{ text: string }>;
+      const result = await pdfParse(fs.readFileSync(filePath));
+      content = textToParagraphHtml(result.text);
     } else if (mimeType === 'application/msword') {
       const WordExtractor = (require('word-extractor') as {
         default?: new () => { extract(source: string): Promise<{ getBody(): string }> };
