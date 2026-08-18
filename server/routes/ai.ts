@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { Router, Response, Request } from 'express';
 import OpenAI from 'openai';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';

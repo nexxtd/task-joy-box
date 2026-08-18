@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { Router, Response } from 'express';
 import { google } from 'googleapis';
 import crypto from 'crypto';

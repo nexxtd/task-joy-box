@@ -1,5 +1,3 @@
-import 'dotenv/config';
-import serverless from 'serverless-http';
 import { app } from '../server/app.js';
 import { initDatabase, initDatabasePoolOnly } from '../server/init-db.js';
 
@@ -25,16 +23,18 @@ function ensureDatabase(): Promise<void> {
 
 export const config = { maxDuration: 60 };
 
-export const handler = async (req: any, context: any) => {
+export default async function handler(req: any, res: any) {
   try {
     await ensureDatabase();
-    return await serverless(app)(req, context);
+    app(req, res);
   } catch (err: any) {
     console.error('Vercel handler crashed:', err);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: false, error: 'Server failed to initialize', details: err?.message || String(err) }),
-    };
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: false, error: 'Server failed to initialize', details: err?.message || String(err) }));
+    } else {
+      res.end();
+    }
   }
-};
+}
