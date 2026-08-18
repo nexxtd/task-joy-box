@@ -321,7 +321,8 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 
     const selectedTier = PRICING_TIERS[tier as SubscriptionTier];
     const appBaseUrl = getAppBaseUrl(req);
-    const total = (selectedTier.price * parsedSeats).toFixed(2);
+    const totalCents = Math.round(selectedTier.price * parsedSeats * 100);
+    const total = (totalCents / 100).toFixed(2);
 
     const { approvalUrl, paymentId } = await createPayPalOrder({
       amount: total,
@@ -337,10 +338,10 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
       planType: 'org',
       seats: parsedSeats,
       orgId: parsedOrgId,
-      amountCents: Math.round(total * 100),
+      amountCents: totalCents,
     }).onConflictDoUpdate({
       target: pendingPayments.orderId,
-      set: { userId: req.userId!, tier: tier as string, planType: 'org', seats: parsedSeats, orgId: parsedOrgId, amountCents: Math.round(total * 100), status: 'pending' },
+      set: { userId: req.userId!, tier: tier as string, planType: 'org', seats: parsedSeats, orgId: parsedOrgId, amountCents: totalCents, status: 'pending' },
     });
 
     res.json({ approvalUrl, paymentId });
