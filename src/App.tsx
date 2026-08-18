@@ -31,6 +31,7 @@ const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const Tutorial = lazy(() => import("@/pages/Tutorial"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const WhiteboardPage = lazy(() => import("@/pages/WhiteboardPage"));
+const Classroom = lazy(() => import("@/pages/Classrooms"));
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
@@ -190,6 +191,7 @@ function ProtectedRoutes() {
                 <Route path="/notes" element={<Suspense fallback={<PageLoader />}><Notes /></Suspense>} />
                 <Route path="/goals" element={<Suspense fallback={<PageLoader />}><Goals /></Suspense>} />
                 <Route path="/habits" element={<Suspense fallback={<PageLoader />}><Habits /></Suspense>} />
+                <Route path="/classroom" element={<Suspense fallback={<PageLoader />}><Classroom /></Suspense>} />
                 <Route path="/support" element={<Suspense fallback={<PageLoader />}><Support /></Suspense>} />
                 <Route path="/collaboration" element={<Suspense fallback={<PageLoader />}><Collaboration /></Suspense>} />
                 <Route path="/ai-chat" element={<Suspense fallback={<PageLoader />}><AIChat /></Suspense>} />

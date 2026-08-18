@@ -18,6 +18,7 @@ import workspaceRoutes from './routes/workspace';  // New workspace routes
 import projectsRoutes from './routes/projects';
 import goalsRoutes from './routes/goals';
 import habitsRoutes from './routes/habits';
+import classroomsRoutes from './routes/classrooms';
 import notesRoutes from './routes/notes';
 import tagsRoutes from './routes/tags';
 import settingsRoutes from './routes/settings';
@@ -264,6 +265,7 @@ app.use('/api/milestones', milestonesRoutes);
 app.use('/api/task-templates', taskTemplatesRoutes);
 app.use('/api/note-templates', noteTemplatesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/classrooms', classroomsRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {

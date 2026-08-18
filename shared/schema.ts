@@ -616,3 +616,52 @@ export const noteTemplates = pgTable('note_templates', {
 export type InsertGoal = any;
 export type InsertHabit = any;
 export type UpdateUserSettings = any;
+
+// --- CLASSROOMS (SEQTA-inspired) ---
+export const classrooms = pgTable('classrooms', {
+  id: serial('id').primaryKey(),
+  teacherId: integer('teacher_id').references(() => users.id).notNull(),
+  name: text('name').notNull(),
+  subject: text('subject'),
+  description: text('description'),
+  joinCode: text('join_code').notNull().unique(),
+  color: text('color').default('#3b82f6'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const classroomMembers = pgTable('classroom_members', {
+  id: serial('id').primaryKey(),
+  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  role: text('role').default('student').notNull(), // 'teacher' | 'student'
+  joinedAt: timestamp('joined_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const classroomAssignments = pgTable('classroom_assignments', {
+  id: serial('id').primaryKey(),
+  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  dueDate: text('due_date'),
+  createdById: integer('created_by_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const assignmentSubmissions = pgTable('assignment_submissions', {
+  id: serial('id').primaryKey(),
+  assignmentId: integer('assignment_id').references(() => classroomAssignments.id).notNull(),
+  studentId: integer('student_id').references(() => users.id).notNull(),
+  content: text('content'),
+  status: text('status').default('submitted').notNull(), // 'submitted' | 'graded'
+  score: integer('score'),
+  feedback: text('feedback'),
+  submittedAt: timestamp('submitted_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const classroomAnnouncements = pgTable('classroom_announcements', {
+  id: serial('id').primaryKey(),
+  classroomId: integer('classroom_id').references(() => classrooms.id).notNull(),
+  authorId: integer('author_id').references(() => users.id).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
