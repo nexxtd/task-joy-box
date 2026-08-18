@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff, Sparkles, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -24,6 +24,18 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [loading, setLoading] = useState(false);
   const [resetToken, setResetToken] = useState(initialToken || '');
   const [success, setSuccess] = useState('');
+  const googleWrapRef = useRef<HTMLDivElement>(null);
+  const [googleWidth, setGoogleWidth] = useState(360);
+
+  useEffect(() => {
+    const el = googleWrapRef.current;
+    if (!el) return;
+    const update = () => setGoogleWidth(Math.max(220, Math.floor(el.clientWidth)));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     setError('');
@@ -248,14 +260,14 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
                     <span className="px-3 bg-card text-xs text-muted-foreground">or continue with</span>
                   </div>
                 </div>
-                <div className="flex justify-center">
+                <div ref={googleWrapRef} className="flex justify-center w-full">
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={() => setError('Google sign-in failed')}
                     useOneTap={false}
                     theme="outline"
                     size="large"
-                    width="360"
+                    width={String(googleWidth)}
                   />
                 </div>
               </>
