@@ -103,11 +103,13 @@
     "jsdom": "^24.1.1",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.441.0",
+    "mammoth": "^1.12.1",
     "multer": "^2.1.1",
     "next-themes": "^0.4.6",
     "nodemon": "^3.1.14",
     "openai": "^6.35.0",
     "paypal-rest-sdk": "^1.8.1",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.20.0",
     "postcss": "^8.5.13",
     "postgres": "^3.4.9",
@@ -130,7 +132,8 @@
     "uuid": "^14.0.0",
     "vaul": "^1.1.2",
     "vite": "^6.4.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "word-extractor": "^1.0.4"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",

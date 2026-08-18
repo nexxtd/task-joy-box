@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { getSettingNumber } from '../lib/settings.js';
+import { extractDocumentText } from '../lib/extract-doc-text.js';
 
 const router = Router();
 
@@ -107,13 +108,14 @@ async function handleUpload(req: any, res: any) {
     const baseTitle = originalName.replace(/\.(docx?|pdf)$/i, '') || 'Untitled document';
     const taskId = req.body.taskId ? String(req.body.taskId) : null;
     const taskTitle = req.body.taskTitle ? String(req.body.taskTitle).slice(0, 200) : null;
+    const content = await extractDocumentText(req.file.path, req.file.mimetype);
 
     const [doc] = await db.insert(documents).values({
       userId: req.userId!,
       taskId,
       taskTitle,
       title: baseTitle,
-      content: '',
+      content,
       fileName: originalName,
       fileType: req.file.mimetype,
       fileSize: req.file.size,
@@ -155,12 +157,19 @@ router.post('/adopt', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.json(existing[0]);
     }
 
+    // Task attachment files live in the same uploads dir — pull their text
+    // through too when the file is readable from this instance.
+    const adoptedFilePath = resolveUploadPath(String(fileUrl));
+    const content = fs.existsSync(adoptedFilePath)
+      ? await extractDocumentText(adoptedFilePath, String(fileType))
+      : '';
+
     const [doc] = await db.insert(documents).values({
       userId: req.userId!,
       taskId: String(taskId),
       taskTitle: taskTitle ? String(taskTitle).slice(0, 200) : null,
       title: sanitizeFilename(String(fileName)).replace(/\.(docx?|pdf)$/i, '') || 'Untitled document',
-      content: '',
+      content,
       fileName: sanitizeFilename(String(fileName)),
       fileType: String(fileType),
       fileSize: Number(fileSize),

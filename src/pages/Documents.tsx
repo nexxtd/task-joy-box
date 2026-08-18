@@ -65,6 +65,7 @@ const Documents: React.FC = () => {
   const pendingContent = useRef<string>('');
   const pendingTitle = useRef<string | null>(null);
   const currentDoc = useRef<DocumentItem | null>(null);
+  const initRef = useRef(false);
 
   const loadDocs = useCallback(async () => {
     try {
@@ -127,9 +128,11 @@ const Documents: React.FC = () => {
     });
   }, [navigate]);
 
-  // Initial selection: ?doc= param, then last opened, then first doc.
+  // Initial selection (run once so auto-saves never re-open the document and
+  // wipe the user's caret/selection mid-edit).
   useEffect(() => {
-    if (loading || docs.length === 0) return;
+    if (loading || initRef.current) return;
+    initRef.current = true;
     const paramId = searchParams.get('doc');
     if (paramId) {
       const doc = docs.find(d => d.id === Number(paramId));
@@ -162,7 +165,15 @@ const Documents: React.FC = () => {
   }, [scheduleSave]);
 
   const exec = useCallback((command: string, value?: string) => {
-    editorRef.current?.focus();
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+    el.focus({ preventScroll: true });
+    if (range && sel) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
     document.execCommand('styleWithCSS', false, 'true');
     document.execCommand(command, false, value);
     handleContentInput();
