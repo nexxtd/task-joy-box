@@ -54,3 +54,6 @@ debug-auth.ts
 
 # TypeScript build info
 *.tsbuildinfo
+
+# User env exports from Vercel/Render downloads
+task-joy-box*.env

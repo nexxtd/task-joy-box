@@ -735,3 +735,9 @@ export async function initDatabase() {
     // Tables might already exist or be created by migrations
   }
 }
+
+// Fast connection check for serverless environments (Vercel) where the full
+// schema pass would eat too much of the function execution budget.
+export async function initDatabasePoolOnly() {
+  await pool.query('SELECT 1');
+}
