@@ -22,6 +22,8 @@ import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/se
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
+import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
+import AttachmentRow from '@/components/AttachmentRow';
 
 type NewTaskSubtaskDraft = {
   id: string;
@@ -559,6 +561,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         body: JSON.stringify({
           input: aiBuilderInput,
           columns: board.columns.map(c => ({ id: c.id, title: c.title })),
+          attachedFiles: newFiles.map(f => f.name),
+          attachedImages: newTaskImages.map(img => img.fileName),
         }),
       });
       if (!res.ok) {
@@ -1197,25 +1201,21 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         />
                       </label>
                       {newFiles.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
                           {newFiles.map((file, fileIdx) => (
-                            <div key={`${file.name}-${fileIdx}`} className="relative group/att">
-                              <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                                <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                                  <Paperclip className="w-5 h-5 text-muted-foreground" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                  <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
-                                </div>
-                              </div>
-                              <button
-                                onClick={e => { e.preventDefault(); e.stopPropagation(); setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
-                                className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                            <AttachmentRow
+                              key={`${file.name}-${fileIdx}`}
+                              attachment={{
+                                id: `draft-${fileIdx}`,
+                                fileName: file.name,
+                                fileSize: file.size,
+                                fileType: file.type,
+                                fileUrl: '',
+                              }}
+                              taskId="draft"
+                              onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))}
+                              disabledInBuilder
+                            />
                           ))}
                         </div>
                       )}
@@ -1273,29 +1273,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           e.target.value = '';
                         }} className="hidden" />
                       </label>
-                      {newTaskImages.length > 0 && (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {newTaskImages.map(img => (
-                            <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
-                              {img.fileUrl.match(/^data:image/) ? (
-                                <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
-                              )}
-                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                                <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                                {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                              </div>
-                              <button
-                                onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
-                                className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <DraggableImageGrid
+                        images={newTaskImages}
+                        onReorder={setNewTaskImages}
+                        onRemove={(id) => setNewTaskImages(prev => prev.filter(img => img.id !== id))}
+                        disabledInBuilder
+                      />
                     </>
                   )}
                 </div>
@@ -1548,19 +1531,93 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
                 <textarea
                   autoFocus
                   value={aiBuilderInput}
                   onChange={e => setAiBuilderInput(e.target.value)}
-                  placeholder={"Describe your task, project, or goal in detail...\n\ne.g. 'I need to launch a new website by next Friday. It requires designing 3 pages, writing copy, setting up hosting, and testing on mobile.'"}
-                  rows={7}
+                  placeholder={"Describe your task, project, or goal in detail...\n\ne.g. 'I need to launch a new website by next Friday based on image 1 and using attached specs.pdf. It requires designing 3 pages, writing copy, setting up hosting, and testing on mobile.'"}
+                  rows={5}
                   className="w-full bg-muted/40 border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
+
+                {/* AI Builder Files & Images Attachments */}
+                <div className="space-y-3 pt-1 border-t border-border/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attachments & Images</span>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                        <Paperclip className="w-3.5 h-3.5 text-primary" />
+                        <span>Add File</span>
+                        <input
+                          type="file"
+                          multiple
+                          onChange={e => {
+                            if (!e.target.files) return;
+                            setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                        <Image className="w-3.5 h-3.5 text-primary" />
+                        <span>Add Image</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,.heic,.heif"
+                          onChange={async e => {
+                            if (!e.target.files) return;
+                            const files = Array.from(e.target.files);
+                            const newImgs: Attachment[] = [];
+                            for (const file of files) {
+                              const fileUrl = await imageToDataUrl(file);
+                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                            }
+                            setNewTaskImages(prev => [...prev, ...newImgs]);
+                            e.target.value = '';
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {newFiles.length > 0 && (
+                    <div className="space-y-1.5">
+                      {newFiles.map((file, fileIdx) => (
+                        <AttachmentRow
+                          key={`builder-file-${file.name}-${fileIdx}`}
+                          attachment={{
+                            id: `builder-${fileIdx}`,
+                            fileName: file.name,
+                            fileSize: file.size,
+                            fileType: file.type,
+                            fileUrl: '',
+                          }}
+                          taskId="builder"
+                          onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))}
+                          disabledInBuilder
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {newTaskImages.length > 0 && (
+                    <DraggableImageGrid
+                      images={newTaskImages}
+                      onReorder={setNewTaskImages}
+                      onRemove={(id) => setNewTaskImages(prev => prev.filter(img => img.id !== id))}
+                      disabledInBuilder
+                    />
+                  )}
+                </div>
+
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 pt-2">
                   <button
                     onClick={() => setAiBuilderOpen(false)}
                     className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"

@@ -11,12 +11,32 @@ import { extractDocumentText } from '../lib/extract-doc-text.js';
 
 const router = Router();
 
-// Word documents and PDFs are the only file types the Document Editor supports.
+// Expanded list of word-processing MIME types
 const ALLOWED_MIMES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  'text/plain',
+  'text/markdown',
+  'text/x-markdown',
+  'text/html',
+  'application/xhtml+xml',
   'application/pdf',
+  'application/epub+zip',
+  'application/octet-stream',
+  'application/zip',
+  'application/x-zip-compressed',
 ];
+
+const SUPPORTED_EXT_REGEX = /\.(docx?|odt|rtf|txt|md|html?|pdf|epub)$/i;
+
+function isSupportedDoc(mimeType: string, fileName?: string): boolean {
+  if (SUPPORTED_EXT_REGEX.test(fileName || '')) return true;
+  if (ALLOWED_MIMES.includes(mimeType)) return true;
+  return false;
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -39,7 +59,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIMES.includes(file.mimetype)) {
+    if (isSupportedDoc(file.mimetype, file.originalname)) {
       cb(null, true);
     } else {
       cb(new Error('FILE_NOT_COMPATIBLE'));
@@ -71,9 +91,40 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Upload a Word/PDF file into the Document Editor. Filed under "My Documents"
+// Create a new blank document
+router.post('/new', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const title = (req.body?.title || 'Untitled document').trim().slice(0, 200);
+    const initialContent = req.body?.content || '';
+    const taskId = req.body?.taskId ? String(req.body.taskId) : null;
+    const taskTitle = req.body?.taskTitle ? String(req.body.taskTitle).slice(0, 200) : null;
+
+    const [doc] = await db.insert(documents).values({
+      userId: req.userId!,
+      taskId,
+      taskTitle,
+      title: title || 'Untitled document',
+      content: initialContent,
+      fileName: `${title.replace(/[^a-zA-Z0-9_-]/g, '_') || 'document'}.docx`,
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 0,
+      fileUrl: '',
+    }).returning();
+
+    res.json(doc);
+  } catch (error) {
+    console.error('Error creating blank document:', error);
+    res.status(500).json({ error: 'Failed to create document' });
+  }
+});
+
+// Upload a document file into the Document Editor. Filed under "My Documents"
 // unless a taskId field is supplied (then it's grouped under that task).
 router.post('/', requireAuth, (req: any, res: any, next: any) => {
+  // If JSON request to create blank document without multipart upload
+  if (req.headers['content-type']?.includes('application/json') || req.body?.createBlank) {
+    return handleBlankCreate(req, res);
+  }
   upload.single('file')(req, res, (err: any) => {
     if (err) {
       if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
@@ -87,6 +138,26 @@ router.post('/', requireAuth, (req: any, res: any, next: any) => {
     handleUpload(req, res);
   });
 });
+
+async function handleBlankCreate(req: any, res: any) {
+  try {
+    const title = (req.body?.title || 'Untitled document').trim().slice(0, 200);
+    const [doc] = await db.insert(documents).values({
+      userId: req.userId!,
+      taskId: req.body?.taskId ? String(req.body.taskId) : null,
+      taskTitle: req.body?.taskTitle ? String(req.body.taskTitle).slice(0, 200) : null,
+      title: title || 'Untitled document',
+      content: req.body?.content || '',
+      fileName: `${title.replace(/[^a-zA-Z0-9_-]/g, '_') || 'document'}.docx`,
+      fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 0,
+      fileUrl: '',
+    }).returning();
+    res.json(doc);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create document' });
+  }
+}
 
 async function handleUpload(req: any, res: any) {
   try {
@@ -105,10 +176,10 @@ async function handleUpload(req: any, res: any) {
     }
 
     const originalName = sanitizeFilename(req.file.originalname);
-    const baseTitle = originalName.replace(/\.(docx?|pdf)$/i, '') || 'Untitled document';
+    const baseTitle = originalName.replace(/\.(docx?|odt|rtf|txt|md|html?|pdf|epub)$/i, '') || 'Untitled document';
     const taskId = req.body.taskId ? String(req.body.taskId) : null;
     const taskTitle = req.body.taskTitle ? String(req.body.taskTitle).slice(0, 200) : null;
-    const content = await extractDocumentText(req.file.path, req.file.mimetype);
+    const content = await extractDocumentText(req.file.path, req.file.mimetype, req.file.originalname);
 
     const [doc] = await db.insert(documents).values({
       userId: req.userId!,
@@ -124,7 +195,7 @@ async function handleUpload(req: any, res: any) {
 
     res.json(doc);
   } catch (error: any) {
-    console.error('Error uploading document');
+    console.error('Error uploading document:', error);
     const msg = error?.message === 'FILE_NOT_COMPATIBLE'
       ? 'FILE_NOT_COMPATIBLE'
       : 'Failed to upload document';
@@ -138,10 +209,10 @@ async function handleUpload(req: any, res: any) {
 router.post('/adopt', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { taskId, taskTitle, fileName, fileType, fileSize, fileUrl } = req.body || {};
-    if (!taskId || !fileName || !fileType || !fileSize || !fileUrl) {
+    if (!taskId || !fileName || !fileType || !fileUrl) {
       return res.status(400).json({ error: 'Missing document metadata' });
     }
-    if (!ALLOWED_MIMES.includes(fileType)) {
+    if (!isSupportedDoc(String(fileType), String(fileName))) {
       return res.status(415).json({ error: 'FILE_NOT_COMPATIBLE' });
     }
 
@@ -154,6 +225,20 @@ router.post('/adopt', requireAuth, async (req: AuthRequest, res: Response) => {
       )).limit(1);
 
     if (existing.length > 0) {
+      // If content is empty in existing document but file exists, try re-extracting
+      if (!existing[0].content && existing[0].fileUrl) {
+        const adoptedPath = resolveUploadPath(existing[0].fileUrl);
+        if (fs.existsSync(adoptedPath)) {
+          const freshContent = await extractDocumentText(adoptedPath, String(fileType), String(fileName));
+          if (freshContent) {
+            const [updated] = await db.update(documents)
+              .set({ content: freshContent, updatedAt: new Date().toISOString() })
+              .where(eq(documents.id, existing[0].id))
+              .returning();
+            return res.json(updated);
+          }
+        }
+      }
       return res.json(existing[0]);
     }
 
@@ -161,18 +246,18 @@ router.post('/adopt', requireAuth, async (req: AuthRequest, res: Response) => {
     // through too when the file is readable from this instance.
     const adoptedFilePath = resolveUploadPath(String(fileUrl));
     const content = fs.existsSync(adoptedFilePath)
-      ? await extractDocumentText(adoptedFilePath, String(fileType))
+      ? await extractDocumentText(adoptedFilePath, String(fileType), String(fileName))
       : '';
 
     const [doc] = await db.insert(documents).values({
       userId: req.userId!,
       taskId: String(taskId),
       taskTitle: taskTitle ? String(taskTitle).slice(0, 200) : null,
-      title: sanitizeFilename(String(fileName)).replace(/\.(docx?|pdf)$/i, '') || 'Untitled document',
+      title: sanitizeFilename(String(fileName)).replace(/\.(docx?|odt|rtf|txt|md|html?|pdf|epub)$/i, '') || 'Untitled document',
       content,
       fileName: sanitizeFilename(String(fileName)),
       fileType: String(fileType),
-      fileSize: Number(fileSize),
+      fileSize: Number(fileSize || 0),
       fileUrl: String(fileUrl),
     }).returning();
 

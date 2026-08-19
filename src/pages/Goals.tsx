@@ -8,6 +8,7 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   BarChart3,
@@ -22,11 +23,14 @@ import {
   GripVertical,
   FolderKanban,
   Image,
+  ListChecks,
+  Milestone,
   Paperclip,
   Plus,
   Save,
   Search,
   Tag,
+  Target,
   Sparkles,
   Star,
   Trash2,
@@ -38,6 +42,7 @@ import {
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
+import { ArchivedRow } from '@/components/shared/ArchivedRow';
 import {
   DragDropContext,
   Droppable,
@@ -85,6 +90,57 @@ const formatDuration = (minutes: number) => {
 };
 
 const isGoalCompleted = (goal: Goal) => Boolean(goal.completed || goal.status === 'completed');
+
+type GoalProgressMode = 'percent' | 'numeric' | 'auto';
+
+interface GoalProgress {
+  mode: GoalProgressMode;
+  percent: number;
+  current: number;
+  target: number;
+}
+
+const getGoalProgress = (goal: Goal): GoalProgress => {
+  const milestones = goal.goalMilestones || [];
+  const mode: GoalProgressMode = goal.goalProgressMode || 'percent';
+  if (mode === 'auto') {
+    const done = milestones.filter(m => m.completed).length;
+    const total = milestones.length;
+    return { mode: 'auto', percent: total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0, current: done, target: total };
+  }
+  if (mode === 'numeric') {
+    const current = Math.max(0, Number(goal.goalProgressValue) || 0);
+    const target = Math.max(0, Number(goal.goalProgressTarget) || 0);
+    return { mode: 'numeric', percent: target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0, current, target };
+  }
+  const percent = Math.min(100, Math.max(0, Math.round(Number(goal.goalProgressValue) || 0)));
+  return { mode: 'percent', percent, current: percent, target: 100 };
+};
+
+const formatGoalProgressLabel = (goal: Goal): string => {
+  const p = getGoalProgress(goal);
+  switch (p.mode) {
+    case 'numeric':
+      return `${p.current} / ${p.target}`;
+    case 'auto':
+      return p.target > 0 ? `${p.current} / ${p.target} milestones` : '0%';
+    default:
+      return `${p.percent}%`;
+  }
+};
+
+const ProgressBar: React.FC<{ percent: number; size?: 'sm' | 'md' | 'lg'; className?: string }> = ({ percent, size = 'md', className = '' }) => {
+  const height = size === 'sm' ? 'h-1' : size === 'lg' ? 'h-2.5' : 'h-1.5';
+  const color = percent >= 100 ? 'bg-label-green' : percent >= 50 ? 'bg-primary' : 'bg-amber-500';
+  return (
+    <div className={`w-full ${height} rounded-full bg-muted/60 overflow-hidden ${className}`}>
+      <div
+        className={`h-full rounded-full ${color} transition-all duration-300`}
+        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+      />
+    </div>
+  );
+};
 
 const getTaskStatus = (goal: Goal): TaskStatus => {
   if (goal.status) return goal.status;
@@ -513,8 +569,9 @@ const Goals: React.FC = () => {
       !groupFilterId ? true : goal.columnId === groupFilterId
     );
 
-    const active = byGroup.filter(goal => !isGoalCompleted(goal));
-    const completed = byGroup.filter(goal => isGoalCompleted(goal));
+    const active = byGroup.filter(goal => !isGoalCompleted(goal) && !goal.archived);
+    const completed = byGroup.filter(goal => isGoalCompleted(goal) && !goal.archived);
+    const archived = byGroup.filter(goal => goal.archived);
 
     const sortByDue = (a: Goal, b: Goal) => {
       const aDate = a.dueDate ? new Date(`${a.dueDate}T${a.dueTime || '23:59'}`) : null;
@@ -552,7 +609,9 @@ const Goals: React.FC = () => {
       return bTime - aTime;
     });
 
-    return { active: activeSorted, completed: completedSorted };
+    const archivedSorted = [...archived].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    return { active: activeSorted, completed: completedSorted, archived: archivedSorted };
   }, [filteredGoalsByBase, groupFilterId, sortByDueDate, sortDueDateDesc, orderedActiveIds]);
 
   const myGoalsGroup = useMemo(() =>
@@ -577,7 +636,7 @@ const Goals: React.FC = () => {
     }).filter(Boolean) as Array<{ project: ProjectMeta; goals: Goal[]; columnGroups: Array<{ column: any; goals: Goal[] }>; uncategorized: Goal[] }>;
   }, [filtered.active, projects, board.columns]);
 
-  const matchingCount = filtered.active.length + filtered.completed.length;
+  const matchingCount = filtered.active.length + filtered.completed.length + filtered.archived.length;
   const openGoal = openTaskId ? board.tasks.find(goal => goal.id === openTaskId) ?? null : null;
 
   const templateEditGoal = useMemo(() => {
@@ -1386,6 +1445,21 @@ const Goals: React.FC = () => {
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
             </div>
+            {(() => {
+              const gp = getGoalProgress(goal);
+              return (
+                <div className="flex items-center gap-2 mt-1">
+                  <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
+                  <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
+                    {gp.mode === 'numeric' && gp.target > 0
+                      ? `${gp.current}/${gp.target}`
+                      : gp.mode === 'auto' && gp.target > 0
+                        ? `${gp.current}/${gp.target}`
+                        : `${gp.percent}%`}
+                  </span>
+                </div>
+              );
+            })()}
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {(goal.priority !== 'none' || priorityEditTaskId === goal.id) && (
                 <PriorityBadge
@@ -1434,8 +1508,19 @@ const Goals: React.FC = () => {
                 }`}
               >
                 <Calendar className="w-2.5 h-2.5" />
-                {goal.dueDate ? `${formatDate(goal.dueDate)}${goal.dueTime ? ` ${goal.dueTime}` : ''}` : 'Add due date'}
+                {goal.dueDate ? `Target: ${formatDate(goal.dueDate)}` : 'Add target date'}
               </button>
+              {(() => {
+                const milestones = goal.goalMilestones || [];
+                if (milestones.length === 0) return null;
+                const done = milestones.filter(m => m.completed).length;
+                return (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1">
+                    <Milestone className="w-2.5 h-2.5" />
+                    {done}/{milestones.length} {milestones.length === 1 ? 'milestone' : 'milestones'}
+                  </span>
+                );
+              })()}
               {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
@@ -1566,7 +1651,15 @@ const Goals: React.FC = () => {
               isPremium={isPremium}
               isPro={isPro}
             />
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={e => { e.stopPropagation(); updateTask(goal.id, { archived: true }); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted rounded-lg transition-all"
+                title="Archive this goal"
+              >
+                <Archive className="w-3.5 h-3.5" />
+                Archive
+              </button>
               <button
                 onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(goal.id); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
@@ -1847,7 +1940,7 @@ const Goals: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-6 relative">
         <DragDropContext onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
-          {myGoalsGroup.length === 0 && projectGoalGroups.length === 0 && filtered.completed.length === 0 && (
+          {myGoalsGroup.length === 0 && projectGoalGroups.length === 0 && filtered.completed.length === 0 && filtered.archived.length === 0 && (
             <div className="text-center py-16">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
               <p className="text-sm text-muted-foreground">No goals found</p>
@@ -2002,6 +2095,43 @@ const Goals: React.FC = () => {
                         key={goal.id}
                         task={goal}
                         onToggleComplete={(t) => toggleGoalCompletion(t)}
+                        onOpenTask={(t) => setOpenTaskId(t.id)}
+                        onDeleteTask={(t) => setSingleDeleteTaskId(t.id)}
+                        isDeleteMode={isDeleteMode}
+                        isSelected={selectedDeleteTaskIds.includes(goal.id)}
+                        onToggleSelect={(t) =>
+                          setSelectedDeleteTaskIds(prev =>
+                            prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {filtered.archived.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-border/80">
+              <div className="border border-border rounded-xl bg-muted/20">
+                <button
+                  onClick={() => setCompletedOpen(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <span className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <Archive className="w-4 h-4" />
+                    Archived ({filtered.archived.length})
+                  </span>
+                  {completedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {completedOpen && (
+                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                    {filtered.archived.map(goal => (
+                      <ArchivedRow
+                        key={goal.id}
+                        task={goal}
+                        onRestore={(t) => updateTask(t.id, { archived: false })}
                         onOpenTask={(t) => setOpenTaskId(t.id)}
                         onDeleteTask={(t) => setSingleDeleteTaskId(t.id)}
                         isDeleteMode={isDeleteMode}
@@ -3364,6 +3494,13 @@ const GoalDropdownExpanded: React.FC<{
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // Milestone states
+  const [milestonesCollapsed, setMilestonesCollapsed] = useState(false);
+  const [newMilestoneText, setNewMilestoneText] = useState('');
+  const [newMilestoneEstimate, setNewMilestoneEstimate] = useState(0);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [editingMilestoneText, setEditingMilestoneText] = useState('');
+
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(goal.id));
 
@@ -3521,6 +3658,47 @@ const GoalDropdownExpanded: React.FC<{
     }
   };
 
+  const milestones = goal.goalMilestones || [];
+  const persistMilestones = (next: Subtask[]) => {
+    onUpdateGoal(goal.id, { goalMilestones: next });
+  };
+  const toggleMilestone = (milestoneId: string) => {
+    persistMilestones(milestones.map(m => m.id === milestoneId ? { ...m, completed: !m.completed } : m));
+  };
+  const addMilestone = () => {
+    if (!newMilestoneText.trim()) return;
+    persistMilestones([
+      ...milestones,
+      { id: crypto.randomUUID(), text: newMilestoneText.trim(), completed: false, durationMinutes: Math.max(0, Number(newMilestoneEstimate) || 0) },
+    ]);
+    setNewMilestoneText('');
+    setNewMilestoneEstimate(0);
+  };
+  const removeMilestone = (milestoneId: string) => {
+    persistMilestones(milestones.filter(m => m.id !== milestoneId));
+  };
+  const updateMilestone = (milestoneId: string, updates: Partial<Subtask>) => {
+    persistMilestones(milestones.map(m => m.id === milestoneId ? { ...m, ...updates } : m));
+  };
+  const saveMilestoneEdit = (milestoneId: string) => {
+    const next = editingMilestoneText.trim();
+    if (next) updateMilestone(milestoneId, { text: next });
+    setEditingMilestoneId(null);
+    setEditingMilestoneText('');
+  };
+  const handleMilestoneReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(milestones);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    persistMilestones(items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [milestones]);
+
+  const setProgressMode = (mode: GoalProgressMode) => {
+    onUpdateGoal(goal.id, { goalProgressMode: mode });
+  };
+
   const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
     return (
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
@@ -3585,6 +3763,220 @@ const GoalDropdownExpanded: React.FC<{
           rows={3}
           className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
         />
+      </div>
+
+      {/* Summary row */}
+      <div className="flex items-center flex-wrap gap-2 pb-2 border-b border-border/60">
+        <span className="text-xs font-semibold text-foreground truncate max-w-[220px]">{goal.title}</span>
+        {goal.priority !== 'none' && (
+          <span
+            className="text-[10px] px-2 py-0.5 rounded-full font-medium text-white flex-shrink-0"
+            style={{ backgroundColor: PRIORITY_COLORS[goal.priority]?.bg }}
+          >
+            {PRIORITY_COLORS[goal.priority]?.label}
+          </span>
+        )}
+        {goal.dueDate && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1 flex-shrink-0">
+            <Calendar className="w-2.5 h-2.5" />
+            Target: {formatDate(goal.dueDate)}
+          </span>
+        )}
+        {(() => { const gp = getGoalProgress(goal); return (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1 flex-shrink-0">
+            <Target className="w-2.5 h-2.5" />
+            {formatGoalProgressLabel(goal)}
+          </span>
+        ); })()}
+        {goal.labels.map(label => (
+          <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>{label.name}</span>
+        ))}
+      </div>
+
+      {/* Progress Tracker */}
+      <div className="rounded-2xl border border-border bg-muted/20 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Target className="w-4 h-4 text-muted-foreground" />
+            Progress
+          </h3>
+          <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg border border-border">
+            {(['percent', 'numeric', 'auto'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setProgressMode(mode)}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                  getGoalProgress(goal).mode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {mode === 'percent' ? '%' : mode === 'numeric' ? 'X / Y' : 'Auto'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          {(() => {
+            const gp = getGoalProgress(goal);
+            return (
+              <>
+                <ProgressBar percent={gp.percent} size="md" />
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-foreground">{formatGoalProgressLabel(goal)}</span>
+                  <span className="text-xs text-muted-foreground">{gp.percent}%</span>
+                </div>
+                {gp.mode === 'percent' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={gp.percent}
+                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Number(e.target.value) })}
+                      className="flex-1 accent-[hsl(var(--primary))] cursor-pointer"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={gp.percent}
+                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                      className="w-20 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm text-right"
+                    />
+                    <span className="text-xs text-muted-foreground">%</span>
+                  </div>
+                )}
+                {gp.mode === 'numeric' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={gp.current}
+                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-sm text-muted-foreground">/</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={gp.target || ''}
+                      placeholder="target"
+                      onChange={e => onUpdateGoal(goal.id, { goalProgressTarget: Math.max(0, Number(e.target.value) || 0) })}
+                      className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">units</span>
+                  </div>
+                )}
+                {gp.mode === 'auto' && (
+                  <p className="text-xs text-muted-foreground">
+                    {milestones.length === 0
+                      ? 'Add milestones below to auto-calculate progress.'
+                      : 'Progress is calculated automatically from completed milestones.'}
+                  </p>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Milestones Section */}
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setMilestonesCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Milestone className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
+            {milestones.length > 0 && (
+              <span className="text-xs text-muted-foreground">({milestones.length})</span>
+            )}
+          </div>
+          {milestonesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!milestonesCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {milestones.length === 0 && (
+              <p className="text-xs text-muted-foreground">No milestones yet. Break your goal into checkpoints below.</p>
+            )}
+            <DragDropContext onDragEnd={handleMilestoneReorder}>
+              <Droppable droppableId={`dropdown-milestones-${goal.id}`}>
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                    {milestones.map((milestone, idx) => (
+                      <Draggable key={milestone.id} draggableId={milestone.id} index={idx}>
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2 group">
+                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <SquareToggle
+                              completed={milestone.completed}
+                              onClick={() => toggleMilestone(milestone.id)}
+                              size="md"
+                            />
+                            {editingMilestoneId === milestone.id ? (
+                              <input
+                                autoFocus
+                                className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                value={editingMilestoneText}
+                                onChange={e => setEditingMilestoneText(e.target.value)}
+                                onBlur={() => saveMilestoneEdit(milestone.id)}
+                                onKeyDown={e => e.key === 'Enter' && saveMilestoneEdit(milestone.id)}
+                              />
+                            ) : (
+                              <span
+                                onClick={() => { setEditingMilestoneId(milestone.id); setEditingMilestoneText(milestone.text); }}
+                                className={`flex-1 cursor-text truncate ${milestone.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                              >
+                                {milestone.text}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                value={milestone.durationMinutes || 0}
+                                onChange={e => updateMilestone(milestone.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                              />
+                              <span className="text-[10px] text-muted-foreground">est.</span>
+                              <button
+                                onClick={() => removeMilestone(milestone.id)}
+                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+            <div className="grid grid-cols-[1fr_80px_auto] gap-2 pt-1">
+              <input
+                value={newMilestoneText}
+                onChange={e => setNewMilestoneText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addMilestone()}
+                placeholder="Add milestone"
+                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                min={0}
+                value={newMilestoneEstimate}
+                onChange={e => setNewMilestoneEstimate(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="est."
+                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+              />
+              <button onClick={addMilestone} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg font-semibold">Add</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sub-goals Section */}
@@ -4078,6 +4470,11 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
+  const [milestonesCollapsed, setMilestonesCollapsed] = useState(false);
+  const [newMilestoneText, setNewMilestoneText] = useState('');
+  const [newMilestoneEstimate, setNewMilestoneEstimate] = useState(0);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [editingMilestoneText, setEditingMilestoneText] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
@@ -4358,6 +4755,47 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
     }
   };
 
+  const milestones = goal.goalMilestones || [];
+  const persistMilestones = (next: Subtask[]) => {
+    onUpdateGoal(goal.id, { goalMilestones: next });
+  };
+  const toggleMilestone = (milestoneId: string) => {
+    persistMilestones(milestones.map(m => m.id === milestoneId ? { ...m, completed: !m.completed } : m));
+  };
+  const addMilestone = () => {
+    if (!newMilestoneText.trim()) return;
+    persistMilestones([
+      ...milestones,
+      { id: crypto.randomUUID(), text: newMilestoneText.trim(), completed: false, durationMinutes: Math.max(0, Number(newMilestoneEstimate) || 0) },
+    ]);
+    setNewMilestoneText('');
+    setNewMilestoneEstimate(0);
+  };
+  const removeMilestone = (milestoneId: string) => {
+    persistMilestones(milestones.filter(m => m.id !== milestoneId));
+  };
+  const updateMilestone = (milestoneId: string, updates: Partial<Subtask>) => {
+    persistMilestones(milestones.map(m => m.id === milestoneId ? { ...m, ...updates } : m));
+  };
+  const saveMilestoneEdit = (milestoneId: string) => {
+    const next = editingMilestoneText.trim();
+    if (next) updateMilestone(milestoneId, { text: next });
+    setEditingMilestoneId(null);
+    setEditingMilestoneText('');
+  };
+  const handleMilestoneReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(milestones);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    persistMilestones(items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [milestones]);
+
+  const setProgressMode = (mode: GoalProgressMode) => {
+    onUpdateGoal(goal.id, { goalProgressMode: mode });
+  };
+
   const createTagForGoal = () => {
     const name = normalizeTagName(newTagName);
     if (!name) return;
@@ -4509,7 +4947,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
           </div>
           <div>
             <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> End
+              <Calendar className="w-3 h-3" /> Target
             </label>
             <div className="flex items-center gap-2 mt-1">
               <div className="relative flex-1">
@@ -4532,6 +4970,192 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Progress Tracker */}
+        <div className="rounded-2xl border border-border bg-muted/20 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Target className="w-4 h-4 text-muted-foreground" />
+              Progress
+            </h3>
+            <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-lg border border-border">
+              {(['percent', 'numeric', 'auto'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setProgressMode(mode)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    getGoalProgress(goal).mode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {mode === 'percent' ? '%' : mode === 'numeric' ? 'X / Y' : 'Auto'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            {(() => {
+              const gp = getGoalProgress(goal);
+              return (
+                <>
+                  <ProgressBar percent={gp.percent} size="lg" />
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-2xl font-bold text-foreground">{formatGoalProgressLabel(goal)}</span>
+                    <span className="text-sm text-muted-foreground">{gp.percent}% complete</span>
+                  </div>
+                  {gp.mode === 'percent' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={gp.percent}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Number(e.target.value) })}
+                        className="flex-1 accent-[hsl(var(--primary))] cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={gp.percent}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                        className="w-20 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm text-right"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                  )}
+                  {gp.mode === 'numeric' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={gp.current}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-28 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-sm text-muted-foreground">/</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={gp.target || ''}
+                        placeholder="target"
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressTarget: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-28 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">units</span>
+                    </div>
+                  )}
+                  {gp.mode === 'auto' && (
+                    <p className="text-xs text-muted-foreground">
+                      {milestones.length === 0
+                        ? 'Add milestones below to auto-calculate progress.'
+                        : 'Progress is calculated automatically from completed milestones.'}
+                    </p>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Milestones Section */}
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setMilestonesCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <Milestone className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
+              {milestones.length > 0 && (
+                <span className="text-xs text-muted-foreground">({milestones.length})</span>
+              )}
+            </div>
+            {milestonesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!milestonesCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {milestones.length === 0 && (
+                <p className="text-xs text-muted-foreground">No milestones yet. Break your goal into checkpoints below.</p>
+              )}
+              <DragDropContext onDragEnd={handleMilestoneReorder}>
+                <Droppable droppableId={`fullview-milestones-${goal.id}`}>
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                      {milestones.map((milestone, idx) => (
+                        <Draggable key={milestone.id} draggableId={milestone.id} index={idx}>
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2 group">
+                              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+                              <SquareToggle
+                                completed={milestone.completed}
+                                onClick={() => toggleMilestone(milestone.id)}
+                                size="md"
+                              />
+                              {editingMilestoneId === milestone.id ? (
+                                <input
+                                  autoFocus
+                                  className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                  value={editingMilestoneText}
+                                  onChange={e => setEditingMilestoneText(e.target.value)}
+                                  onBlur={() => saveMilestoneEdit(milestone.id)}
+                                  onKeyDown={e => e.key === 'Enter' && saveMilestoneEdit(milestone.id)}
+                                />
+                              ) : (
+                                <span
+                                  onClick={() => { setEditingMilestoneId(milestone.id); setEditingMilestoneText(milestone.text); }}
+                                  className={`flex-1 cursor-text truncate ${milestone.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                >
+                                  {milestone.text}
+                                </span>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  value={milestone.durationMinutes || 0}
+                                  onChange={e => updateMilestone(milestone.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                                />
+                                <span className="text-[10px] text-muted-foreground">est.</span>
+                                <button
+                                  onClick={() => removeMilestone(milestone.id)}
+                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+              <div className="grid grid-cols-[1fr_80px_auto] gap-2 pt-1">
+                <input
+                  value={newMilestoneText}
+                  onChange={e => setNewMilestoneText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addMilestone()}
+                  placeholder="Add milestone"
+                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newMilestoneEstimate}
+                  onChange={e => setNewMilestoneEstimate(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="est."
+                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                />
+                <button onClick={addMilestone} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg font-semibold">Add</button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -5177,6 +5801,14 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               </button>
             </div>
           ) : (
+            <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onUpdateGoal(goal.id, { archived: true })}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all font-medium"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              Archive
+            </button>
             <button
               onClick={() => onDeleteGoal(goal.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all font-medium"
@@ -5184,6 +5816,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               <Trash2 className="w-3.5 h-3.5" />
               Delete Goal
             </button>
+            </div>
           )}
         </div>
       </div>

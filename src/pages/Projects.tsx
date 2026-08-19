@@ -1264,7 +1264,7 @@ const Projects: React.FC = () => {
                           boardZoom={boardZoom}
                           onAddClick={canCreateTasks ? () => {
                             setCreateModalColumnId(column.id);
-                            setShowCreateModal(true);
+                            openAddPopup();
                           } : undefined}
                         />
                       );
@@ -1310,7 +1310,13 @@ const Projects: React.FC = () => {
   };
 
   const renderList = () => (
-    <ListView onTaskClick={setSelectedTask} projectId={selectedProject?.id} onAddTask={canCreateTasks ? () => setShowCreateModal(true) : undefined} />
+    <ListView
+      onTaskClick={setSelectedTask}
+      projectId={selectedProject?.id}
+      onAddTask={canCreateTasks ? () => {
+        openAddPopup();
+      } : undefined}
+    />
   );
 
   const renderChat = () => (
@@ -1567,12 +1573,6 @@ const Projects: React.FC = () => {
                     <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
                       <Share2 className="h-3.5 w-3.5" />
                       Share
-                    </button>
-                  )}
-                  {canEdit && (
-                    <button onClick={openAddPopup} className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
-                      <Plus className="h-3.5 w-3.5" />
-                      Add
                     </button>
                   )}
                 </div>

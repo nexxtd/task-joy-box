@@ -161,6 +161,13 @@
   box-shadow: 0 20px 40px rgba(0,0,0,0.15);
 }
 
+/* Rich text editor placeholder */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
 /* Task Assistant animations */
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(12px); }

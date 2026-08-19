@@ -81,6 +81,11 @@ export interface Task {
   targetPeriod?: 'daily' | 'weekly' | 'monthly';
   recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
   nextOccurrence?: string | null;
+  archived?: boolean;
+  goalMilestones?: Subtask[];
+  goalProgressMode?: 'percent' | 'numeric' | 'auto';
+  goalProgressValue?: number;
+  goalProgressTarget?: number;
   attachments?: Attachment[];
   images?: Attachment[];
   comments?: TaskComment[];

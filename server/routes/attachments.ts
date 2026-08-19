@@ -13,11 +13,14 @@ const router = Router();
 const ALLOWED_MIMES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
   'application/pdf',
-  'text/plain', 'text/csv',
+  'text/plain', 'text/csv', 'text/markdown', 'text/x-markdown', 'text/html', 'application/xhtml+xml',
   'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text', 'application/rtf', 'text/rtf', 'application/epub+zip',
   'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/zip', 'application/x-zip-compressed',
+  'application/zip', 'application/x-zip-compressed', 'application/octet-stream',
 ];
+
+const SUPPORTED_ATTACHMENT_EXT = /\.(jpe?g|png|gif|webp|svg|pdf|csv|txt|md|html?|docx?|odt|rtf|epub|xlsx?|zip)$/i;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -42,7 +45,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIMES.includes(file.mimetype)) {
+    if (ALLOWED_MIMES.includes(file.mimetype) || SUPPORTED_ATTACHMENT_EXT.test(file.originalname)) {
       cb(null, true);
     } else {
       cb(new Error('File type not allowed'));

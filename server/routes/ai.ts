@@ -1596,7 +1596,7 @@ router.post('/task-builder', requireAuth, async (req: AuthRequest, res: Response
       return res.status(503).json({ error: 'AI service is currently unavailable. Please set OPENROUTER_API_KEY.' });
     }
 
-    const { input, columns: boardColumns, tags: availableTags } = req.body;
+    const { input, columns: boardColumns, tags: availableTags, attachedFiles, attachedImages } = req.body;
     if (!input || typeof input !== 'string' || !input.trim()) {
       return res.status(400).json({ error: 'Input text is required' });
     }
@@ -1609,6 +1609,15 @@ router.post('/task-builder', requireAuth, async (req: AuthRequest, res: Response
       ? `Available tags (choose from these exact names): ${availableTags.join(', ')}.`
       : '';
 
+    const allAttachedNames = [
+      ...(Array.isArray(attachedFiles) ? attachedFiles : []),
+      ...(Array.isArray(attachedImages) ? attachedImages : []),
+    ].map(n => String(n).trim()).filter(Boolean);
+
+    const attachmentsContext = allAttachedNames.length > 0
+      ? `Attached files and images available for reference: ${allAttachedNames.join(', ')}.`
+      : '';
+
     const today = new Date().toISOString().split('T')[0];
 
     const prompt = `You are a task management AI. The user describes a task, project, or goal in plain text. Extract all relevant information and return a fully structured task JSON.
@@ -1616,6 +1625,7 @@ router.post('/task-builder', requireAuth, async (req: AuthRequest, res: Response
 Today's date: ${today}
 ${columnsContext}
 ${tagsContext}
+${attachmentsContext}
 
 User input:
 """
@@ -1644,6 +1654,7 @@ Return ONLY a valid JSON object with these exact fields:
 Rules:
 - title: the actual task name, extracted from the user's input (e.g. if user says "work task high priority", title should be "Work task", NOT the whole prompt)
 - description: leave empty ("") unless the user provided a separate detailed description beyond the title/the task name itself. NEVER copy the entire user prompt into description.
+- attached files: if the user prompt references any attached file or image by name or number (e.g. "image 1", "attached doc", "using specs.pdf"), incorporate that reference into the generated task structure or subtasks.
 - tags: pick from the available tags list if any match the task's context. Use exact names from the list. Empty array if none match.
 - subtasks: break down complex tasks. Each gets a realistic durationMinutes.
 - checklistItems: for step-by-step actions or checklist-style items in the input.

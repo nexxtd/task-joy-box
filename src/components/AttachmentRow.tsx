@@ -2,19 +2,30 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Paperclip, FileWarning, Download, Trash2 } from 'lucide-react';
 
-const WORD_MIMES = [
+const SUPPORTED_DOC_MIMES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text',
+  'application/rtf',
+  'text/rtf',
+  'text/plain',
+  'text/markdown',
+  'text/x-markdown',
+  'text/html',
+  'application/xhtml+xml',
+  'application/pdf',
+  'application/epub+zip',
 ];
+
+const SUPPORTED_DOC_EXT_REGEX = /\.(docx?|odt|rtf|txt|md|html?|pdf|epub)$/i;
 
 export function isDocumentCompatible(attachment: any): boolean {
   const fileType = attachment?.fileType || '';
   const fileName = attachment?.fileName || '';
   const fileUrl = attachment?.fileUrl || '';
-  return WORD_MIMES.includes(fileType)
-    || fileType === 'application/pdf'
-    || /\.(docx?|pdf)$/i.test(fileName)
-    || /\.(docx?|pdf)$/i.test(fileUrl);
+  return SUPPORTED_DOC_MIMES.includes(fileType)
+    || SUPPORTED_DOC_EXT_REGEX.test(fileName)
+    || SUPPORTED_DOC_EXT_REGEX.test(fileUrl);
 }
 
 interface AttachmentRowProps {
@@ -22,9 +33,10 @@ interface AttachmentRowProps {
   taskId: string | number;
   taskTitle?: string;
   onDelete?: () => void;
+  disabledInBuilder?: boolean;
 }
 
-const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskTitle, onDelete }) => {
+const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskTitle, onDelete, disabledInBuilder = false }) => {
   const navigate = useNavigate();
   const [opening, setOpening] = useState(false);
   const [showIncompatible, setShowIncompatible] = useState(false);
@@ -33,11 +45,8 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskT
   const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
 
   const openInEditor = async () => {
+    if (disabledInBuilder) return;
     if (!isDocumentCompatible(attachment)) {
-      setShowIncompatible(true);
-      return;
-    }
-    if (!isServerAtt) {
       setShowIncompatible(true);
       return;
     }
@@ -51,8 +60,8 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskT
           taskId: String(taskId),
           taskTitle: taskTitle || '',
           fileName: attachment.fileName,
-          fileType: attachment.fileType,
-          fileSize: attachment.fileSize,
+          fileType: attachment.fileType || 'application/octet-stream',
+          fileSize: attachment.fileSize || 0,
           fileUrl: attachment.fileUrl,
         }),
       });
@@ -75,9 +84,9 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskT
       <div className="relative group/att">
         <button
           onClick={openInEditor}
-          disabled={opening}
-          className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all w-full text-left pr-24"
-          title={opening ? 'Opening in Document Editor...' : 'Open in Document Editor'}
+          disabled={opening || disabledInBuilder}
+          className={`flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 transition-all w-full text-left ${disabledInBuilder ? 'pr-12 cursor-default' : 'hover:bg-muted pr-24 cursor-pointer'}`}
+          title={disabledInBuilder ? 'Download & Editor available after task creation' : (opening ? 'Opening in Document Editor...' : 'Open in Document Editor')}
         >
           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0">
             <Paperclip className="w-5 h-5 text-muted-foreground" />
@@ -87,17 +96,19 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskT
             <p className="text-xs text-muted-foreground">{attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
           </div>
         </button>
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          download
-          onClick={e => e.stopPropagation()}
-          title="Download file"
-          className="absolute top-1/2 -translate-y-1/2 right-10 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-primary transition-all"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </a>
+        {!disabledInBuilder && href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            download
+            onClick={e => e.stopPropagation()}
+            title="Download file"
+            className="absolute top-1/2 -translate-y-1/2 right-10 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-primary transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </a>
+        )}
         {onDelete && (
           <button
             onClick={e => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
@@ -123,7 +134,7 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, taskId, taskT
             </div>
             <h3 className="text-base font-bold text-foreground">File not compatible</h3>
             <p className="text-sm text-muted-foreground">
-              Only Word documents and PDFs can be opened in the Document Editor.
+              Compatible document types include Word (.docx, .doc), Google Docs exports, OpenDocument (.odt), RTF, Text, Markdown, HTML, and PDF.
             </p>
             <button
               onClick={() => setShowIncompatible(false)}
