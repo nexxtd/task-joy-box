@@ -1,0 +1,39 @@
+AI Assistant (Planora) — Full Spec
+
+Overall layout
+A full page chat interface. At the top is a header bar. The middle is the conversation area showing the full message history. At the bottom is a quick action bar and an input bar. The page is clean and minimal — the focus is the conversation.
+
+Header bar
+On the left is the Planora logo and name with the tagline "Your AI productivity partner" underneath. On the right are live stat pills showing: total task count, total column count, a Clear button to wipe the conversation history, and a Ready status indicator showing the AI is connected and active.
+
+Conversation area
+The conversation scrolls vertically. Each message is its own row separated by a thin divider line. Messages are left-aligned. Each message has a timestamp on the right.
+User messages appear as a simple row with a small arrow icon on the left to expand or collapse the message, the message text, and the timestamp.
+Planora messages appear with the Planora logo and name on the left, the response content below, and the timestamp on the right. Planora responses are clean formatted text — not raw JSON. Responses can include:
+Plain conversational replies
+Task cards when a task has been created, updated, or found — showing the task name, description, status, and priority in a small inline card
+Lists when multiple tasks or items are returned
+Warnings or confirmations when a destructive action is about to happen such as deleting a task
+
+What Planora can do
+Planora understands natural language and can perform actions directly inside the app. Capabilities shown as dot indicators at the very bottom of the page:
+Create — create a new task from a message, e.g. "Create a task called Design homepage due Friday"
+Delete — delete a task by name or description
+Move — move a task to a different column or group
+Update — update any field on a task such as priority, due date, or description
+Analyse — analyse the user's tasks and give productivity insights or suggestions
+Planora reads the user's actual task data so all responses and actions are based on real information.
+
+Quick action buttons
+A row of shortcut buttons sits just above the input bar. Each button triggers a common action instantly without typing:
+Find duplicates — scans all tasks and returns any that appear to be duplicates with a suggestion to remove them
+Overdue tasks — returns a list of all tasks past their due date with suggestions on what to do with each one
+Task summary — generates a summary of all current tasks grouped by status and priority
+Create task — opens a quick task creation flow inline in the chat
+
+Input bar
+A wide text input at the bottom of the page with placeholder text: "Try: Create a task called... or Find duplicates". A send button on the right sends the message. The input supports long messages and pastes of large amounts of text such as documents or notes — Planora reads the content and extracts relevant information to create or update tasks automatically.
+
+Conversation history
+All messages are stored and visible in the conversation. The user can scroll back through the full history. The Clear button in the header wipes the entire conversation and starts fresh with a new greeting from Planora.
+

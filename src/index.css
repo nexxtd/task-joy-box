@@ -1,0 +1,258 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 228 45% 97%;
+    --foreground: 222 22% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 22% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 22% 14%;
+
+    /* Black with white text */
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 228 32% 94%;
+    --secondary-foreground: 222 22% 18%;
+
+    --muted: 228 36% 95%;
+    --muted-foreground: 228 14% 46%;
+
+    --accent: 230 34% 94%;
+    --accent-foreground: 222 22% 16%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 226 24% 91%;
+    --input: 226 24% 91%;
+    --ring: 0 0% 0%;
+
+    --radius: 0.5rem;
+
+    --column-bg: 228 34% 95%;
+    --task-bg: 0 0% 100%;
+    --task-hover: 228 32% 96%;
+
+    --label-red: 0 65% 50%;
+    --label-orange: 25 85% 52%;
+    --label-yellow: 42 80% 45%;
+    --label-green: 142 55% 38%;
+    --label-blue: 215 60% 45%;
+    --label-purple: 262 55% 52%;
+    --label-pink: 330 60% 52%;
+
+    --priority-urgent: 0 65% 50%;
+    --priority-high: 25 85% 52%;
+    --priority-medium: 42 80% 45%;
+    --priority-low: 215 55% 48%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 12% 30%;
+    --sidebar-primary: 0 0% 0%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 12% 94%;
+    --sidebar-accent-foreground: 220 15% 15%;
+    --sidebar-border: 214 14% 89%;
+    --sidebar-ring: 0 0% 0%;
+  }
+
+  .dark {
+    --background: 220 16% 10%;
+    --foreground: 210 18% 92%;
+
+    --card: 220 14% 13%;
+    --card-foreground: 210 18% 92%;
+
+    --popover: 220 14% 14%;
+    --popover-foreground: 210 18% 92%;
+
+    /* Black with white text (matches light theme default accent) */
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 12% 18%;
+    --secondary-foreground: 210 16% 82%;
+
+    --muted: 220 12% 18%;
+    --muted-foreground: 215 10% 52%;
+
+    --accent: 220 12% 18%;
+    --accent-foreground: 210 18% 92%;
+
+    --destructive: 0 65% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 12% 20%;
+    --input: 220 12% 20%;
+    --ring: 0 0% 0%;
+
+    --column-bg: 220 14% 11%;
+    --task-bg: 220 14% 15%;
+    --task-hover: 220 12% 18%;
+
+    --label-red: 0 65% 55%;
+    --label-orange: 25 85% 55%;
+    --label-yellow: 42 80% 52%;
+    --label-green: 142 55% 45%;
+    --label-blue: 215 60% 55%;
+    --label-purple: 262 55% 58%;
+    --label-pink: 330 60% 58%;
+
+    --priority-urgent: 0 65% 55%;
+    --priority-high: 25 85% 55%;
+    --priority-medium: 42 80% 52%;
+    --priority-low: 215 55% 58%;
+
+    --sidebar-background: 220 16% 10%;
+    --sidebar-foreground: 210 16% 80%;
+    --sidebar-primary: 0 0% 0%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 12% 18%;
+    --sidebar-accent-foreground: 210 18% 92%;
+    --sidebar-border: 220 12% 20%;
+    --sidebar-ring: 0 0% 0%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+
+
+/* Drag styles */
+.task-dragging {
+  opacity: 0.9;
+  transform: rotate(2deg);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+}
+
+/* Rich text editor placeholder */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+
+/* Task Assistant animations */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slide-out-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+@keyframes widget-flash {
+  0% { box-shadow: 0 0 0 3px hsl(0 0% 0% / 0.35), 0 12px 30px -30px hsl(0 0% 0% / 0.25); }
+  100% { box-shadow: 0 0 0 3px hsl(0 0% 0% / 0), 0 12px 30px -30px hsl(0 0% 0% / 0.25); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out both;
+}
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out both;
+}
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, hsl(var(--primary) / 0.08) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out both;
+}
+.animate-slide-out-right {
+  animation: slide-out-right 0.18s ease-out both;
+}
+.animate-widget-flash {
+  animation: widget-flash 0.9s ease-out both;
+}
+.animate-shake {
+  animation: shake 0.2s ease-in-out 2;
+}
+
+/* Task Assistant specific styles */
+.ta-action-card {
+  @apply rounded-xl border border-gray-200/60 bg-card p-4 transition-all duration-200;
+}
+.ta-action-card:hover {
+  @apply border-primary/30 shadow-lg shadow-primary/5;
+}
+.ta-result-success {
+  @apply border-l-4 border-l-gray-400;
+}
+.ta-result-error {
+  @apply border-l-4 border-l-gray-400;
+}
+.ta-result-info {
+  @apply border-l-4 border-l-gray-400;
+}
+.ta-result-warning {
+  @apply border-l-4 border-l-gray-400;
+}

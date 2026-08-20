@@ -1,0 +1,41 @@
+==> Downloading cache...
+==> Cloning from https://github.com/nexxtd/task-joy-box
+==> Checking out commit 31bf73a3d865ef974aa27dca160156f6ba188a2d in branch main
+==> Downloaded 110MB in 3s. Extraction took 1s.
+==> Using Node.js version 24.14.1 (default)
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Using Bun version 1.3.4 (default)
+==> Docs on specifying a Bun version: https://render.com/docs/bun-version
+==> Running build command 'npm install && npm run build'...
+added 759 packages, and audited 760 packages in 11s
+125 packages are looking for funding
+  run `npm fund` for details
+22 vulnerabilities (15 moderate, 7 high)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+> task-joy-box@0.1.0-beta build
+> npm run build:client && npm run build:server
+> task-joy-box@0.1.0-beta build:client
+> tsc -b && vite build
+src/components/Whiteboard.tsx(999,14): error TS2304: Cannot find name 'Settings2'.
+src/components/Whiteboard.tsx(1011,16): error TS2304: Cannot find name 'Shapes'.
+src/components/Whiteboard.tsx(1099,49): error TS2345: Argument of type '(prev: CanvasItem[]) => (CanvasItem | { borderThickness: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; ... 25 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to parameter of type 'SetStateAction<CanvasItem[]>'.
+  Type '(prev: CanvasItem[]) => (CanvasItem | { borderThickness: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; ... 25 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to type '(prevState: CanvasItem[]) => CanvasItem[]'.
+    Type '(CanvasItem | { borderThickness: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; ... 23 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to type 'CanvasItem[]'.
+      Type 'CanvasItem | { borderThickness: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; ... 23 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; }' is not assignable to type 'CanvasItem'.
+        Type '{ borderThickness: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; borderColor?: string; ... 22 more ...; lineThickness?: "thin" | "medium" | "thick"; }' is not assignable to type 'CanvasItem'.
+          Types of property 'borderThickness' are incompatible.
+            Type 'string' is not assignable to type '"medium" | "thick" | "thin"'.
+src/components/Whiteboard.tsx(1113,49): error TS2345: Argument of type '(prev: CanvasItem[]) => (CanvasItem | { borderStyle: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; ... 25 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to parameter of type 'SetStateAction<CanvasItem[]>'.
+  Type '(prev: CanvasItem[]) => (CanvasItem | { borderStyle: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; ... 25 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to type '(prevState: CanvasItem[]) => CanvasItem[]'.
+    Type '(CanvasItem | { borderStyle: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; ... 23 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; })[]' is not assignable to type 'CanvasItem[]'.
+      Type 'CanvasItem | { borderStyle: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; ... 23 more ...; lineThickness?: "medium" | ... 1 more ... | "thin"; }' is not assignable to type 'CanvasItem'.
+        Type '{ borderStyle: string; id: string; type: string; x: number; y: number; width?: number; height?: number; content?: string; color?: string; rotation?: number; fontSize?: number; borderColor?: string; ... 22 more ...; lineThickness?: "thin" | "medium" | "thick"; }' is not assignable to type 'CanvasItem'.
+          Types of property 'borderStyle' are incompatible.
+            Type 'string' is not assignable to type '"dashed" | "dotted" | "solid"'.
+src/components/Whiteboard.tsx(1132,48): error TS2367: This comparison appears to be unintentional because the types '"circle" | "star" | "triangle" | "diamond" | "hexagon" | "arrow"' and '"rectangle"' have no overlap.
+src/components/Whiteboard.tsx(1134,104): error TS2551: Property 'borderRadius' does not exist on type 'CanvasItem'. Did you mean 'cornerRadius'?
+src/components/Whiteboard.tsx(1139,33): error TS2551: Property 'borderRadius' does not exist on type 'CanvasItem'. Did you mean 'cornerRadius'?

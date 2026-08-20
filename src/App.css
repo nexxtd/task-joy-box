@@ -1,0 +1,26 @@
+/* App-level styles - layout handled by Tailwind */
+
+/* Fix for react-beautiful-dnd drag offset when using zoom transforms */
+.task-dragging {
+  opacity: 0.9 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+  transform: rotate(3deg) !important;
+  cursor: grabbing !important;
+}
+
+/* Ensure drag placeholder has proper sizing */
+[data-rbd-placeholder-context-id] {
+  display: none !important;
+}
+
+/* Smooth drag transitions */
+[data-rbd-drag-handle-context-id],
+[data-rbd-draggable-context-id] {
+  transition: transform 0.1s ease, opacity 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* Dragging state */
+[data-rbd-dragging~="true"] {
+  transition: none !important;
+  z-index: 9999 !important;
+}
