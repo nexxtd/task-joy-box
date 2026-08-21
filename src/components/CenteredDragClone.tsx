@@ -9,19 +9,20 @@ interface CenteredDragCloneProps {
   children: React.ReactNode;
 }
 
+const parseSize = (v: string | number | undefined): number | null => {
+  if (v === undefined || v === null || v === 'auto') return null;
+  if (typeof v === 'number') return v || null;
+  const s = String(v).trim();
+  if (s.endsWith('px')) return parseFloat(s) || null;
+  if (s.endsWith('rem')) return (parseFloat(s) || 0) * 16 || null;
+  const n = Number(s);
+  return Number.isFinite(n) && n !== 0 ? n : null;
+};
+
 const getRenderedDimensions = (style: any) => {
-  const w = style?.width as string | number | undefined;
-  const h = style?.height as string | number | undefined;
-  // Normalize: convert 'auto' and undefined to null so we can detect them
-  const normalizedW = w === 'auto' || w === undefined ? null : Number(w);
-  const normalizedH = h === 'auto' || h === undefined ? null : Number(h);
-  // If dimensions are null/0/undefined, try to derive sensible defaults
-  if (normalizedW === null || normalizedW === 0 || normalizedH === null || normalizedH === 0) {
-    // Fall back: use a reasonable default based on typical task row sizes
-    // The actual dimensions will be discovered from the child content
-    return { w: 200, h: 60 };
-  }
-  return { w: normalizedW, h: normalizedH };
+  const w = parseSize(style?.width);
+  const h = parseSize(style?.height);
+  return { w, h };
 };
 
 const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
@@ -54,8 +55,9 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
         top: 0,
         left: 0,
         boxSizing: 'border-box',
-        width: renderedW / zoom,
-        height: renderedH / zoom,
+        width: renderedW != null ? renderedW / zoom : undefined,
+        minWidth: renderedW == null ? 320 : undefined,
+        height: renderedH != null ? renderedH / zoom : 'auto',
         zIndex: style?.zIndex ?? 5000,
         opacity: typeof style?.opacity === 'number' ? style.opacity : undefined,
         transition: 'none',
@@ -64,7 +66,7 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
         pointerEvents: 'none',
       }}
     >
-      <div style={{ width: '100%', height: '100%' }}>{children}</div>
+      <div style={{ width: '100%', height: renderedH != null ? '100%' : 'auto' }}>{children}</div>
     </div>
   );
 };

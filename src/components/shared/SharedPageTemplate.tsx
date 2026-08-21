@@ -539,14 +539,15 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
   // ============ RENDER ============
 
   const renderClone = (taskProvided: any, taskSnapshot: any, rubric: any) => {
-    const draggedTask = rubric?.source?.index != null ? filtered.active[rubric.source.index] : null;
+    const draggedTask =
+      rubric?.source?.index != null ? filtered.active[rubric.source.index] ?? filtered.completed[rubric.source.index - filtered.active.length] : null;
     if (!draggedTask) return null;
     return (
       <CenteredDragClone
         draggableProps={taskProvided.draggableProps}
         dragHandleProps={taskProvided.dragHandleProps}
         innerRef={taskProvided.innerRef}
-        style={{ width: taskSnapshot.bounds?.width, height: taskSnapshot.bounds?.height }}
+        style={taskProvided.draggableProps.style as any}
         zoom={1}
       >
         {renderItemRow(draggedTask, taskProvided, taskSnapshot, extraState)}
