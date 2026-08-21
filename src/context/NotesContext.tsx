@@ -47,9 +47,10 @@ async function loadBoard(userId: number): Promise<Board> {
     const res = await fetch('/api/note-boards/snapshot', { credentials: 'include' });
     if (res.ok) {
       const data = await res.json();
-      if (data.board) {
-        localStorage.setItem(getBoardKey(userId), JSON.stringify(data.board));
-        return data.board;
+      const board = data?.board ?? (data?.columns ? data : null);
+      if (board) {
+        localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+        return board;
       }
     }
   } catch {}
@@ -179,9 +180,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const res = await fetch('/api/note-boards/snapshot', { credentials: 'include' });
           if (res.ok) {
             const data = await res.json();
-            if (data.board) {
-              // Only update if server data is newer or different
-              const serverBoard = data.board;
+            const serverBoard = data?.board ?? (data?.columns ? data : null);
+            if (serverBoard) {
               const localBoardStr = JSON.stringify(board);
               const serverBoardStr = JSON.stringify(serverBoard);
 
