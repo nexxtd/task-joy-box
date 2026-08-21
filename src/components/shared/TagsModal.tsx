@@ -260,7 +260,8 @@ const TagsModal: React.FC<TagsModalProps> = ({
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: `hsl(${typeof window !== 'undefined' ? localStorage.getItem('accentHsl') || '0 0% 0%' : '0 0% 0%'})` }}
               >
                 {creating ? 'Adding...' : 'Add tag'}
               </button>

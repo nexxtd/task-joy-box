@@ -1425,6 +1425,9 @@ const Tasks: React.FC = () => {
     setQuickEditStatus(getTaskStatus(task));
     setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
     setQuickEditProjectId(task.projectId || '');
+    setDateEditTaskId(null);
+    setDateEditField(null);
+    setTagPopupTaskId(null);
   };
 
   const closeQuickEdit = () => {
@@ -1633,8 +1636,11 @@ const Tasks: React.FC = () => {
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
+                  const nextId = dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id;
+                  const nextField = dateEditField === 'start' ? null : 'start' as const;
+                  setDateEditTaskId(nextId);
+                  setDateEditField(nextField);
+                  if (nextId) { setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); }
                 }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
               >
@@ -1644,8 +1650,11 @@ const Tasks: React.FC = () => {
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
+                  const nextId = dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id;
+                  const nextField = dateEditField === 'due' ? null : 'due' as const;
+                  setDateEditTaskId(nextId);
+                  setDateEditField(nextField);
+                  if (nextId) { setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); }
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   task.dueDate
@@ -1686,14 +1695,14 @@ const Tasks: React.FC = () => {
               ))}
               {task.labels.length > taskTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  onClick={e => { e.stopPropagation(); const nid = tagPopupTaskId === task.id ? null : task.id; setTagPopupTaskId(nid); if (nid) { setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); } }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                onClick={e => { e.stopPropagation(); const nid = tagPopupTaskId === task.id ? null : task.id; setTagPopupTaskId(nid); if (nid) { setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); } }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
@@ -4176,6 +4185,19 @@ export const TaskDropdownExpanded: React.FC<{
         </button>
         {!subtasksCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {(() => {
+              const total = effectiveSubtasks.length;
+              const done = effectiveSubtasks.filter((s: any) => s.completed).length;
+              const pct = total ? Math.round((done / total) * 100) : 0;
+              return total > 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                    <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{done}/{total}</span>
+                </div>
+              ) : null;
+            })()}
             {allSubtasksDone && (
               <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
                 All sub-tasks are done ✓
@@ -4233,6 +4255,19 @@ export const TaskDropdownExpanded: React.FC<{
         </button>
         {!checklistsSectionCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {(() => {
+              const total = checklistLists.reduce((s: number, l: any) => s + l.items.length, 0);
+              const done = checklistLists.reduce((s: number, l: any) => s + l.items.filter((i: any) => i.completed).length, 0);
+              const pct = total ? Math.round((done / total) * 100) : 0;
+              return total > 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                    <div className="h-full bg-label-green transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{done}/{total}</span>
+                </div>
+              ) : null;
+            })()}
             {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
             <DragDropContext onDragEnd={handleDropdownReorder}>
               <Droppable droppableId={`dropdown-checklist-lists-${task.id}`} type="checklistList">
@@ -5196,6 +5231,19 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
           {!subtasksCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {(() => {
+                const total = (task.subtasks || []).length;
+                const done = (task.subtasks || []).filter((s: any) => s.completed).length;
+                const pct = total ? Math.round((done / total) * 100) : 0;
+                return total > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                      <div className="h-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{done}/{total}</span>
+                  </div>
+                ) : null;
+              })()}
               {allSubtasksDone && (
                 <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
                   All sub-tasks are done ✓
@@ -5252,6 +5300,19 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
           {!checklistsSectionCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {(() => {
+                const total = checklistLists.reduce((s: number, l: any) => s + l.items.length, 0);
+                const done = checklistLists.reduce((s: number, l: any) => s + l.items.filter((i: any) => i.completed).length, 0);
+                const pct = total ? Math.round((done / total) * 100) : 0;
+                return total > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+                      <div className="h-full bg-label-green transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{done}/{total}</span>
+                  </div>
+                ) : null;
+              })()}
               {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
               <DragDropContext onDragEnd={handleFullViewReorder}>
                 <Droppable droppableId="fullview-checklist-lists" type="checklistList">

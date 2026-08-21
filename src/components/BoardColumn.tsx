@@ -35,13 +35,13 @@ const formatDate = (value?: string) => {
 const SubtaskProgressBar: React.FC<{ done: number; total: number }> = ({ done, total }) => {
   if (total === 0) return null;
   const percent = Math.round((done / total) * 100);
+  const clamped = Math.min(100, Math.max(0, percent));
   return (
     <div className="mb-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
       <span className="w-8 rounded-full bg-muted/30 px-1.5">{percent}%</span>
-      <div
-        className={`flex-1 h-0.5 rounded-full bg-muted/20 overflow-hidden`}
-        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-      />
+      <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+        <div className="h-full bg-primary transition-all" style={{ width: `${clamped}%` }} />
+      </div>
     </div>
   );
 };
@@ -49,13 +49,13 @@ const SubtaskProgressBar: React.FC<{ done: number; total: number }> = ({ done, t
 const ChecklistProgressBar: React.FC<{ done: number; total: number }> = ({ done, total }) => {
   if (total === 0) return null;
   const percent = Math.round((done / total) * 100);
+  const clamped = Math.min(100, Math.max(0, percent));
   return (
     <div className="mb-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
       <span className="w-8 rounded-full bg-muted/30 px-1.5">{percent}%</span>
-      <div
-        className={`flex-1 h-0.5 rounded-full bg-muted/20 overflow-hidden`}
-        style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
-      />
+      <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+        <div className="h-full bg-label-green transition-all" style={{ width: `${clamped}%` }} />
+      </div>
     </div>
   );
 };

@@ -512,6 +512,20 @@ const Collaboration: React.FC = () => {
     );
   }
 
+  if (true) {
+    return (
+      <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+        <div className="max-w-lg">
+          <ComingSoon
+            title="Collaboration"
+            description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
+            onNotify={() => (window.location.href = '/pricing')}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
       <header className="px-6 h-16 border-b border-border flex items-center">

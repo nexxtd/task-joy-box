@@ -419,6 +419,20 @@ const Documents: React.FC = () => {
     </div>
   );
 
+  if (true) {
+    return (
+      <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+        <div className="max-w-lg">
+          <ComingSoon
+            title="Documents"
+            description="Create, edit and co-author documents with rich formatting, images and real-time collaboration linked to your tasks."
+            onNotify={() => (window.location.href = '/pricing')}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-background">
       <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">

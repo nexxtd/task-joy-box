@@ -121,7 +121,7 @@ const Notifier = () => {
     const timer = setInterval(check, 60000);
     check();
     return () => clearInterval(timer);
-  }, [isPaid]);
+  }, [isPaid, board.tasks]);
 
   return null;
 };
