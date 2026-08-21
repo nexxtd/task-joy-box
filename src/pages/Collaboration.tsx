@@ -501,17 +501,6 @@ const Collaboration: React.FC = () => {
     { id: 'join' as const, label: 'Join Workspace' },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Loading collaboration...</span>
-        </div>
-      </div>
-    );
-  }
-
   if (true) {
     return (
       <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
@@ -522,6 +511,20 @@ const Collaboration: React.FC = () => {
             onNotify={() => (window.location.href = '/pricing')}
           />
         </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Loading collaboration...</span>
+        </div>
+      </div>
+    );
+  }
       </div>
     );
   }
