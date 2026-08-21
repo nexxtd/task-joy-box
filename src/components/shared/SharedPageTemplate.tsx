@@ -735,9 +735,9 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
                       className="w-full flex items-center justify-between px-4 py-3"
                     >
                       <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                        </* icon based on itemType */>Completed ({filtered.completed.length})
+                        {/* icon based on itemType */}Completed ({filtered.completed.length})
                       </span>
-                      </* toggle icon *//>
+                      {/* toggle icon */}
                     </button>
                     <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
                       {filtered.completed.map((item: any) => (

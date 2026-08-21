@@ -1617,7 +1617,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
-                <div className="flex justify-end gap-2 pt-2">
+<div className="flex justify-end gap-2 pt-2">
                   <div className="flex items-center gap-1.5">
                     <label className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
                       <input
@@ -1638,7 +1638,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <span>Images</span>
                     </label>
                   </div>
-                </div>
                   <button
                     onClick={() => setAiBuilderOpen(false)}
                     className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"

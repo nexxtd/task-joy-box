@@ -10,7 +10,7 @@ export const LANGUAGE_MAP: Record<string, LangCode> = {
   Português: 'pt',
   Nederlands: 'nl',
   Türkçe: 'tr',
-  Tiếng Việt: 'vi',
+  'Tiếng Việt': 'vi',
   العربية: 'ar',
   עברית: 'he',
   中文: 'zh',
@@ -29,14 +29,11 @@ export const LANGUAGE_MAP: Record<string, LangCode> = {
   'Ð ÑƒÑÑÐºÐ¸Ð¹': 'ru',
   'æ—¥æœ¬èªž': 'ja',
   'í•œêµ­ì–´': 'ko',
-  Nederlands: 'nl',
-  Türkçe: 'tr',
-  Tiếng Việt: 'vi',
 };
 
 export const RTL_LANGUAGES: LangCode[] = ['ar', 'he'];
 
-const t: Record<LangCode, Translations> = {
+const t = {
   en: {
     nav_dashboard: 'Dashboard',
     nav_projects: 'Projects',
@@ -544,6 +541,7 @@ const t: Record<LangCode, Translations> = {
     add_task: '작업 추가', no_tasks: '작업 없음', add_column: '열 추가', due_date: '마감일',
     priority_urgent: '긴급', priority_high: '높음', priority_medium: '보통',
     priority_low: '낮음', priority_none: '없음',
+  },
   nl: {
     nav_dashboard: 'Dashboard', nav_projects: 'Projects', nav_tasks: 'Taken',
     nav_calendar: 'Kalender', nav_insights: 'Inzichten', nav_notes: 'Notities',
@@ -652,5 +650,4 @@ const t: Record<LangCode, Translations> = {
     ai_insights: 'AI Phân tích',
   },
 };
-
 export default t;
