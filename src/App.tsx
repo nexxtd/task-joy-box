@@ -91,8 +91,8 @@ const Notifier = () => {
         const urgent = task.priority === 'urgent';
         if (urgent && !overdue && diff < 12 * 60 * 60 * 1000) {
           const key = `urgent_${task.id}`;
-          toast({ title: "Urgent Deadline", description: `Task "${task.title}" is due soon!` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Urgent Deadline", description: `Task "${task.title}" is due soon!` });
             deviceNotify("Urgent Deadline", `Task "${task.title}" is due soon!`, key);
             markAlertSent(key);
           }
@@ -100,8 +100,8 @@ const Notifier = () => {
 
         if (!overdue && diff < 60 * 60 * 1000) {
           const key = `soon_${task.id}`;
-          toast({ title: "Due Soon", description: `Task "${task.title}" is due within the hour` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Due Soon", description: `Task "${task.title}" is due within the hour` });
             deviceNotify("Due Soon", `Task "${task.title}" is due by ${task.dueTime || 'end of day'} today`, key);
             markAlertSent(key);
           }
@@ -109,8 +109,8 @@ const Notifier = () => {
 
         if (overdue) {
           const key = `overdue_${task.id}`;
-          toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
             deviceNotify("Overdue", `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`, key);
             markAlertSent(key);
           }
@@ -118,10 +118,10 @@ const Notifier = () => {
       });
     };
 
-    check();
     const timer = setInterval(check, 60000);
+    check();
     return () => clearInterval(timer);
-  }, [board.tasks, isPaid]);
+  }, [isPaid, board.tasks]);
 
   return null;
 };

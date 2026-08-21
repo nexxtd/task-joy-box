@@ -392,11 +392,12 @@ const Habits: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | 'frequency' | null>(null);
   const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditDueDate, setQuickEditDueDate] = useState('');
   const [quickEditDueTime, setQuickEditDueTime] = useState('');
   const [quickEditDuration, setQuickEditDuration] = useState(0);
+  const [quickEditFrequency, setQuickEditFrequency] = useState<'daily' | 'mon-fri' | 'mon-wed-fri' | 'sat-sun' | 'weekly' | 'monthly'>('daily');
   const [quickEditStatus, setQuickEditStatus] = useState<TaskStatus>('to_do');
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
 
@@ -424,6 +425,7 @@ const Habits: React.FC = () => {
   const [newHabitColumnId, setNewHabitColumnId] = useState<string>('');
   const [newDailyTarget, setNewDailyTarget] = useState(1);
   const [newTargetPeriod, setNewTargetPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [newHabitFrequency, setNewHabitFrequency] = useState<'daily' | 'mon-fri' | 'mon-wed-fri' | 'sat-sun' | 'weekly' | 'monthly'>('daily');
   const [newHabitProjectId, setNewHabitProjectId] = useState<number | ''>('');
 
   // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
@@ -1163,6 +1165,7 @@ const Habits: React.FC = () => {
       labels: newHabitLabels,
       dailyTarget: newDailyTarget,
       dailyLogs: '{}',
+      recurrencePattern: newHabitFrequency,
       targetPeriod: newTargetPeriod,
       checklists: allChecklists,
       attachments: newFiles.map((file, i) => ({
@@ -1284,6 +1287,9 @@ const Habits: React.FC = () => {
     const updates: Partial<Habit> = {};
     if (quickEditField === 'duration') {
       updates.duration = Math.max(0, Number(quickEditDuration) || 0);
+    }
+    if (quickEditField === 'frequency') {
+      updates.recurrencePattern = quickEditFrequency as any;
     }
     if (quickEditField === 'project') {
       updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
@@ -1450,6 +1456,7 @@ const Habits: React.FC = () => {
     const habitTags = habit.labels.slice(0, 3);
     const doneToday = isHabitDoneToday(habit);
     const streak = computeStreak(habit);
+    const frequencyLabel = getFrequencyLabel(habit);
     return (
       <div
         key={habit.id}
@@ -1481,6 +1488,10 @@ const Habits: React.FC = () => {
               <GripVertical className="w-4 h-4" />
             </div>
           )}
+          {/* Type label — "Habit" */}
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium mr-1">
+            Habit
+          </span>
           {/* Delete-mode checkbox OR mark-done-today circular toggle */}
           {isDeleteMode ? (
             <input
@@ -1518,15 +1529,21 @@ const Habits: React.FC = () => {
           >
             <span className="text-sm font-medium text-foreground truncate block">{habit.title}</span>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {/* Duration pill — only if set */}
+              {/* Duration pill — only if set, opens inline editor on click */}
               {habitDurFmt && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1">
+                <span
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(habit.id); setQuickEditField('duration');}}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1 cursor-pointer"
+                >
                   <Clock className="w-2.5 h-2.5" />{habitDurFmt}
                 </span>
               )}
-              {/* Frequency pill */}
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium">
-                {getFrequencyLabel(habit)}
+              {/* Frequency pill — opens inline editor on click */}
+              <span
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(habit.id); setQuickEditField('frequency');}}
+                className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium cursor-pointer"
+              >
+                {frequencyLabel}
               </span>
               {/* Streak counter */}
               {streak > 0 && (
@@ -1576,10 +1593,28 @@ const Habits: React.FC = () => {
         {quickEditTaskId === habit.id && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
             <div className="flex flex-wrap items-center gap-2">
-              {quickEditField === 'duration' && (
+{quickEditField === 'duration' && (
                 <div className="flex items-center gap-2">
-                  <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(habit)} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(habit)} className="w-24 rounded-lg border border-background px-3 py-2 text-sm" />
                   <span className="text-xs text-muted-foreground">minutes</span>
+                </div>
+              )}
+              {quickEditField === 'frequency' && (
+                <div className="flex items-center gap-2">
+                  <Select value={quickEditFrequency} onValueChange={val => setQuickEditFrequency(val as any)}>
+                    <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
+                      <SelectValue placeholder="Frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="mon,tue,wed,thu,fri">Mon-Fri</SelectItem>
+                      <SelectItem value="mon,wed,fri">Mon/Wed/Fri</SelectItem>
+                      <SelectItem value="sat,sun">Sat/Sun</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <button onClick={() => applyQuickEdit(habit)} className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
                 </div>
               )}
               {quickEditField === 'project' && (
@@ -2406,28 +2441,38 @@ const Habits: React.FC = () => {
                 <div className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-3">
                     <Target className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Target</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Frequency & Target</h3>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min={1}
-                      value={newDailyTarget}
-                      onChange={e => setNewDailyTarget(Math.max(1, Number(e.target.value) || 1))}
-                      className="w-24 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      placeholder="5"
-                    />
-                    <span className="text-xs text-muted-foreground">units</span>
-                    <Select value={newTargetPeriod} onValueChange={v => setNewTargetPeriod(v as any)}>
-                      <SelectTrigger className="bg-muted/40 border-border rounded-lg px-3 py-2 text-sm h-auto w-auto">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">per day</SelectItem>
-                        <SelectItem value="weekly">per week</SelectItem>
-                        <SelectItem value="monthly">per month</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    {/* Frequency selector */}
+                    <div className="flex-1">
+                      <Select value={newHabitFrequency} onValueChange={val => setNewHabitFrequency(val as any)}>
+                        <SelectTrigger className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm h-9">
+                          <SelectValue placeholder="Frequency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="mon-fri">Mon-Fri</SelectItem>
+                          <SelectItem value="mon-wed-fri">Mon/Wed/Fri</SelectItem>
+                          <SelectItem value="sat-sun">Sat/Sun</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                          <SelectItem value="monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {/* Target period */}
+                    <div className="flex-1">
+                      <Select value={newTargetPeriod} onValueChange={v => setNewTargetPeriod(v as any)}>
+                        <SelectTrigger className="bg-muted/40 border-border rounded-lg px-3 py-2 text-sm h-auto w-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">per day</SelectItem>
+                          <SelectItem value="weekly">per week</SelectItem>
+                          <SelectItem value="monthly">per month</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3841,7 +3886,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
   const freqLogs = parseLogs(habit);
   const freqDays = Array.isArray(freqLogs.frequencyDays) ? (freqLogs.frequencyDays as string[]) : [];
   const selectedMode: 'daily' | 'weekly' | 'monthly' | 'custom' =
-    freqDays.length > 0 && freqDays.length < 7 ? 'custom' : (habit.recurrencePattern || 'daily');
+    freqDays.length > 0 && freqDays.length < 7 ? 'custom' : ((habit.recurrencePattern as any) || 'daily');
 
   const updateFrequency = (mode: 'daily' | 'weekly' | 'monthly') => {
     const logs = { ...parseLogs(habit) };

@@ -28,7 +28,7 @@ const THEMES = [
 const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
 const LANGUAGES = [
-  'English', 'EspaÃ±ol', 'FranÃ§ais', 'Deutsch', 'PortuguÃªs',
+  'English', 'EspaÃ±ol', 'FranÃ§ais', 'Deutsch', 'PortuguÃªs', 'Nederlands', 'Türkçe', 'Tiếng Việt',
   'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©', '×¢×‘×¨×™×ª', 'ä¸­æ–‡', 'à¤¹à¤¿à¤¨à¥à¤¦à¥€', 'Ð ÑƒÑÑÐºÐ¸Ð¹', 'æ—¥æœ¬èªž', 'í•œêµ­ì–´',
 ];
 

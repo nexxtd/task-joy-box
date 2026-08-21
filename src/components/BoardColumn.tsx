@@ -32,6 +32,34 @@ const formatDate = (value?: string) => {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+const SubtaskProgressBar: React.FC<{ done: number; total: number }> = ({ done, total }) => {
+  if (total === 0) return null;
+  const percent = Math.round((done / total) * 100);
+  const clamped = Math.min(100, Math.max(0, percent));
+  return (
+    <div className="mb-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      <span className="w-8 rounded-full bg-muted/30 px-1.5">{percent}%</span>
+      <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+        <div className="h-full bg-primary transition-all" style={{ width: `${clamped}%` }} />
+      </div>
+    </div>
+  );
+};
+
+const ChecklistProgressBar: React.FC<{ done: number; total: number }> = ({ done, total }) => {
+  if (total === 0) return null;
+  const percent = Math.round((done / total) * 100);
+  const clamped = Math.min(100, Math.max(0, percent));
+  return (
+    <div className="mb-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      <span className="w-8 rounded-full bg-muted/30 px-1.5">{percent}%</span>
+      <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+        <div className="h-full bg-label-green transition-all" style={{ width: `${clamped}%` }} />
+      </div>
+    </div>
+  );
+};
+
 const SHARED_TAG_PREFIX = 'shared-tag-';
 const SHARED_COLOR_MAP: Record<string, LabelColor> = {
   red: 'red', orange: 'orange', yellow: 'yellow', green: 'green', blue: 'blue', purple: 'purple', pink: 'pink',
@@ -229,6 +257,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     const subtaskCount = task.subtasks?.length || 0;
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+    const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
     const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
     return (
@@ -258,6 +287,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+              <SubtaskProgressBar done={subtaskDone} total={subtaskCount} />
+              <ChecklistProgressBar done={checklistDone} total={checklistTotal} />
             </div>
             <div className="flex items-center gap-1.5 flex-nowrap mt-0.5">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
@@ -315,7 +348,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 </span>
               )}
               {subtaskCount > 0 && (() => {
-                const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
                 return (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                     {subtaskDone}/{subtaskCount} sub task
@@ -854,6 +886,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           onDelete={tagId => deleteTagEverywhere(tagId)}
           onRename={(tagId, newName) => renameTagEverywhere(tagId, newName)}
           onColorChange={(tagId, color) => changeTagColorEverywhere(tagId, color)}
+          accentColor={undefined}
         />
       );
     })()}

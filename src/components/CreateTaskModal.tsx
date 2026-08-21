@@ -182,6 +182,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
+  const [showFilesSection, setShowFilesSection] = useState(true);
+  const [showImagesSection, setShowImagesSection] = useState(true);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -1584,7 +1586,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                   </div>
 
-                  {newFiles.length > 0 && (
+                  {showFilesSection && newFiles.length > 0 && (
                     <div className="space-y-1.5">
                       {newFiles.map((file, fileIdx) => (
                         <AttachmentRow
@@ -1604,7 +1606,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                   )}
 
-                  {newTaskImages.length > 0 && (
+                  {showImagesSection && newTaskImages.length > 0 && (
                     <DraggableImageGrid
                       images={newTaskImages}
                       onReorder={setNewTaskImages}
@@ -1617,7 +1619,27 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
-                <div className="flex justify-end gap-2 pt-2">
+<div className="flex justify-end gap-2 pt-2">
+                  <div className="flex items-center gap-1.5">
+                    <label className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                      <input
+                        type="checkbox"
+                        checked={showFilesSection}
+                        onChange={e => setShowFilesSection(e.target.checked)}
+                        className="w-4 h-4 rounded border-accent cursor-pointer"
+                      />
+                      <span>Files</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                      <input
+                        type="checkbox"
+                        checked={showImagesSection}
+                        onChange={e => setShowImagesSection(e.target.checked)}
+                        className="w-4 h-4 rounded border-accent cursor-pointer"
+                      />
+                      <span>Images</span>
+                    </label>
+                  </div>
                   <button
                     onClick={() => setAiBuilderOpen(false)}
                     className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"

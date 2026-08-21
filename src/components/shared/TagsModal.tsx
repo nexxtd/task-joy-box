@@ -22,6 +22,7 @@ export interface TagsModalProps {
   onColorChange?: (tagId: string, color: LabelColor) => void | Promise<void>;
   emptyText?: string;
   showCreate?: boolean;
+  accentColor?: LabelColor;
 }
 
 const TAG_COLOR_OPTIONS: LabelColor[] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink'];
@@ -42,47 +43,22 @@ const TagsModal: React.FC<TagsModalProps> = ({
   onColorChange,
   emptyText = 'No tags yet. Create one below.',
   showCreate = true,
+  accentColor,
 }) => {
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState<LabelColor>(randomTagColor());
+  const [newColor, setNewColor] = useState<LabelColor>(accentColor || randomTagColor());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState('');
+  const colorPickerRef = useRef<HTMLDivElement | null>(null);
   const [colorPickerId, setColorPickerId] = useState<string | null>(null);
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const [pickerRect, setPickerRect] = useState<DOMRect | null>(null);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
   const [creating, setCreating] = useState(false);
 
   const closeColorPicker = () => {
     setColorPickerId(null);
-    setAnchorEl(null);
-    setPickerRect(null);
   };
 
-  useLayoutEffect(() => {
-    if (!anchorEl) { setPickerRect(null); return; }
-    const update = () => setPickerRect(anchorEl.getBoundingClientRect());
-    update();
-    window.addEventListener('scroll', update, true);
-    window.addEventListener('resize', update);
-    return () => {
-      window.removeEventListener('scroll', update, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [anchorEl]);
-
-  useEffect(() => {
-    if (!colorPickerId) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (pickerRef.current && pickerRef.current.contains(target)) return;
-      if ((target as HTMLElement).closest?.('[data-color-trigger]')) return;
-      closeColorPicker();
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [colorPickerId]);
+  // No longer tracking anchorEl/pickerRect - modal is always centered
 
   if (!open) return null;
 
@@ -185,8 +161,6 @@ const TagsModal: React.FC<TagsModalProps> = ({
                           closeColorPicker();
                         } else {
                           setColorPickerId(tag.id);
-                          const row = (e.currentTarget.closest('[data-tag-row]') as HTMLElement) || e.currentTarget;
-                          setAnchorEl(row);
                         }
                       }}
                       title="Change tag color"
@@ -230,14 +204,13 @@ const TagsModal: React.FC<TagsModalProps> = ({
           })}
         </div>
 
-        {colorPickerId && onColorChange && pickerRect && (() => {
+        {colorPickerId && onColorChange && (() => {
           const activeTag = tags.find(t => t.id === colorPickerId);
           if (!activeTag) return null;
           return createPortal(
             <div
-              ref={pickerRef}
-              className="fixed z-[100]"
-              style={{ top: pickerRect.bottom + 6, left: pickerRect.left }}
+              ref={colorPickerRef}
+              className="fixed z-[100] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card p-2 shadow-xl">
@@ -287,7 +260,8 @@ const TagsModal: React.FC<TagsModalProps> = ({
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: `hsl(${typeof window !== 'undefined' ? localStorage.getItem('accentHsl') || '0 0% 0%' : '0 0% 0%'})` }}
               >
                 {creating ? 'Adding...' : 'Add tag'}
               </button>

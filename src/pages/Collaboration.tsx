@@ -3,6 +3,7 @@ import { Users, UserPlus, Copy, Plus, Crown, Loader2, MessageCircle, Building2, 
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ComingSoon from '@/components/shared/ComingSoon';
 
 interface TeamMember {
   id: string;
@@ -500,6 +501,20 @@ const Collaboration: React.FC = () => {
     { id: 'join' as const, label: 'Join Workspace' },
   ];
 
+  if (true) {
+    return (
+      <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+        <div className="max-w-lg">
+          <ComingSoon
+            title="Collaboration"
+            description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
+            onNotify={() => (window.location.href = '/pricing')}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -507,6 +522,9 @@ const Collaboration: React.FC = () => {
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Loading collaboration...</span>
         </div>
+      </div>
+    );
+  }
       </div>
     );
   }
@@ -553,25 +571,11 @@ const Collaboration: React.FC = () => {
         </div>
 
         {/* Paywall for free users - now as a non-blocking notice */}
-        {!user?.subscriptionTier || user.subscriptionTier === 'free' ? (
-          <div className="mb-6 p-4 bg-card border border-border rounded-xl text-center animate-fade-in">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
-              <Users2 className="w-6 h-6 text-primary" />
-            </div>
-            <h2 className="text-lg font-bold text-foreground mb-2">Upgrade for Full Collaboration</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Work together with your team, share workspaces, and chat in real-time. 
-              Premium and Pro plans allow unlimited members and advanced team features.
-            </p>
-            <a
-              href="/pricing"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all duration-200"
-            >
-              <Sparkles className="w-4 h-4 fill-current" />
-              View Pricing Plans
-            </a>
-          </div>
-        ) : null}
+        <ComingSoon
+          title="Team Collaboration"
+          description="Invite team members, create teams, and chat in real-time. Upgrade for unlimited members and advanced features."
+          onNotify={() => window.location.href = '/pricing'}
+        />
 
         {activeTab === 'team' && (
           <div className="animate-fade-in space-y-6">

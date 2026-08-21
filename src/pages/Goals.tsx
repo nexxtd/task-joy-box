@@ -1447,6 +1447,8 @@ const Goals: React.FC = () => {
             </div>
             {(() => {
               const gp = getGoalProgress(goal);
+              const milestoneCount = (goal.goalMilestones || []).length;
+              const milestoneDone = (goal.goalMilestones || []).filter(m => m.completed).length;
               return (
                 <div className="flex items-center gap-2 mt-1">
                   <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
@@ -1454,9 +1456,14 @@ const Goals: React.FC = () => {
                     {gp.mode === 'numeric' && gp.target > 0
                       ? `${gp.current}/${gp.target}`
                       : gp.mode === 'auto' && gp.target > 0
-                        ? `${gp.current}/${gp.target}`
-                        : `${gp.percent}%`}
+                        ? `${gp.current}/${gp.target} milestones`
+                        : gp.mode === 'percent' ? `${gp.percent}%` : ''}
                   </span>
+                  {milestoneCount > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                      {milestoneDone}/{milestoneCount} {milestoneCount === 1 ? 'milestone' : 'milestones'}
+                    </span>
+                  )}
                 </div>
               );
             })()}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import ComingSoon from '@/components/shared/ComingSoon';
 import {
   Bold, Italic, Underline, Strikethrough, List, ListOrdered,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Undo2, Redo2, FileText,
@@ -418,6 +419,20 @@ const Documents: React.FC = () => {
     </div>
   );
 
+  if (true) {
+    return (
+      <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+        <div className="max-w-lg">
+          <ComingSoon
+            title="Documents"
+            description="Create, edit and co-author documents with rich formatting, images and real-time collaboration linked to your tasks."
+            onNotify={() => (window.location.href = '/pricing')}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-background">
       <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
@@ -469,6 +484,12 @@ const Documents: React.FC = () => {
           />
         </div>
       </header>
+
+      <ComingSoon
+        title="Document Collaboration"
+        description="Co-author documents in real-time, leave comments, and track changes. Coming in a future update."
+        onNotify={() => window.location.href = '/pricing'}
+      />
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: document list */}

@@ -16,12 +16,12 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
       .limit(1);
       
     if (snapshot.length === 0) {
-      return res.json(null);
+      return res.json({ board: null });
     }
     
     // Parse the JSON string back to an object
     const boardData = JSON.parse(snapshot[0].snapshot);
-    res.json(boardData);
+    res.json({ board: boardData });
   } catch (error) {
     console.error('Failed to fetch board snapshot:', error);
     res.status(500).json({ error: 'Failed to fetch board snapshot' });
