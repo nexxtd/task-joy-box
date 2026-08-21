@@ -257,6 +257,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     const subtaskCount = task.subtasks?.length || 0;
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+    const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
     const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
     return (
@@ -347,7 +348,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 </span>
               )}
               {subtaskCount > 0 && (() => {
-                const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
                 return (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                     {subtaskDone}/{subtaskCount} sub task

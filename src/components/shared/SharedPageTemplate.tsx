@@ -154,14 +154,9 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
   const [aiTaskDraft, setAiTaskDraft] = useState<any | null>(null);
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | 'startDate' | 'dueDate' | 'tags' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
   const [quickEditDuration, setQuickEditDuration] = useState(0);
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
-  const [quickEditStartDate, setQuickEditStartDate] = useState('');
-  const [quickEditStartTime, setQuickEditStartTime] = useState('');
-  const [quickEditDueDate, setQuickEditDueDate] = useState('');
-  const [quickEditDueTime, setQuickEditDueTime] = useState('');
-  const [quickEditTags, setQuickEditTags] = useState<string[]>([]);
 
   // Load projects
   useEffect(() => {
