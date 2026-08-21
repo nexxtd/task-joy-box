@@ -79,7 +79,7 @@ export interface Task {
   dailyTarget?: number;
   dailyLogs?: string;
   targetPeriod?: 'daily' | 'weekly' | 'monthly';
-  recurrencePattern?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrencePattern?: string | null;
   nextOccurrence?: string | null;
   archived?: boolean;
   goalMilestones?: Subtask[];

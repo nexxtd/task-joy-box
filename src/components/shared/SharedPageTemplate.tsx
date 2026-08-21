@@ -10,8 +10,9 @@ import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import TagsModal from '@/components/shared/TagsModal';
-import { ProgressBar } from '@/ui/progress';
+import { Progress } from '@/components/ui/progress';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
+import { createTag, updateTag, deleteTag, fetchTags } from '@/services/tagService';
 
 /**
  * Shared page template that provides common drag-and-drop, inline editing,
@@ -112,9 +113,15 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<string>('blue');
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | 'startDate' | 'dueDate' | 'tags' | null>(null);
   const [quickEditDuration, setQuickEditDuration] = useState(0);
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
+  const [quickEditStartDate, setQuickEditStartDate] = useState('');
+  const [quickEditStartTime, setQuickEditStartTime] = useState('');
+  const [quickEditDueDate, setQuickEditDueDate] = useState('');
+  const [quickEditDueTime, setQuickEditDueTime] = useState('');
+  const [quickEditTags, setQuickEditTags] = useState<string[]>([]);
+  const [pendingDragMove, setPendingDragMove] = useState<any>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => {
     try { const v = localStorage.getItem(`-${itemType}-expanded-ids`); return v ? JSON.parse(v) : []; } catch { return []; }
@@ -153,10 +160,6 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
   const [aiBuilderImages, setAiBuilderImages] = useState<any[]>([]);
   const [aiTaskDraft, setAiTaskDraft] = useState<any | null>(null);
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
-  const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
-  const [quickEditDuration, setQuickEditDuration] = useState(0);
-  const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
 
   // Load projects
   useEffect(() => {
@@ -266,7 +269,7 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
 
   // ============ INLINE EDITORS ============
 
-  const openQuickEdit = (item: any, field: 'duration' | 'project') => {
+  const openQuickEdit = (item: any, field: 'duration' | 'project' | 'startDate' | 'dueDate' | 'tags') => {
     setQuickEditTaskId(item.id);
     setQuickEditField(field);
     if (field === 'duration') {
@@ -275,31 +278,6 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
     if (field === 'project') {
       setQuickEditProjectId(item.projectId || '');
     }
-  };
-
-  const closeQuickEdit = () => {
-    setQuickEditTaskId(null);
-    setQuickEditField(null);
-  };
-
-  const applyQuickEdit = (item: any) => {
-    const updates: any = {};
-    if (quickEditField === 'duration') {
-      updates.duration = Math.max(0, Number(quickEditDuration) || 0);
-    }
-    if (quickEditField === 'project') {
-      updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
-      updates.projectName = quickEditProjectId === ''
-        ? undefined
-        : (projects.find((p: any) => p.id === Number(quickEditProjectId))?.name || undefined);
-    }
-    updateTask(item.id, updates);
-    closeQuickEdit();
-  };
-
-  const closeQuickEditAndReset = () => {
-    setQuickEditTaskId(null);
-    setQuickEditField(null);
   };
 
   const openQuickEditDuration = (item: any) => {
@@ -560,10 +538,26 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
 
   // ============ RENDER ============
 
+  const renderClone = (taskProvided: any, taskSnapshot: any, rubric: any) => {
+    const draggedTask = rubric?.source?.index != null ? filtered.active[rubric.source.index] : null;
+    if (!draggedTask) return null;
+    return (
+      <CenteredDragClone
+        draggableProps={taskProvided.draggableProps}
+        dragHandleProps={taskProvided.dragHandleProps}
+        innerRef={taskProvided.innerRef}
+        style={{ width: taskSnapshot.bounds?.width, height: taskSnapshot.bounds?.height }}
+        zoom={1}
+      >
+        {renderItemRow(draggedTask, taskProvided, taskSnapshot, extraState)}
+      </CenteredDragClone>
+    );
+  };
+
   return (
     <div>
       {/* Creation modal */}
-      {renderCreationModal(addTask, setAddingTask, {
+      {renderCreationModal(addingTask, () => setAddingTask(false), {
         projects, setProjects,
         tier, isPremium, isPro,
         onAddClick,
@@ -690,11 +684,7 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
       })()}
 
       {/* Main content area with drag-and-drop */}
-      <DragDropContext
-        draggableId={`-${itemType}-column`}
-        index={0}
-        onDragEnd={handleDragEnd}
-      >
+      <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="my-${itemType}" type="item" renderClone={renderClone}>
           {(dropProvided, snapshot) => (
             <div
@@ -753,25 +743,6 @@ const SharedPageTemplate: React.FC<SharedPageTemplateProps> = ({
 };
 
 export default SharedPageTemplate;
-
-/**
- * Helper: renders the drag preview clone
- */
-const renderClone = (taskProvided: any, taskSnapshot: any, rubric: any) => {
-  const draggedTask = /* get from rubric */ null;
-  if (!draggedTask) return null;
-  return (
-    <CenteredDragClone
-      draggableProps={taskProvided.draggableProps}
-      dragHandleProps={taskProvided.dragHandleProps}
-      innerRef={taskProvided.innerRef}
-      style={{ width: taskSnapshot.bounds.width, height: taskSnapshot.bounds.height }}
-      zoom={1}
-    >
-      {renderItemRow(draggedTask, taskProvided, taskSnapshot, null)}
-    </CenteredDragClone>
-  );
-};
 
 /**
  * Helper: checks if an item is completed

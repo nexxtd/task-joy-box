@@ -1289,7 +1289,7 @@ const Habits: React.FC = () => {
       updates.duration = Math.max(0, Number(quickEditDuration) || 0);
     }
     if (quickEditField === 'frequency') {
-      updates.recurrencePattern = quickEditFrequency as 'daily' | 'weekly' | 'monthly';
+      updates.recurrencePattern = quickEditFrequency as any;
     }
     if (quickEditField === 'project') {
       updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
@@ -1601,7 +1601,7 @@ const Habits: React.FC = () => {
               )}
               {quickEditField === 'frequency' && (
                 <div className="flex items-center gap-2">
-                  <Select value={quickEditFrequency} onValueChange={val => setQuickEditFrequency(val)}>
+                  <Select value={quickEditFrequency} onValueChange={val => setQuickEditFrequency(val as any)}>
                     <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
                       <SelectValue placeholder="Frequency" />
                     </SelectTrigger>
@@ -2446,7 +2446,7 @@ const Habits: React.FC = () => {
                   <div className="flex flex-col sm:flex-row items-center gap-3">
                     {/* Frequency selector */}
                     <div className="flex-1">
-                      <Select value={newHabitFrequency} onValueChange={val => setNewHabitFrequency(val)}>
+                      <Select value={newHabitFrequency} onValueChange={val => setNewHabitFrequency(val as any)}>
                         <SelectTrigger className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm h-9">
                           <SelectValue placeholder="Frequency" />
                         </SelectTrigger>
@@ -3886,7 +3886,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
   const freqLogs = parseLogs(habit);
   const freqDays = Array.isArray(freqLogs.frequencyDays) ? (freqLogs.frequencyDays as string[]) : [];
   const selectedMode: 'daily' | 'weekly' | 'monthly' | 'custom' =
-    freqDays.length > 0 && freqDays.length < 7 ? 'custom' : (habit.recurrencePattern || 'daily');
+    freqDays.length > 0 && freqDays.length < 7 ? 'custom' : ((habit.recurrencePattern as any) || 'daily');
 
   const updateFrequency = (mode: 'daily' | 'weekly' | 'monthly') => {
     const logs = { ...parseLogs(habit) };

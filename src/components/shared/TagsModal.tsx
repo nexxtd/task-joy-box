@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Trash2 } from 'lucide-react';
 import { LabelColor, LABEL_COLORS } from '@/types/board';
-import { useAccent } from '@/context/ThemeContext';
 
 export interface TagOption {
   id: string;
@@ -52,6 +51,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renamingValue, setRenamingValue] = useState('');
   const colorPickerRef = useRef<HTMLDivElement | null>(null);
+  const [colorPickerId, setColorPickerId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const closeColorPicker = () => {
@@ -161,8 +161,6 @@ const TagsModal: React.FC<TagsModalProps> = ({
                           closeColorPicker();
                         } else {
                           setColorPickerId(tag.id);
-                          const row = (e.currentTarget.closest('[data-tag-row]') as HTMLElement) || e.currentTarget;
-                          setAnchorEl(row);
                         }
                       }}
                       title="Change tag color"
