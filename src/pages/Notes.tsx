@@ -1330,10 +1330,13 @@ const Notes: React.FC = () => {
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />
           ) : null}
-          <div className="flex-1 min-w-0 cursor-pointer" onClick={e => { if (!isDeleteMode) { e.stopPropagation(); setOpenTaskId(note.id); } }}>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Note</span>
-            <span className="text-sm font-medium text-foreground truncate block">{note.title}</span>
-
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-left text-foreground truncate">{note.title}</span>
+            </div>
+            {noteSnippet && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{noteSnippet}</p>
+            )}
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
                 <PriorityBadge
@@ -2005,8 +2008,31 @@ const Notes: React.FC = () => {
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-  
-
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
+                  <Select value={newNotePriority} onValueChange={v => setNewNotePriority(v as Priority)}>
+                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={newNoteDuration}
+                    onChange={e => setNewNoteDuration(Math.max(0, Number(e.target.value) || 0))}
+                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                  />
+                </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                   <Select value={newNoteProjectId === '' ? 'my-notes' : String(newNoteProjectId)} onValueChange={v => { setNewNoteProjectId(v === 'my-notes' ? '' : Number(v)); setNewNoteColumnId(''); }}>
@@ -2089,20 +2115,231 @@ const Notes: React.FC = () => {
             </div>
           </div>
 
-
-
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Body</label>
-            <RichTextEditor
-              value={newNoteDescription}
-              onChange={(html) => setNewNoteDescription(html)}
-              placeholder="Write your note..."
-              minHeight={220}
-            />
+          {/* Start Date and Time Section */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
+              <input
+                type="date"
+                value={newNoteStartDate}
+                onChange={e => setNewNoteStartDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Time</label>
+              <input
+                type="time"
+                value={newNoteStartTime}
+                onChange={e => setNewNoteStartTime(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
           </div>
 
+          {/* Due Date and Time Section */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
+              <input
+                type="date"
+                value={newNoteDueDate}
+                onChange={e => setNewNoteDueDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Time</label>
+              <input
+                type="time"
+                value={newNoteDueTime}
+                onChange={e => setNewNoteDueTime(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
+                <textarea
+                  value={newNoteDescription}
+                  onChange={e => setNewNoteDescription(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                />
+              </div>
+
               {/* Checklist Card */}
-              
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftChecklistCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+                    {newChecklistLists.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newChecklistLists.length})</span>
+                    )}
+                  </div>
+                  {draftChecklistCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftChecklistCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
+                <DragDropContext onDragEnd={handleDraftReorder}>
+                  {newChecklistItems.length > 0 && (
+                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                      <div className="flex items-center px-3 py-2">
+                        <span className="text-xs font-semibold text-foreground">Checklist</span>
+                      </div>
+                      <div className="px-3 pb-2 space-y-1.5">
+                        <Droppable droppableId="draft-checklist">
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                              {newChecklistItems.map((item, index) => (
+                                <Draggable key={item.id} draggableId={item.id} index={index}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                        <GripVertical className="w-4 h-4" />
+                                      </div>
+                                      <span className="flex-1">{item.text}</span>
+                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                        <div className="flex gap-2 pt-1">
+                          <input
+                            value={newChecklistText}
+                            onChange={e => setNewChecklistText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
+                            placeholder="Add checklist item"
+                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                          />
+                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <Droppable droppableId="draft-checklist-lists" type="checklistList">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                        {newChecklistLists.map((list, listIndex) => {
+                          const isCollapsed = collapsedDraftChecklists.has(list.id);
+                          return (
+                            <Draggable key={list.id} draggableId={list.id} index={listIndex}>
+                              {(provided) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                  <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mr-1">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    <button
+                                      onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
+                                      className="flex-1 flex items-center gap-2 text-left"
+                                    >
+                                      {editingDraftChecklistId === list.id ? (
+                                        <input
+                                          autoFocus
+                                          className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                          value={editingDraftChecklistTitle}
+                                          onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                          onBlur={() => {
+                                            if (editingDraftChecklistTitle.trim()) {
+                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                            }
+                                            setEditingDraftChecklistId(null);
+                                          }}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                              if (editingDraftChecklistTitle.trim()) {
+                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
+                                              }
+                                              setEditingDraftChecklistId(null);
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                          {list.title}
+                                        </span>
+                                      )}
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
+                                        {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {!isCollapsed && (
+                                    <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                                      <Droppable droppableId={`draft-checklist-items-${list.id}`} type="checklistItem">
+                                        {(provided) => (
+                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                            {list.items.map((item, itemIndex) => (
+                                              <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                                {(provided) => (
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                      <GripVertical className="w-4 h-4" />
+                                                    </div>
+                                                    <span className="flex-1 text-foreground">{item.text}</span>
+                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                      <div className="flex gap-2 pt-1">
+                                        <input
+                                          value={perChecklistInput[list.id] ?? ''}
+                                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
+                                          placeholder="Add checklist item"
+                                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                        />
+                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </Draggable>
+                          );
+                        })}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+                    <div className="flex gap-2">
+                      <input
+                        value={newChecklistTitle}
+                        onChange={e => setNewChecklistTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
+                        placeholder="New checklist name"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Attachments Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
@@ -2179,7 +2416,81 @@ const Notes: React.FC = () => {
               </div>
 
               {/* Images Card */}
-              
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftImagesCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                    {newNoteImages.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newNoteImages.length})</span>
+                    )}
+                  </div>
+                  {draftImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftImagesCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {!isPremium ? (
+                      <div className="border border-dashed border-border rounded-xl">
+                        <PremiumGate
+                          title="Image Attachments"
+                          description="Upload images directly to your notes."
+                          icon={<Image className="w-6 h-6 text-primary" />}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                          <div className="flex flex-col items-center justify-center py-4">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                              <Image className="w-5 h-5 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">Click to upload</p>
+                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                          </div>
+                          <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                            if (!e.target.files) return;
+                            const files = Array.from(e.target.files);
+                            const newImgs: Attachment[] = [];
+                            for (const file of files) {
+                              const fileUrl = await imageToDataUrl(file);
+                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                            }
+                            setNewNoteImages(prev => [...prev, ...newImgs]);
+                            e.target.value = '';
+                          }} className="hidden" />
+                        </label>
+                        {newNoteImages.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {newNoteImages.map(img => (
+                              <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                                {img.fileUrl.match(/^data:image/) ? (
+                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                                </div>
+                                <button
+                                  onClick={() => setNewNoteImages(prev => prev.filter(x => x.id !== img.id))}
+                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
@@ -2990,15 +3301,6 @@ const NoteDropdownExpanded: React.FC<{
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs font-semibold text-muted-foreground mb-1.5">Title</label>
-        <input
-          value={note.title}
-          onChange={e => onUpdateNote(note.id, { title: e.target.value })}
-          className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-        />
-      </div>
-
-      <div>
         <h4 className="text-xs font-semibold text-muted-foreground mb-1.5">Body</h4>
         <RichTextEditor
           value={note.description}
@@ -3008,24 +3310,185 @@ const NoteDropdownExpanded: React.FC<{
         />
       </div>
 
-      <div className="space-y-2">
-        {note.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {note.labels.map(label => (
-              <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>{label.name}</span>
-            ))}
+      {/* Checklist Section */}
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+            {checklistLists.length > 0 && (
+              <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
+            )}
+          </div>
+          {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!checklistsSectionCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+            <DragDropContext onDragEnd={handleDropdownReorder}>
+              <Droppable droppableId={`dropdown-checklist-lists-${note.id}`} type="checklistList">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                    {checklistLists.map((list, listIndex) => {
+                      const isCollapsed = collapsedChecklists.has(list.id);
+                      return (
+                        <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                              <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <GripVertical className="w-4 h-4" />
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const next = new Set(collapsedChecklists);
+                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                    setCollapsedChecklists(next);
+                                  }}
+                                  className="flex-1 flex items-center gap-2 text-left"
+                                >
+                                  {editingChecklistId === list.id ? (
+                                    <input
+                                      autoFocus
+                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                      value={editingChecklistTitle}
+                                      onChange={e => setEditingChecklistTitle(e.target.value)}
+                                      onBlur={() => {
+                                        if (editingChecklistTitle.trim()) {
+                                          onUpdateNote(note.id, { checklists: note.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                        }
+                                        setEditingChecklistId(null);
+                                        setEditingChecklistTitle('');
+                                      }}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                          if (editingChecklistTitle.trim()) {
+                                            onUpdateNote(note.id, { checklists: note.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                          }
+                                          setEditingChecklistId(null);
+                                          setEditingChecklistTitle('');
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <span
+                                      onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
+                                      className="text-xs font-semibold text-foreground cursor-text"
+                                    >
+                                      {list.title}
+                                    </span>
+                                  )}
+                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => onUpdateNote(note.id, { checklists: note.checklists.filter(cl => cl.id !== list.id) })}
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const next = new Set(collapsedChecklists);
+                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                      setCollapsedChecklists(next);
+                                    }}
+                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                  >
+                                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                  </button>
+                                </div>
+                              </div>
+                              {!isCollapsed && (
+                                <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                                  <Droppable droppableId={`dropdown-checklist-${note.id}-${list.id}`} type="checklistItem">
+                                    {(provided) => (
+                                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                        {list.items.map((item, index) => (
+                                          <Draggable key={item.id} draggableId={item.id} index={index}>
+                                            {(provided) => (
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                  <GripVertical className="w-4 h-4" />
+                                                </div>
+                                                <SquareToggle
+                                                  completed={item.completed}
+                                                  onClick={() => onToggleChecklistItem(note.id, list.id, item.id)}
+                                                  size="md"
+                                                />
+                                                {editingChecklistItemId === item.id ? (
+                                                  <input
+                                                    autoFocus
+                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                    value={editingChecklistText}
+                                                    onChange={e => setEditingChecklistText(e.target.value)}
+                                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                  />
+                                                ) : (
+                                                  <span
+                                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                  >
+                                                    {item.text}
+                                                  </span>
+                                                )}
+                                                <button
+                                                  onClick={() => onDeleteChecklistItem(note.id, list.id, item.id)}
+                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            )}
+                                          </Draggable>
+                                        ))}
+                                        {provided.placeholder}
+                                      </div>
+                                    )}
+                                  </Droppable>
+                                  <div className="flex gap-2 pt-1">
+                                    <input
+                                      value={perChecklistInput[list.id] ?? ''}
+                                      onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                      onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(note.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                                      placeholder="Add checklist item"
+                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                    />
+                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(note.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+            <div className="flex gap-2">
+              <input
+                value={newChecklistTitle}
+                onChange={e => setNewChecklistTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateNote(note.id, { checklists: [...note.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                placeholder="New checklist name"
+                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                onClick={() => { if (newChecklistTitle.trim()) { onUpdateNote(note.id, { checklists: [...note.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                disabled={!newChecklistTitle.trim()}
+                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
+              >
+                Add checklist
+              </button>
+            </div>
           </div>
         )}
-        <button
-          onClick={() => setTagPickerOpen && setTagPickerOpen(true)}
-          className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1"
-        >
-          <Tag className="w-2.5 h-2.5" />Tags
-        </button>
       </div>
-
-      {/* Checklist Section */}
-      
 
       {/* Attachments Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
@@ -3111,7 +3574,99 @@ const NoteDropdownExpanded: React.FC<{
       </div>
 
       {/* Images Section */}
-      
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setImagesCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Image className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Images</h3>
+            {note.images && note.images.length > 0 && (
+              <span className="text-xs text-muted-foreground">({note.images.length})</span>
+            )}
+          </div>
+          {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!imagesCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {!isPremium ? (
+              <div className="border border-dashed border-border rounded-xl">
+                <PremiumGate
+                  title="Image Attachments"
+                  description="Upload images directly to your notes."
+                  icon={<Image className="w-6 h-6 text-primary" />}
+                />
+              </div>
+            ) : (
+              <>
+                {(note.images?.length || 0) + (note.attachments?.length || 0) >= mediaLimit ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                    <div className="flex flex-col items-center justify-center py-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                        <Image className="w-5 h-5 text-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">Click to upload</p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                    </div>
+                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                      if (!e.target.files) return;
+                      const files = Array.from(e.target.files);
+                      const newImages: Attachment[] = [];
+                      for (const file of files) {
+                        const fileUrl = await imageToDataUrl(file);
+                        const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                        newImages.push({ id: crypto.randomUUID(), taskId: String(note.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                      }
+                      onUpdateNote(note.id, { images: [...(note.images || []), ...newImages] });
+                      e.target.value = '';
+                    }} className="hidden" />
+                  </label>
+                )}
+                {note.images && note.images.length > 0 && (
+                  <DragDropContext onDragEnd={handleImageReorder}>
+                    <Droppable droppableId={`dropdown-images-${note.id}`} direction="horizontal">
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {note.images.map((img, idx) => (
+                            <Draggable key={img.id} draggableId={img.id} index={idx}>
+                              {(provided) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                                  {img.fileUrl.match(/^data:image/) ? (
+                                    <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                                  )}
+                                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                                    <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                                    {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                                  </div>
+                                  <div {...provided.dragHandleProps} className="absolute top-1.5 left-1.5 p-1 rounded-md bg-background/80 border border-border text-muted-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10">
+                                    <GripVertical className="w-3.5 h-3.5" />
+                                  </div>
+                                  <button
+                                    onClick={() => onUpdateNote(note.id, { images: (note.images || []).filter(x => x.id !== img.id) })}
+                                    className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -3390,7 +3945,32 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           </button>
         </div>
 
-
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
+            <Select value={note.priority} onValueChange={v => onUpdateNote(note.id, { priority: v as Priority })}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
+            <input
+              type="number"
+              min={0}
+              value={note.duration || 0}
+              onChange={e => onUpdateNote(note.id, { duration: Math.max(0, Number(e.target.value) || 0) })}
+              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
@@ -3432,7 +4012,58 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           </div>
         </div>
 
-
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> Start
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={note.startDate || ''}
+                  onChange={e => onUpdateNote(note.id, { startDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={note.startTime || ''}
+                  onChange={e => onUpdateNote(note.id, { startTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> End
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={note.dueDate || ''}
+                  onChange={e => onUpdateNote(note.id, { dueDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={note.dueTime || ''}
+                  onChange={e => onUpdateNote(note.id, { dueTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div>
           <label className="text-xs font-semibold text-muted-foreground mb-1 block">Body</label>
@@ -3503,7 +4134,184 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           )}
         </div>
 
-        
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
+              {checklistLists.length > 0 && (
+                <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
+              )}
+            </div>
+            {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!checklistsSectionCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
+              <DragDropContext onDragEnd={handleFullViewReorder}>
+                <Droppable droppableId="fullview-checklist-lists" type="checklistList">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                      {checklistLists.map((list, listIndex) => {
+                        const isCollapsed = collapsedChecklists.has(list.id);
+                        return (
+                          <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                    <GripVertical className="w-4 h-4" />
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      const next = new Set(collapsedChecklists);
+                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                      setCollapsedChecklists(next);
+                                    }}
+                                    className="flex-1 flex items-center gap-2 text-left"
+                                  >
+                                    {editingChecklistId === list.id ? (
+                                      <input
+                                        autoFocus
+                                        className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                        value={editingChecklistTitle}
+                                        onChange={e => setEditingChecklistTitle(e.target.value)}
+                                        onBlur={() => {
+                                          if (editingChecklistTitle.trim()) {
+                                            onUpdateNote(note.id, { checklists: note.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                          }
+                                          setEditingChecklistId(null);
+                                          setEditingChecklistTitle('');
+                                        }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') {
+                                            if (editingChecklistTitle.trim()) {
+                                              onUpdateNote(note.id, { checklists: note.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
+                                            }
+                                            setEditingChecklistId(null);
+                                            setEditingChecklistTitle('');
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <span
+                                        onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
+                                        className="text-xs font-semibold text-foreground cursor-text"
+                                      >
+                                        {list.title}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => onUpdateNote(note.id, { checklists: note.checklists.filter(cl => cl.id !== list.id) })}
+                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        const next = new Set(collapsedChecklists);
+                                        if (isCollapsed) next.delete(list.id); else next.add(list.id);
+                                        setCollapsedChecklists(next);
+                                      }}
+                                      className="p-1 text-muted-foreground hover:text-foreground"
+                                    >
+                                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                {!isCollapsed && (
+                                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
+                                      <Droppable droppableId={"fullview-checklist-" + list.id} type="checklistItem">
+                                        {(provided) => (
+                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                            {list.items.map((item, index) => (
+                                              <Draggable key={item.id} draggableId={item.id} index={index}>
+                                                {(provided) => (
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                      <GripVertical className="w-4 h-4" />
+                                                    </div>
+                                                    <SquareToggle
+                                                      completed={item.completed}
+                                                      onClick={() => onToggleChecklistItem(note.id, list.id, item.id)}
+                                                      size="md"
+                                                    />
+                                                    {editingChecklistItemId === item.id ? (
+                                                      <input
+                                                        autoFocus
+                                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                        value={editingChecklistText}
+                                                        onChange={e => setEditingChecklistText(e.target.value)}
+                                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
+                                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                      />
+                                                    ) : (
+                                                      <span
+                                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
+                                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                      >
+                                                        {item.text}
+                                                      </span>
+                                                    )}
+                                                    <button
+                                                      onClick={() => onDeleteChecklistItem(note.id, list.id, item.id)}
+                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                    >
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </Draggable>
+                                            ))}
+                                            {provided.placeholder}
+                                          </div>
+                                        )}
+                                      </Droppable>
+                                    <div className="flex gap-2 pt-1">
+                                      <input
+                                        value={perChecklistInput[list.id] ?? ''}
+                                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(note.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                                        placeholder="Add checklist item"
+                                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                      />
+                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(note.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </Draggable>
+                        );
+                      })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+              <div className="flex gap-2">
+                <input
+                  value={newChecklistTitle}
+                  onChange={e => setNewChecklistTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateNote(note.id, { checklists: [...note.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                  placeholder="New checklist name"
+                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => { if (newChecklistTitle.trim()) { onUpdateNote(note.id, { checklists: [...note.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                  disabled={!newChecklistTitle.trim()}
+                  className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
+                >
+                  Add checklist
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">
           <button
@@ -3587,7 +4395,99 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           )}
         </div>
 
-        
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setImagesCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <Image className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-foreground">Images</h3>
+              {note.images && note.images.length > 0 && (
+                <span className="text-xs text-muted-foreground">({note.images.length})</span>
+              )}
+            </div>
+            {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {!imagesCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              {!isPremium ? (
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate
+                    title="Image Attachments"
+                    description="Upload images directly to your notes."
+                    icon={<Image className="w-6 h-6 text-primary" />}
+                  />
+                </div>
+              ) : (
+                <>
+              {(note.images?.length || 0) + (note.attachments?.length || 0) >= mediaLimit ? (
+                <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                      <Image className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Click to upload</p>
+                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                  </div>
+                   <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                    if (!e.target.files) return;
+                    const files = Array.from(e.target.files);
+                    const newImages: Attachment[] = [];
+                    for (const file of files) {
+                      const fileUrl = await imageToDataUrl(file);
+                      const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                      newImages.push({ id: crypto.randomUUID(), taskId: String(note.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                    }
+                    onUpdateNote(note.id, { images: [...(note.images || []), ...newImages] });
+                    e.target.value = '';
+                  }} className="hidden" />
+                </label>
+              )}
+              {note.images && note.images.length > 0 && (
+                <DragDropContext onDragEnd={handleImageReorder}>
+                  <Droppable droppableId="fullview-images" direction="horizontal">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {note.images.map((img, idx) => (
+                          <Draggable key={img.id} draggableId={img.id} index={idx}>
+                            {(provided) => (
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
+                                {img.fileUrl.match(/^data:image/) ? (
+                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
+                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
+                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
+                                </div>
+                                <div {...provided.dragHandleProps} className="absolute top-1.5 left-1.5 p-1 rounded-md bg-background/80 border border-border text-muted-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10">
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </div>
+                                <button
+                                  onClick={() => onUpdateNote(note.id, { images: (note.images || []).filter(x => x.id !== img.id) })}
+                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">
           <button
