@@ -6,7 +6,6 @@ import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority,
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
-import PageTemplate from '@/components/PageTemplate';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import {
   Archive,
@@ -1148,7 +1147,7 @@ const Notes: React.FC = () => {
   };
 
   const openQuickEdit = (note: Note, field: 'duration' | 'project') => {
-    setQuickEditTaskId(note.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
+    setQuickEditTaskId(note.id);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(note));
     setQuickEditDuration(Math.max(0, Number(note.duration) || 0));
@@ -1334,6 +1333,8 @@ const Notes: React.FC = () => {
           <div className="flex-1 min-w-0 cursor-pointer" onClick={e => { if (!isDeleteMode) { e.stopPropagation(); setOpenTaskId(note.id); } }}>
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Note</span>
             <span className="text-sm font-medium text-foreground truncate block">{note.title}</span>
+
+            
             <div className="mt-1">
               {noteTags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
@@ -1363,7 +1364,73 @@ const Notes: React.FC = () => {
             </div>
           )}
         </div>
-
+        {quickEditTaskId === note.id && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
+            <div className="flex flex-wrap items-center gap-2">
+              {quickEditField === 'duration' && (
+                <div className="flex items-center gap-2">
+                  <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(note)} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
+                  <span className="text-xs text-muted-foreground">minutes</span>
+                </div>
+              )}
+              {quickEditField === 'project' && (
+                <Select value={quickEditProjectId === '' ? 'my-notes' : String(quickEditProjectId)} onValueChange={val => setQuickEditProjectId(val === 'my-notes' ? '' : Number(val))}>
+                  <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
+                    <SelectValue placeholder="My Notes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="my-notes">My Notes</SelectItem>
+                    {projects.map(project => (<SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              )}
+              <button onClick={() => applyQuickEdit(note)} className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
+              <button onClick={closeQuickEdit} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
+            </div>
+          </div>
+        )}
+        {dateEditTaskId === note.id && dateEditField && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={dateEditField === 'start' ? (note.startDate || '') : (note.dueDate || '')}
+                  onChange={e => {
+                    const val = e.target.value || undefined;
+                    updateTask(note.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
+                  }}
+                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[140px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={dateEditField === 'start' ? (note.startTime || '') : (note.dueTime || '')}
+                  onChange={e => {
+                    const val = e.target.value || undefined;
+                    updateTask(note.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
+                  }}
+                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              {((dateEditField === 'start' && note.startDate) || (dateEditField === 'due' && note.dueDate)) && (
+                <button
+                  onClick={() => {
+                    updateTask(note.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
+                    setDateEditTaskId(null);
+                    setDateEditField(null);
+                  }}
+                  className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {isExpanded && !isDeleteMode && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <NoteDropdownExpanded
@@ -1971,8 +2038,6 @@ const Notes: React.FC = () => {
           </div>
 
               {/* Attachments Card */}
-              
-
               <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
               <div className="relative">
                 <button
@@ -2815,8 +2880,96 @@ const NoteDropdownExpanded: React.FC<{
         </button>
       </div>
 
-      {/* Attachments Section */}
+      {/* Checklist Section */}
       
+
+      {/* Attachments Section */}
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setAttachmentsCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Paperclip className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+            {(note.attachments ?? []).length > 0 && (
+              <span className="text-xs text-muted-foreground">({(note.attachments ?? []).length})</span>
+            )}
+          </div>
+          {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!attachmentsCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {!isPremium ? (
+              <div className="border border-dashed border-border rounded-xl">
+                <PremiumGate
+                  title="File Attachments"
+                  description="Attach files, images, and documents directly to your notes."
+                  icon={<Paperclip className="w-6 h-6 text-primary" />}
+                />
+              </div>
+            ) : (
+              <>
+                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                      <Paperclip className="w-5 h-5 text-primary" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                    <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                  </div>
+                  <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
+                </label>
+                {uploading && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
+                {(note.attachments || []).length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(note.attachments || []).map(attachment => {
+                      const isServerAtt = /^\d+$/.test(String(attachment.id));
+                      const href = isServerAtt ? `/api/attachments/file/${attachment.id}` : attachment.fileUrl;
+                      return (
+                        <div key={attachment.id} className="relative group/att">
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                              <Paperclip className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{attachment.fileName}</p>
+                              <p className="text-xs text-muted-foreground">{attachment.fileSize ? `${(attachment.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
+                            </div>
+                          </a>
+                          <button
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); deleteAttachment(attachment.id); }}
+                            className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Images Section */}
+      
+    </div>
+  );
 };
 
 const NoteFullView: React.FC<NoteFullViewProps> = ({
@@ -3205,6 +3358,8 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
             </div>
           )}
         </div>
+
+        
 
         <div className="rounded-2xl border border-border bg-muted/20">
           <button
