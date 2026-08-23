@@ -1334,21 +1334,85 @@ const Notes: React.FC = () => {
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Note</span>
             <span className="text-sm font-medium text-foreground truncate block">{note.title}</span>
 
-            
-            <div className="mt-1">
-              {noteTags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {noteTags.map(label => (
-                    <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>{label.name}</span>
-                  ))}
-                </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
+                <PriorityBadge
+                  note={note}
+                  onUpdate={(priority) => updateTask(note.id, { priority })}
+                  isOpen={priorityEditTaskId === note.id}
+                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === note.id ? null : note.id)}
+                />
+              )}
+              {noteDurFmt && (
+                <button
+                  onClick={e => { e.stopPropagation(); openQuickEdit(note, 'duration'); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  {noteDurFmt}
+                </button>
+              )}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === note.id && dateEditField === 'start' ? null : note.id);
+                  setDateEditField(prev => prev === 'start' ? null : 'start');
+                }}
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {note.startDate ? `${formatDate(note.startDate)}${note.startTime ? ` ${note.startTime}` : ''}` : 'Add start date'}
+              </button>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setDateEditTaskId(dateEditTaskId === note.id && dateEditField === 'due' ? null : note.id);
+                  setDateEditField(prev => prev === 'due' ? null : 'due');
+                }}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  note.dueDate
+                    ? (() => {
+                        const warning = getDueTimeWarning(note);
+                        return warning === 'overdue'
+                          ? 'bg-destructive/10 text-destructive'
+                          : warning === 'imminent' || warning === 'soon'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground';
+                      })()
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {note.dueDate ? `${formatDate(note.dueDate)}${note.dueTime ? ` ${note.dueTime}` : ''}` : 'Add due date'}
+              </button>
+              {checklistTotal > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {checklistDone}/{checklistTotal} checklist
+                </span>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1"
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
               >
-                <Tag className="w-2.5 h-2.5" />Tags
+                <Tag className="w-2.5 h-2.5" />
+                Tags
               </button>
+              {noteTags.map(label => (
+                <button
+                  key={label.id}
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </button>
+              ))}
+              {note.labels.length > noteTags.length && (
+                <button
+                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  +{note.labels.length - noteTags.length}
+                </button>
+              )}
             </div>
           </div>
           {!isDeleteMode && (
@@ -2037,8 +2101,88 @@ const Notes: React.FC = () => {
             />
           </div>
 
+              {/* Checklist Card */}
+              
+
               {/* Attachments Card */}
-              <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftAttachmentsCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+                    {newFiles.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newFiles.length})</span>
+                    )}
+                  </div>
+                  {draftAttachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!draftAttachmentsCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {!isPremium ? (
+                      <div className="border border-dashed border-border rounded-xl">
+                        <PremiumGate
+                          title="File Attachments"
+                          description="Attach files, images, and documents directly to your notes."
+                          icon={<Paperclip className="w-6 h-6 text-primary" />}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                          <div className="flex flex-col items-center justify-center py-4">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                              <Paperclip className="w-5 h-5 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                            <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                          </div>
+                          <input
+                            type="file"
+                            multiple
+                            onChange={e => {
+                              if (!e.target.files) return;
+                              setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {newFiles.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {newFiles.map((file, fileIdx) => (
+                              <div key={`${file.name}-${fileIdx}`} className="relative group/att">
+                                <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                  <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                    <Paperclip className="w-5 h-5 text-muted-foreground" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={e => { e.preventDefault(); e.stopPropagation(); setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
+                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Images Card */}
+              
+            </div>
+
+            <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
               <div className="relative">
                 <button
                   onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
