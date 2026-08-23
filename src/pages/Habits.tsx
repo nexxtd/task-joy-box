@@ -395,7 +395,7 @@ const Habits: React.FC = () => {
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
   const [frequencyDraftMode, setFrequencyDraftMode] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('daily');
   const [frequencyDraftDays, setFrequencyDraftDays] = useState<string[]>([]);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | 'frequency' | null>(null);
   const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditDueDate, setQuickEditDueDate] = useState('');
   const [quickEditDueTime, setQuickEditDueTime] = useState('');

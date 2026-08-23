@@ -28,12 +28,6 @@ const THEMES = [
 
 const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
-const LANGUAGES = [
-  'English', 'Español', 'Français', 'Deutsch', 'Português',
-  'Italiano', '中文', '日本語', '한국어', 'العربية', 'हिन्दी',
-  'Русский', 'Nederlands', 'Türkçe', 'Tiếng Việt',
-];
-
 const hexToHsl = (hex: string) => {
   let r = 0, g = 0, b = 0;
   if (hex.length === 4) {
@@ -690,7 +684,7 @@ const SettingsPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {LANGUAGES.map(l => (
-                      <SelectItem key={l} value={l}>{l}</SelectItem>
+                      <SelectItem key={l.english} value={l.english}>{l.native}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
