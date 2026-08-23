@@ -1285,6 +1285,7 @@ const Notes: React.FC = () => {
     const noteDurFmt = formatDuration(note.duration || 0);
     const noteTags = note.labels.slice(0, 3);
     const noteSnippet = (note.description || '')
+      .replace(/&nbsp;/g, ' ')
       .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
