@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import TaskDetailModal from '@/components/TaskDetailModal';
 import { Task } from '@/types/board';
 import { CalendarSlot, CalendarViewMode, SchedulingPopupData } from '@/types/calendar';
@@ -21,6 +22,7 @@ type ViewMode = 'day' | 'week' | 'month';
 
 const CalendarPage: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { board, updateTask, addTask } = useBoardContext();
   const isPro = user?.subscriptionTier === 'pro';
 
@@ -91,7 +93,7 @@ const CalendarPage: React.FC = () => {
 
   const headerTitle = () => {
     if (viewMode === 'day') return format(selectedDate, 'EEEE, MMMM d');
-    if (viewMode === 'week') return `Week of ${format(selectedDate, 'MMM d')}`;
+    if (viewMode === 'week') return t('Week of {{date}}', { date: format(selectedDate, 'MMM d') });
     return format(selectedDate, 'MMMM yyyy');
   };
 
@@ -160,7 +162,7 @@ const CalendarPage: React.FC = () => {
   const handleFixedDragStart = (e: React.DragEvent, type: 'fixed-event' | 'break') => {
     const data = {
       type,
-      title: type === 'fixed-event' ? 'Fixed Event' : 'Break',
+      title: type === 'fixed-event' ? t('Fixed Event') : t('Break'),
       duration: type === 'break' ? 15 : 60,
       color: type === 'fixed-event' ? '#7c3aed' : '#0891b2',
     };
@@ -175,7 +177,7 @@ const CalendarPage: React.FC = () => {
 
   const runAI = async (mode: 'schedule' | 'plan') => {
     if (!isPro) {
-      setAiError('Pro subscription required');
+      setAiError(t('Pro subscription required'));
       return;
     }
     if (aiLoading || aiRunningRef.current || aiCooldownRef.current) return;
@@ -215,14 +217,14 @@ const CalendarPage: React.FC = () => {
       if (res.status === 429) {
         const retryAfter = res.headers.get('Retry-After');
         const msg = retryAfter
-          ? `Server is busy. Try again in ${retryAfter}s`
-          : 'Server is busy right now. Wait 15s then try again.';
+          ? t('Server is busy. Try again in {{retryAfter}}s', { retryAfter })
+          : t('Server is busy right now. Wait 15s then try again.');
         throw new Error(msg);
       }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Request failed (${res.status})`);
+        throw new Error(errData.error || t('Request failed ({{status}})', { status: res.status }));
       }
 
       const data = await res.json();
@@ -234,11 +236,11 @@ const CalendarPage: React.FC = () => {
       } else if (data.insight || data.tips) {
         setAiResult(data);
       } else {
-        throw new Error('Unexpected AI response format');
+        throw new Error(t('Unexpected AI response format'));
       }
     } catch (e: any) {
       if (e.name === 'AbortError') return;
-      setAiError(e.message || 'Something went wrong');
+      setAiError(e.message || t('Something went wrong'));
       // 15s cooldown so user can't hammer the button
       aiCooldownRef.current = true;
       setTimeout(() => { aiCooldownRef.current = false; }, 15000);
@@ -298,7 +300,7 @@ const CalendarPage: React.FC = () => {
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button onClick={goToday} className="px-3 py-1 text-xs font-bold text-foreground hover:bg-muted rounded-lg transition-all">
-                Today
+                {t('Today')}
               </button>
               <button onClick={goNext} className="p-1.5 hover:bg-muted rounded-lg transition-all text-muted-foreground hover:text-foreground">
                 <ChevronRight className="w-4 h-4" />

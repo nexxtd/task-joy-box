@@ -15,7 +15,7 @@ const AppSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const { T } = useLanguage();
+  const { T, t } = useLanguage();
   const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
@@ -26,16 +26,16 @@ const AppSidebar: React.FC = () => {
     { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
     { icon: CalendarDays, label: T.nav_calendar, path: '/calendar' },
     { icon: BarChart3, label: T.nav_insights, path: '/insights' },
-    { icon: Wand2, label: 'AI Assistant', path: '/ai-chat' },
+    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: Target, label: T.nav_goals, path: '/goals' },
-    { icon: Flame, label: 'Habits', path: '/habits' },
-    { icon: FileText, label: 'Documents', path: '/documents' },
-    ...(user?.subscriptionTier && user.subscriptionTier !== 'free' 
+    { icon: Flame, label: t('Habits'), path: '/habits' },
+    { icon: FileText, label: t('Documents'), path: '/documents' },
+    ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
-    { icon: LifeBuoy, label: 'Support', path: '/support' },
-    ...(user?.isAdmin ? [{ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' }] : []),
+    { icon: LifeBuoy, label: t('Support'), path: '/support' },
+    ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
   ];
 
   const bottomItems = [
@@ -180,23 +180,23 @@ const AppSidebar: React.FC = () => {
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">Whiteboard Coming Soon</h3>
+              <h3 className="text-lg font-semibold text-foreground">{t('Whiteboard coming soon')}</h3>
               <button onClick={() => setShowWhiteboardModal(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                The whiteboard feature is currently under development. Soon you'll be able to:
+                {t('The whiteboard feature is currently under development. Soon you will be able to:')}
               </p>
               <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
-                <li>Create visual mind maps and diagrams</li>
-                <li>Collaborate with team members in real-time</li>
-                <li>Link whiteboards to your tasks and projects</li>
-                <li>Use drawing tools and sticky notes</li>
+                <li>{t('Create visual mind maps and diagrams')}</li>
+                <li>{t('Collaborate with team members in real-time')}</li>
+                <li>{t('Link whiteboards to your tasks and projects')}</li>
+                <li>{t('Use drawing tools and sticky notes')}</li>
               </ul>
               <p className="text-sm text-muted-foreground">
-                Stay tuned for updates!
+                {t('Stay tuned for updates!')}
               </p>
             </div>
           </div>

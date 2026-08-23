@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { CircleToggle } from '@/components/ToggleComponents';
+import { useLanguage } from '@/context/LanguageContext';
 
 export const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
@@ -31,6 +32,7 @@ export const CompletedTaskRow: React.FC<CompletedTaskRowProps> = ({
   isSelected = false,
   onToggleSelect,
 }) => {
+  const { t } = useLanguage();
   return (
     <div
       onClick={() => (isDeleteMode ? onToggleSelect?.(task) : onOpenTask?.(task))}
@@ -55,20 +57,20 @@ export const CompletedTaskRow: React.FC<CompletedTaskRowProps> = ({
           completed
           onClick={(e) => { e.stopPropagation(); onToggleComplete?.(task); }}
           size="md"
-          title="Mark active"
+          title={t('Mark active')}
         />
       )}
       <span className={`text-sm text-left flex-1 ${isDeleteMode ? 'text-foreground font-medium' : 'text-muted-foreground/80 line-through'}`}>
         {task.title}
       </span>
       <span className="text-[10px] px-2 py-0.5 rounded-full bg-label-green/15 text-label-green font-medium flex-shrink-0">
-        Auto-delete in {daysUntilAutoDelete(task.completedAt)} day{daysUntilAutoDelete(task.completedAt) === 1 ? '' : 's'}
+        {t('Auto-delete in {{count}} days', { count: daysUntilAutoDelete(task.completedAt) })}
       </span>
       {onDeleteTask && (
         <button
           onClick={(e) => { e.stopPropagation(); onDeleteTask(task); }}
           className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-          title="Delete task"
+          title={t('Delete task')}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>

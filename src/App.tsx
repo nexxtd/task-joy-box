@@ -12,7 +12,7 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, useRef } from "react";
 
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Projects = lazy(() => import("@/pages/Projects"));
@@ -73,56 +73,51 @@ const Notifier = () => {
   const { board } = useBoardContext();
   const { user } = useAuth();
   const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-
+  const tasksRef = useRef(board.tasks);
+  useEffect(() => { tasksRef.current = board.tasks; }, [board.tasks]);
   useEffect(() => {
-    if (!isPaid || !board.tasks.length) return;
-
+    if (!isPaid) return;
     const smartAlertsEnabled = () => localStorage.getItem('smartAlerts') !== 'false';
-
     const check = () => {
       if (!smartAlertsEnabled()) return;
-      board.tasks.forEach(task => {
+      const tasks = tasksRef.current;
+      if (!tasks.length) return;
+      tasks.forEach(task => {
         if (!task.dueDate || !task.columnId || task.columnId.toLowerCase().includes('done')) return;
-
         const due = new Date(`${task.dueDate}T${task.dueTime || '23:59:59'}`);
         const diff = due.getTime() - Date.now();
         const overdue = diff < 0;
-
         const urgent = task.priority === 'urgent';
         if (urgent && !overdue && diff < 12 * 60 * 60 * 1000) {
           const key = `urgent_${task.id}`;
-          toast({ title: "Urgent Deadline", description: `Task "${task.title}" is due soon!` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Urgent Deadline", description: `Task "${task.title}" is due soon!` });
             deviceNotify("Urgent Deadline", `Task "${task.title}" is due soon!`, key);
             markAlertSent(key);
           }
         }
-
         if (!overdue && diff < 60 * 60 * 1000) {
           const key = `soon_${task.id}`;
-          toast({ title: "Due Soon", description: `Task "${task.title}" is due within the hour` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Due Soon", description: `Task "${task.title}" is due within the hour` });
             deviceNotify("Due Soon", `Task "${task.title}" is due by ${task.dueTime || 'end of day'} today`, key);
             markAlertSent(key);
           }
         }
-
         if (overdue) {
           const key = `overdue_${task.id}`;
-          toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
           if (!wasAlertSent(key)) {
+            toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
             deviceNotify("Overdue", `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`, key);
             markAlertSent(key);
           }
         }
       });
     };
-
     check();
     const timer = setInterval(check, 60000);
     return () => clearInterval(timer);
-  }, [board.tasks, isPaid]);
-
+  }, [isPaid]);
   return null;
 };
 

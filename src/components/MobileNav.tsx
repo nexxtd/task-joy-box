@@ -13,7 +13,7 @@ const MobileNav: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { T } = useLanguage();
+  const { T, t } = useLanguage();
 
   const navItems = [
     { icon: LayoutDashboard, label: T.nav_dashboard, path: '/' },
@@ -21,18 +21,18 @@ const MobileNav: React.FC = () => {
     { icon: CheckSquare, label: T.nav_tasks, path: '/tasks' },
     { icon: CalendarDays, label: T.nav_calendar, path: '/calendar' },
     { icon: BarChart3, label: T.nav_insights, path: '/insights' },
-    { icon: Wand2, label: 'AI Assistant', path: '/ai-chat' },
+    { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: Target, label: T.nav_goals, path: '/goals' },
-    { icon: Flame, label: 'Habits', path: '/habits' },
-    { icon: FileText, label: 'Documents', path: '/documents' },
+    { icon: Flame, label: t('Habits'), path: '/habits' },
+    { icon: FileText, label: t('Documents'), path: '/documents' },
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free' 
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
     ...(user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium'
-      ? [{ icon: LifeBuoy, label: 'Support', path: '/support' }]
+      ? [{ icon: LifeBuoy, label: t('Support'), path: '/support' }]
       : []),
-    ...(user?.isAdmin ? [{ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' }] : []),
+    ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
   ];
 
   const bottomItems = [

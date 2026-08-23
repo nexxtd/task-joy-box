@@ -6,6 +6,7 @@ import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority,
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
+import PageTemplate from '@/components/PageTemplate';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import {
   Archive,
@@ -406,6 +407,7 @@ const Goals: React.FC = () => {
   const [sortDueDateDesc, setSortDueDateDesc] = useState(false);
 
   const [addingGoal, setAddingGoal] = useState(false);
+  const [showMilestonePopup, setShowMilestonePopup] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newGoalDescription, setNewGoalDescription] = useState('');
   const [newGoalPriority, setNewGoalPriority] = useState<Priority>('medium');
@@ -417,6 +419,10 @@ const Goals: React.FC = () => {
   const [newGoalDuration, setNewGoalDuration] = useState<number>(60);
   const [newGoalColumnId, setNewGoalColumnId] = useState<string>('');
   const [newGoalProjectId, setNewGoalProjectId] = useState<number | ''>('');
+  const [newGoalMilestones, setNewGoalMilestones] = useState<any[]>([]);
+  const [newMilestoneName, setNewMilestoneName] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState('');
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
 
   // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
   // with the project pre-selected so the new goal is assigned to it.
@@ -1253,7 +1259,7 @@ const Goals: React.FC = () => {
   const newSubtaskRemaining = newGoalDuration - newSubtaskTotal;
 
   const openQuickEdit = (goal: Goal, field: 'duration' | 'project') => {
-    setQuickEditTaskId(goal.id);
+    setQuickEditTaskId(goal.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(goal));
     setQuickEditDuration(Math.max(0, Number(goal.duration) || 0));
@@ -1442,24 +1448,27 @@ const Goals: React.FC = () => {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Goal</span>
               <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
             </div>
-            {(() => {
-              const gp = getGoalProgress(goal);
-              return (
-                <div className="flex items-center gap-2 mt-1">
-                  <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
-                  <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
-                    {gp.mode === 'numeric' && gp.target > 0
-                      ? `${gp.current}/${gp.target}`
-                      : gp.mode === 'auto' && gp.target > 0
+            <button onClick={e => { e.stopPropagation(); toggleExpand(goal.id); }} className="flex items-center gap-2 mt-1 hover:opacity-80">
+              {(() => {
+                const gp = getGoalProgress(goal);
+                return (
+                  <>
+                    <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
+                    <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
+                      {gp.mode === 'numeric' && gp.target > 0
                         ? `${gp.current}/${gp.target}`
-                        : `${gp.percent}%`}
-                  </span>
-                </div>
-              );
-            })()}
+                        : gp.mode === 'auto' && gp.target > 0
+                          ? `${gp.current}/${gp.target}`
+                          : `${gp.percent}%`}
+                    </span>
+                  </>
+                );
+              })()}
+            </button>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {(goal.priority !== 'none' || priorityEditTaskId === goal.id) && (
                 <PriorityBadge
@@ -1469,29 +1478,12 @@ const Goals: React.FC = () => {
                   onToggle={() => setPriorityEditTaskId(priorityEditTaskId === goal.id ? null : goal.id)}
                 />
               )}
-              {goalDurFmt && (
-                <button
-                  onClick={e => { e.stopPropagation(); openQuickEdit(goal, 'duration'); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  {goalDurFmt}
-                </button>
-              )}
+
+
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === goal.id && dateEditField === 'start' ? null : goal.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {goal.startDate ? `${formatDate(goal.startDate)}${goal.startTime ? ` ${goal.startTime}` : ''}` : 'Add start date'}
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === goal.id && dateEditField === 'due' ? null : goal.id);
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === goal.id && dateEditField === 'due' ? null : goal.id);
                   setDateEditField(prev => prev === 'due' ? null : 'due');
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
@@ -1521,21 +1513,8 @@ const Goals: React.FC = () => {
                   </span>
                 );
               })()}
-              {checklistTotal > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {checklistDone}/{checklistTotal} checklist
-                </span>
-              )}
-              {subtaskCount > 0 && (() => {
-                const subtaskDone = (goal.subtasks || []).filter(s => s.completed).length;
-                return (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                    {subtaskDone}/{subtaskCount} sub goal
-                  </span>
-                );
-              })()}
               <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
               >
                 <Tag className="w-2.5 h-2.5" />
@@ -1544,7 +1523,7 @@ const Goals: React.FC = () => {
               {goalTags.map(label => (
                 <button
                   key={label.id}
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
                   className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
@@ -1552,7 +1531,7 @@ const Goals: React.FC = () => {
               ))}
               {goal.labels.length > goalTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === goal.id ? null : goal.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{goal.labels.length - goalTags.length}
@@ -1637,6 +1616,8 @@ const Goals: React.FC = () => {
                   Clear
                 </button>
               )}
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
             </div>
           </div>
         )}
@@ -2202,16 +2183,7 @@ const Goals: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={newGoalDuration}
-                    onChange={e => setNewGoalDuration(Math.max(0, Number(e.target.value) || 0))}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  />
-                </div>
+
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                   <Select value={newGoalProjectId === '' ? 'my-goals' : String(newGoalProjectId)} onValueChange={v => { setNewGoalProjectId(v === 'my-goals' ? '' : Number(v)); setNewGoalColumnId(''); }}>
@@ -2348,294 +2320,31 @@ const Goals: React.FC = () => {
                 />
               </div>
 
-              {/* Sub-goals Card */}
+              {/* Milestones */}
               <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
+                <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Sub-goals</h3>
-                    {newGoalSubtasks.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newGoalSubtasks.length})</span>
-                    )}
+                    <Milestone className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">Milestones</h3>
+                    {newGoalMilestones.length > 0 && <span className="text-xs text-muted-foreground">({newGoalMilestones.length})</span>}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {newGoalDuration > 0 && (
-                      <span className={`text-xs font-medium ${
-                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
-                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                      }`}>
-                        {newSubtaskRemaining > 0
-                          ? `${newSubtaskRemaining} mins left`
-                          : newSubtaskRemaining < 0
-                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
-                          : '0 mins left ✓'}
-                      </span>
-                    )}
-                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </button>
-                {!draftSubtasksCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <DragDropContext onDragEnd={handleDraftReorder}>
-                      <Droppable droppableId="draft-subtasks">
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                            {newGoalSubtasks.map((subtask, index) => (
-                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    {editingDraftSubtaskId === subtask.id ? (
-                                      <>
-                                        <input
-                                          autoFocus
-                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskText}
-                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                          onBlur={() => { setNewGoalSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') { setNewGoalSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                        />
-                                        <input
-                                          type="number"
-                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskDuration}
-                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span
-                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text truncate"
-                                        >
-                                          {subtask.text}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                            value={subtask.durationMinutes || 0}
-                                            onChange={e => {
-                                              const val = Math.max(0, Number(e.target.value) || 0);
-                                              setNewGoalSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                            }}
-                                          />
-                                          <span className="text-[10px] text-muted-foreground">min</span>
-                                          <button
-                                            onClick={() => setNewGoalSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                      <input
-                        value={newSubtaskText}
-                        onChange={e => setNewSubtaskText(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
-                        placeholder="New sub-goal"
-                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={newSubtaskDuration}
-                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="min"
-                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                      />
-                      <button onClick={addSubtaskDraft} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Checklist Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftChecklistCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                    {newChecklistLists.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newChecklistLists.length})</span>
-                    )}
-                  </div>
-                  {draftChecklistCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftChecklistCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
-                <DragDropContext onDragEnd={handleDraftReorder}>
-                  {newChecklistItems.length > 0 && (
-                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                      <div className="flex items-center px-3 py-2">
-                        <span className="text-xs font-semibold text-foreground">Checklist</span>
-                      </div>
-                      <div className="px-3 pb-2 space-y-1.5">
-                        <Droppable droppableId="draft-checklist">
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                              {newChecklistItems.map((item, index) => (
-                                <Draggable key={item.id} draggableId={item.id} index={index}>
-                                  {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                        <GripVertical className="w-4 h-4" />
-                                      </div>
-                                      <span className="flex-1">{item.text}</span>
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-                        <div className="flex gap-2 pt-1">
-                          <input
-                            value={newChecklistText}
-                            onChange={e => setNewChecklistText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
-                            placeholder="Add checklist item"
-                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                          />
-                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                  <button onClick={() => setShowMilestonePopup(true)} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Add Milestone</button>
+                </div>
+                <div className="border-t border-border/60 px-4 py-3 space-y-2">
+                  {newGoalMilestones.length === 0 ? <p className="text-xs text-muted-foreground">No milestones yet. Add a milestone to get started.</p> : (
+                    <div className="space-y-1.5">
+                      {newGoalMilestones.map((m:any, idx:number) => (
+                        <div key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2">
+                          <div className="cursor-grab p-0.5 text-muted-foreground/30"><GripVertical className="w-4 h-4" /></div>
+                          <input type="checkbox" checked={!!m.completed} onChange={() => setNewGoalMilestones(prev => prev.map(x => x.id===m.id?{...x, completed:!x.completed}:x))} className="rounded" />
+                          <span className="flex-1 text-sm truncate">{m.name}</span>
+                          <span className="text-xs text-muted-foreground">{m.date}</span>
+                          <button onClick={() => setNewGoalMilestones(prev => prev.filter(x => x.id!==m.id))} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   )}
-                  <Droppable droppableId="draft-checklist-lists" type="checklistList">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                        {newChecklistLists.map((list, listIndex) => {
-                          const isCollapsed = collapsedDraftChecklists.has(list.id);
-                          return (
-                            <Draggable key={list.id} draggableId={list.id} index={listIndex}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                  <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mr-1">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    <button
-                                      onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                                      className="flex-1 flex items-center gap-2 text-left"
-                                    >
-                                      {editingDraftChecklistId === list.id ? (
-                                        <input
-                                          autoFocus
-                                          className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                          value={editingDraftChecklistTitle}
-                                          onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                                          onBlur={() => {
-                                            if (editingDraftChecklistTitle.trim()) {
-                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                            }
-                                            setEditingDraftChecklistId(null);
-                                          }}
-                                          onKeyDown={e => {
-                                            if (e.key === 'Enter') {
-                                              if (editingDraftChecklistTitle.trim()) {
-                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                              }
-                                              setEditingDraftChecklistId(null);
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
-                                          {list.title}
-                                        </span>
-                                      )}
-                                    </button>
-                                    <div className="flex items-center gap-1">
-                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
-                                        {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {!isCollapsed && (
-                                    <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={`draft-checklist-items-${list.id}`} type="checklistItem">
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                            {list.items.map((item, itemIndex) => (
-                                              <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
-                                                {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                      <GripVertical className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="flex-1 text-foreground">{item.text}</span>
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                          </div>
-                                        )}
-                                      </Droppable>
-                                      <div className="flex gap-2 pt-1">
-                                        <input
-                                          value={perChecklistInput[list.id] ?? ''}
-                                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
-                                          placeholder="Add checklist item"
-                                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                        />
-                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-                    <div className="flex gap-2">
-                      <input
-                        value={newChecklistTitle}
-                        onChange={e => setNewChecklistTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
-                        placeholder="New checklist name"
-                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* Attachments Card */}
@@ -2790,6 +2499,38 @@ const Goals: React.FC = () => {
               </div>
             </div>
 
+
+            {showMilestonePopup && addingGoal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-5">
+                    <span className="text-base font-bold text-foreground">New Milestone</span>
+                    <button onClick={() => setShowMilestonePopup(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                      <input autoFocus type="text" value={newMilestoneName} onChange={e => setNewMilestoneName(e.target.value)} placeholder="Milestone name" className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Date</label>
+                      <input type="date" value={newMilestoneDate} onChange={e => setNewMilestoneDate(e.target.value)} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Description (optional)</label>
+                      <textarea value={newMilestoneDesc} onChange={e => setNewMilestoneDesc(e.target.value)} placeholder="Describe this milestone…" rows={2} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm resize-none" />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => { if (newMilestoneName.trim() && newMilestoneDate) { setNewGoalMilestones(prev => [...prev, { id: crypto.randomUUID(), name: newMilestoneName.trim(), date: newMilestoneDate, description: newMilestoneDesc.trim(), completed: false }]); setShowMilestonePopup(false); setNewMilestoneName(''); setNewMilestoneDate(''); setNewMilestoneDesc(''); } }} disabled={!newMilestoneName.trim() || !newMilestoneDate} className="flex-1 bg-foreground text-background text-sm font-bold py-2.5 rounded-xl disabled:opacity-50">Save Milestone</button>
+                      <button onClick={() => setShowMilestonePopup(false)} className="px-4 py-2.5 text-sm border border-border text-muted-foreground rounded-xl">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
               <div className="relative">
                 <button
@@ -3500,6 +3241,10 @@ const GoalDropdownExpanded: React.FC<{
   const [newMilestoneEstimate, setNewMilestoneEstimate] = useState(0);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [editingMilestoneText, setEditingMilestoneText] = useState('');
+  const [showMilestonePopup, setShowMilestonePopup] = useState(false);
+  const [newMilestoneName, setNewMilestoneName] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState('');
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(goal.id));
@@ -3514,6 +3259,11 @@ const GoalDropdownExpanded: React.FC<{
   const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
   const subtaskTimeRemaining = goalDuration - subtaskTotal;
   const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
   const persistSubtasks = (nextSubtasks: Goal['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -3825,45 +3575,57 @@ const GoalDropdownExpanded: React.FC<{
                   <span className="text-xs text-muted-foreground">{gp.percent}%</span>
                 </div>
                 {gp.mode === 'percent' && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={gp.percent}
-                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Number(e.target.value) })}
-                      className="flex-1 accent-[hsl(var(--primary))] cursor-pointer"
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={gp.percent}
-                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
-                      className="w-20 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm text-right"
-                    />
-                    <span className="text-xs text-muted-foreground">%</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={gp.percent}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Number(e.target.value) })}
+                        className="flex-1 accent-[hsl(var(--primary))] cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={gp.percent}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                        className="w-20 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm text-right"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
+                      <button className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
+                    </div>
                   </div>
                 )}
                 {gp.mode === 'numeric' && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={0}
-                      value={gp.current}
-                      onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
-                    />
-                    <span className="text-sm text-muted-foreground">/</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={gp.target || ''}
-                      placeholder="target"
-                      onChange={e => onUpdateGoal(goal.id, { goalProgressTarget: Math.max(0, Number(e.target.value) || 0) })}
-                      className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
-                    />
-                    <span className="text-xs text-muted-foreground">units</span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={gp.current}
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-sm text-muted-foreground">/</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={gp.target || ''}
+                        placeholder="target"
+                        onChange={e => onUpdateGoal(goal.id, { goalProgressTarget: Math.max(0, Number(e.target.value) || 0) })}
+                        className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">units</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
+                      <button className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
+                    </div>
                   </div>
                 )}
                 {gp.mode === 'auto' && (
@@ -3957,279 +3719,51 @@ const GoalDropdownExpanded: React.FC<{
                 )}
               </Droppable>
             </DragDropContext>
-            <div className="grid grid-cols-[1fr_80px_auto] gap-2 pt-1">
-              <input
-                value={newMilestoneText}
-                onChange={e => setNewMilestoneText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addMilestone()}
-                placeholder="Add milestone"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newMilestoneEstimate}
-                onChange={e => setNewMilestoneEstimate(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="est."
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addMilestone} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg font-semibold">Add</button>
-            </div>
+            <button onClick={() => setShowMilestonePopup(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-border rounded-lg hover:bg-muted">Add Milestone</button>
           </div>
         )}
       </div>
 
-      {/* Sub-goals Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setSubtasksCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Sub-goals</h3>
-            {effectiveSubtasks.length > 0 && (
-              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {goalDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </button>
-        {!subtasksCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {allSubtasksDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All sub-goals are done ✓
-              </div>
-            )}
 
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-subtasks-${goal.id}`} type="subtask">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
 
-            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
-                value={newSubtaskText}
-                onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                placeholder="Add sub-goal"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newSubtaskDuration}
-                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="min"
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Checklist Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-            {checklistLists.length > 0 && (
-              <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
-            )}
-          </div>
-          {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!checklistsSectionCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-checklist-lists-${goal.id}`} type="checklistList">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                    {checklistLists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
-                      return (
-                        <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                              <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const next = new Set(collapsedChecklists);
-                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                    setCollapsedChecklists(next);
-                                  }}
-                                  className="flex-1 flex items-center gap-2 text-left"
-                                >
-                                  {editingChecklistId === list.id ? (
-                                    <input
-                                      autoFocus
-                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                      value={editingChecklistTitle}
-                                      onChange={e => setEditingChecklistTitle(e.target.value)}
-                                      onBlur={() => {
-                                        if (editingChecklistTitle.trim()) {
-                                          onUpdateGoal(goal.id, { checklists: goal.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                        }
-                                        setEditingChecklistId(null);
-                                        setEditingChecklistTitle('');
-                                      }}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                          if (editingChecklistTitle.trim()) {
-                                            onUpdateGoal(goal.id, { checklists: goal.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                          }
-                                          setEditingChecklistId(null);
-                                          setEditingChecklistTitle('');
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                      className="text-xs font-semibold text-foreground cursor-text"
-                                    >
-                                      {list.title}
-                                    </span>
-                                  )}
-                                </button>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => onUpdateGoal(goal.id, { checklists: goal.checklists.filter(cl => cl.id !== list.id) })}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
-                                    }}
-                                    className="p-1 text-muted-foreground hover:text-foreground"
-                                  >
-                                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                  </button>
-                                </div>
-                              </div>
-                              {!isCollapsed && (
-                                <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                  <Droppable droppableId={`dropdown-checklist-${goal.id}-${list.id}`} type="checklistItem">
-                                    {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                        {list.items.map((item, index) => (
-                                          <Draggable key={item.id} draggableId={item.id} index={index}>
-                                            {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                  <GripVertical className="w-4 h-4" />
-                                                </div>
-                                                <SquareToggle
-                                                  completed={item.completed}
-                                                  onClick={() => onToggleChecklistItem(goal.id, list.id, item.id)}
-                                                  size="md"
-                                                />
-                                                {editingChecklistItemId === item.id ? (
-                                                  <input
-                                                    autoFocus
-                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                                    value={editingChecklistText}
-                                                    onChange={e => setEditingChecklistText(e.target.value)}
-                                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                                                  />
-                                                ) : (
-                                                  <span
-                                                    onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                  >
-                                                    {item.text}
-                                                  </span>
-                                                )}
-                                                <button
-                                                  onClick={() => onDeleteChecklistItem(goal.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              </div>
-                                            )}
-                                          </Draggable>
-                                        ))}
-                                        {provided.placeholder}
-                                      </div>
-                                    )}
-                                  </Droppable>
-                                  <div className="flex gap-2 pt-1">
-                                    <input
-                                      value={perChecklistInput[list.id] ?? ''}
-                                      onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                                      placeholder="Add checklist item"
-                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                    />
-                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      );
-                    })}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-            <div className="flex gap-2">
-              <input
-                value={newChecklistTitle}
-                onChange={e => setNewChecklistTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                placeholder="New checklist name"
-                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button
-                onClick={() => { if (newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
-              >
-                Add checklist
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      
 
       {/* Attachments Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
+      
+      {showMilestonePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-base font-bold text-foreground">New Milestone</span>
+              <button onClick={() => setShowMilestonePopup(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                <input autoFocus type="text" value={newMilestoneName} onChange={e => setNewMilestoneName(e.target.value)} placeholder="Milestone name" className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Date</label>
+                <input type="date" value={newMilestoneDate} onChange={e => setNewMilestoneDate(e.target.value)} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Description (optional)</label>
+                <textarea value={newMilestoneDesc} onChange={e => setNewMilestoneDesc(e.target.value)} placeholder="Describe this milestone…" rows={2} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm resize-none" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { if (newMilestoneName.trim() && newMilestoneDate) { const newM = { id: crypto.randomUUID(), text: newMilestoneName.trim(), completed: false, durationMinutes: 0, date: newMilestoneDate, description: newMilestoneDesc.trim() } as any; persistMilestones([...milestones, newM]); setShowMilestonePopup(false); setNewMilestoneName(''); setNewMilestoneDate(''); setNewMilestoneDesc(''); } }} disabled={!newMilestoneName.trim() || !newMilestoneDate} className="flex-1 bg-foreground text-background text-sm font-bold py-2.5 rounded-xl disabled:opacity-50">Save Milestone</button>
+                <button onClick={() => setShowMilestonePopup(false)} className="px-4 py-2.5 text-sm border border-border text-muted-foreground rounded-xl">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+        <div className="rounded-2xl border border-border bg-muted/20">
         <button
           onClick={() => setAttachmentsCollapsed(prev => !prev)}
           className="w-full flex items-center justify-between px-4 py-3"
@@ -4405,6 +3939,38 @@ const GoalDropdownExpanded: React.FC<{
           </div>
         )}
       </div>
+
+      {showMilestonePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowMilestonePopup(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-base font-bold text-foreground">New Milestone</span>
+              <button onClick={() => setShowMilestonePopup(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Name</label>
+                <input autoFocus type="text" value={newMilestoneName} onChange={e => setNewMilestoneName(e.target.value)} placeholder="Milestone name" className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Date</label>
+                <input type="date" value={newMilestoneDate} onChange={e => setNewMilestoneDate(e.target.value)} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Description (optional)</label>
+                <textarea value={newMilestoneDesc} onChange={e => setNewMilestoneDesc(e.target.value)} placeholder="Describe this milestone…" rows={2} className="w-full bg-muted/30 border border-border rounded-xl p-2.5 text-sm resize-none" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { if (newMilestoneName.trim() && newMilestoneDate) { const newM = { id: crypto.randomUUID(), text: newMilestoneName.trim(), completed: false, durationMinutes: 0, date: newMilestoneDate, description: newMilestoneDesc.trim() } as any; persistMilestones([...milestones, newM]); setShowMilestonePopup(false); setNewMilestoneName(''); setNewMilestoneDate(''); setNewMilestoneDesc(''); } }} disabled={!newMilestoneName.trim() || !newMilestoneDate} className="flex-1 bg-foreground text-background text-sm font-bold py-2.5 rounded-xl disabled:opacity-50">Save Milestone</button>
+                <button onClick={() => setShowMilestonePopup(false)} className="px-4 py-2.5 text-sm border border-border text-muted-foreground rounded-xl">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4475,6 +4041,10 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
   const [newMilestoneEstimate, setNewMilestoneEstimate] = useState(0);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [editingMilestoneText, setEditingMilestoneText] = useState('');
+  const [showMilestonePopup, setShowMilestonePopup] = useState(false);
+  const [newMilestoneName, setNewMilestoneName] = useState('');
+  const [newMilestoneDate, setNewMilestoneDate] = useState('');
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
@@ -4495,6 +4065,11 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
   const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
   const subtaskTimeRemaining = goalDuration - subtaskTotal;
   const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
   const goalProject = goal.projectId ? projects.find(project => project.id === goal.projectId) || null : null;
 
@@ -4868,16 +4443,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-            <input
-              type="number"
-              min={0}
-              value={goal.duration || 0}
-              onChange={e => onUpdateGoal(goal.id, { duration: Math.max(0, Number(e.target.value) || 0) })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            />
-          </div>
+
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
@@ -5112,14 +4678,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                                 </span>
                               )}
                               <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                  value={milestone.durationMinutes || 0}
-                                  onChange={e => updateMilestone(milestone.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                                />
-                                <span className="text-[10px] text-muted-foreground">est.</span>
+                                <span className="text-xs text-muted-foreground">{(milestone as any).date || ''}</span>
                                 <button
                                   onClick={() => removeMilestone(milestone.id)}
                                   className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
@@ -5136,24 +4695,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                   )}
                 </Droppable>
               </DragDropContext>
-              <div className="grid grid-cols-[1fr_80px_auto] gap-2 pt-1">
-                <input
-                  value={newMilestoneText}
-                  onChange={e => setNewMilestoneText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addMilestone()}
-                  placeholder="Add milestone"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newMilestoneEstimate}
-                  onChange={e => setNewMilestoneEstimate(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="est."
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button onClick={addMilestone} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg font-semibold">Add</button>
-              </div>
+            <button onClick={() => setShowMilestonePopup(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium border border-dashed border-border rounded-lg hover:bg-muted">Add Milestone</button>
             </div>
           )}
         </div>
@@ -5227,252 +4769,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setSubtasksCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Sub-goals</h3>
-              {(goal.subtasks ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(goal.subtasks ?? []).length})</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {goalDuration > 0 && (
-                <span className={`text-xs font-medium ${
-                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                }`}>
-                  {subtaskTimeRemaining > 0
-                    ? `${subtaskTimeRemaining} mins left`
-                    : subtaskTimeRemaining < 0
-                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                    : '0 mins left ✓'}
-                </span>
-              )}
-              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-            </div>
-          </button>
-          {!subtasksCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {allSubtasksDone && (
-                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                  All sub-goals are done ✓
-                </div>
-              )}
 
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-subtasks" type="subtask">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                      {(goal.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, si))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-
-              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                  placeholder="Add sub-goal"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="min"
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-              {checklistLists.length > 0 && (
-                <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
-              )}
-            </div>
-            {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!checklistsSectionCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-checklist-lists" type="checklistList">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                      {checklistLists.map((list, listIndex) => {
-                        const isCollapsed = collapsedChecklists.has(list.id);
-                        return (
-                          <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
-                            {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                    <GripVertical className="w-4 h-4" />
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
-                                    }}
-                                    className="flex-1 flex items-center gap-2 text-left"
-                                  >
-                                    {editingChecklistId === list.id ? (
-                                      <input
-                                        autoFocus
-                                        className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                        value={editingChecklistTitle}
-                                        onChange={e => setEditingChecklistTitle(e.target.value)}
-                                        onBlur={() => {
-                                          if (editingChecklistTitle.trim()) {
-                                            onUpdateGoal(goal.id, { checklists: goal.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                          }
-                                          setEditingChecklistId(null);
-                                          setEditingChecklistTitle('');
-                                        }}
-                                        onKeyDown={e => {
-                                          if (e.key === 'Enter') {
-                                            if (editingChecklistTitle.trim()) {
-                                              onUpdateGoal(goal.id, { checklists: goal.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                            }
-                                            setEditingChecklistId(null);
-                                            setEditingChecklistTitle('');
-                                          }
-                                        }}
-                                      />
-                                    ) : (
-                                      <span
-                                        onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                        className="text-xs font-semibold text-foreground cursor-text"
-                                      >
-                                        {list.title}
-                                      </span>
-                                    )}
-                                  </button>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => onUpdateGoal(goal.id, { checklists: goal.checklists.filter(cl => cl.id !== list.id) })}
-                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        const next = new Set(collapsedChecklists);
-                                        if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                        setCollapsedChecklists(next);
-                                      }}
-                                      className="p-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                    </button>
-                                  </div>
-                                </div>
-                                {!isCollapsed && (
-                                  <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={"fullview-checklist-" + list.id} type="checklistItem">
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                            {list.items.map((item, index) => (
-                                              <Draggable key={item.id} draggableId={item.id} index={index}>
-                                                {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                      <GripVertical className="w-4 h-4" />
-                                                    </div>
-                                                    <SquareToggle
-                                                      completed={item.completed}
-                                                      onClick={() => onToggleChecklistItem(goal.id, list.id, item.id)}
-                                                      size="md"
-                                                    />
-                                                    {editingChecklistItemId === item.id ? (
-                                                      <input
-                                                        autoFocus
-                                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                                        value={editingChecklistText}
-                                                        onChange={e => setEditingChecklistText(e.target.value)}
-                                                        onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                                                      />
-                                                    ) : (
-                                                      <span
-                                                        onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                      >
-                                                        {item.text}
-                                                      </span>
-                                                    )}
-                                                    <button
-                                                      onClick={() => onDeleteChecklistItem(goal.id, list.id, item.id)}
-                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
-                                                    >
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                          </div>
-                                        )}
-                                      </Droppable>
-                                    <div className="flex gap-2 pt-1">
-                                      <input
-                                        value={perChecklistInput[list.id] ?? ''}
-                                        onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                                        placeholder="Add checklist item"
-                                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                      />
-                                      <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(goal.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-              <div className="flex gap-2">
-                <input
-                  value={newChecklistTitle}
-                  onChange={e => setNewChecklistTitle(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                  placeholder="New checklist name"
-                  className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <button
-                  onClick={() => { if (newChecklistTitle.trim()) { onUpdateGoal(goal.id, { checklists: [...goal.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                  disabled={!newChecklistTitle.trim()}
-                  className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
-                >
-                  Add checklist
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">
           <button

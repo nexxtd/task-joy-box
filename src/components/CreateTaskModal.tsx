@@ -45,6 +45,8 @@ export type CreateTaskInitialValues = {
   subtasks?: Array<{ text: string; durationMinutes: number }>;
   checklistItems?: string[];
   labels?: Label[];
+  files?: File[];
+  images?: Attachment[];
 };
 
 export type CreateTaskModalProps = {
@@ -197,6 +199,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
+  const [aiBuilderFilesCollapsed, setAiBuilderFilesCollapsed] = useState(false);
+  const [aiBuilderImagesCollapsed, setAiBuilderImagesCollapsed] = useState(false);
 
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -380,6 +384,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         setNewChecklistItems(initialValues.checklistItems.map(text => ({ id: crypto.randomUUID(), text })));
       }
       if (initialValues.labels) setNewTaskLabels(initialValues.labels);
+      if (initialValues.files) setNewFiles(initialValues.files);
+      if (initialValues.images) setNewTaskImages(initialValues.images);
     }
     if (initialAI) setAiBuilderOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1541,76 +1547,70 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   className="w-full bg-muted/40 border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
 
-                {/* AI Builder Files & Images Attachments */}
-                <div className="space-y-3 pt-1 border-t border-border/50">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attachments & Images</span>
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <button onClick={() => setAiBuilderFilesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                      <Paperclip className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                      {newFiles.length > 0 && <span className="text-xs text-muted-foreground">({newFiles.length})</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
                         <Paperclip className="w-3.5 h-3.5 text-primary" />
                         <span>Add File</span>
-                        <input
-                          type="file"
-                          multiple
-                          onChange={e => {
-                            if (!e.target.files) return;
-                            setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
-                          }}
-                          className="hidden"
-                        />
+                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
                       </label>
-                      <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
-                        <Image className="w-3.5 h-3.5 text-primary" />
-                        <span>Add Image</span>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*,.heic,.heif"
-                          onChange={async e => {
-                            if (!e.target.files) return;
-                            const files = Array.from(e.target.files);
-                            const newImgs: Attachment[] = [];
-                            for (const file of files) {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                            }
-                            setNewTaskImages(prev => [...prev, ...newImgs]);
-                            e.target.value = '';
-                          }}
-                          className="hidden"
-                        />
-                      </label>
+                      {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>
-                  </div>
-
-                  {newFiles.length > 0 && (
-                    <div className="space-y-1.5">
-                      {newFiles.map((file, fileIdx) => (
-                        <AttachmentRow
-                          key={`builder-file-${file.name}-${fileIdx}`}
-                          attachment={{
-                            id: `builder-${fileIdx}`,
-                            fileName: file.name,
-                            fileSize: file.size,
-                            fileType: file.type,
-                            fileUrl: '',
-                          }}
-                          taskId="builder"
-                          onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))}
-                          disabledInBuilder
-                        />
-                      ))}
+                  </button>
+                  {!aiBuilderFilesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      {newFiles.length === 0 ? <p className="text-xs text-muted-foreground">No files yet. Add a file to get started.</p> : (
+                        <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(newFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setNewFiles(items); }}>
+                          <Droppable droppableId="ai-builder-files">
+                            {provided => (
+                              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                {newFiles.map((file, fileIdx) => (
+                                  <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-file-${fileIdx}-${file.name}`} index={fileIdx}>
+                                    {provided => (
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2">
+                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
+                                        <div className="flex-1"><AttachmentRow attachment={{ id: `builder-${fileIdx}`, fileName: file.name, fileSize: file.size, fileType: file.type, fileUrl: '' }} taskId="builder" onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))} disabledInBuilder /></div>
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        </DragDropContext>
+                      )}
                     </div>
                   )}
-
-                  {newTaskImages.length > 0 && (
-                    <DraggableImageGrid
-                      images={newTaskImages}
-                      onReorder={setNewTaskImages}
-                      onRemove={(id) => setNewTaskImages(prev => prev.filter(img => img.id !== id))}
-                      disabledInBuilder
-                    />
+                </div>
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <button onClick={() => setAiBuilderImagesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Image className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                      {newTaskImages.length > 0 && <span className="text-xs text-muted-foreground">({newTaskImages.length})</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
+                        <Image className="w-3.5 h-3.5 text-primary" />
+                        <span>Add Image</span>
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); e.target.value=''; }} className="hidden" />
+                      </label>
+                      {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                  </button>
+                  {!aiBuilderImagesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      {newTaskImages.length === 0 ? <p className="text-xs text-muted-foreground">No images yet. Add an image to get started.</p> : (
+                        <DraggableImageGrid images={newTaskImages} onReorder={setNewTaskImages} onRemove={id => setNewTaskImages(prev=>prev.filter(img=>img.id!==id))} disabledInBuilder />
+                      )}
+                    </div>
                   )}
                 </div>
 

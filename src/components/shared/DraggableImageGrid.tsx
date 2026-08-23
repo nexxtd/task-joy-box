@@ -2,6 +2,7 @@ import React from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Image, Trash2, GripVertical } from 'lucide-react';
 import { Attachment } from '@/types/board';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface DraggableImageGridProps {
   images: Attachment[];
@@ -16,6 +17,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
   onRemove,
   disabledInBuilder = false,
 }) => {
+  const { t } = useLanguage();
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
     const reordered = Array.from(images);

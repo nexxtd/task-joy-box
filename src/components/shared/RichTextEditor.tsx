@@ -9,14 +9,12 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
-  ImagePlus,
-  Heading1,
-  Heading2,
-  Heading3,
+  AlignJustify,
   Type,
   Palette,
   Highlighter,
 } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface RichTextEditorProps {
   value: string;
@@ -29,10 +27,12 @@ interface RichTextEditorProps {
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   value,
   onChange,
-  placeholder = 'Write something...',
+  placeholder,
   minHeight = 150,
   readOnly = false,
 }) => {
+  const { t } = useLanguage();
+  const resolvedPlaceholder = placeholder ?? t('Write something...');
   const editorRef = useRef<HTMLDivElement>(null);
   const [textColor, setTextColor] = useState('#000000');
   const [bgColor, setBgColor] = useState('#ffff00');
@@ -80,38 +80,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-1 p-2 border-b border-border bg-muted/30 select-none">
-          {/* Format Block */}
-          <select
-            onChange={e => exec('formatBlock', e.target.value)}
-            defaultValue="p"
-            className="h-8 text-xs bg-muted border border-border rounded-lg px-2 text-foreground focus:outline-none cursor-pointer"
-          >
-            <option value="p">Paragraph</option>
-            <option value="h1">Heading 1</option>
-            <option value="h2">Heading 2</option>
-            <option value="h3">Heading 3</option>
-          </select>
-
-          {/* Font Size */}
-          <select
-            onChange={e => exec('fontSize', e.target.value)}
-            defaultValue="3"
-            className="h-8 text-xs bg-muted border border-border rounded-lg px-2 text-foreground focus:outline-none cursor-pointer"
-          >
-            <option value="1">Small</option>
-            <option value="3">Normal</option>
-            <option value="5">Large</option>
-            <option value="7">Huge</option>
-          </select>
-
-          <div className="h-4 w-px bg-border mx-1" />
 
           {/* Inline Styles */}
           <button
             type="button"
             onClick={() => exec('bold')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Bold"
+            title={t('Bold')}
           >
             <Bold className="w-4 h-4" />
           </button>
@@ -119,7 +94,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('italic')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Italic"
+            title={t('Italic')}
           >
             <Italic className="w-4 h-4" />
           </button>
@@ -127,7 +102,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('underline')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Underline"
+            title={t('Underline')}
           >
             <Underline className="w-4 h-4" />
           </button>
@@ -135,7 +110,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('strikeThrough')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Strikethrough"
+            title={t('Strikethrough')}
           >
             <Strikethrough className="w-4 h-4" />
           </button>
@@ -144,7 +119,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           {/* Color pickers */}
           <div className="flex items-center gap-1">
-            <label className="p-1 rounded-lg hover:bg-muted cursor-pointer flex items-center gap-1" title="Text Color">
+            <label className="p-1 rounded-lg hover:bg-muted cursor-pointer flex items-center gap-1" title={t('Text Color')}>
               <Palette className="w-3.5 h-3.5 text-muted-foreground" />
               <input
                 type="color"
@@ -156,7 +131,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 className="w-4 h-4 border-0 p-0 cursor-pointer bg-transparent"
               />
             </label>
-            <label className="p-1 rounded-lg hover:bg-muted cursor-pointer flex items-center gap-1" title="Highlight Color">
+            <label className="p-1 rounded-lg hover:bg-muted cursor-pointer flex items-center gap-1" title={t('Highlight Color')}>
               <Highlighter className="w-3.5 h-3.5 text-muted-foreground" />
               <input
                 type="color"
@@ -177,7 +152,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('insertUnorderedList')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Bullet list"
+            title={t('Bullet list')}
           >
             <List className="w-4 h-4" />
           </button>
@@ -185,7 +160,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('insertOrderedList')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Numbered list"
+            title={t('Numbered list')}
           >
             <ListOrdered className="w-4 h-4" />
           </button>
@@ -197,7 +172,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('justifyLeft')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Align left"
+            title={t('Align left')}
           >
             <AlignLeft className="w-4 h-4" />
           </button>
@@ -205,7 +180,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('justifyCenter')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Align center"
+            title={t('Align center')}
           >
             <AlignCenter className="w-4 h-4" />
           </button>
@@ -213,22 +188,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             type="button"
             onClick={() => exec('justifyRight')}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-            title="Align right"
+            title={t('Align right')}
           >
             <AlignRight className="w-4 h-4" />
           </button>
-
-          <div className="h-4 w-px bg-border mx-1" />
-
-          {/* Insert Image */}
           <button
             type="button"
-            onClick={handleImageInsert}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all flex items-center gap-1 text-xs"
-            title="Insert inline image"
+            onClick={() => exec('justifyFull')}
+            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+            title={t('Justify')}
           >
-            <ImagePlus className="w-4 h-4" />
+            <AlignJustify className="w-4 h-4" />
           </button>
+
+
         </div>
       )}
 
@@ -239,7 +212,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         onInput={handleInput}
         style={{ minHeight }}
         className="p-4 text-sm text-foreground focus:outline-none overflow-y-auto"
-        data-placeholder={placeholder}
+        data-placeholder={resolvedPlaceholder}
       />
     </div>
   );

@@ -53,6 +53,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const [creating, setCreating] = useState(false);
+  const accentColor = typeof window !== 'undefined' ? localStorage.getItem('accentColor') || '#000000' : '#000000';
 
   const closeColorPicker = () => {
     setColorPickerId(null);
@@ -287,7 +288,8 @@ const TagsModal: React.FC<TagsModalProps> = ({
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="flex-1 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                style={{ backgroundColor: accentColor }}
+                className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
                 {creating ? 'Adding...' : 'Add tag'}
               </button>

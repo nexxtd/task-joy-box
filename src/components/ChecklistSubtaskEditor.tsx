@@ -65,6 +65,13 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
   const [editingChecklistText, setEditingChecklistText] = useState('');
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
 
+  const subtaskTotal = subtasks.length;
+  const subtaskDone = subtasks.filter(s => s.completed).length;
+  const subtaskPct = subtaskTotal > 0 ? Math.round((subtaskDone / subtaskTotal) * 100) : 0;
+  const checklistTotal = checklists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+
   const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
     onSubtasksChange(subtasks.map(st => (st.id === subtaskId ? { ...st, ...updates } : st)));
   };
@@ -199,6 +206,9 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
         </button>
         {!subtasksCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
+            </div>
             <DragDropContext onDragEnd={handleReorder}>
               <Droppable droppableId={`subtasks-${entityId}`} type="subtask">
                 {provided => (
@@ -267,6 +277,9 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
         </button>
         {!checklistsCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
+            </div>
             {checklists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add one below.</p>}
             <DragDropContext onDragEnd={handleReorder}>
               <Droppable droppableId={`checklist-lists-${entityId}`} type="checklistList">

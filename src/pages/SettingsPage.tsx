@@ -9,7 +9,8 @@ import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
-import { useLanguage } from '@/context/LanguageContext'; // Import the language hook
+import { useLanguage } from '@/context/LanguageContext';
+import { LANGUAGES } from '@/i18n/translations';
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
@@ -28,8 +29,9 @@ const THEMES = [
 const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
 const LANGUAGES = [
-  'English', 'EspaÃ±ol', 'FranÃ§ais', 'Deutsch', 'PortuguÃªs',
-  'Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©', '×¢×‘×¨×™×ª', 'ä¸­æ–‡', 'à¤¹à¤¿à¤¨à¥à¤¦à¥€', 'Ð ÑƒÑÑÐºÐ¸Ð¹', 'æ—¥æœ¬èªž', 'í•œêµ­ì–´',
+  'English', 'Español', 'Français', 'Deutsch', 'Português',
+  'Italiano', '中文', '日本語', '한국어', 'العربية', 'हिन्दी',
+  'Русский', 'Nederlands', 'Türkçe', 'Tiếng Việt',
 ];
 
 const hexToHsl = (hex: string) => {

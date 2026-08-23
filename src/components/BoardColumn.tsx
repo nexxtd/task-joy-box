@@ -136,7 +136,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   }, [board.tasks, sharedTags]);
 
   const openQuickEdit = (task: Task, field: 'duration') => {
-    setQuickEditTaskId(task.id);
+    setQuickEditTaskId(task.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
     setQuickEditField(field);
     setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
   };
@@ -279,7 +279,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
                   setDateEditField(prev => prev === 'start' ? null : 'start');
                 }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
@@ -290,7 +290,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
                   setDateEditField(prev => prev === 'due' ? null : 'due');
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
@@ -332,14 +332,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               ))}
               {task.labels.length > taskTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
@@ -417,6 +417,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   Clear
                 </button>
               )}
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
             </div>
           </div>
         )}

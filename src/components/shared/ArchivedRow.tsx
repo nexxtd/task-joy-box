@@ -1,6 +1,7 @@
 import React from 'react';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import { Task } from '@/types/board';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ArchivedRowProps {
   task: Task;
@@ -23,6 +24,7 @@ export const ArchivedRow: React.FC<ArchivedRowProps> = ({
   isSelected = false,
   onToggleSelect,
 }) => {
+  const { t } = useLanguage();
   return (
     <div
       onClick={() => (isDeleteMode ? onToggleSelect?.(task) : onOpenTask?.(task))}
@@ -57,16 +59,16 @@ export const ArchivedRow: React.FC<ArchivedRowProps> = ({
         <button
           onClick={(e) => { e.stopPropagation(); onRestore(task); }}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all flex-shrink-0 opacity-0 group-hover:opacity-100"
-          title="Restore"
+          title={t('Restore')}
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          Restore
+          {t('Restore')}
         </button>
       )}
       <button
         onClick={(e) => { e.stopPropagation(); onDeleteTask(task); }}
         className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-        title="Delete"
+        title={t('Delete')}
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>

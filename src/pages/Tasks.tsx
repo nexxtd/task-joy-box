@@ -753,6 +753,8 @@ const Tasks: React.FC = () => {
   const [aiBuilderError, setAiBuilderError] = useState('');
   const [aiBuilderFiles, setAiBuilderFiles] = useState<File[]>([]);
   const [aiBuilderImages, setAiBuilderImages] = useState<Attachment[]>([]);
+  const [aiBuilderFilesCollapsed, setAiBuilderFilesCollapsed] = useState(false);
+  const [aiBuilderImagesCollapsed, setAiBuilderImagesCollapsed] = useState(false);
   const [aiTaskDraft, setAiTaskDraft] = useState<CreateTaskInitialValues | null>(null);
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
@@ -1400,12 +1402,12 @@ const Tasks: React.FC = () => {
         })),
         checklistItems: (data.checklistItems || []).map(text => text),
         labels: matchedTags,
+        files: [...aiBuilderFiles],
+        images: [...aiBuilderImages],
       });
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
-      if (aiBuilderFiles.length > 0) setNewFiles(prev => [...prev, ...aiBuilderFiles]);
-      if (aiBuilderImages.length > 0) setNewTaskImages(prev => [...prev, ...aiBuilderImages]);
       setAiBuilderFiles([]);
       setAiBuilderImages([]);
       setAddingTask(true);
@@ -1420,7 +1422,7 @@ const Tasks: React.FC = () => {
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
   const openQuickEdit = (task: Task, field: 'duration' | 'project') => {
-    setQuickEditTaskId(task.id);
+    setQuickEditTaskId(task.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(task));
     setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
@@ -1633,7 +1635,7 @@ const Tasks: React.FC = () => {
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
                   setDateEditField(prev => prev === 'start' ? null : 'start');
                 }}
                 className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
@@ -1644,7 +1646,7 @@ const Tasks: React.FC = () => {
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
                   setDateEditField(prev => prev === 'due' ? null : 'due');
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
@@ -1686,14 +1688,14 @@ const Tasks: React.FC = () => {
               ))}
               {task.labels.length > taskTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
@@ -1786,6 +1788,8 @@ const Tasks: React.FC = () => {
                   Clear
                 </button>
               )}
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
+              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
             </div>
           </div>
         )}
@@ -3653,109 +3657,81 @@ const Tasks: React.FC = () => {
                 )}
 
                 <div className="rounded-2xl border border-border bg-muted/20">
-                  <div className="flex items-center gap-2 px-4 py-3">
-                    <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Files</h3>
-                    {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
-                  </div>
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Paperclip className="w-5 h-5 text-primary" />
-                        </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                        <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                      </div>
-                      <input
-                        type="file"
-                        multiple
-                        onChange={e => {
-                          if (!e.target.files) return;
-                          setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
-                          e.target.value = '';
-                        }}
-                        className="hidden"
-                      />
-                    </label>
-                    {aiBuilderFiles.length > 0 && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {aiBuilderFiles.map((file, fileIdx) => (
-                          <div key={`${file.name}-${fileIdx}`} className="relative group/att">
-                            <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                              <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                                <Paperclip className="w-5 h-5 text-muted-foreground" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
-                              className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                  <button onClick={() => setAiBuilderFilesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                      {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
+                    </div>
+                    {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {!aiBuilderFilesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                            <Paperclip className="w-5 h-5 text-primary" />
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                        </div>
+                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
+                      </label>
+                      {aiBuilderFiles.length > 0 && (
+                        <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(aiBuilderFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setAiBuilderFiles(items); }}>
+                          <Droppable droppableId="ai-builder-files-tasks">
+                            {provided => (
+                              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                {aiBuilderFiles.map((file, fileIdx) => (
+                                  <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-task-file-${fileIdx}-${file.name}`} index={fileIdx}>
+                                    {provided => (
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2">
+                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
+                                        <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
+                                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
+                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        </DragDropContext>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-2xl border border-border bg-muted/20">
-                  <div className="flex items-center gap-2 px-4 py-3">
-                    <Image className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
-                    {aiBuilderImages.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderImages.length})</span>}
-                  </div>
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-4">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Image className="w-5 h-5 text-primary" />
-                        </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload</p>
-                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                      </div>
-                      <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                        if (!e.target.files) return;
-                        const files = Array.from(e.target.files);
-                        const newImgs: Attachment[] = [];
-                        for (const file of files) {
-                          const fileUrl = await imageToDataUrl(file);
-                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                          newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                        }
-                        setAiBuilderImages(prev => [...prev, ...newImgs]);
-                        e.target.value = '';
-                      }} className="hidden" />
-                    </label>
-                    {aiBuilderImages.length > 0 && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {aiBuilderImages.map(img => (
-                          <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
-                            {img.fileUrl.match(/^data:image/) ? (
-                              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
-                            )}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                              <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                              {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                            </div>
-                            <button
-                              onClick={() => setAiBuilderImages(prev => prev.filter(x => x.id !== img.id))}
-                              className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                  <button onClick={() => setAiBuilderImagesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Image className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                      {aiBuilderImages.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderImages.length})</span>}
+                    </div>
+                    {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {!aiBuilderImagesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                            <Image className="w-5 h-5 text-primary" />
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <p className="text-sm font-medium text-foreground">Click to upload</p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                        </div>
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); e.target.value=''; }} className="hidden" />
+                      </label>
+                      {aiBuilderImages.length > 0 && (
+                        <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2">
@@ -3936,6 +3912,11 @@ export const TaskDropdownExpanded: React.FC<{
   const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
   const subtaskTimeRemaining = taskDuration - subtaskTotal;
   const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
   const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -4176,6 +4157,9 @@ export const TaskDropdownExpanded: React.FC<{
         </button>
         {!subtasksCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
+            </div>
             {allSubtasksDone && (
               <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
                 All sub-tasks are done ✓
@@ -4233,6 +4217,9 @@ export const TaskDropdownExpanded: React.FC<{
         </button>
         {!checklistsSectionCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
+            </div>
             {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
             <DragDropContext onDragEnd={handleDropdownReorder}>
               <Droppable droppableId={`dropdown-checklist-lists-${task.id}`} type="checklistList">
@@ -4662,6 +4649,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
   const subtaskTimeRemaining = taskDuration - subtaskTotal;
   const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
@@ -5196,6 +5188,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
           {!subtasksCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
+              </div>
               {allSubtasksDone && (
                 <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
                   All sub-tasks are done ✓
@@ -5252,6 +5247,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           </button>
           {!checklistsSectionCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
+              </div>
               {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
               <DragDropContext onDragEnd={handleFullViewReorder}>
                 <Droppable droppableId="fullview-checklist-lists" type="checklistList">
