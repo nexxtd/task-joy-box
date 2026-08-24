@@ -235,6 +235,17 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
             ? `energy down ${(-analysis.trendDelta).toFixed(1)}/3 over the last two weeks`
             : 'energy steady over the last two weeks'}
       </p>
+      <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          <span className="font-bold text-foreground">Premium insight:</span> {peak ? `Your ${peak.label.toLowerCase()} peak (${analysis.slots[peak.id].avg.toFixed(1)}/3) suggests deep work belongs in ${peak.window} — trough in ${trough ? trough.label.toLowerCase() : 'your low slot'} should handle light tasks.` : 'Log all three daily checks for a week to reveal a stable peak window.'}
+        </p>
+        <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+          <span>{analysis.daysLogged}/7 logged</span>
+          <span>·</span>
+          <span>{analysis.slots.morning.logged + analysis.slots.midday.logged + analysis.slots.afternoon.logged} checks</span>
+          <span className="ml-auto font-bold text-foreground">{peak ? `${peak.label} peak` : 'building'}</span>
+        </div>
+      </div>
     </div>
   );
 };

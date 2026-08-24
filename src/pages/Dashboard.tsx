@@ -7,7 +7,7 @@ import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import { useEnergyAnalysis, isEnergyTrackerEnabled, ENERGY_SLOTS } from '@/utils/energyStats';
 import {
   CheckSquare, Clock, Plus, ArrowRight,
-  TrendingUp, Bot, Calendar, Zap, X,
+  TrendingUp, TrendingDown, Bot, Calendar, Zap, X,
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles,
   AlertTriangle, Flag, History, PieChart, Tags, LineChart, SlidersHorizontal,
   GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw,
@@ -958,30 +958,73 @@ const Dashboard: React.FC = () => {
     const def = WIDGET_DEFS.find(d => d.type === widget.type);
     const accent = def?.accent || 'label-blue';
     switch (widget.type) {
-      case 'stats':
+      case 'stats': {
+        const statsDetails: Record<string, { sub: string; trend: string; trendUp: boolean | null }> = {
+          'Tasks Active': {
+            sub: `${overdueTasks.length} overdue · ${upcomingDeadlines.length} due in 3-7 days`,
+            trend: overdueTasks.length > 0 ? `${overdueTasks.length} overdue dragging this number` : 'All active tasks are on time',
+            trendUp: overdueTasks.length === 0 ? true : false,
+          },
+          'Completion': {
+            sub: `${completedTasks.length}/${board.tasks.length} · ${completionRate < 50 ? 'below' : 'above'} 50% mark`,
+            trend: completionRate < 40 ? `Trending down — ${overdueTasks.length} overdue are dragging this number` : completionRate >= 70 ? 'Strong — trending up week over week' : `Steady at ${completionRate}% — close the overdue gap to lift it`,
+            trendUp: completionRate >= 50,
+          },
+          'Deep Work': {
+            sub: `${deepFocusMinutes} min today · ${(deepFocusMinutes / 60).toFixed(1)}h total`,
+            trend: deepFocusMinutes >= 30 ? 'On pace for deep-focus goal' : 'Log a session today to build momentum',
+            trendUp: deepFocusMinutes >= 30,
+          },
+          'Daily Streak': {
+            sub: streakDays > 0 ? `${streakDays}d streak · best this week` : 'No streak yet — complete a task today',
+            trend: streakDays >= 3 ? `You're on a ${streakDays}-day roll` : streakDays > 0 ? 'Keep it going — one more day extends it' : 'Start today to build a streak',
+            trendUp: streakDays > 0,
+          },
+        };
         return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
-            {stats.map((stat, i) => {
-              const Icon = stat.icon;
-              return (
-                <div key={stat.label} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm">
-                  <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
-                    <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
+              {stats.map((stat) => {
+                const Icon = stat.icon;
+                const det = statsDetails[stat.label] || { sub: '', trend: '', trendUp: null };
+                return (
+                  <div key={stat.label} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm flex flex-col">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
+                      <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
+                    </div>
+                    <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">{stat.label}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{det.sub}</p>
+                    <div className={`mt-2 flex items-center gap-1 text-[10px] font-bold ${det.trendUp === null ? 'text-muted-foreground' : det.trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {det.trendUp === true ? <TrendingUp className="w-3 h-3" /> : det.trendUp === false ? <TrendingDown className="w-3 h-3" /> : null}
+                      {det.trend}
+                    </div>
                   </div>
-                  <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground mt-1.5">{stat.label}</p>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <span className="font-bold text-foreground">Insight:</span> {completionRate < 50 ? `You're trending down from last week — ${overdueTasks.length} tasks overdue and ${activeTasks.length - overdueTasks.length} still open are dragging the ${completionRate}% completion. Clear one overdue today to lift it.` : `You're at ${completionRate}% completion with ${completedTasks.length} of ${board.tasks.length} done — ${streakDays >= 3 ? `your ${streakDays}-day streak is the driver` : 'keep the daily completions steady to hold it'}.`}
+              </p>
+            </div>
           </div>
         );
-      case 'tasks':
+      }
+      case 'tasks': {
+        const urgentCount = activeTasks.filter(t => t.priority === 'urgent').length;
+        const overduePri = priorityTasks.filter(t => t.dueDate && dueEnd(t) && dueEnd(t)!.getTime() < Date.now()).length;
         return (
           <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] text-muted-foreground">{priorityTasks.length} prioritized · {urgentCount} urgent · {activeTasks.length - priorityTasks.length} without priority</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overduePri > 0 ? 'bg-red-500/15 text-red-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{overduePri > 0 ? `${overduePri} overdue` : 'On track'}</span>
+            </div>
             {priorityTasks.length === 0 ? (
               <div className="text-center py-6">
                 <CheckSquare className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No priority tasks. Add some to get started!</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Assign a priority to any task and it appears here ranked urgent → low.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1010,6 +1053,17 @@ const Dashboard: React.FC = () => {
                 })}
               </div>
             )}
+            <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {overduePri > 0 ? `Pattern: ${overduePri} of your top priorities are already overdue — they should be your first deep-work block today.` : priorityTasks.length > 3 ? 'Good mix — you have enough prioritized work to fill the day, but none are overdue.' : 'Light load on prioritized tasks — pull one medium-priority up to keep momentum.'}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                <span className="font-bold text-foreground">{priorityTasks.length} shown</span>
+                <span>·</span>
+                <span>{activeTasks.length} active total</span>
+                <span className="ml-auto flex items-center gap-1">{overduePri > 0 ? <><AlertTriangle className="w-3 h-3 text-red-500" /> needs attention</> : <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> balanced</>}</span>
+              </div>
+            </div>
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
               style={{ background: 'hsl(var(--primary))', boxShadow: '0 8px 18px -12px hsl(228 25% 25% / 0.4)' }}
@@ -1019,7 +1073,10 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         );
-      case 'projects':
+      }
+      case 'projects': {
+        const avgProjPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? p.done / p.total : 0), 0) / projectsInfo.length * 100) : 0;
+        const atRisk = projectsInfo.filter(p => p.total > 0 && p.done / p.total < 0.3).length;
         return (
           <div>
             {projectsInfo.length === 0 ? (
@@ -1027,30 +1084,53 @@ const Dashboard: React.FC = () => {
                 <FolderOpen className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No projects yet</p>
                 <button onClick={() => navigate('/projects')} className="text-xs text-primary hover:underline mt-2">Create one</button>
+                <p className="text-[11px] text-muted-foreground mt-2">Create a project to group tasks and track completion as a cohort.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {projectsInfo.slice(0, 6).map(p => (
-                  <button key={p.id} onClick={() => navigate('/projects')}
-                    className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:bg-muted/30 hover:shadow-sm"
-                    style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                    <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{p.name}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
-                      {p.active} active
-                    </span>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} active · avg {avgProjPct}%</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${atRisk > 0 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{atRisk > 0 ? `${atRisk} lagging` : 'All steady'}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {projectsInfo.slice(0, 6).map(p => {
+                    const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                    return (
+                      <button key={p.id} onClick={() => navigate('/projects')}
+                        className="w-full flex items-center gap-2 p-2 rounded-lg text-left transition-all hover:bg-muted/30 hover:shadow-sm"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-medium text-foreground truncate">{p.name}</span>
+                          <span className="block text-[10px] text-muted-foreground">{p.done}/{p.total} · {pct}%</span>
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
+                          {p.active} active
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {atRisk > 0 ? `${atRisk} project${atRisk > 1 ? 's are' : ' is'} below 30% — they need a focused push this week.` : avgProjPct >= 70 ? `Portfolio is strong at ${avgProjPct}% avg completion — keep closing the small remainder.` : `Mixed progress — ${projectsInfo.length} projects averaging ${avgProjPct}% — the lowest will benefit from one deep-work session.`}
+                  </p>
+                </div>
+              </>
             )}
           </div>
         );
+      }
       case 'project-tasks': {
         const proj = projectsInfo.find(p => p.id === widget.projectId) || projectsInfo[0];
         const projTasks = proj
           ? board.tasks.filter(t => t.projectId === proj.id && !(doneColIds.includes(t.columnId) || t.completed)).slice(0, 6)
           : [];
+        const totalInProj = proj ? board.tasks.filter(t => t.projectId === proj.id).length : 0;
+        const doneInProj = proj ? board.tasks.filter(t => t.projectId === proj.id && isTaskDone(t, doneColIds)).length : 0;
+        const pctInProj = totalInProj > 0 ? Math.round((doneInProj / totalInProj) * 100) : 0;
+        const overdueInProj = proj ? board.tasks.filter(t => t.projectId === proj.id && t.dueDate && dueEnd(t) && dueEnd(t)!.getTime() < Date.now() && !isTaskDone(t, doneColIds)).length : 0;
         return (
           <div>
             {projectsInfo.length === 0 ? (
@@ -1059,7 +1139,7 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="mb-3">
+                <div className="mb-3 pt-1">
                   <Select
                     value={String(widget.projectId ?? proj?.id ?? '')}
                     onValueChange={v => {
@@ -1067,7 +1147,7 @@ const Dashboard: React.FC = () => {
                       updateWidget(widget.id, { projectId: Number.isFinite(n) && n > 0 ? n : null });
                     }}
                   >
-                    <SelectTrigger className="w-full rounded-lg px-3 py-2 text-sm font-medium text-foreground h-auto">
+                    <SelectTrigger className="w-full rounded-lg px-3 py-2 text-sm font-medium text-foreground h-auto bg-card">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1099,12 +1179,27 @@ const Dashboard: React.FC = () => {
                     })}
                   </div>
                 )}
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-foreground">{doneInProj}/{totalInProj} done · {pctInProj}%</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overdueInProj > 0 ? 'bg-red-500/15 text-red-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
+                      {overdueInProj > 0 ? `${overdueInProj} overdue` : 'On track'}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pctInProj}%`, background: overdueInProj > 0 ? 'hsl(var(--label-red))' : 'hsl(var(--label-green))' }} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
+                    {overdueInProj > 0 ? `You're falling behind — ${overdueInProj} task${overdueInProj > 1 ? 's' : ''} overdue in this project are dragging its ${pctInProj}% completion.` : pctInProj >= 80 ? `${proj?.name} is nearly done at ${pctInProj}% — finish the last ${totalInProj - doneInProj} to close it out.` : pctInProj >= 50 ? `Mid-way at ${pctInProj}% — steady progress, keep the momentum on ${proj?.name}.` : `Early stage at ${pctInProj}% — ${totalInProj - doneInProj} tasks still open, prioritize the urgent ones.`}
+                  </p>
+                </div>
               </>
             )}
           </div>
         );
       }
-      case 'insights':
+      case 'insights': {
+        const insightTrend = completionRate >= 50 ? 'up' : 'down';
         return (
           <div>
             <div className="flex items-center gap-4">
@@ -1120,7 +1215,21 @@ const Dashboard: React.FC = () => {
                 <p className="text-xs text-muted-foreground">
                   <span className="font-bold text-foreground">{activeTasks.length}</span> active · <span className="font-bold text-foreground">{completedTasks.length}</span> completed
                 </p>
-                <p className="text-xs text-muted-foreground">{projectsInfo.length} project{projectsInfo.length !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-muted-foreground">{projectsInfo.length} project{projectsInfo.length !== 1 ? 's' : ''} · {overdueTasks.length} overdue</p>
+                <p className={`text-[11px] font-bold flex items-center gap-1 ${insightTrend === 'up' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {insightTrend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {insightTrend === 'up' ? 'Trending up — keep closing' : `Trending down — ${overdueTasks.length} overdue dragging it`}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <span className="font-bold text-foreground">{completionRate}% completion</span> — {activeTasks.length} active, {completedTasks.length} completed, {overdueTasks.length} past due. {overdueTasks.length > 0 ? `Clear one overdue today to lift the rate above ${Math.min(100, completionRate + 5)}%.` : 'No overdue — you are holding a clean board.'}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                <span>{board.tasks.length} total tasks</span>
+                <span>·</span>
+                <span>{projectsInfo.length} projects tracked</span>
               </div>
             </div>
             <button onClick={() => navigate('/insights')}
@@ -1130,6 +1239,7 @@ style={{ background: 'hsl(var(--primary))' }}>
             </button>
           </div>
         );
+      }
       case 'peak-hours':
         return (
           <div className="space-y-2.5 mt-1">
@@ -1219,34 +1329,59 @@ style={{ background: 'hsl(var(--primary))' }}>
             )}
           </div>
         );
-      case 'weekly':
+      case 'weekly': {
+        const totalWeek = weeklyData.reduce((s, v) => s + v, 0);
+        const prevWeekAvg = totalWeek > 0 ? Math.round(totalWeek / 7 * 10) / 10 : 0;
         return (
-          <div className="flex items-end gap-2 h-24 mt-1">
-            {weekDays.map((day, i) => {
-              const height = weeklyData[i] > 0 ? Math.max(10, (weeklyData[i] / maxWeekly) * 80) : 6;
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full">
-                    <div className={`w-full rounded-t-md transition-all duration-500`}
-                      style={{
-                        height: `${height}px`,
-                        background: i === peakDay
-                          ? `hsl(var(--${accent}))`
-                          : `hsl(var(--${accent}) / 0.20)`,
-                        boxShadow: i === peakDay ? `0 8px 18px -10px hsl(var(--${accent}) / 0.45)` : 'none',
-                      }}
-                    />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">{totalWeek} completed · peak {weekDays[peakDay]} ({weeklyData[peakDay]})</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalWeek > 3 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>{totalWeek > 3 ? 'Active week' : 'Quiet week'}</span>
+            </div>
+            <div className="flex items-end gap-2 h-24 mt-1">
+              {weekDays.map((day, i) => {
+                const height = weeklyData[i] > 0 ? Math.max(10, (weeklyData[i] / maxWeekly) * 80) : 6;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full">
+                      <div className={`w-full rounded-t-md transition-all duration-500`}
+                        style={{
+                          height: `${height}px`,
+                          background: i === peakDay
+                            ? `hsl(var(--${accent}))`
+                            : `hsl(var(--${accent}) / 0.20)`,
+                          boxShadow: i === peakDay ? `0 8px 18px -10px hsl(var(--${accent}) / 0.45)` : 'none',
+                        }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{day}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">{day}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {totalWeek === 0 ? 'No completions yet this week — your first finish will set the bar.' : weeklyData[peakDay] >= 3 ? `${weekDays[peakDay]} is your peak (${weeklyData[peakDay]} of ${totalWeek}) — mid-week momentum is driving the week.` : `Even spread — avg ${prevWeekAvg}/day — steady pace, no single spike.`}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                <span>{totalWeek} total</span>
+                <span>·</span>
+                <span>avg {prevWeekAvg}/day</span>
+                {totalWeek > 0 && <span className="ml-auto font-bold text-foreground">{weekDays[peakDay]} peak</span>}
+              </div>
+            </div>
           </div>
         );
+      }
       case 'account': {
         const tier = user?.subscriptionTier || 'free';
         const tierLabel = tier === 'pro' ? 'Pro' : tier === 'premium' ? 'Premium' : 'Free';
         const isPaid = tier === 'pro' || tier === 'premium';
+        const createdThisWeek = board.tasks.filter(t => {
+          const d = t.createdAt ? new Date(t.createdAt) : null;
+          if (!d || Number.isNaN(d.getTime())) return false;
+          return (Date.now() - d.getTime()) / DAY_MS <= 7;
+        }).length;
         return (
           <div className="space-y-2.5 mt-1">
             <div className="flex items-center justify-between">
@@ -1257,196 +1392,342 @@ style={{ background: 'hsl(var(--primary))' }}>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5" /> Tasks completed</span>
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{completedTasks.length}</span>
+              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{completedTasks.length} of {board.tasks.length}</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>Created this week</span>
+              <span className="font-bold text-foreground">{createdThisWeek}</span>
+            </div>
+            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {isPaid ? `You're on ${tierLabel} — ${completedTasks.length} tasks completed across ${board.tasks.length} total. Keep the completion rate climbing.` : `Free plan — ${completedTasks.length} completed. Upgrade to unlock Premium/Pro insights and close overdue faster.`}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-primary">
+                <span>{completionRate}% completion</span>
+                <span className="text-muted-foreground font-normal">· {streakDays}d streak</span>
+              </div>
             </div>
           </div>
         );
       }
-      case 'overdue':
+      case 'overdue': {
+        const worstOverdue = overdueTasks.length > 0 ? Math.max(...overdueTasks.map(t => Math.floor((Date.now() - dueEnd(t)!.getTime()) / DAY_MS))) : 0;
         return (
           <div>
             {overdueTasks.length === 0 ? (
               <div className="text-center py-6">
                 <CheckCircle2 className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
                 <p className="text-sm text-muted-foreground">All caught up — no overdue tasks!</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{completionRate}% completion is holding because nothing is past due — keep closing before dates slip.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {overdueTasks.slice(0, 5).map(t => {
-                  const overdueDays = Math.max(1, Math.floor((Date.now() - dueEnd(t).getTime()) / DAY_MS));
-                  const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
-                  return (
-                    <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
-                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
-                      <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(var(--label-red))' }}>
-                        {cfg ? cfg.label : 'Open'} · {overdueDays}d late
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{overdueTasks.length} overdue · oldest {worstOverdue}d late</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">{completionRate}% completion — dragged down</span>
+                </div>
+                <div className="space-y-1.5">
+                  {overdueTasks.slice(0, 5).map(t => {
+                    const overdueDays = Math.max(1, Math.floor((Date.now() - dueEnd(t).getTime()) / DAY_MS));
+                    const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
+                    return (
+                      <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
+                        <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(var(--label-red))' }}>
+                          {cfg ? cfg.label : 'Open'} · {overdueDays}d late
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    You're trending down from last week — {overdueTasks.length} tasks overdue {worstOverdue >= 7 ? `with the oldest ${worstOverdue}d late` : ''} are dragging the {completionRate}% completion. Tackle the oldest today to lift it.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{overdueTasks.length} overdue</span>
+                    <span>·</span>
+                    <span>worst {worstOverdue}d</span>
+                    <span className="ml-auto flex items-center gap-1 text-red-600 font-bold"><TrendingDown className="w-3 h-3" /> needs action</span>
+                  </div>
+                </div>
+              </>
             )}
             {overdueTasks.length > 5 && (
               <p className="text-[10px] text-muted-foreground text-center mt-2">+{overdueTasks.length - 5} more overdue</p>
             )}
           </div>
         );
-      case 'deadlines':
+      }
+      case 'deadlines': {
+        const soonestDays = upcomingDeadlines.length > 0 ? Math.max(1, Math.ceil((dueEnd(upcomingDeadlines[0]).getTime() - Date.now()) / DAY_MS)) : 0;
         return (
           <div>
             {upcomingDeadlines.length === 0 ? (
               <div className="text-center py-6">
                 <Flag className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No deadlines in the next 7 days</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Clear runway — use it to close overdue and get ahead.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {upcomingDeadlines.slice(0, 5).map(t => {
-                  const days = Math.max(1, Math.ceil((dueEnd(t).getTime() - Date.now()) / DAY_MS));
-                  const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
-                  return (
-                    <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
-                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                      <Flag className="w-3.5 h-3.5 flex-shrink-0" style={{ color: `hsl(var(--${accent}))` }} />
-                      <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground shrink-0`}>
-                        {cfg?.label || ''} {days}d
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{upcomingDeadlines.length} due in 3-7 days · soonest in {soonestDays}d</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Upcoming</span>
+                </div>
+                <div className="space-y-1.5">
+                  {upcomingDeadlines.slice(0, 5).map(t => {
+                    const days = Math.max(1, Math.ceil((dueEnd(t).getTime() - Date.now()) / DAY_MS));
+                    const cfg = t.priority !== 'none' ? PRIORITY_CONFIG[t.priority] : null;
+                    return (
+                      <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <Flag className="w-3.5 h-3.5 flex-shrink-0" style={{ color: `hsl(var(--${accent}))` }} />
+                        <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground shrink-0`}>
+                          {cfg?.label || ''} {days}d
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Next deadline in {soonestDays}d — {upcomingDeadlines.length} tasks cluster in the 3-7 day window. Flag the soonest today so it doesn't become overdue.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{upcomingDeadlines.length} upcoming</span>
+                    <span>·</span>
+                    <span>soonest {soonestDays}d</span>
+                    <span className="ml-auto font-bold text-amber-600">plan ahead</span>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         );
-      case 'project-progress':
+      }
+      case 'project-progress': {
+        const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
+        const strongest = projectsInfo.length > 0 ? projectsInfo.reduce((a, b) => (a.done / a.total) > (b.done / b.total) ? a : b) : null;
         return (
           <div className="space-y-2.5 mt-1">
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
                 <FolderOpen className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No projects yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Add tasks to a project and this widget tracks each one's closure rate.</p>
               </div>
             ) : (
-              projectsInfo.slice(0, 6).map(p => {
-                const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-                return (
-                  <div key={p.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                        {p.name}
-                      </span>
-                      <span className="text-[10px] font-semibold text-muted-foreground">{pct}%</span>
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Avg {avgPct}% · {projectsInfo.length} projects</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${avgPct >= 60 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>{avgPct >= 60 ? 'On track' : 'Needs push'}</span>
+                </div>
+                {projectsInfo.slice(0, 6).map(p => {
+                  const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                  return (
+                    <div key={p.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                          {p.name}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{pct}% · {p.done}/{p.total}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct >= 70 ? 'hsl(var(--label-green))' : pct >= 40 ? 'hsl(var(--label-yellow))' : 'hsl(var(--label-red))' }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: 'hsl(var(--label-green))' }} />
-                    </div>
+                  );
+                })}
+                <div className="mt-2 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {strongest ? `${strongest.name} leads at ${Math.round((strongest.done / strongest.total) * 100)}% — average is ${avgPct}% across ${projectsInfo.length} projects. Pull the lowest project up by one completion this week.` : `Average completion is ${avgPct}% — focus on the lagging project to lift the portfolio.`}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>Strongest: {strongest?.name || '—'}</span>
+                    <span className="ml-auto font-bold text-foreground">{avgPct}% avg</span>
                   </div>
-                );
-              })
+                </div>
+              </>
             )}
           </div>
         );
-      case 'recently-completed':
+      }
+      case 'recently-completed': {
+        const totalRC = recentlyCompleted.length;
+        const withItems = recentlyCompleted.filter(r => r.items.length > 0).length;
         return (
           <div>
             {recentlyCompleted.length === 0 ? (
               <div className="text-center py-6">
                 <History className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No completed tasks yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Finish a task or checklist item and it shows here within seconds.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {recentlyCompleted.map(r => (
-                  <div key={r.id} className="p-2 rounded-lg"
-                    style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-green))' }} />
-                      <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{r.title}</span>
-                      <span className="text-[9px] font-medium text-muted-foreground shrink-0">{timeAgo(r.time)}</span>
-                    </div>
-                    {r.items.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 pl-5">
-                        {r.items.slice(0, 3).map((item, i) => (
-                          <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
-                            {item}
-                          </span>
-                        ))}
-                        {r.items.length > 3 && (
-                          <span className="text-[9px] text-muted-foreground">+{r.items.length - 3} more</span>
-                        )}
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{totalRC} recent · {withItems} with checklist</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">{totalRC > 3 ? 'Active' : 'Getting started'}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {recentlyCompleted.map(r => (
+                    <div key={r.id} className="p-2 rounded-lg"
+                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-green))' }} />
+                        <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{r.title}</span>
+                        <span className="text-[9px] font-medium text-muted-foreground shrink-0">{timeAgo(r.time)}</span>
                       </div>
-                    )}
+                      {r.items.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5 pl-5">
+                          {r.items.slice(0, 3).map((item, i) => (
+                            <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
+                              {item}
+                            </span>
+                          ))}
+                          {r.items.length > 3 && (
+                            <span className="text-[9px] text-muted-foreground">+{r.items.length - 3} more</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {totalRC >= 4 ? `Momentum is real — ${totalRC} completions recently, with ${withItems} carrying checklist progress. Keep the streak alive by closing one more today.` : `Small sample — ${totalRC} completions shown. Each finished checklist item lifts the next task's progress.`}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{totalRC} completed</span>
+                    <span>·</span>
+                    <span>{withItems} with breakdown</span>
                   </div>
-                ))}
-              </div>
+                </div>
+              </>
             )}
           </div>
         );
+      }
       case 'priority-breakdown': {
         const maxCount = Math.max(...priorityBreakdown.map(p => p.count), 1);
+        const totalPri = priorityBreakdown.reduce((s, p) => s + p.count, 0);
+        const dominant = priorityBreakdown.length > 0 ? priorityBreakdown.reduce((a, b) => a.count > b.count ? a : b) : null;
         return (
           <div className="mt-1">
             {priorityBreakdown.every(p => p.count === 0) ? (
               <div className="text-center py-6">
                 <PieChart className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No prioritized active tasks</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Set a priority on active tasks to see the mix here.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {priorityBreakdown.map(p => (
-                  <div key={p.priority}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-foreground capitalize">
-                        <span className={`w-2 h-2 rounded-full ${p.className}`} />
-                        {p.priority}
-                      </span>
-                      <span className="text-[10px] font-semibold text-muted-foreground">{p.count}</span>
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{totalPri} prioritized · {dominant?.priority || ''} dominates</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dominant ? `${Math.round(dominant.count / totalPri * 100)}% ${dominant.priority}` : ''}</span>
+                </div>
+                <div className="space-y-2">
+                  {priorityBreakdown.map(p => (
+                    <div key={p.priority}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground capitalize">
+                          <span className={`w-2 h-2 rounded-full ${p.className}`} />
+                          {p.priority}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{p.count} · {Math.round(p.count / totalPri * 100)}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${(p.count / maxCount) * 100}%`,
+                            background: `hsl(var(--${accent}))`,
+                            opacity: p.count === 0 ? 0.25 : 1,
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${(p.count / maxCount) * 100}%`,
-                          background: `hsl(var(--${accent}))`,
-                          opacity: p.count === 0 ? 0.25 : 1,
-                        }}
-                      />
-                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {dominant && dominant.count / totalPri > 0.5 ? `${dominant.priority} dominates at ${Math.round(dominant.count / totalPri * 100)}% — risk of tunnel vision, pull a medium task forward to balance.` : `Balanced mix — no single priority exceeds 50%. Good for steady throughput.`}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{totalPri} active with priority</span>
+                    <span>·</span>
+                    <span>{activeTasks.filter(t => t.priority === 'none').length} without</span>
                   </div>
-                ))}
-              </div>
+                </div>
+              </>
             )}
           </div>
         );
       }
-      case 'tags-overview':
-        return <TagsOverviewBody tasks={board.tasks} ctx={{ doneColIds }} />;
+      case 'tags-overview': {
+        const tagSummary = board.tasks.flatMap(t => t.labels).length;
+        const distinctTags = new Set(board.tasks.flatMap(t => t.labels.map(l => l.id))).size;
+        const topCount = (() => {
+          const m: Record<string, number> = {};
+          board.tasks.flatMap(t => t.labels).forEach(l => { m[l.name] = (m[l.name] || 0) + 1; });
+          const vals = Object.values(m);
+          return vals.length ? Math.max(...vals) : 0;
+        })();
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">{distinctTags} tags · {tagSummary} assignments</span>
+              <span className="text-[10px] font-bold text-muted-foreground">{distinctTags > 5 ? 'Rich tagging' : 'Light tagging'}</span>
+            </div>
+            <TagsOverviewBody tasks={board.tasks} ctx={{ doneColIds }} />
+            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {distinctTags === 0 ? 'No tags yet — add tags to surface cross-project themes.' : `Top tag carries ${topCount} uses — tags group work beyond project boundaries.`}
+              </p>
+            </div>
+          </div>
+        );
+      }
       case 'advanced-insights': {
         const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
+        const avg = advancedInsights.avgHours;
+        const trendUp = total30 > 5 && avg != null && avg < 24;
         return (
           <div className="space-y-2.5 mt-1">
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                 <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Avg completion</p>
                 <p className="text-base font-black text-foreground mt-0.5">
-                  {advancedInsights.avgHours != null ? `${advancedInsights.avgHours.toFixed(1)}h` : '—'}
+                  {avg != null ? `${avg.toFixed(1)}h` : '—'}
                 </p>
+                <p className="text-[10px] text-muted-foreground mt-1">{avg != null && avg < 10 ? 'Fast turnover' : avg != null && avg < 48 ? 'Moderate pace' : 'Slow cycle'}</p>
               </div>
               <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                 <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Busiest day</p>
                 <p className="text-base font-black text-foreground mt-0.5">{advancedInsights.busiestDay || '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{advancedInsights.busiestDay ? `${total30} in 30 days` : 'No data yet'}</p>
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">30-day trend</p>
-                <p className="text-[10px] font-semibold text-muted-foreground">{total30} completed</p>
+                <p className="text-[10px] font-semibold text-muted-foreground">{total30} completed · avg {(total30 / 30).toFixed(1)}/day</p>
               </div>
               <MiniBars values={advancedInsights.trend30} accent={accent} containerClass="h-12" />
+            </div>
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <span className="font-bold text-foreground">Premium insight:</span> {total30 === 0 ? 'No completions in 30 days — the trend will form once you close tasks.' : trendUp ? `Activity is building — ${total30} in 30 days with ${advancedInsights.busiestDay} as peak. Keep the daily close rate above 1.` : `Long cycle at ${avg?.toFixed(1) || '—'}h avg — break large tasks to shorten completion time.`}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">{trendUp ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{trendUp ? 'building' : 'needs lift'}</span>
+                <span className="ml-auto font-bold text-foreground">{total30} total</span>
+              </div>
             </div>
           </div>
         );
@@ -1457,7 +1738,9 @@ style={{ background: 'hsl(var(--primary))' }}>
         const series = buildReportSeries(metric, range);
         const total = series.reduce((s, v) => s + v, 0);
         const maxSeries = Math.max(...series, 1);
+        const avgPerDay = range > 0 ? (total / range).toFixed(1) : '0';
         const metricLabel = metric === 'created' ? 'Created' : metric === 'checklist' ? 'Checklist items done' : 'Completed';
+        const peakIdx = series.indexOf(maxSeries);
         return (
           <div className="mt-1">
             <div className="flex gap-2 mb-3">
@@ -1485,49 +1768,82 @@ style={{ background: 'hsl(var(--primary))' }}>
             {total === 0 ? (
               <div className="text-center py-6">
                 <p className="text-sm text-muted-foreground">No {metricLabel.toLowerCase()} in this range yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Switch metric or extend the range to surface a pattern.</p>
               </div>
             ) : (
               <>
                 <MiniBars values={series} accent={accent} containerClass="h-14" />
                 <div className="flex items-center justify-between mt-2">
-                  <p className="text-[10px] font-bold text-foreground">{total} {metricLabel.toLowerCase()}</p>
-                  <p className="text-[10px] text-muted-foreground">peak {maxSeries}/day</p>
+                  <p className="text-[10px] font-bold text-foreground">{total} {metricLabel.toLowerCase()} · avg {avgPerDay}/day</p>
+                  <p className="text-[10px] text-muted-foreground">peak {maxSeries}/day on day {peakIdx + 1}</p>
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one {metricLabel.toLowerCase()} daily to lift the trend.`}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{total} total</span>
+                    <span>·</span>
+                    <span>peak {maxSeries}</span>
+                    <span className="ml-auto font-bold text-foreground">{avgPerDay}/day avg</span>
+                  </div>
                 </div>
               </>
             )}
           </div>
         );
       }
-      case 'multi-project':
+      case 'multi-project': {
+        const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
+        const spread = projectsInfo.length > 1 ? Math.max(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) - Math.min(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) : 0;
         return (
           <div className="space-y-2.5 mt-1">
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
                 <GitCompareArrows className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No projects yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Create at least two projects — comparison appears once you have more than one.</p>
               </div>
             ) : (
-              projectsInfo.slice(0, 6).map(p => {
-                const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-                return (
-                  <div key={p.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
-                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                        {p.name}
-                      </span>
-                      <span className="text-[10px] font-semibold text-muted-foreground">{p.done}/{p.total} · {pct}%</span>
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} projects · avg {avgPct}%</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${spread > 0.5 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{spread > 0.5 ? 'Wide spread' : 'Tight range'}</span>
+                </div>
+                {projectsInfo.slice(0, 6).map(p => {
+                  const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                  const vsAvg = pct - avgPct;
+                  return (
+                    <div key={p.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                          {p.name}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{p.done}/{p.total} · {pct}% <span className={vsAvg >= 0 ? 'text-emerald-600' : 'text-red-500'}>{vsAvg >= 0 ? `+${vsAvg}` : vsAvg}% vs avg</span></span>
+                      </div>
+                      <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                        <div className="rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vsAvg >= 0 ? 'hsl(var(--label-green))' : 'hsl(var(--label-orange))' }} />
+                        <div className="rounded-full flex-1 transition-all duration-500" style={{ background: `hsl(var(--${accent}) / 0.25)` }} />
+                      </div>
                     </div>
-                    <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
-                      <div className="rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: 'hsl(var(--label-green))' }} />
-                      <div className="rounded-full flex-1 transition-all duration-500" style={{ background: `hsl(var(--${accent}) / 0.25)` }} />
-                    </div>
+                  );
+                })}
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Premium comparison — avg {avgPct}% across {projectsInfo.length} projects{spread > 0.5 ? `, ${Math.round(spread * 100)}pt spread signals uneven progress — the lagging project needs the next deep-work block.` : ' with tight spread — progress is evenly distributed.'}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>Spread {Math.round(spread * 100)}pt</span>
+                    <span>·</span>
+                    <span>{projectsInfo.length} compared</span>
                   </div>
-                );
-              })
+                </div>
+              </>
             )}
           </div>
         );
+      }
       case 'ai-score': {
         if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
         if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
@@ -1535,30 +1851,41 @@ style={{ background: 'hsl(var(--primary))' }}>
         return (
           <div className="mt-1">
             {score ? (
-              <div className="flex items-start gap-4">
-                <div className="relative w-20 h-20 flex-shrink-0">
-                  <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" style={{ stroke: `hsl(var(--${accent}) / 0.14)` }} />
-                    <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" strokeLinecap="round"
-                      strokeDasharray={`${Math.max(0, Math.min(100, score.score)) * 2.01} 201`} style={{ stroke: `hsl(var(--${accent}))` }} />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-foreground">{score.score}</span>
+              <div className="space-y-3">
+                <div className="flex items-start gap-4">
+                  <div className="relative w-20 h-20 flex-shrink-0">
+                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" style={{ stroke: `hsl(var(--${accent}) / 0.14)` }} />
+                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" strokeLinecap="round"
+                        strokeDasharray={`${Math.max(0, Math.min(100, score.score)) * 2.01} 201`} style={{ stroke: `hsl(var(--${accent}))` }} />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-foreground">{score.score}</span>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">AI Productivity Score</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{score.summary}</p>
+                    {score.focusAreas.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {score.focusAreas.map((f: string, i: number) => (
+                          <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full text-primary-foreground" style={{ background: 'hsl(var(--label-orange))' }}>
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors">
+                      <RefreshCw className="w-3 h-3" /> Refresh
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">AI Productivity Score</p>
-                  <p className="text-xs text-muted-foreground leading-snug">{score.summary}</p>
-                  {score.focusAreas.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {score.focusAreas.map((f: string, i: number) => (
-                        <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full text-primary-foreground" style={{ background: 'hsl(var(--label-orange))' }}>
-                          {f}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors">
-                    <RefreshCw className="w-3 h-3" /> Refresh
-                  </button>
+                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> Score {score.score}/100 — {score.score >= 70 ? 'health is strong; keep the overdue count at zero to hold it' : score.score >= 40 ? 'mid-range — overdue and high-priority open tasks are the drag' : 'critical — overdue tasks and stalled breakdowns dominate the penalty'}.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1">{score.score >= 70 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{score.score >= 50 ? 'trending stable' : 'needs lift'}</span>
+                    <span className="ml-auto font-bold text-foreground">{score.focusAreas.length} focus areas</span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1579,30 +1906,42 @@ style={{ background: 'hsl(var(--primary))' }}>
               <div className="text-center py-6">
                 <ListOrdered className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
                 <p className="text-sm text-muted-foreground">No tasks to prioritize right now</p>
+                <p className="text-[11px] text-muted-foreground mt-1">AI ranks by overdue, priority and project balance — add more tasks to get a ranked list.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {nextTasks.map((nt: { id: string; reason: string }, i: number) => {
-                  const task = board.tasks.find(t => String(t.id) === String(nt.id));
-                  const cfg = task && task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
-                  return (
-                    <div key={nt.id} className="flex items-start gap-2 p-2 rounded-lg"
-                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                      <span className="w-5 h-5 flex-shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white mt-0.5"
-                        style={{ background: `hsl(var(--${accent}))` }}>
-                        {i + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
-                          {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>}
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{nextTasks.length} ranked · by urgency & impact</span>
+                  <span className="text-[10px] font-bold text-primary">Pro ranked</span>
+                </div>
+                <div className="space-y-1.5">
+                  {nextTasks.map((nt: { id: string; reason: string }, i: number) => {
+                    const task = board.tasks.find(t => String(t.id) === String(nt.id));
+                    const cfg = task && task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
+                    return (
+                      <div key={nt.id} className="flex items-start gap-2 p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <span className="w-5 h-5 flex-shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white mt-0.5"
+                          style={{ background: `hsl(var(--${accent}))` }}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
+                            {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{nt.reason}</p>
                         </div>
-                        <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{nt.reason}</p>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> Top 3 are chosen for deadline proximity and priority weight — {nextTasks.length > 1 ? `start with #1, then sequence through ${nextTasks.length} in order.` : 'clear it to lift the whole queue.'}
+                  </p>
+                </div>
+              </>
             )}
           </div>
         );
@@ -1619,23 +1958,36 @@ style={{ background: 'hsl(var(--primary))' }}>
               <div className="text-center py-6">
                 <Siren className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
                 <p className="text-sm text-muted-foreground">No bottlenecks detected</p>
+                <p className="text-[11px] text-muted-foreground mt-1">AI sees no stalled work — your breakdowns are moving. Keep the daily close rate up.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {bottlenecks.map((bn: { id: string; reason: string }) => {
-                  const task = board.tasks.find(t => String(t.id) === String(bn.id));
-                  return (
-                    <div key={bn.id} className="p-2 rounded-lg"
-                      style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                      <div className="flex items-center gap-2">
-                        <Siren className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
-                        <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{bottlenecks.length} stalled · needs attention</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Pro flagged</span>
+                </div>
+                <div className="space-y-1.5">
+                  {bottlenecks.map((bn: { id: string; reason: string }) => {
+                    const task = board.tasks.find(t => String(t.id) === String(bn.id));
+                    return (
+                      <div key={bn.id} className="p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <div className="flex items-center gap-2">
+                          <Siren className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
+                          <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600">Stalled</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-snug mt-1 pl-5">{bn.reason}</p>
                       </div>
-                      <p className="text-[10px] text-muted-foreground leading-snug mt-1 pl-5">{bn.reason}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> {bottlenecks.length} tasks are stalled — they have breakdown items untouched for 7+ days. Restart one today or cut it to clear the drag on completion.
+                  </p>
+                </div>
+              </>
             )}
           </div>
         );
@@ -1649,10 +2001,22 @@ style={{ background: 'hsl(var(--primary))' }}>
             {summary === null ? (
               <AiWidgetStatus onRetry={loadAiWidgets} />
             ) : (
-              <div className="flex gap-2 p-3 rounded-lg"
-                style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                <MessageSquareText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{summary}</p>
+              <div className="space-y-3">
+                <div className="flex gap-2 p-3 rounded-lg"
+                  style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                  <MessageSquareText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: `hsl(var(--${accent}))` }} />
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{summary}</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro recap:</span> Week over week — {completedTasks.length} completed, {overdueTasks.length} still overdue, {streakDays}d streak. Next step: close the oldest overdue to tilt next week up.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{weeklyData.reduce((s, v) => s + v, 0)} this week</span>
+                    <span>·</span>
+                    <span>{completionRate}% completion</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1759,7 +2123,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 return (
                   <div
                     key={widget.id}
-                    className={`relative group/widget rounded-2xl overflow-hidden flex flex-col ${isDisplaced ? 'animate-widget-flash' : ''} ${activeDragId === widget.id ? 'z-10' : ''}`}
+                    className={`relative group/widget rounded-2xl flex flex-col ${widget.type === 'project-tasks' ? 'overflow-visible' : 'overflow-hidden'} ${isDisplaced ? 'animate-widget-flash' : ''} ${activeDragId === widget.id ? 'z-10' : ''}`}
                     style={{
                       position: 'absolute',
                       ...cellStyle(widget),
@@ -1819,7 +2183,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                           el.scrollBy({ top: e.deltaY, behavior: 'auto' });
                         }
                       }}
-                      className="px-4 pb-4 overflow-y-auto min-h-0 flex-1"
+                      className={`px-4 pb-4 min-h-0 flex-1 ${widget.type === 'project-tasks' ? 'overflow-visible pt-1' : 'overflow-y-auto'}`}
                     >
                       {renderWidgetBody(widget)}
                     </div>

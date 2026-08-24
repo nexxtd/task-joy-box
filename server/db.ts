@@ -16,30 +16,42 @@ const { Pool } = pg;
 // Fix: Render free tier cannot connect via IPv6 (ENETUNREACH).
 // Supabase direct connection (db.*.supabase.co:5432) resolves to IPv6 only.
 // Use Supabase connection pooler (aws-0-*.pooler.supabase.com:6543) which resolves to IPv4.
-function buildPoolConfig() {
+function buildPoolConfig(): any {
   const rawUrl = process.env.DATABASE_URL;
   if (!rawUrl) return {};
+  const baseOpts = {
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 10,
+    allowExitOnIdle: true,
+  };
 
   if (process.env.NODE_ENV === 'production') {
-    // Parse the direct connection string and convert to pooler URL
-    const parsed = new URL(rawUrl);
-    const projectRef = parsed.hostname.replace('db.', '').replace('.supabase.co', '');
-    // URL parser doesn't decode percent-encoded password, must decode first then re-encode
-    const decodedPassword = decodeURIComponent(parsed.password);
-    const poolerUrl = `postgresql://postgres.${projectRef}:${encodeURIComponent(decodedPassword)}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`;
-    // Debug: log the URL (masked) to verify it's correct
-    console.log('Pool config - projectRef:', projectRef);
-    console.log('Pool config - username: postgres.' + projectRef);
-    console.log('Pool config - URL (masked):', poolerUrl.replace(/:([^:@]+)@/, ':***@'));
-    return { connectionString: poolerUrl };
+    if (rawUrl.includes('pooler.supabase.com')) {
+      console.log('Pool config - using existing pooler URL (masked):', rawUrl.replace(/:([^:@]+)@/, ':***@'));
+      return { connectionString: rawUrl, ...baseOpts };
+    }
+    try {
+      const parsed = new URL(rawUrl);
+      const projectRef = parsed.hostname.replace('db.', '').replace('.supabase.co', '');
+      const decodedPassword = decodeURIComponent(parsed.password);
+      const poolerUrl = `postgresql://postgres.${projectRef}:${encodeURIComponent(decodedPassword)}@aws-0-eu-west-1.pooler.supabase.com:6543/postgres`;
+      console.log('Pool config - projectRef:', projectRef);
+      console.log('Pool config - URL (masked):', poolerUrl.replace(/:([^:@]+)@/, ':***@'));
+      return { connectionString: poolerUrl, ...baseOpts };
+    } catch {
+      return { connectionString: rawUrl, ...baseOpts };
+    }
   }
 
-  // In development, decode URL-encoded password for local use
   const dbUrl = rawUrl.replace(/%40/g, '@');
-  return { connectionString: dbUrl };
+  return { connectionString: dbUrl, ...baseOpts };
 }
 
 export const pool = new Pool(buildPoolConfig());
+pool.on('error', (err: any) => {
+  console.error('Unexpected pool error:', err?.message || err);
+});
 
 export const db = drizzle(pool, { schema });
 

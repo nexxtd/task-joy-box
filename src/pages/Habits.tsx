@@ -1502,7 +1502,6 @@ const Habits: React.FC = () => {
             className="flex-1 min-w-0 cursor-pointer"
             onClick={e => { if (!isDeleteMode) { e.stopPropagation(); setOpenTaskId(habit.id); } }}
           >
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Habit</span>
               <span className="text-sm font-medium text-foreground truncate block">{habit.title}</span>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {/* Duration pill — only if set */}
@@ -3256,6 +3255,7 @@ const HabitDropdownExpanded: React.FC<{
   const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
   const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
   const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
 
   const persistSubtasks = (nextSubtasks: Habit['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist

@@ -1449,7 +1449,6 @@ const Goals: React.FC = () => {
           )}
           <div className="flex-1 min-w-0">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Goal</span>
               <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
             </div>
             <button onClick={e => { e.stopPropagation(); toggleExpand(goal.id); }} className="flex items-center gap-2 mt-1 hover:opacity-80">
@@ -2334,12 +2333,12 @@ const Goals: React.FC = () => {
                   {newGoalMilestones.length === 0 ? <p className="text-xs text-muted-foreground">No milestones yet. Add a milestone to get started.</p> : (
                     <div className="space-y-1.5">
                       {newGoalMilestones.map((m:any, idx:number) => (
-                        <div key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2">
+                        <div key={m.id} className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2 group">
                           <div className="cursor-grab p-0.5 text-muted-foreground/30"><GripVertical className="w-4 h-4" /></div>
                           <input type="checkbox" checked={!!m.completed} onChange={() => setNewGoalMilestones(prev => prev.map(x => x.id===m.id?{...x, completed:!x.completed}:x))} className="rounded" />
                           <span className="flex-1 text-sm truncate">{m.name}</span>
                           <span className="text-xs text-muted-foreground">{m.date}</span>
-                          <button onClick={() => setNewGoalMilestones(prev => prev.filter(x => x.id!==m.id))} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setNewGoalMilestones(prev => prev.filter(x => x.id!==m.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       ))}
                     </div>
@@ -3264,6 +3263,7 @@ const GoalDropdownExpanded: React.FC<{
   const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
   const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
   const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
 
   const persistSubtasks = (nextSubtasks: Goal['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist

@@ -112,13 +112,20 @@ const authLimiter = rateLimit({
 
 app.use(globalLimiter);
 
+function normalizeOrigin(url: string) {
+  return url.replace(/\/+$/, '');
+}
 const allowedOrigins = new Set<string>();
 if (frontendUrl) {
-  allowedOrigins.add(frontendUrl);
+  const n = normalizeOrigin(frontendUrl);
+  allowedOrigins.add(n);
+  allowedOrigins.add(n + '/');
 }
 
 if (process.env.RENDER_EXTERNAL_URL) {
-  allowedOrigins.add(process.env.RENDER_EXTERNAL_URL);
+  const n = normalizeOrigin(process.env.RENDER_EXTERNAL_URL);
+  allowedOrigins.add(n);
+  allowedOrigins.add(n + '/');
 }
 
 if (process.env.NGROK_URL) {
@@ -132,9 +139,10 @@ if (process.env.CF_TUNNEL_URL) {
 const additionalOriginsVar = process.env.ADDITIONAL_ALLOWED_ORIGINS;
 if (additionalOriginsVar) {
   additionalOriginsVar.split(',').forEach(origin => {
-    const trimmedOrigin = origin.trim();
+    const trimmedOrigin = origin.trim().replace(/\/+$/, '');
     if (trimmedOrigin) {
       allowedOrigins.add(trimmedOrigin);
+      allowedOrigins.add(trimmedOrigin + '/');
     }
   });
 }

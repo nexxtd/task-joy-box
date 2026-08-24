@@ -29,15 +29,26 @@ export const useAuth = () => {
   return ctx;
 };
 
-async function apiFetch(path: string, options?: RequestInit) {
-  const res = await fetch(path, { 
-    credentials: 'include', 
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    }
-  });
+async function apiFetch(path: string, options?: RequestInit, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      credentials: 'include',
+      signal: controller.signal,
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      }
+    });
+  } catch (e: any) {
+    clearTimeout(tid);
+    if (e?.name === 'AbortError') throw new Error('Request timed out');
+    throw e;
+  }
+  clearTimeout(tid);
   
   // If the response is 401, it means the session/JWT token is invalid
   // We should clear the user data and return an error
@@ -80,9 +91,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    // Attempt to get user data on mount
+    let cancelled = false;
+    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 12000);
     refreshUserData()
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });
+    return () => { cancelled = true; clearTimeout(t); };
   }, [refreshUserData]);
 
   const login = useCallback(async (email: string, password: string) => {

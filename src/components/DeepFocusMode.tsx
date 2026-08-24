@@ -689,6 +689,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const taskDurMins = selectedTask?.duration ?? 0;
   const remainingMins = taskDurMins - subtaskTotalMins;
   const allSubtasksDone = taskSubtasks.length > 0 && taskSubtasks.every(st => st.completed);
+  const allChecklistsDone = focusChecklistItems.length > 0 && focusChecklistItems.every(i => i.completed);
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
   const r = 88;
   const circ = 2 * Math.PI * r;
@@ -866,6 +867,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </button>
               {!checklistsCollapsed && (
                 <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                  {allChecklistsDone && (
+                    <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                      All checklists are done ✓
+                    </div>
+                  )}
                   {focusChecklists.length === 0 && focusChecklistItems.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
                   {(focusChecklists.length > 0 || focusChecklistItems.length > 0) && (
                     <DragDropContext onDragEnd={handleDeepFocusReorder}>

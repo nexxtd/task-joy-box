@@ -10,6 +10,7 @@ import DayView from '@/components/calendar/DayView';
 import WeekView from '@/components/calendar/WeekView';
 import MonthView from '@/components/calendar/MonthView';
 import SchedulingPopup from '@/components/calendar/SchedulingPopup';
+import ComingSoon from '@/components/shared/ComingSoon';
 import {
   ChevronLeft, ChevronRight, Sparkles, X, Sun, Clock, Grid3X3,
   Zap, Calendar as CalendarIcon, ListChecks, Plus, Coffee,
@@ -276,6 +277,18 @@ const CalendarPage: React.FC = () => {
     setSmartScheduleApplied(true);
     setTimeout(() => { setAiPanelOpen(false); setSmartScheduleApplied(false); }, 1500);
   };
+
+  return (
+    <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+      <div className="max-w-lg">
+        <ComingSoon
+          title="Calendar"
+          description="Plan your tasks on a visual calendar with drag-and-drop scheduling, time-blocking and timeline views. Coming soon to organize your time like never before."
+          onNotify={() => (window.location.href = '/pricing')}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex w-full h-full overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">

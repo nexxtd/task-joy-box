@@ -3686,12 +3686,12 @@ const Tasks: React.FC = () => {
                                 {aiBuilderFiles.map((file, fileIdx) => (
                                   <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-task-file-${fileIdx}-${file.name}`} index={fileIdx}>
                                     {provided => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
                                         <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
                                           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
                                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
-                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                                         </div>
                                       </div>
                                     )}
@@ -3918,6 +3918,7 @@ export const TaskDropdownExpanded: React.FC<{
   const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
   const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
   const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
 
   const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
     const nextChecklists = legacySubtasksChecklist
@@ -4221,6 +4222,11 @@ export const TaskDropdownExpanded: React.FC<{
             <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
               <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
             </div>
+            {allChecklistsDone && (
+              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                All checklists are done ✓
+              </div>
+            )}
             {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
             <DragDropContext onDragEnd={handleDropdownReorder}>
               <Droppable droppableId={`dropdown-checklist-lists-${task.id}`} type="checklistList">
@@ -4655,6 +4661,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
   const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
   const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
 
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
 
@@ -5251,6 +5258,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
                 <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
               </div>
+              {allChecklistsDone && (
+                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                  All checklists are done ✓
+                </div>
+              )}
               {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
               <DragDropContext onDragEnd={handleFullViewReorder}>
                 <Droppable droppableId="fullview-checklist-lists" type="checklistList">

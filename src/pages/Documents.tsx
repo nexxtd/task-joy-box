@@ -8,6 +8,7 @@ import {
   FilePlus, Upload, Outdent, Indent, Heading1, Heading2, Heading3, Highlighter, Type
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import ComingSoon from '@/components/shared/ComingSoon';
 
 interface DocumentItem {
   id: number;
@@ -57,6 +58,20 @@ const FONT_SIZES = [
 const GROUP_COLORS = ['hsl(var(--primary))', '#f97316', '#8b5cf6', '#10b981', '#ef4444'];
 
 const Documents: React.FC = () => {
+  return (
+    <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+      <div className="max-w-lg">
+        <ComingSoon
+          title="Documents"
+          description="Create, edit and organize rich documents with inline images, formatting and task-linked files. A full document workspace is coming soon."
+          onNotify={() => (window.location.href = '/pricing')}
+        />
+      </div>
+    </div>
+  );
+};
+
+const DocumentsInternal: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 

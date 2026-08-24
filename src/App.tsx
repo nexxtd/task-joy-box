@@ -46,9 +46,12 @@ const AppearanceSync = () => {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
     (async () => {
       try {
-        const res = await fetch("/api/settings", { credentials: "include" });
+        const res = await fetch("/api/settings", { credentials: "include", signal: ctrl.signal });
+        clearTimeout(tid);
         if (!res.ok || cancelled) return;
         const data = await res.json();
         const { hex, hsl } = normalizeAccent(data.accentColor, data.accentHsl);
@@ -60,10 +63,10 @@ const AppearanceSync = () => {
           localStorage.setItem("font", data.fontFamily);
         }
       } catch {
-        // Ignore — CSS defaults stay in place until the user saves settings.
+        clearTimeout(tid);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(tid); };
   }, [user]);
 
   return null;
@@ -130,17 +133,20 @@ function ProtectedRoutes() {
 
   useEffect(() => {
     let cancelled = false;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
     (async () => {
       try {
-        const res = await fetch("/api/status");
+        const res = await fetch("/api/status", { signal: ctrl.signal });
+        clearTimeout(tid);
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled) setMaintenance(data);
       } catch {
-        // Ignore — the app stays available if the status endpoint fails.
+        clearTimeout(tid);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(tid); };
   }, []);
 
   if (loading) {
@@ -195,7 +201,7 @@ function ProtectedRoutes() {
                 <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
               </Route>
               <Route path="/whiteboard/:id" element={<Suspense fallback={<PageLoader />}><WhiteboardPage /></Suspense>} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
             </Routes>
           </HabitsProvider>
         </GoalsProvider>

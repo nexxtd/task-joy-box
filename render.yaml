@@ -22,6 +22,8 @@ services:
         value: https://task-joy-box.onrender.com
       - key: BACKEND_URL
         value: https://task-joy-box.onrender.com
+      - key: ADMIN_EMAILS
+        value: evansanders.1000@gmail.com,orelyehuda1212@gmail.com
       - key: PORT
         value: 10000
       - key: AI_MODEL

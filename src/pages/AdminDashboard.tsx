@@ -11,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import TicketConversation from '@/components/TicketConversation';
 import UserDetailView from '@/components/UserDetailView';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AdminStats {
   summary: {
@@ -857,8 +858,8 @@ if (loading && !stats) {
           onDragStart={() => handleDragStart({ kind: 'coupon', coupon })}
           onDragOver={(e) => handleDragOver(e, { kind: 'coupon', coupon })}
           onDragEnd={handleDragEnd}
-          className={`flex items-center gap-3 p-4 bg-card border rounded-xl transition-all group ${
-            isExpanded ? 'border-primary shadow-md' : 'border-border hover:border-primary/30'
+          className={`flex items-center gap-3 p-4 bg-card border rounded-2xl transition-all group ${
+            isExpanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-border'
           } ${dragRef.current?.kind === 'coupon' && dragRef.current.id === coupon.id ? 'opacity-50' : ''}`}
         >
           <div className="w-6 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
@@ -868,11 +869,11 @@ if (loading && !stats) {
               <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
             </svg>
           </div>
-          <span className="font-black text-sm tracking-wider">{coupon.code}</span>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-muted">
+          <span className="font-semibold text-sm tracking-wide">{coupon.code}</span>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-muted">
             {coupon.usedCount} / {coupon.maxUses || '∞'}
           </span>
-          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
             isExpired ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'
           }`}>
             {isExpired ? 'Expired' : 'Active'}
@@ -883,7 +884,7 @@ if (loading && !stats) {
           <div className="flex-1" />
           <button
             onClick={() => setEditingCoupon(coupon)}
-            className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            className="px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
           >
             Edit
           </button>
@@ -895,39 +896,39 @@ if (loading && !stats) {
           </button>
         </div>
         {isExpanded && (
-          <div className="ml-12 p-4 bg-muted/30 border border-border rounded-b-xl -mt-1 mb-2 animate-in fade-in duration-200">
+          <div className="ml-8 p-4 bg-muted/30 border border-border rounded-2xl -mt-1 mb-2 animate-in fade-in duration-200">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground text-xs">Start Date</span>
-                <p className="font-bold">{coupon.startDate ? format(new Date(coupon.startDate), 'MMM dd, yyyy') : 'No start date'}</p>
+                <p className="font-medium">{coupon.startDate ? format(new Date(coupon.startDate), 'MMM dd, yyyy') : 'No start date'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Expiry Date</span>
-                <p className="font-bold">{coupon.expiresAt ? format(new Date(coupon.expiresAt), 'MMM dd, yyyy') : 'Never'}</p>
+                <p className="font-medium">{coupon.expiresAt ? format(new Date(coupon.expiresAt), 'MMM dd, yyyy') : 'Never'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Discount</span>
-                <p className="font-bold">{coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`}</p>
+                <p className="font-medium">{coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Usage Limit</span>
-                <p className="font-bold">{coupon.maxUses || 'Unlimited'}</p>
+                <p className="font-medium">{coupon.maxUses || 'Unlimited'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">One Time Per User</span>
-                <p className="font-bold">{coupon.oneTimePerUser ? 'Yes' : 'No'}</p>
+                <p className="font-medium">{coupon.oneTimePerUser ? 'Yes' : 'No'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Restricted to Plan</span>
-                <p className="font-bold">{coupon.restrictedToPlan || 'All Plans'}</p>
+                <p className="font-medium">{coupon.restrictedToPlan || 'All Plans'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Restricted to Email</span>
-                <p className="font-bold">{coupon.restrictedToEmail || 'Public'}</p>
+                <p className="font-medium">{coupon.restrictedToEmail || 'Public'}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Group</span>
-                <p className="font-bold">{couponGroups.find(g => g.id === coupon.groupId)?.name || 'No group'}</p>
+                <p className="font-medium">{couponGroups.find(g => g.id === coupon.groupId)?.name || 'No group'}</p>
               </div>
             </div>
           </div>
@@ -948,8 +949,8 @@ if (loading && !stats) {
           onDragOver={(e) => handleDragOver(e, item)}
           onDragEnd={handleDragEnd}
           onClick={() => openEditGroup(group)}
-          className={`flex items-center gap-3 p-4 bg-card border rounded-xl transition-all group cursor-pointer select-none ${
-            expanded ? 'border-primary/40 shadow-md' : 'border-border hover:border-primary/30'
+          className={`flex items-center gap-3 p-4 bg-card border rounded-2xl transition-all group cursor-pointer select-none ${
+            expanded ? 'border-primary/30 shadow-sm' : 'border-border hover:border-border'
           } ${dragRef.current?.kind === 'group' && dragRef.current.id === group.id ? 'opacity-50' : ''}`}
         >
           <div className="w-6 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
@@ -961,11 +962,11 @@ if (loading && !stats) {
           </div>
           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color || '#6b7280' }} />
           <Icon className="w-4 h-4 text-muted-foreground" />
-          <span className="font-black text-sm">{group.name}</span>
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-muted">
+          <span className="font-semibold text-sm">{group.name}</span>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-muted">
             {gCoupons.length} coupon{gCoupons.length === 1 ? '' : 's'}
           </span>
-          <span className="text-[10px] text-muted-foreground italic hidden md:inline">Click to rename or recolor</span>
+          <span className="text-[10px] text-muted-foreground hidden md:inline">Click to rename or recolor</span>
           <div className="flex-1" />
           <button
             onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }}
@@ -976,7 +977,7 @@ if (loading && !stats) {
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); openEditGroup(group); }}
-            className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+            className="px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
           >
             Edit
           </button>
@@ -993,7 +994,7 @@ if (loading && !stats) {
         {expanded && (
           <div className="ml-8 space-y-2 border-l-2 border-border/40 pl-4">
             {gCoupons.length === 0 && (
-              <p className="text-xs text-muted-foreground italic py-1 px-2">No coupons in this group yet - drag one here, or pick the group when creating a coupon.</p>
+              <p className="text-xs text-muted-foreground py-1 px-2">No coupons in this group yet — drag one here, or pick the group when creating a coupon.</p>
             )}
             {gCoupons.map(cup => renderCouponRow(cup))}
           </div>
@@ -1003,23 +1004,25 @@ if (loading && !stats) {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background/50">
-      {/* Header - aligned with the rest of the app (h-16, inline with the MyPlanner brand row) */}
-      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between flex-shrink-0">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
+      <header className="px-4 sm:px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between flex-shrink-0 gap-3 min-w-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <ShieldCheck className="w-4 h-4 text-primary" />
           </div>
-          <h1 className="text-lg font-bold text-foreground whitespace-nowrap">Admin Center</h1>
+          <div className="min-w-0">
+            <h1 className="text-base font-bold text-foreground whitespace-nowrap">Admin Center</h1>
+            <p className="text-xs text-muted-foreground hidden sm:block">Manage your workspace and platform settings</p>
+          </div>
         </div>
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-xl flex-shrink-0">
+        <div className="flex items-center gap-1 bg-muted p-1 rounded-xl flex-shrink-0 overflow-x-auto scrollbar-none max-w-[60vw] sm:max-w-none">
           {(['overview', 'coupons', 'users', 'tickets', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm ${
+              className={`px-3 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm font-medium ${
                 activeTab === tab
-                  ? 'bg-background text-foreground shadow-sm shadow-black/5'
+                  ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -1032,72 +1035,117 @@ if (loading && !stats) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 overscroll-contain" style={{ scrollbarGutter: 'stable' }}>
+        <div className="max-w-5xl mx-auto w-full min-w-0 space-y-6">
         {activeTab === 'overview' && (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                { label: 'Total Earnings', value: `$${stats?.summary.totalEarnings?.toLocaleString() ?? '0'}`, icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-                { label: 'Revenue This Month', value: `$${stats?.summary.revenueThisMonth?.toLocaleString() ?? '0'}`, icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-500/10' },
-                { label: 'Total Users', value: stats?.summary.totalUsers?.toLocaleString() ?? '0', icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                { label: 'New Users (7d)', value: `+${stats?.summary.newUsersThisWeek ?? 0}`, icon: User, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
-                { label: 'Active Subscriptions', value: stats?.summary.activeSubscriptions ?? 0, icon: CreditCard, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-                { label: 'Active Users (7d)', value: stats?.summary.activeUsers7d ?? 0, icon: Activity, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-                { label: 'Coupons Redeemed', value: stats?.summary.totalCouponsUsed ?? 0, icon: Ticket, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-                { label: 'Open Tickets', value: stats?.summary.openTickets ?? 0, icon: MessageSquare, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-              ].map((stat, i) => (
-                <div key={i} className="glass card-hover-effect rounded-3xl p-6 border-white/10 dark:border-white/5 shadow-xl shadow-black/5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-3 rounded-2xl ${stat.bg}`}>
-                      <stat.icon className={`w-6 h-6 ${stat.color}`} />
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {loading ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="rounded-2xl bg-card border border-border p-5">
+                      <Skeleton className="w-9 h-9 rounded-xl mb-3" />
+                      <Skeleton className="h-3 w-20 mb-2" />
+                      <Skeleton className="h-7 w-24" />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="rounded-2xl bg-card border border-border p-6 lg:col-span-2">
+                    <Skeleton className="h-5 w-40 mb-6" />
+                    <div className="space-y-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="flex gap-4">
+                          <Skeleton className="h-10 flex-1" />
+                          <Skeleton className="h-10 w-20" />
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                  <h3 className="text-3xl font-bold mt-1">{stat.value}</h3>
+                  <div className="space-y-4">
+                    <div className="rounded-2xl bg-card border border-border p-6">
+                      <Skeleton className="h-5 w-32 mb-4" />
+                      <div className="space-y-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton key={i} className="h-10 w-full" />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl bg-card border border-border p-6">
+                      <Skeleton className="h-5 w-28 mb-4" />
+                      <div className="space-y-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton key={i} className="h-8 w-full" />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Earnings', value: `$${stats?.summary.totalEarnings?.toLocaleString() ?? '0'}`, icon: DollarSign, accent: 'label-green' },
+                { label: 'Revenue This Month', value: `$${stats?.summary.revenueThisMonth?.toLocaleString() ?? '0'}`, icon: TrendingUp, accent: 'label-green' },
+                { label: 'Total Users', value: stats?.summary.totalUsers?.toLocaleString() ?? '0', icon: Users, accent: 'label-blue' },
+                { label: 'New Users (7d)', value: `+${stats?.summary.newUsersThisWeek ?? 0}`, icon: User, accent: 'label-blue' },
+                { label: 'Active Subscriptions', value: stats?.summary.activeSubscriptions ?? 0, icon: CreditCard, accent: 'label-purple' },
+                { label: 'Active Users (7d)', value: stats?.summary.activeUsers7d ?? 0, icon: Activity, accent: 'label-purple' },
+                { label: 'Coupons Redeemed', value: stats?.summary.totalCouponsUsed ?? 0, icon: Ticket, accent: 'label-orange' },
+                { label: 'Open Tickets', value: stats?.summary.openTickets ?? 0, icon: MessageSquare, accent: 'label-red' },
+              ].map((stat, i) => (
+                <div key={i} className="rounded-2xl bg-card border border-border p-5">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
+                    <stat.icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
+                  </div>
+                  <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+                  <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="glass rounded-3xl p-8 border-white/10 dark:border-white/5 shadow-xl shadow-black/5 lg:col-span-2">
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Recent Transactions
-                </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="rounded-2xl bg-card border border-border overflow-hidden lg:col-span-2">
+                <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--label-blue) / 0.12)' }}>
+                    <Calendar className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-blue))' }} />
+                  </div>
+                  <h2 className="text-sm font-bold">Recent Transactions</h2>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-muted-foreground border-b border-white/5">
-                        <th className="pb-4 font-medium italic">User</th>
-                        <th className="pb-4 font-medium italic">Plan</th>
-                        <th className="pb-4 font-medium italic">Amount</th>
-                        <th className="pb-4 font-medium italic">Status</th>
-                        <th className="pb-4 font-medium italic">Date</th>
+                      <tr className="text-muted-foreground border-b border-border bg-muted/20">
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">User</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Plan</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Amount</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Status</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Date</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-border">
                       {stats?.recentTransactions?.map((tx: any) => (
-                        <tr key={tx.id} className="group hover:bg-white/5 transition-colors">
-                          <td className="py-4">
-                            <p className="font-medium">{tx.userName || `User #${tx.userId}`}</p>
+                        <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-6 py-3">
+                            <p className="text-sm font-medium">{tx.userName || `User #${tx.userId}`}</p>
                             <p className="text-xs text-muted-foreground">{tx.userEmail}</p>
                           </td>
-                          <td className="py-4 text-muted-foreground capitalize">{tx.plan || 'free'}</td>
-                          <td className="py-4 text-emerald-500 font-bold">${(tx.amount / 100).toFixed(2)}</td>
-                          <td className="py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                              tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-yellow-500/10 text-yellow-500'
+                          <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{tx.plan || 'free'}</td>
+                          <td className="px-4 py-3 text-sm font-semibold" style={{ color: 'hsl(var(--label-green))' }}>${(tx.amount / 100).toFixed(2)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                              tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
                             }`}>
                               {tx.status}
                             </span>
                           </td>
-                          <td className="py-4 text-muted-foreground">{format(new Date(tx.createdAt), 'MMM dd, HH:mm')}</td>
+                          <td className="px-6 py-3 text-sm text-muted-foreground">{format(new Date(tx.createdAt), 'MMM dd, HH:mm')}</td>
                         </tr>
                       ))}
                       {(!stats?.recentTransactions || stats.recentTransactions.length === 0) && (
                         <tr>
-                          <td colSpan={5} className="py-12 text-center text-muted-foreground italic">
+                          <td colSpan={5} className="px-6 py-12 text-center text-sm text-muted-foreground">
                             No transactions found yet.
                           </td>
                         </tr>
@@ -1107,76 +1155,89 @@ if (loading && !stats) {
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <div className="glass rounded-3xl p-8 border-white/10 dark:border-white/5 shadow-xl shadow-black/5">
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    Recent Registrations
-                  </h2>
+              <div className="space-y-4">
+                <div className="rounded-2xl bg-card border border-border p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                      <Sparkles className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-purple))' }} />
+                    </div>
+                    <h2 className="text-sm font-bold">Recent Registrations</h2>
+                  </div>
                   <div className="space-y-3">
                     {stats?.recentRegistrations?.map((u: any) => (
-                      <div key={u.id} className="flex items-center justify-between gap-2">
+                      <div key={u.id} className="flex items-center justify-between gap-2 py-2 border-b border-border/50 last:border-0">
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{u.name}</p>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{u.tier}</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{u.tier}</span>
                           <p className="text-[10px] text-muted-foreground">{format(new Date(u.createdAt), 'MMM d')}</p>
                         </div>
                       </div>
                     ))}
                     {(!stats?.recentRegistrations || stats.recentRegistrations.length === 0) && (
-                      <p className="text-sm text-muted-foreground italic">No registrations yet.</p>
+                      <p className="text-sm text-muted-foreground">No registrations yet.</p>
                     )}
                   </div>
                 </div>
-                <div className="glass rounded-3xl p-8 border-white/10 dark:border-white/5 shadow-xl shadow-black/5">
-                  <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <Ticket className="w-4 h-4 text-primary" />
-                    Top Coupons
-                  </h2>
-                  <div className="space-y-3">
+                <div className="rounded-2xl bg-card border border-border p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--label-orange) / 0.12)' }}>
+                      <Ticket className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-orange))' }} />
+                    </div>
+                    <h2 className="text-sm font-bold">Top Coupons</h2>
+                  </div>
+                  <div className="space-y-2">
                     {stats?.topCoupons?.map((c: any) => (
-                      <div key={c.id} className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold">{c.code}</span>
+                      <div key={c.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                        <span className="font-mono text-xs font-semibold">{c.code}</span>
                         <span className="text-xs text-muted-foreground">
                           {c.discountType === 'percentage' ? `${c.discountValue}%` : `$${c.discountValue}`} · {c.usedCount}/{c.maxUses || '∞'} used
                         </span>
                       </div>
                     ))}
                     {(!stats?.topCoupons || stats.topCoupons.length === 0) && (
-                      <p className="text-sm text-muted-foreground italic">No coupons yet.</p>
+                      <p className="text-sm text-muted-foreground">No coupons yet.</p>
                     )}
                   </div>
                 </div>
               </div>
             </div>
+              </>
+            )}
           </div>
         )}
 
         {activeTab === 'coupons' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-wrap justify-between items-center gap-3 bg-primary/5 p-6 rounded-3xl border border-primary/10">
-              <div>
-                <h2 className="text-2xl font-black">Promotions & Discounts</h2>
-                <p className="text-sm text-muted-foreground">Create and manage active coupon codes for your users. Drag to reorder — coupons stay with their group.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => { setGroupForm({ name: '', color: GROUP_COLORS[0], icon: 'tag' }); setGroupModal({ mode: 'add' }); }}
-                  className="bg-card border border-primary/30 text-primary px-5 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-primary/10 active:scale-95 transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add Group
-                </button>
-                <button
-                  onClick={() => setIsAddingCoupon(true)}
-                  className="bg-primary text-primary-foreground px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                  New Coupon
-                </button>
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="rounded-2xl bg-card border border-border p-6">
+              <div className="flex flex-wrap justify-between items-start gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-orange) / 0.12)' }}>
+                    <Ticket className="w-4 h-4" style={{ color: 'hsl(var(--label-orange))' }} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">Promotions & Discounts</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Create and manage active coupon codes. Drag to reorder — coupons stay with their group.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setGroupForm({ name: '', color: GROUP_COLORS[0], icon: 'tag' }); setGroupModal({ mode: 'add' }); }}
+                    className="bg-card border border-border text-foreground px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-muted transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Group
+                  </button>
+                  <button
+                    onClick={() => setIsAddingCoupon(true)}
+                    className="bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-primary/90 transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Coupon
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1201,27 +1262,35 @@ if (loading && !stats) {
                   </button>
                 ))}
               </div>
-              <span className="text-xs text-muted-foreground italic">Drag group headers and coupons to reorder. Dragging a group moves its coupons with it.</span>
+              <span className="text-xs text-muted-foreground">Drag group headers and coupons to reorder.</span>
             </div>
 
-            <div className="space-y-4">
-              {layout.map(item =>
-                item.kind === 'group' ? renderGroupRow(item) : renderCouponRow(item.coupon)
-              )}
-              {layout.length === 0 && (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Ticket className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">No coupons yet. Create your first coupon to get started.</p>
-                </div>
+            <div className="space-y-3">
+              {loading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                ))
+              ) : (
+                <>
+                  {layout.map(item =>
+                    item.kind === 'group' ? renderGroupRow(item) : renderCouponRow(item.coupon)
+                  )}
+                  {layout.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Ticket className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">No coupons yet. Create your first coupon to get started.</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
         )}
 
 {activeTab === 'users' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="animate-in fade-in duration-300">
             {activeUserView ? (
-              <div className="glass rounded-[2rem] overflow-hidden border-white/10 shadow-2xl">
+              <div className="rounded-2xl bg-card border border-border overflow-hidden">
                 <div className="h-[calc(100vh-160px)] min-h-[420px]">
                   <UserDetailView
                     details={activeUserView}
@@ -1231,56 +1300,71 @@ if (loading && !stats) {
                 </div>
               </div>
             ) : (
-              <div className="glass rounded-[2rem] overflow-hidden border-white/10 shadow-2xl">
-                <div className="p-8 bg-primary/5 border-b border-white/5">
-                  <h2 className="text-2xl font-black italic flex items-center gap-2">
-                    <Users className="w-6 h-6 text-primary" />
-                    User Management
-                  </h2>
-                  <p className="text-muted-foreground">Monitor your users and manually adjust their status or access levels. Click a name for the full profile.</p>
+              <div className="rounded-2xl bg-card border border-border overflow-hidden">
+                <div className="px-6 py-5 border-b border-border flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-blue) / 0.12)' }}>
+                    <Users className="w-4 h-4" style={{ color: 'hsl(var(--label-blue))' }} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">User Management</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Monitor users and adjust status or access levels. Click a name for the full profile.</p>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-muted-foreground border-b border-white/5 bg-white/5">
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest pl-8">Name</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest">Email</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest text-center">Tier</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest text-center">Status</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest">Joined</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest">Last Active</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest hidden lg:table-cell">Location</th>
-                        <th className="p-4 font-bold uppercase text-xs italic tracking-widest text-right pr-8">Actions</th>
+                      <tr className="text-muted-foreground border-b border-border bg-muted/20">
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide">Name</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Email</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-center">Tier</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-center">Status</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Joined</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide">Last Active</th>
+                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide hidden lg:table-cell">Location</th>
+                        <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {users.map((u) => (
-                        <tr key={u.id} className="hover:bg-white/5 transition-colors">
-                          <td className="p-4 pl-8 font-bold">
-                            <button onClick={() => handleViewUserData(u.id, true)} className="hover:text-primary transition-colors flex items-center gap-1">
+                    <tbody className="divide-y divide-border">
+                      {loading ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <tr key={i}>
+                            <td className="px-6 py-4"><Skeleton className="h-4 w-24" /></td>
+                            <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
+                            <td className="px-4 py-4"><Skeleton className="h-5 w-16 mx-auto" /></td>
+                            <td className="px-4 py-4"><Skeleton className="h-5 w-16 mx-auto" /></td>
+                            <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                            <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                            <td className="px-4 py-4 hidden lg:table-cell"><Skeleton className="h-4 w-16" /></td>
+                            <td className="px-6 py-4"><Skeleton className="h-7 w-20 ml-auto" /></td>
+                          </tr>
+                        ))
+                      ) : users.map((u) => (
+                        <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-6 py-3 font-medium">
+                            <button onClick={() => handleViewUserData(u.id, true)} className="hover:text-primary transition-colors flex items-center gap-1 text-sm">
                               {u.name || '—'}
                               <Eye className="w-3 h-3 opacity-50" />
                             </button>
                             {u.location && <p className="text-xs text-muted-foreground font-normal lg:hidden">{u.location}</p>}
                           </td>
-                          <td className="p-4 text-muted-foreground">{u.email}</td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                              u.tier === 'premium' ? 'bg-amber-500/10 text-amber-500' :
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{u.email}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+                              u.tier === 'premium' ? 'bg-amber-500/10 text-amber-600' :
                               u.tier === 'pro' ? 'bg-primary/10 text-primary' :
                               'bg-muted text-muted-foreground'
                             }`}>
                               {u.tier === 'premium' ? 'Premium' : u.tier === 'pro' ? 'Pro' : u.tier}
                             </span>
                           </td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                              u.status === 'active' || u.status === 'trialing' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                          <td className="px-4 py-3 text-center">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-semibold ${
+                              u.status === 'active' || u.status === 'trialing' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-500'
                             }`}>
                               {u.status}
                             </span>
                           </td>
-                          <td className="p-4 text-muted-foreground whitespace-nowrap">
+                          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
                             {u.createdAt ? format(new Date(u.createdAt), 'MMM dd, yyyy') : '—'}
                           </td>
                           <td className="p-4 text-muted-foreground whitespace-nowrap">
@@ -1296,7 +1380,7 @@ if (loading && !stats) {
                                 View
                               </button>
                               <Select value={u.tier} onValueChange={(value) => handleUpdateUserTier(u.id, value)}>
-                                <SelectTrigger className="bg-background border border-white/10 rounded-lg px-2 py-1 text-xs font-bold h-9">
+                                <SelectTrigger className="bg-background border border-border rounded-lg px-2 py-1 text-xs font-semibold h-8">
                                   <SelectValue placeholder="Select tier" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1318,9 +1402,14 @@ if (loading && !stats) {
         )}
 
 {activeTab === 'tickets' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <h2 className="text-xl font-bold">Support Tickets ({adminTickets.length})</h2>
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="rounded-2xl bg-card border border-border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-red) / 0.12)' }}>
+                  <MessageSquare className="w-4 h-4" style={{ color: 'hsl(var(--label-red))' }} />
+                </div>
+                <h2 className="text-base font-bold">Support Tickets ({adminTickets.length})</h2>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Select value={ticketTypeFilter} onValueChange={setTicketTypeFilter}>
                   <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
@@ -1359,13 +1448,19 @@ if (loading && !stats) {
                 <button onClick={fetchTickets} className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 bg-muted rounded-lg transition-colors">Refresh</button>
               </div>
             </div>
-            {adminTickets.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            {loading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : adminTickets.length === 0 ? (
+              <div className="rounded-2xl bg-card border border-border py-16 text-center text-muted-foreground">
+                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">No tickets submitted yet.</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {adminTickets
                   .filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
                   .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter)
@@ -2055,33 +2150,55 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
-          <div>
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <Settings className="w-5 h-5 text-primary" />
-              System Settings
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              These settings are enforced by the server in real time — prices, usage limits, signup rules
-              and maintenance mode all take effect within seconds of saving.
-            </p>
+        <div className="space-y-6 animate-in fade-in duration-300 pb-8 max-w-3xl mx-auto w-full min-w-0 overflow-y-auto overscroll-contain">
+          <div className="rounded-2xl bg-card border border-border p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                <Settings className="w-4 h-4" style={{ color: 'hsl(var(--label-purple))' }} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold">System Settings</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  These settings are enforced by the server in real time — prices, usage limits, signup rules
+                  and maintenance mode all take effect within seconds of saving.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-6">
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-2xl bg-card border border-border p-6">
+                  <Skeleton className="h-5 w-32 mb-4" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <div className="space-y-4">
             {SETTINGS_GROUPS.map(group => {
               const GroupIcon = group.icon;
+              const accentMap: Record<string, string> = {
+                'platform-access': 'label-red',
+                'pricing': 'label-green',
+                'usage-limits': 'label-orange',
+                'notifications': 'label-blue',
+                'support': 'label-purple',
+              };
+              const accent = accentMap[group.id] || 'label-purple';
               return (
                 <section key={group.id} className="space-y-3">
                   <div className="flex items-center gap-3 px-1">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-                      <GroupIcon className="h-4 w-4" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
+                      <GroupIcon className="h-4 w-4" style={{ color: `hsl(var(--${accent}))` }} />
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-sm font-bold text-foreground">{group.label}</h3>
                       <p className="text-xs text-muted-foreground">{group.description}</p>
                     </div>
                   </div>
-                  <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-xl shadow-black/5">
+                  <div className="overflow-hidden rounded-2xl border border-border bg-card">
                     <div className="divide-y divide-border">
                       {group.rows.map(row => {
                         const current = settings[row.key] ?? row.defaultValue;
@@ -2150,6 +2267,7 @@ if (loading && !stats) {
               );
             })}
           </div>
+          )}
         </div>
       )}
     </div>

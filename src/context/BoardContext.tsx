@@ -45,7 +45,10 @@ function getBoardKey(userId: number) {
 
 async function loadBoard(userId: number): Promise<Board> {
   try {
-    const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch('/api/boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+    clearTimeout(tid);
     if (res.ok) {
       const data = await res.json();
       if (data.board) {
@@ -67,28 +70,27 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
     // Always save to localStorage first for immediate persistence
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
 
-    // Sync to server with retry logic
+    const ac = new AbortController();
+    const at = setTimeout(() => ac.abort(), 10000);
     const response = await fetch('/api/boards/snapshot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: ac.signal,
       body: JSON.stringify({ boardData: board }),
     });
-
+    clearTimeout(at);
     if (!response.ok) {
+      if (response.status === 403 || response.status === 400) return false;
       throw new Error(`Server error: ${response.status}`);
     }
-
     return true;
   } catch (err) {
     console.error('Failed to save board to server:', err);
-
-    // Retry up to 3 times with exponential backoff
     if (retryCount < 3) {
       await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
       return saveBoard(userId, board, retryCount + 1);
     }
-
     return false;
   }
 }
@@ -213,7 +215,8 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (document.visibilityState === 'visible') {
         // Refresh board from server when returning to the app
         try {
-          const res = await fetch('/api/boards/snapshot', { credentials: 'include' });
+          const vc = new AbortController(); setTimeout(() => vc.abort(), 8000);
+          const res = await fetch('/api/boards/snapshot', { credentials: 'include', signal: vc.signal });
           if (res.ok) {
             const data = await res.json();
             if (data.board) {

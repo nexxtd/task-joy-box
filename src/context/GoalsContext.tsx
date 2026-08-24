@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem } from '@/types/board';
 import { emptyBoard } from '@/data/initialBoard';
 import { useAuth } from '@/context/AuthContext';
@@ -44,16 +44,19 @@ function getBoardKey(userId: number) {
 
 async function loadBoard(userId: number): Promise<Board> {
   try {
-    const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include' });
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+    clearTimeout(tid);
     if (res.ok) {
       const data = await res.json();
-      if (data.board) {
-        localStorage.setItem(getBoardKey(userId), JSON.stringify(data.board));
-        return data.board;
+      const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+      if (board) {
+        localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+        return board as Board;
       }
     }
   } catch {}
-  // Fallback to localStorage
   try {
     const saved = localStorage.getItem(getBoardKey(userId));
     if (saved) return JSON.parse(saved);
@@ -67,14 +70,19 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
 
     // Sync to server with retry logic
+    const ac = new AbortController();
+    const at = setTimeout(() => ac.abort(), 10000);
     const response = await fetch('/api/goal-boards/snapshot', {
+      signal: ac.signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ boardData: board }),
     });
 
+    clearTimeout(at);
     if (!response.ok) {
+      if (response.status === 403 || response.status === 400) return false;
       throw new Error(`Server error: ${response.status}`);
     }
 
@@ -104,6 +112,8 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const { user } = useAuth();
   const [board, setBoard] = useState<Board>({ ...emptyBoard });
   const [loading, setLoading] = useState(true);
+  const boardRef = useRef<Board>({ ...emptyBoard });
+  useEffect(() => { boardRef.current = board; }, [board]);
 
   // Track sync status for cross-device sync
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -154,37 +164,28 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [user?.id, loading, board?.id]);
 
-  // Periodic sync to server (every 30 seconds) for cross-device consistency
   useEffect(() => {
     if (!user) return;
-
     const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, board);
-      if (success) {
-        setLastSyncTime(new Date());
-      }
-    }, 30000); // Sync every 30 seconds
-
+      const success = await saveBoard(user.id, boardRef.current);
+      if (success) setLastSyncTime(new Date());
+    }, 30000);
     return () => clearInterval(syncInterval);
-  }, [user?.id, board]);
+  }, [user?.id]);
 
-  // Sync when window regains focus (user returns from another device/tab)
   useEffect(() => {
     if (!user) return;
-
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        // Refresh board from server when returning to the app
         try {
-          const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include' });
+          const vc = new AbortController(); setTimeout(() => vc.abort(), 8000);
+          const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: vc.signal });
           if (res.ok) {
             const data = await res.json();
-            if (data.board) {
-              // Only update if server data is newer or different
-              const serverBoard = data.board;
-              const localBoardStr = JSON.stringify(board);
+            const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+            if (serverBoard) {
+              const localBoardStr = JSON.stringify(boardRef.current);
               const serverBoardStr = JSON.stringify(serverBoard);
-
               if (serverBoardStr !== localBoardStr) {
                 setBoard(serverBoard);
                 localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
@@ -197,10 +198,9 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user?.id, board]);
+  }, [user?.id]);
 
   const logActivity = useCallback((taskId: string, text: string) => {
     setBoard(prev => ({

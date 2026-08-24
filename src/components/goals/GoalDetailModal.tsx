@@ -159,10 +159,10 @@ const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
               <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Sub-goals</label>
               <div className="space-y-1">
                 {goal.subGoals.map((sg, i) => (
-                  <div key={sg.id} className="flex items-center gap-2 text-xs bg-muted/30 border border-border rounded-lg px-3 py-1.5">
+                  <div key={sg.id} className="flex items-center gap-2 text-xs bg-muted/30 border border-border rounded-lg px-3 py-1.5 group">
                     <input type="checkbox" checked={sg.completed} onChange={() => onSubGoalToggle(sg.id)} className="rounded" />
                     <span className="flex-1 text-foreground">{sg.title}</span>
-                    <button onClick={() => onFieldChange('subGoals', goal.subGoals.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3 h-3" /></button>
+                    <button onClick={() => onFieldChange('subGoals', goal.subGoals.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 ))}
               </div>

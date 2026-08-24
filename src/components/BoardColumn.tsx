@@ -766,9 +766,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Attachments</label>
                 <div className="flex flex-wrap gap-1 mb-2">
                   {newFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-primary/5 px-2 py-1 rounded-lg border border-primary/20 text-[9px] font-medium text-primary uppercase">
+                    <div key={i} className="flex items-center gap-2 bg-primary/5 px-2 py-1 rounded-lg border border-primary/20 text-[9px] font-medium text-primary uppercase group">
                       {f.name}
-                      <button onClick={() => setNewFiles(newFiles.filter((_, idx) => idx !== i))} className="hover:text-destructive">
+                      <button onClick={() => setNewFiles(newFiles.filter((_, idx) => idx !== i))} className="hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
                         <Trash2 className="w-2.5 h-2.5" />
                       </button>
                     </div>

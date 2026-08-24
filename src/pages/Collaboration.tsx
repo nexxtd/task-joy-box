@@ -3,6 +3,7 @@ import { Users, UserPlus, Copy, Plus, Crown, Loader2, MessageCircle, Building2, 
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ComingSoon from '@/components/shared/ComingSoon';
 
 interface TeamMember {
   id: string;
@@ -499,6 +500,18 @@ const Collaboration: React.FC = () => {
     ...(teams.length > 0 ? [{ id: 'chat' as const, label: 'Team Chat' }] : []), // Only show if user is in a team
     { id: 'join' as const, label: 'Join Workspace' },
   ];
+
+  return (
+    <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+      <div className="max-w-lg">
+        <ComingSoon
+          title="Collaboration"
+          description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
+          onNotify={() => (window.location.href = '/pricing')}
+        />
+      </div>
+    </div>
+  );
 
   if (isLoading) {
     return (
