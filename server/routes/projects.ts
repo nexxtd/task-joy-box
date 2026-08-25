@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { projectMembers, projects, users } from '../../shared/schema.js';
@@ -22,11 +22,11 @@ function getPlanTier(tier?: string | null): 'free' | 'premium' | 'pro' {
 }
 
 async function getProjectMembershipCount(userId: number) {
-  const rows = await db
-    .select({ count: projectMembers.id })
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(projectMembers)
     .where(eq(projectMembers.userId, userId));
-  return rows.length;
+  return row?.count ?? 0;
 }
 
 async function serializeProject(projectId: number) {

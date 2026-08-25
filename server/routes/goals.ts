@@ -13,7 +13,9 @@ const TAG_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5
 async function loadGoalsWithTags(userId: number) {
   const userGoals = await db.select().from(goals).where(eq(goals.userId, userId)).orderBy(desc(goals.updatedAt));
   const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
-  const allAssignments = await db.select().from(goalTagAssignments);
+  const allAssignments = allTags.length > 0
+    ? await db.select().from(goalTagAssignments).where(sql`${goalTagAssignments.tagId} IN ${sql.raw(`(${allTags.map(t => t.id).join(',')})`)}`)
+    : [];
 
   const tagsByGoal = new Map<number, typeof allTags>();
   for (const a of allAssignments) {

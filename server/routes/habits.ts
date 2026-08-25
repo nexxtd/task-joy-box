@@ -38,7 +38,9 @@ function calculateStreak(completedDays: string[]): number {
 async function loadHabitsWithTags(userId: number) {
   const userHabits = await db.select().from(habits).where(eq(habits.userId, userId)).orderBy(desc(habits.updatedAt));
   const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
-  const allAssignments = await db.select().from(habitTagAssignments);
+  const allAssignments = allTags.length > 0
+    ? await db.select().from(habitTagAssignments).where(sql`${habitTagAssignments.tagId} IN ${sql.raw(`(${allTags.map(t => t.id).join(',')})`)}`)
+    : [];
 
   const tagMap = new Map(allAssignments.map(a => [a.habitId, a.tagId]));
   const tagsByHabit = new Map<number, typeof allTags>();

@@ -25,14 +25,13 @@ async function logActivity(userId: number, entityType: string, entityId: number,
 }
 
 async function loadNotesPayload(userId: number) {
-  const [userNotes, userTags, assignments] = await Promise.all([
+  const [userNotes, userTags] = await Promise.all([
     db.select().from(notes).where(eq(notes.userId, userId)).orderBy(desc(notes.pinned), desc(notes.updatedAt), desc(notes.createdAt)),
     db.select().from(tags).where(eq(tags.userId, userId)).orderBy(asc(tags.name)),
-    db.select({
-      noteId: noteTagAssignments.noteId,
-      tagId: noteTagAssignments.tagId,
-    }).from(noteTagAssignments),
   ]);
+  const assignments = userTags.length > 0
+    ? await db.select({ noteId: noteTagAssignments.noteId, tagId: noteTagAssignments.tagId }).from(noteTagAssignments).where(sql`${noteTagAssignments.tagId} IN ${sql.raw(`(${userTags.map(t => t.id).join(',')})`)}`)
+    : [];
 
   const tagsById = new Map(userTags.map(tag => [tag.id, tag]));
   const noteTagMap = new Map<number, Array<{ id: number; name: string; color: string }>>();

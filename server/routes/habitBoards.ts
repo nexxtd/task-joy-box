@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { habitSnapshots, users } from '../../shared/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
@@ -16,12 +16,10 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
       .limit(1);
       
     if (snapshot.length === 0) {
-      return res.json(null);
+      return res.json({ board: null });
     }
-    
-    // Parse the JSON string back to an object
     const boardData = JSON.parse(snapshot[0].snapshot);
-    res.json(boardData);
+    res.json({ board: boardData });
   } catch (error) {
     console.error('Failed to fetch board snapshot:', error);
     res.status(500).json({ error: 'Failed to fetch board snapshot' });
@@ -52,9 +50,7 @@ router.post('/snapshot', requireAuth, async (req: AuthRequest, res: Response) =>
     if (userSnapshots.length > 10) {
       const idsToDelete = userSnapshots.slice(10).map(s => s.id);
       if (idsToDelete.length > 0) {
-        for (const id of idsToDelete) {
-          await db.delete(habitSnapshots).where(eq(habitSnapshots.id, id));
-        }
+        await db.delete(habitSnapshots).where(inArray(habitSnapshots.id, idsToDelete));
       }
     }
       
