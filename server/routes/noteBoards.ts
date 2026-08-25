@@ -18,8 +18,13 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
     if (snapshot.length === 0) {
       return res.json({ board: null });
     }
-    const boardData = JSON.parse(snapshot[0].snapshot);
-    res.json({ board: boardData });
+    try {
+      const boardData = JSON.parse(snapshot[0].snapshot);
+      res.json({ board: boardData });
+    } catch {
+      console.error('Failed to parse note board snapshot');
+      res.json({ board: null });
+    }
   } catch (error) {
     console.error('Failed to fetch board snapshot:', error);
     res.status(500).json({ error: 'Failed to fetch board snapshot' });

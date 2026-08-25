@@ -29,7 +29,7 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
     }
   } catch (error) {
     console.error('Failed to fetch board snapshot:', error);
-    res.status(500).json({ error: 'Failed to fetch board snapshot' });
+    res.json({ board: null });
   }
 });
 

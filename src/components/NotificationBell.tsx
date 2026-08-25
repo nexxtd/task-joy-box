@@ -17,18 +17,23 @@ export const NotificationBell: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const fetchPendings = async () => {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 4000);
     try {
-      const res = await fetch('/api/notifications', { credentials: 'include' });
+      const res = await fetch('/api/notifications', { credentials: 'include', signal: ctrl.signal });
+      clearTimeout(tid);
       if (res.ok) {
         const data = await res.json();
         setPendings(data.pendings || []);
+      } else if (res.status >= 500) {
+        setPendings([]);
       }
-    } catch {}
+    } catch { clearTimeout(tid); }
   };
 
   useEffect(() => {
     fetchPendings();
-    const id = setInterval(fetchPendings, 15000);
+    const id = setInterval(fetchPendings, 30000);
     return () => clearInterval(id);
   }, []);
 

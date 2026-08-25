@@ -40,35 +40,49 @@ async function applyPendingChange(pending: any) {
 }
 
 async function autoApproveExpired(userId: number) {
-  const pendings = await db.select().from(pendingUserChanges).where(and(eq(pendingUserChanges.userId, userId), eq(pendingUserChanges.status, 'pending')));
-  const now = new Date();
-  for (const p of pendings as any[]) {
-    const expires = new Date((p as any).expiresAt);
-    if (expires < now) {
-      await applyPendingChange(p);
-      await db.update(pendingUserChanges).set({ status: 'auto_approved', resolvedAt: new Date().toISOString() as any }).where(eq(pendingUserChanges.id, p.id));
-      await db.insert(userNotifications).values({
-        userId,
-        type: 'change_auto_approved',
-        title: 'Change auto-approved',
-        message: `Your pending ${p.changeType} change was auto-approved after 24 hours.`,
-        data: JSON.stringify({ pendingId: p.id, changeType: p.changeType }),
-        read: false,
-      } as any);
+  try {
+    const pendings = await db.select().from(pendingUserChanges).where(and(eq(pendingUserChanges.userId, userId), eq(pendingUserChanges.status, 'pending')));
+    const now = new Date();
+    for (const p of pendings as any[]) {
+      try {
+        const expires = new Date((p as any).expiresAt);
+        if (expires < now) {
+          await applyPendingChange(p);
+          await db.update(pendingUserChanges).set({ status: 'auto_approved', resolvedAt: new Date().toISOString() as any }).where(eq(pendingUserChanges.id, p.id));
+          await db.insert(userNotifications).values({
+            userId,
+            type: 'change_auto_approved',
+            title: 'Change auto-approved',
+            message: `Your pending ${p.changeType} change was auto-approved after 24 hours.`,
+            data: JSON.stringify({ pendingId: p.id, changeType: p.changeType }),
+            read: false,
+          } as any);
+        }
+      } catch (e) {
+        console.error('autoApprove item failed', p?.id, e);
+      }
     }
+  } catch (e) {
+    console.error('autoApproveExpired failed', e);
   }
 }
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    await autoApproveExpired(userId);
-    const pendings = await db.select().from(pendingUserChanges).where(and(eq(pendingUserChanges.userId, userId), eq(pendingUserChanges.status, 'pending'))).orderBy(desc(pendingUserChanges.createdAt));
-    const notifs = await db.select().from(userNotifications).where(eq(userNotifications.userId, userId)).orderBy(desc(userNotifications.createdAt)).limit(20);
+    try { await autoApproveExpired(userId); } catch {}
+    let pendings: any[] = [];
+    let notifs: any[] = [];
+    try {
+      pendings = await db.select().from(pendingUserChanges).where(and(eq(pendingUserChanges.userId, userId), eq(pendingUserChanges.status, 'pending'))).orderBy(desc(pendingUserChanges.createdAt));
+    } catch (e) { console.error('pendings fetch failed', e); pendings = []; }
+    try {
+      notifs = await db.select().from(userNotifications).where(eq(userNotifications.userId, userId)).orderBy(desc(userNotifications.createdAt)).limit(20);
+    } catch (e) { console.error('notifs fetch failed', e); notifs = []; }
     res.json({ pendings, notifications: notifs });
   } catch (e) {
     console.error('Failed to fetch notifications', e);
-    res.status(500).json({ error: 'Failed to fetch notifications' });
+    res.json({ pendings: [], notifications: [] });
   }
 });
 
