@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import ComingSoon from '@/components/shared/ComingSoon';
+import { useAuth } from '@/context/AuthContext';
+import { useAdminPreview } from '@/hooks/useAdminPreview';
 
 interface DocumentItem {
   id: number;
@@ -58,6 +60,10 @@ const FONT_SIZES = [
 const GROUP_COLORS = ['hsl(var(--primary))', '#f97316', '#8b5cf6', '#10b981', '#ef4444'];
 
 const Documents: React.FC = () => {
+  const { user } = useAuth();
+  const { viewAsUser } = useAdminPreview();
+  const isAdminView = !!user?.isAdmin && !viewAsUser;
+  if (isAdminView) return <DocumentsInternal />;
   return (
     <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
       <div className="max-w-lg">

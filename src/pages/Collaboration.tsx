@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ComingSoon from '@/components/shared/ComingSoon';
+import { useAdminPreview } from '@/hooks/useAdminPreview';
 
 interface TeamMember {
   id: string;
@@ -501,17 +502,21 @@ const Collaboration: React.FC = () => {
     { id: 'join' as const, label: 'Join Workspace' },
   ];
 
-  return (
-    <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
-      <div className="max-w-lg">
-        <ComingSoon
-          title="Collaboration"
-          description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
-          onNotify={() => (window.location.href = '/pricing')}
-        />
+  const { viewAsUser } = useAdminPreview();
+  const isAdminView = !!user?.isAdmin && !viewAsUser;
+  if (!isAdminView) {
+    return (
+      <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+        <div className="max-w-lg">
+          <ComingSoon
+            title="Collaboration"
+            description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
+            onNotify={() => (window.location.href = '/pricing')}
+          />
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   if (isLoading) {
     return (
