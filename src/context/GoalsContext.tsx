@@ -42,51 +42,61 @@ function getBoardKey(userId: number) {
   return `goal_board_${userId}`;
 }
 
-async function loadBoard(userId: number): Promise<Board> {
-  // First, try to get from localStorage
+// Helper function to load from localStorage only
+function loadBoardFromCache(userId: number): Board | null {
   try {
     const cached = localStorage.getItem(getBoardKey(userId));
     if (cached) {
-      try { 
-        const parsed = JSON.parse(cached); 
-        if (parsed?.columns) {
-          // Successfully loaded from cache. We could still initiate a background fetch
-          // for pro users here if needed, but for now, return the cached version.
-          return parsed; 
-        } 
-      } catch (e) {
-        console.error("Error parsing cached board:", e);
-        // If parsing failed, remove the corrupted cache entry
-        localStorage.removeItem(getBoardKey(userId));
-      }
+      const parsed = JSON.parse(cached);
+      if (parsed?.columns) return parsed;
     }
   } catch (e) {
-    console.error("Error accessing localStorage:", e);
+    console.error("Error loading board from cache:", e);
   }
+  return null;
+}
 
-  // If localStorage failed or was empty, attempt network fetch with timeout
+async function loadBoard(userId: number, cachedBoardOnEntry: Board | null): Promise<Board> {
+  // Attempt network fetch with timeout
   try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
     clearTimeout(tid);
+
+    // Check for 403/400 immediately and return cached board if present
+    if (res.status === 403 || res.status === 400) {
+        console.debug("Server responded with 403/400, returning cached board if available.");
+        if (cachedBoardOnEntry) {
+            return cachedBoardOnEntry;
+        }
+        // If no cache and got 403/400, we must return empty board as per policy
+        return { ...emptyBoard };
+    }
+
     if (res.ok) {
       const data = await res.json();
       const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
       if (board) {
-        // Cache the fetched board
+        // Update localStorage cache with fresh data
         localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
         return board as Board;
       }
     }
-  } catch {}
+    // If res.ok is false but status is not 403/400 (e.g., 500), we proceed to fallback
+    console.debug("Server fetch failed with status:", res.status, "attempting cache fallback.");
+    if (cachedBoardOnEntry) {
+      return cachedBoardOnEntry;
+    }
+  } catch (networkError) {
+    console.debug("Network fetch failed or timed out, attempting cache fallback.", networkError);
+    // Network error occurred (including timeout), try cache
+    if (cachedBoardOnEntry) {
+      return cachedBoardOnEntry;
+    }
+  }
   
-  // Final fallback: try localStorage again (in case it was cleared during the try above)
-  // or return empty board if all sources fail.
-  try {
-    const saved = localStorage.getItem(getBoardKey(userId));
-    if (saved) return JSON.parse(saved);
-  } catch {}
+  // Final fallback to empty board if network fails and no cache
   return { ...emptyBoard };
 }
 
@@ -147,26 +157,44 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (user) {
-      setLoading(true);
-      loadBoard(user.id).then(loaded => {
-        if (loaded.columns.length === 0) {
-          loaded = {
-            ...loaded,
-            columns: [
-              { id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' },
-              { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' },
-              { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' },
-            ],
-          };
-          saveBoard(user.id, loaded);
-        }
-        setBoard(loaded);
-        setLoading(false);
-        setLastSyncTime(new Date());
-      }).catch(() => {
-        setBoard({ ...emptyBoard });
-        setLoading(false);
-      });
+      // Stale-while-revalidate: Load from cache first
+      const cachedBoard = loadBoardFromCache(user.id);
+      if (cachedBoard) {
+        setBoard(cachedBoard);
+        setLoading(false); // Stop loading indicator as we have data
+      } else {
+         // If no cache, still go through the loadBoard flow which includes network and emptyBoard fallback
+         setLoading(true);
+         // Pass null as cachedBoardOnEntry since there was no cache initially
+         loadBoard(user.id, null).then(loaded => {
+           setBoard(loaded);
+           setLoading(false);
+           setLastSyncTime(new Date());
+         }).catch(() => {
+           setBoard({ ...emptyBoard });
+           setLoading(false);
+         });
+      }
+
+      // Now, initiate the background refresh from the server
+      // This ensures Pro users get fresh data and caches stay updated.
+      // We only do this if we had some initial data (either from cache or initial load).
+      if (cachedBoard) {
+        // Pass the cached board so loadBoard can return it quickly on 403/400
+        loadBoard(user.id, cachedBoard).then(freshBoard => {
+          // Update state and cache with fresh data if different
+          const currentBoardStr = JSON.stringify(boardRef.current);
+          const freshBoardStr = JSON.stringify(freshBoard);
+          if (currentBoardStr !== freshBoardStr) {
+            setBoard(freshBoard);
+            // The saveBoard call inside loadBoard already updated localStorage
+            setLastSyncTime(new Date());
+          }
+        }).catch(err => {
+          console.debug("Background refresh failed, keeping cached data.", err);
+          // No state change needed, we keep the stale data.
+        });
+      }
     } else {
       setBoard({ ...emptyBoard });
       setLoading(false);

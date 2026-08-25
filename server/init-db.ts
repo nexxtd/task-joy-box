@@ -99,8 +99,30 @@ export async function initDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS habits_user_id_idx ON habits(user_id);
     `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS goals_user_id_idx ON goals(user_id);`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS notes_user_id_idx ON notes(user_id);`);
+    // Check if 'goals' table exists before creating the index
+    const checkGoalsTable = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'goals'
+      );
+    `);
+    if (checkGoalsTable.rows[0].exists) {
+      await pool.query(`CREATE INDEX IF NOT EXISTS goals_user_id_idx ON goals(user_id);`);
+    }
+
+    // Check if 'notes' table exists before creating the index
+    const checkNotesTable = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'notes'
+      );
+    `);
+    if (checkNotesTable.rows[0].exists) {
+      await pool.query(`CREATE INDEX IF NOT EXISTS notes_user_id_idx ON notes(user_id);`);
+    }
+
     await pool.query(`CREATE INDEX IF NOT EXISTS board_snapshots_updated_idx ON board_snapshots(updated_at);`);
 
     // Add energy level columns to user_settings if they don't exist
