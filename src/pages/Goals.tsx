@@ -1456,7 +1456,7 @@ const Goals: React.FC = () => {
                 const gp = getGoalProgress(goal);
                 return (
                   <>
-                    <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
+                    crogressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
                     <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
                       {gp.mode === 'numeric' && gp.target > 0
                         ? `${gp.current}/${gp.target}`

@@ -100,10 +100,15 @@ async function loadBoard(userId: number, cachedBoardOnEntry: Board | null): Prom
   return { ...emptyBoard };
 }
 
-async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<boolean> {
+async function saveBoard(userId: number, board: Board, retryCount = 0, setSyncStatusFunc?: React.Dispatch<React.SetStateAction<'synced' | 'syncing' | 'offline'>>): Promise<boolean> {
   try {
     // Always save to localStorage first for immediate persistence
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+
+    // Optionally update sync status before network call
+    if (setSyncStatusFunc) {
+        setSyncStatusFunc('syncing');
+    }
 
     // Sync to server with retry logic
     const ac = new AbortController();
@@ -118,18 +123,33 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
 
     clearTimeout(at);
     if (!response.ok) {
-      if (response.status === 403 || response.status === 400) return false;
+      if (response.status === 403 || response.status === 400) {
+        // Optionally update sync status for permanent failure
+        if (setSyncStatusFunc) {
+            setSyncStatusFunc('synced'); // Treat 403/400 as a resolved state, not an ongoing issue
+        }
+        return false;
+      }
       throw new Error(`Server error: ${response.status}`);
     }
 
+    // Update sync status on success
+    if (setSyncStatusFunc) {
+        setSyncStatusFunc('synced');
+    }
     return true;
   } catch (err) {
     console.error('Failed to save board to server:', err);
 
+    // Update sync status on network error/timeout
+    if (setSyncStatusFunc) {
+        setSyncStatusFunc('offline');
+    }
+
     // Retry up to 3 times with exponential backoff
     if (retryCount < 1) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      return saveBoard(userId, board, retryCount + 1);
+      return saveBoard(userId, board, retryCount + 1, setSyncStatusFunc);
     }
 
     return false;
@@ -162,17 +182,25 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (cachedBoard) {
         setBoard(cachedBoard);
         setLoading(false); // Stop loading indicator as we have data
+        // Initial status after loading from cache
+        setSyncStatus('synced');
       } else {
          // If no cache, still go through the loadBoard flow which includes network and emptyBoard fallback
          setLoading(true);
+         // Set status to syncing when attempting network fetch
+         setSyncStatus('syncing');
          // Pass null as cachedBoardOnEntry since there was no cache initially
          loadBoard(user.id, null).then(loaded => {
            setBoard(loaded);
            setLoading(false);
            setLastSyncTime(new Date());
+           // Set status to synced after successful load
+           setSyncStatus('synced');
          }).catch(() => {
            setBoard({ ...emptyBoard });
            setLoading(false);
+           // Set status to offline after load failure
+           setSyncStatus('offline');
          });
       }
 
@@ -181,6 +209,8 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // We only do this if we had some initial data (either from cache or initial load).
       if (cachedBoard) {
         // Pass the cached board so loadBoard can return it quickly on 403/400
+        // Indicate syncing for the background refresh
+        setSyncStatus('syncing');
         loadBoard(user.id, cachedBoard).then(freshBoard => {
           // Update state and cache with fresh data if different
           const currentBoardStr = JSON.stringify(boardRef.current);
@@ -190,16 +220,22 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // The saveBoard call inside loadBoard already updated localStorage
             setLastSyncTime(new Date());
           }
+          // Set status to synced after background refresh attempt
+          setSyncStatus('synced');
         }).catch(err => {
           console.debug("Background refresh failed, keeping cached data.", err);
+          // Set status to offline after background refresh failure
+          setSyncStatus('offline');
           // No state change needed, we keep the stale data.
         });
       }
     } else {
       setBoard({ ...emptyBoard });
       setLoading(false);
+      // Reset status when user logs out
+      setSyncStatus('synced');
     }
-  }, [user?.id]);
+  }, [user?.id, setSyncStatus]); // Added setSyncStatus to dependency array
 
   // One-time project data reset to ensure fresh independent projects columns and tasks state
   useEffect(() => {
@@ -221,19 +257,77 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!user) return;
     const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, boardRef.current);
-      if (success) setLastSyncTime(new Date());
+      const success = await saveBoard(user.id, boardRef.current, 0, setSyncStatus); // Pass setSyncStatus to periodic save
+      // Note: syncStatus is managed within saveBoard now
     }, 30000);
     return () => clearInterval(syncInterval);
-  }, [user?.id]);
+  }, [user?.id, boardRef, setSyncStatus]); // Added setSyncStatus to dependency array
+
+  // Periodic pull sync to check for server updates while on the page
+  useEffect(() => {
+    if (!user) return;
+
+    const pullSyncInterval = setInterval(async () => {
+        // Set status to syncing when starting pull sync
+        setSyncStatus('syncing');
+      try {
+        const ctrl = new AbortController();
+        // Slightly shorter timeout for pull sync compared to initial load
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+        clearTimeout(tid);
+
+        // Fast-path 403/400 (free tier restrictions)
+        if (res.status === 403 || res.status === 400) {
+            // Treat 403/400 as synced for pull sync
+            setSyncStatus('synced');
+            return;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+          if (serverBoard) {
+            const localBoardStr = JSON.stringify(boardRef.current);
+            const serverBoardStr = JSON.stringify(serverBoard);
+            if (serverBoardStr !== localBoardStr) {
+              setBoard(serverBoard);
+              localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
+              setLastSyncTime(new Date());
+            }
+          }
+          // Set status to synced after successful pull
+          setSyncStatus('synced');
+        } else {
+            // Handle non-OK response (e.g., 5xx)
+            setSyncStatus('offline');
+        }
+      } catch (err) {
+        console.debug("Periodic pull sync failed:", err);
+        // Set status to offline on error/timeout
+        setSyncStatus('offline');
+        // Silently ignore errors during pull sync, rely on other mechanisms
+      }
+    }, 30000); // Sync every 30 seconds, same as push sync
+
+    return () => clearInterval(pullSyncInterval);
+  }, [user?.id, boardRef, setBoard, setLastSyncTime, setSyncStatus]); // Added setSyncStatus to dependency array
 
   useEffect(() => {
     if (!user) return;
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
+        let timeoutId: NodeJS.Timeout | null = null; // Declare timeoutId
         try {
-          const vc = new AbortController(); setTimeout(() => vc.abort(), 4000);
+          const vc = new AbortController();
+          // Store the timeout ID
+          timeoutId = setTimeout(() => {
+              console.debug("Visibility sync fetch timed out after 4000ms");
+              vc.abort();
+          }, 4000);
+          
           const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: vc.signal });
+          
           if (res.ok) {
             const data = await res.json();
             const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
@@ -248,7 +342,16 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
           }
         } catch (err) {
-          console.error('Failed to sync on visibility change:', err);
+          if (err instanceof DOMException && err.name === 'AbortError') {
+             console.debug("Visibility sync fetch was aborted.");
+          } else {
+             console.error('Failed to sync on visibility change:', err);
+          }
+        } finally {
+          // Clear the timeout if it was set and hasn't fired yet
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
       }
     };
@@ -270,10 +373,13 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const persist = useCallback((updater: (b: Board) => Board) => {
     setBoard(prev => {
       const next = updater(prev);
-      if (user) saveBoard(user.id, next);
+      if (user) {
+          // Pass setSyncStatus to saveBoard for user-initiated changes
+          saveBoard(user.id, next, 0, setSyncStatus);
+      }
       return next;
     });
-  }, [user]);
+  }, [user, setSyncStatus]); // Added setSyncStatus to dependency array
 
   const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
     const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
