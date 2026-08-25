@@ -96,10 +96,12 @@ export async function initDatabase() {
       );
     `);
 
-    // Create index on user_id for faster lookups
     await pool.query(`
       CREATE INDEX IF NOT EXISTS habits_user_id_idx ON habits(user_id);
     `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS goals_user_id_idx ON goals(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS notes_user_id_idx ON notes(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS board_snapshots_updated_idx ON board_snapshots(updated_at);`);
 
     // Add energy level columns to user_settings if they don't exist
     const checkColumn = await pool.query(`

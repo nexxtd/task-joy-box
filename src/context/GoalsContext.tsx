@@ -43,11 +43,29 @@ function getBoardKey(userId: number) {
 }
 
 async function loadBoard(userId: number): Promise<Board> {
+  // First, try to get from localStorage
   try {
     const cached = localStorage.getItem(getBoardKey(userId));
     if (cached) {
-      try { const parsed = JSON.parse(cached); if (parsed?.columns) return parsed; } catch {}
+      try { 
+        const parsed = JSON.parse(cached); 
+        if (parsed?.columns) {
+          // Successfully loaded from cache. We could still initiate a background fetch
+          // for pro users here if needed, but for now, return the cached version.
+          return parsed; 
+        } 
+      } catch (e) {
+        console.error("Error parsing cached board:", e);
+        // If parsing failed, remove the corrupted cache entry
+        localStorage.removeItem(getBoardKey(userId));
+      }
     }
+  } catch (e) {
+    console.error("Error accessing localStorage:", e);
+  }
+
+  // If localStorage failed or was empty, attempt network fetch with timeout
+  try {
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
@@ -56,11 +74,15 @@ async function loadBoard(userId: number): Promise<Board> {
       const data = await res.json();
       const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
       if (board) {
+        // Cache the fetched board
         localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
         return board as Board;
       }
     }
   } catch {}
+  
+  // Final fallback: try localStorage again (in case it was cleared during the try above)
+  // or return empty board if all sources fail.
   try {
     const saved = localStorage.getItem(getBoardKey(userId));
     if (saved) return JSON.parse(saved);
