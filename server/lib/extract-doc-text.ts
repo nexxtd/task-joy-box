@@ -152,8 +152,9 @@ export async function extractDocumentText(filePath: string, mimeType: string, or
           })
         : undefined;
 
-      const result = await mammoth.convertToHtml(
-        { path: filePath, convertImage }
+      const result = await (mammoth as any).convertToHtml(
+        { path: filePath },
+        convertImage ? { convertImage } : undefined
       );
       content = result.value;
     }
