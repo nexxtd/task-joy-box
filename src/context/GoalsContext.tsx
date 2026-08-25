@@ -299,7 +299,7 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (document.visibilityState === 'visible') {
         // Set status to syncing when starting visibility sync
         setSyncStatus('syncing');
-        let timeoutId: NodeJS.Timeout | null = null; // Declare timeoutId
+        let timeoutId: ReturnType<typeof setTimeout> | null = null; // Declare timeoutId
         try {
           const vc = new AbortController();
           // Store the timeout ID
@@ -362,13 +362,12 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!task) return prev;
       const newActivity: TaskActivity = {
         id: genId(),
-        taskId,
         text,
         createdAt: new Date().toISOString(),
       };
       return {
         ...prev,
-        tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, activities: [...t.activities, newActivity] } : t)),
+        tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, activityLog: [...(t.activityLog || []), newActivity] } : t)),
       };
     });
   }, []);
@@ -380,7 +379,7 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         title,
         columnId,
         createdAt: new Date().toISOString(),
-        activities: [],
+        activityLog: [],
         ...details,
       };
       setBoard(prev => ({
@@ -437,7 +436,6 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         id: genId(),
         title,
         projectId,
-        createdAt: new Date().toISOString(),
       };
       setBoard(prev => ({
         ...prev,
