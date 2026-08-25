@@ -374,24 +374,35 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addTask = useCallback(
     (columnId: string, title: string, details?: Partial<Task>) => {
-      const newTask: Task = {
-        id: genId(),
-        title,
-        description: '', // Added required field
-        priority: 'none', // Added required field
-        labels: [], // Added required field
-        checklists: [], // Added required field
-        subtasks: [], // Added required field
-        columnId,
-        createdAt: new Date().toISOString(),
-        activityLog: [], // Changed 'activities' to 'activityLog'
-        ...details,
-      };
-      setBoard(prev => ({
-        ...prev,
-        tasks: [...prev.tasks, newTask],
-      }));
-      logActivity(newTask.id, `Task created`);
+      setBoard(prev => {
+        // Calculate the order for the new task based on existing tasks in the column
+        const tasksInColumn = prev.tasks.filter(t => t.columnId === columnId);
+        const maxOrderInColumn = tasksInColumn.length > 0 ? Math.max(...tasksInColumn.map(t => t.order)) : -1;
+        const newOrder = maxOrderInColumn + 1;
+
+        const newTask: Task = {
+          id: genId(),
+          title,
+          description: '', // Added required field
+          priority: 'none', // Added required field
+          labels: [], // Added required field
+          checklists: [], // Added required field
+          subtasks: [], // Added required field
+          columnId,
+          order: newOrder, // Added required field
+          createdAt: new Date().toISOString(),
+          activityLog: [], // Changed 'activities' to 'activityLog'
+          ...details,
+        };
+
+        return {
+          ...prev,
+          tasks: [...prev.tasks, newTask], // Add the correctly typed newTask
+        };
+      });
+      // Log activity after the state update is scheduled
+      // Assuming logActivity relies on the new state being flushed or is handled via useEffect
+      logActivity(newTaskId, `Task created`);
     },
     [logActivity],
   );
@@ -437,18 +448,27 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addColumn = useCallback(
     (title: string, projectId?: number | null) => {
-      const newColumn: Column = {
-        id: genId(),
-        title,
-        projectId,
-        order: prev.columns.length, // Added required field
-        color: 'hsl(var(--muted-foreground))', // Added required field, using a default from elsewhere in the codebase
-      };
-      setBoard(prev => ({
-        ...prev,
-        columns: [...prev.columns, newColumn],
-      }));
-      logActivity(newColumn.id, `Column created`);
+      // Corrected implementation: Calculate order inside the setBoard callback
+      const newColumnId = genId();
+      setBoard(prev => {
+         // Calculate the order for the new column based on the current number of columns
+         const newOrder = prev.columns.length;
+
+         const newColumn: Column = {
+           id: newColumnId, // Use the ID generated outside
+           title,
+           projectId,
+           order: newOrder, // Added required field, calculated based on prev state
+           color: 'hsl(var(--muted-foreground))', // Added required field, using a default from elsewhere in the codebase
+         };
+
+         return {
+           ...prev,
+           columns: [...prev.columns, newColumn], // Add the correctly typed newColumn
+         };
+      });
+      // Log activity after the state update is scheduled
+      logActivity(newColumnId, `Column created`);
     },
     [logActivity],
   );
