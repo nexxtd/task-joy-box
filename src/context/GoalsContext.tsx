@@ -237,8 +237,448 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!user) return;
     const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, boardRef.current, 0, setSyncStatus); // Pass setSyncStatus to periodic save
-      // Note: syncStatus is managed within saveBoard now
+      const success = await saveBoard(user.id, boardRef.current);
+      if (success) setLastSyncTime(new Date());
     }, 30000);
     return () => clearInterval(syncInterval);
-  }, [user?.id, boardRef, setSyncStatus]); // Added setSyncStatus to dependency array
+  }, [user?.id]);
+
+  // Periodic pull sync to check for server updates while on the page
+  useEffect(() => {
+    if (!user) return;
+
+    const pullSyncInterval = setInterval(async () => {
+        // Set status to syncing when starting pull sync
+        setSyncStatus('syncing');
+      try {
+        const ctrl = new AbortController();
+        // Slightly shorter timeout for pull sync compared to initial load
+        const tid = setTimeout(() => ctrl.abort(), 3000);
+        const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+        clearTimeout(tid);
+
+        // Fast-path 403/400 (free tier restrictions)
+        if (res.status === 403 || res.status === 400) {
+            // Treat 403/400 as synced for pull sync
+            setSyncStatus('synced');
+            return;
+        }
+
+        if (res.ok) {
+          const data = await res.json();
+          const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+          if (serverBoard) {
+            const localBoardStr = JSON.stringify(boardRef.current);
+            const serverBoardStr = JSON.stringify(serverBoard);
+            if (serverBoardStr !== localBoardStr) {
+              setBoard(serverBoard);
+              localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
+              setLastSyncTime(new Date());
+            }
+          }
+          // Set status to synced after successful pull
+          setSyncStatus('synced');
+        } else {
+            // Handle non-OK response (e.g., 5xx)
+            setSyncStatus('offline');
+        }
+      } catch (err) {
+        console.debug("Periodic pull sync failed:", err);
+        // Set status to offline on error/timeout
+        setSyncStatus('offline');
+        // Silently ignore errors during pull sync, rely on other mechanisms
+      }
+    }, 30000); // Sync every 30 seconds, same as push sync
+
+    return () => clearInterval(pullSyncInterval);
+  }, [user?.id, boardRef, setBoard, setLastSyncTime, setSyncStatus]); // Added setSyncStatus to dependency array
+
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        // Set status to syncing when starting visibility sync
+        setSyncStatus('syncing');
+        let timeoutId: NodeJS.Timeout | null = null; // Declare timeoutId
+        try {
+          const vc = new AbortController();
+          // Store the timeout ID
+          timeoutId = setTimeout(() => {
+              console.debug("Visibility sync fetch timed out after 4000ms");
+              vc.abort();
+          }, 4000);
+          
+          const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: vc.signal });
+          clearTimeout(timeoutId);
+          
+          // Fast-path 403/400 (free tier restrictions)
+          if (res.status === 403 || res.status === 400) {
+            // Treat 403/400 as synced for visibility sync
+            setSyncStatus('synced');
+            return;
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+            if (serverBoard) {
+              const localBoardStr = JSON.stringify(boardRef.current);
+              const serverBoardStr = JSON.stringify(serverBoard);
+              if (serverBoardStr !== localBoardStr) {
+                setBoard(serverBoard);
+                localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
+                setLastSyncTime(new Date());
+              }
+            }
+            // Set status to synced after successful visibility sync
+            setSyncStatus('synced');
+          } else {
+            // Handle non-OK response (e.g., 5xx)
+            setSyncStatus('offline');
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+             console.debug("Visibility sync fetch was aborted.");
+          } else {
+             console.error('Failed to sync on visibility change:', err);
+          }
+          // Set status to offline on error/timeout
+          setSyncStatus('offline');
+        } finally {
+          // Clear the timeout if it was set and hasn't fired yet
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user?.id, boardRef, setBoard, setLastSyncTime, setSyncStatus]); // Added setSyncStatus to dependency array
+
+  const logActivity = useCallback((taskId: string, text: string) => {
+    setBoard(prev => {
+      const task = prev.tasks.find(t => t.id === taskId);
+      if (!task) return prev;
+      const newActivity: TaskActivity = {
+        id: genId(),
+        taskId,
+        text,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        ...prev,
+        tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, activities: [...t.activities, newActivity] } : t)),
+      };
+    });
+  }, []);
+
+  const addTask = useCallback(
+    (columnId: string, title: string, details?: Partial<Task>) => {
+      const newTask: Task = {
+        id: genId(),
+        title,
+        columnId,
+        createdAt: new Date().toISOString(),
+        activities: [],
+        ...details,
+      };
+      setBoard(prev => ({
+        ...prev,
+        tasks: [...prev.tasks, newTask],
+      }));
+      logActivity(newTask.id, `Task created`);
+    },
+    [logActivity],
+  );
+
+  const updateTask = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      setBoard(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, ...updates } : t)),
+      }));
+      logActivity(taskId, `Task updated`);
+    },
+    [logActivity],
+  );
+
+  const deleteTask = useCallback(
+    (taskId: string) => {
+      setBoard(prev => ({
+        ...prev,
+        tasks: prev.tasks.filter(t => t.id !== taskId),
+      }));
+      logActivity(taskId, `Task deleted`);
+    },
+    [logActivity],
+  );
+
+  const moveTask = useCallback(
+    (taskId: string, toColumnId: string, newOrder: number) => {
+      setBoard(prev => {
+        const task = prev.tasks.find(t => t.id === taskId);
+        if (!task) return prev;
+        const newTasks = prev.tasks.filter(t => t.id !== taskId);
+        newTasks.splice(newOrder, 0, { ...task, columnId: toColumnId });
+        return {
+          ...prev,
+          tasks: newTasks,
+        };
+      });
+      logActivity(taskId, `Task moved to column ${toColumnId}`);
+    },
+    [logActivity],
+  );
+
+  const addColumn = useCallback(
+    (title: string, projectId?: number | null) => {
+      const newColumn: Column = {
+        id: genId(),
+        title,
+        projectId,
+        createdAt: new Date().toISOString(),
+      };
+      setBoard(prev => ({
+        ...prev,
+        columns: [...prev.columns, newColumn],
+      }));
+      logActivity(newColumn.id, `Column created`);
+    },
+    [logActivity],
+  );
+
+  const updateColumn = useCallback(
+    (columnId: string, updates: Partial<Column>) => {
+      setBoard(prev => ({
+        ...prev,
+        columns: prev.columns.map(c => (c.id === columnId ? { ...c, ...updates } : c)),
+      }));
+      logActivity(columnId, `Column updated`);
+    },
+    [logActivity],
+  );
+
+  const deleteColumn = useCallback(
+    (columnId: string) => {
+      setBoard(prev => ({
+        ...prev,
+        columns: prev.columns.filter(c => c.id !== columnId),
+        tasks: prev.tasks.filter(t => t.columnId !== columnId),
+      }));
+      logActivity(columnId, `Column deleted`);
+    },
+    [logActivity],
+  );
+
+  const reorderColumns = useCallback(
+    (startIndex: number, endIndex: number, projectId?: number | null) => {
+      setBoard(prev => {
+        const columns = [...prev.columns];
+        const [removed] = columns.splice(startIndex, 1);
+        columns.splice(endIndex, 0, removed);
+        return {
+          ...prev,
+          columns,
+        };
+      });
+      logActivity(`Column reorder`, `Reordered columns from ${startIndex} to ${endIndex}`);
+    },
+    [logActivity],
+  );
+
+  const addChecklist = useCallback(
+    (taskId: string, title: string) => {
+      setBoard(prev => {
+        const task = prev.tasks.find(t => t.id === taskId);
+        if (!task) return prev;
+        const newChecklist: Checklist = {
+          id: genId(),
+          title,
+          items: [],
+        };
+        return {
+          ...prev,
+          tasks: prev.tasks.map(t => (t.id === taskId ? { ...t, checklists: [...t.checklists, newChecklist] } : t)),
+        };
+      });
+      logActivity(taskId, `Checklist created`);
+    },
+    [logActivity],
+  );
+
+  const toggleChecklistItem = useCallback(
+    (taskId: string, checklistId: string, itemId: string) => {
+      setBoard(prev => {
+        const task = prev.tasks.find(t => t.id === taskId);
+        if (!task) return prev;
+        const checklist = task.checklists.find(c => c.id === checklistId);
+        if (!checklist) return prev;
+        const item = checklist.items.find(i => i.id === itemId);
+        if (!item) return prev;
+        return {
+          ...prev,
+          tasks: prev.tasks.map(t =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  checklists: t.checklists.map(c =>
+                    c.id === checklistId
+                      ? {
+                          ...c,
+                          items: c.items.map(i =>
+                            i.id === itemId ? { ...i, completed: !i.completed } : i,
+                          ),
+                        }
+                      : c,
+                  ),
+                }
+              : t,
+          ),
+        };
+      });
+      logActivity(taskId, `Checklist item toggled`);
+    },
+    [logActivity],
+  );
+
+  const addChecklistItem = useCallback(
+    (taskId: string, checklistId: string, text: string) => {
+      setBoard(prev => {
+        const task = prev.tasks.find(t => t.id === taskId);
+        if (!task) return prev;
+        const checklist = task.checklists.find(c => c.id === checklistId);
+        if (!checklist) return prev;
+        const newItem: ChecklistItem = {
+          id: genId(),
+          text,
+          completed: false,
+        };
+        return {
+          ...prev,
+          tasks: prev.tasks.map(t =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  checklists: t.checklists.map(c =>
+                    c.id === checklistId ? { ...c, items: [...c.items, newItem] } : c,
+                  ),
+                }
+              : t,
+          ),
+        };
+      });
+      logActivity(taskId, `Checklist item added`);
+    },
+    [logActivity],
+  );
+
+  const deleteChecklistItem = useCallback(
+    (taskId: string, checklistId: string, itemId: string) => {
+      setBoard(prev => {
+        const task = prev.tasks.find(t => t.id === taskId);
+        if (!task) return prev;
+        const checklist = task.checklists.find(c => c.id === checklistId);
+        if (!checklist) return prev;
+        return {
+          ...prev,
+          tasks: prev.tasks.map(t =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  checklists: t.checklists.map(c =>
+                    c.id === checklistId
+                      ? {
+                          ...c,
+                          items: c.items.filter(i => i.id !== itemId),
+                        }
+                      : c,
+                  ),
+                }
+              : t,
+          ),
+        };
+      });
+      logActivity(taskId, `Checklist item deleted`);
+    },
+    [logActivity],
+  );
+
+  const findTasksByTitle = useCallback(
+    (title: string) => {
+      return board.tasks.filter(t => t.title.toLowerCase().includes(title.toLowerCase()));
+    },
+    [board.tasks],
+  );
+
+  const findDuplicates = useCallback(() => {
+    const map = new Map<string, Task[]>();
+    board.tasks.forEach(task => {
+      const lowerTitle = task.title.toLowerCase();
+      if (map.has(lowerTitle)) {
+        map.get(lowerTitle)?.push(task);
+      } else {
+        map.set(lowerTitle, [task]);
+      }
+    });
+    return map;
+  }, [board.tasks]);
+
+  const getColumnByName = useCallback(
+    (name: string) => {
+      return board.columns.find(c => c.title.toLowerCase() === name.toLowerCase());
+    },
+    [board.columns],
+  );
+
+  const bulkDeleteTasks = useCallback(
+    (taskIds: string[]) => {
+      setBoard(prev => ({
+        ...prev,
+        tasks: prev.tasks.filter(t => !taskIds.includes(t.id)),
+      }));
+      logActivity(`Bulk delete`, `Deleted ${taskIds.length} tasks`);
+    },
+    [logActivity],
+  );
+
+  const reorderTasks = useCallback(
+    (orderedIds: string[]) => {
+      setBoard(prev => ({
+        ...prev,
+        tasks: orderedIds.map(id => prev.tasks.find(t => t.id === id)!),
+      }));
+      logActivity(`Reorder tasks`, `Reordered tasks`);
+    },
+    [logActivity],
+  );
+
+  return (
+    <GoalsContext.Provider
+      value={{
+        board,
+        addTask,
+        updateTask,
+        deleteTask,
+        moveTask,
+        addColumn,
+        updateColumn,
+        deleteColumn,
+        reorderColumns,
+        addChecklist,
+        toggleChecklistItem,
+        addChecklistItem,
+        deleteChecklistItem,
+        findTasksByTitle,
+        findDuplicates,
+        getColumnByName,
+        bulkDeleteTasks,
+        reorderTasks,
+        lastSyncTime,
+        syncStatus,
+      }}
+    >
+      {children}
+    </GoalsContext.Provider>
+  );
+};
