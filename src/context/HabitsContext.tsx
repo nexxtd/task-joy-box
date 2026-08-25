@@ -43,15 +43,56 @@ function getBoardKey(userId: number) {
 }
 
 async function loadBoard(userId: number): Promise<Board> {
+  // 1) Return cached board IMMEDIATELY if present (instant load)
+  const cached = localStorage.getItem(getBoardKey(userId));
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed?.columns) {
+        // 2) Revalidate in background (don't block UI)
+        void (async () => {
+          try {
+            const ctrl = new AbortController();
+            const tid = setTimeout(() => ctrl.abort(), 4000);
+            const res = await fetch('/api/habit-boards/snapshot', { 
+              credentials: 'include', 
+              signal: ctrl.signal 
+            });
+            clearTimeout(tid);
+            
+            // Fast-path 403/400 (free tier restrictions)
+            if (res.status === 403 || res.status === 400) return;
+            
+            if (res.ok) {
+              const data = await res.json();
+              const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+              if (board) {
+                localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+              }
+            }
+          } catch {}
+        })();
+        
+        return parsed as Board;
+      }
+    } catch {}
+  }
+
+  // 3) No cache: fetch from server (but fast-path 403/400)
   try {
-    const cached = localStorage.getItem(getBoardKey(userId));
-    if (cached) {
-      try { const parsed = JSON.parse(cached); if (parsed?.columns) return parsed; } catch {}
-    }
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch('/api/habit-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+    const res = await fetch('/api/habit-boards/snapshot', { 
+      credentials: 'include', 
+      signal: ctrl.signal 
+    });
     clearTimeout(tid);
+    
+    // Fast-path free tier restrictions
+    if (res.status === 403 || res.status === 400) {
+      return { ...emptyBoard };
+    }
+    
     if (res.ok) {
       const data = await res.json();
       const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
@@ -61,10 +102,13 @@ async function loadBoard(userId: number): Promise<Board> {
       }
     }
   } catch {}
+  
+  // 4) Final fallback
   try {
     const saved = localStorage.getItem(getBoardKey(userId));
     if (saved) return JSON.parse(saved);
   } catch {}
+  
   return { ...emptyBoard };
 }
 
