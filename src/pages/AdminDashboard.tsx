@@ -2177,7 +2177,7 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-6 animate-in fade-in duration-300 pb-8 w-full min-w-0 overflow-y-auto overscroll-contain">
+        <div className="space-y-6 animate-in fade-in duration-300">
           <div className="rounded-2xl bg-card border border-border p-6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>

@@ -511,8 +511,8 @@ const SettingsPage: React.FC = () => {
   const tasksWithDates = board.tasks.filter(t => t.dueDate).length;
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative overscroll-contain" style={{ scrollbarGutter: 'stable' }}>
-      <header className="px-4 sm:px-6 h-16 border-b border-border flex items-center justify-between flex-shrink-0 sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+    <div className="flex-1 overflow-y-auto relative">
+      <header className="px-6 h-16 border-b border-border flex items-center justify-between">
         <h1 className="text-base font-bold text-foreground">Settings</h1>
         {saved && (
           <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 animate-fade-in">
@@ -521,14 +521,14 @@ const SettingsPage: React.FC = () => {
         )}
       </header>
 
-      <div className="flex flex-col md:flex-row min-w-0">
-        <div className="w-full md:w-48 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 flex md:flex-col gap-1 md:space-y-0.5 flex-shrink-0 overflow-x-auto md:overflow-visible scrollbar-none md:min-h-full">
+      <div className="flex">
+        <div className="w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 min-h-full">
           {sections.map(s => (
             <button
               key={s.id}
               onClick={() => setActiveSection(s.id)}
               data-testid={`settings-nav-${s.id}`}
-              className={`flex md:w-full items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+              className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all duration-200 ${
                 activeSection === s.id
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -540,7 +540,7 @@ const SettingsPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex-1 min-w-0 p-4 sm:p-6 max-w-xl mx-auto w-full overflow-y-auto overscroll-contain">
+        <div className="flex-1 p-6 max-w-2xl">
           {activeSection === 'appearance' && (
             <div className="space-y-6">
               <div>
