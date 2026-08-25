@@ -1456,11 +1456,8 @@ const Goals: React.FC = () => {
                 const gp = getGoalProgress(goal);
                 return (
                   <>
-                    crogressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
+                    <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
                     <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
-                      {gp.mode === 'numeric' && gp.target > 0
-                        ? `${gp.current}/${gp.target}`
-                        : gp.mode === 'auto' && gp.target > 0
                           ? `${gp.current}/${gp.target}`
                           : `${gp.percent}%`}
                     </span>
@@ -3569,7 +3566,7 @@ const GoalDropdownExpanded: React.FC<{
             const gp = getGoalProgress(goal);
             return (
               <>
-                <ProgressBar percent={gp.percent} size="md" />
+                <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-bold text-foreground">{formatGoalProgressLabel(goal)}</span>
                   <span className="text-xs text-muted-foreground">{gp.percent}%</span>
