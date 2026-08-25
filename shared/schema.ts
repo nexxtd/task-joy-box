@@ -560,6 +560,29 @@ export const ticketMessages = pgTable('ticket_messages', {
   attachmentSize: integer('attachment_size'),
 });
 
+export const pendingUserChanges = pgTable('pending_user_changes', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  adminId: integer('admin_id').references(() => users.id),
+  changeType: text('change_type').notNull(),
+  payload: text('payload').notNull(),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'string' }).notNull(),
+  resolvedAt: timestamp('resolved_at', { mode: 'string' }),
+});
+
+export const userNotifications = pgTable('user_notifications', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  data: text('data'),
+  read: boolean('read').notNull().default(false),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 // Types exported via any to avoid inference issues on Render
 export type InsertUser = any;
 export type UpdateUser = any;

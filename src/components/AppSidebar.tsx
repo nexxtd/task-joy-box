@@ -8,6 +8,7 @@ import {
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import NotificationBell from '@/components/NotificationBell';
 
 const AppSidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -111,6 +112,10 @@ const AppSidebar: React.FC = () => {
 
       {/* Bottom */}
       <div className="px-2 py-3 border-t border-border space-y-0.5">
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-1 py-1`}>
+          {!collapsed && <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Notifications</span>}
+          <NotificationBell />
+        </div>
         {bottomItems.map(item => {
           const active = isActive(item.path);
           return (

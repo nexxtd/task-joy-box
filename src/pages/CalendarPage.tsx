@@ -287,6 +287,7 @@ const CalendarPage: React.FC = () => {
         <div className="max-w-lg">
           <ComingSoon
             title="Calendar"
+            accent="blue"
             description="Plan your tasks on a visual calendar with drag-and-drop scheduling, time-blocking and timeline views. Coming soon to organize your time like never before."
             onNotify={() => (window.location.href = '/pricing')}
           />

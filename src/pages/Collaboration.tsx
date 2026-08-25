@@ -510,6 +510,7 @@ const Collaboration: React.FC = () => {
         <div className="max-w-lg">
           <ComingSoon
             title="Collaboration"
+            accent="purple"
             description="Invite teammates, share project boards and collaborate in real time with chat and task assignments. Teams and real-time collaboration are coming soon."
             onNotify={() => (window.location.href = '/pricing')}
           />

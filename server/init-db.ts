@@ -673,6 +673,41 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS documents_task_id_idx ON documents(task_id);`);
     console.log('Documents table verified');
 
+    // --- PENDING USER CHANGES (admin approval workflow) ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_user_changes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        change_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        resolved_at TIMESTAMP
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS pending_user_changes_user_id_idx ON pending_user_changes(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS pending_user_changes_status_idx ON pending_user_changes(status);`);
+    console.log('Pending user changes table verified');
+
+    // --- USER NOTIFICATIONS ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        data TEXT,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS user_notifications_user_id_idx ON user_notifications(user_id);`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS user_notifications_read_idx ON user_notifications(read);`);
+    console.log('User notifications table verified');
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are
     // needed. Enabling RLS without permissive policies satisfies the linter

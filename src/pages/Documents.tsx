@@ -69,6 +69,7 @@ const Documents: React.FC = () => {
       <div className="max-w-lg">
         <ComingSoon
           title="Documents"
+          accent="emerald"
           description="Create, edit and organize rich documents with inline images, formatting and task-linked files. A full document workspace is coming soon."
           onNotify={() => (window.location.href = '/pricing')}
         />

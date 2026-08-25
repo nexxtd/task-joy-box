@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones } from '../../shared/schema.js';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications } from '../../shared/schema.js';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
@@ -494,6 +494,67 @@ router.patch('/users/:id/tier', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, tier });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update user tier' });
+  }
+});
+
+router.post('/users/:id/request-change', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const adminId = req.userId!;
+    const { changeType, payload } = req.body;
+    if (!changeType || !payload) return res.status(400).json({ error: 'changeType and payload required' });
+    if (!['email', 'password', 'subscription', 'tier', 'general'].includes(changeType)) {
+      return res.status(400).json({ error: 'Invalid changeType' });
+    }
+    const userExists = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!userExists.length) return res.status(404).json({ error: 'User not found' });
+
+    if (payload.email) {
+      const dup = await db.select({ id: users.id }).from(users).where(and(eq(users.email, payload.email), sql`id != ${userId}`)).limit(1);
+      if (dup.length) return res.status(400).json({ error: 'Email already in use' });
+    }
+    if (payload.password && (typeof payload.password !== 'string' || payload.password.length < 6)) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const [pending] = await db.insert(pendingUserChanges).values({
+      userId,
+      adminId,
+      changeType,
+      payload: JSON.stringify(payload),
+      status: 'pending',
+      expiresAt: expiresAt.toISOString() as any,
+    } as any).returning();
+
+    const titleMap: Record<string, string> = {
+      email: 'Confirm email change',
+      password: 'Confirm password change',
+      subscription: 'Confirm subscription change',
+      tier: 'Confirm plan change',
+      general: 'Confirm account change',
+    };
+    const msgMap: Record<string, string> = {
+      email: `Admin wants to change your email to "${payload.email}". Approve or deny. Auto-approves in 24h if no action.`,
+      password: `Admin wants to change your password. Approve or deny. Auto-approves in 24h if no action.`,
+      subscription: `Admin wants to change your subscription to "${payload.tier || payload.status}". Approve or deny. Auto-approves in 24h.`,
+      tier: `Admin wants to change your plan to "${payload.tier}". Approve or deny. Auto-approves in 24h.`,
+      general: `Admin requested changes to your account. Approve or deny. Auto-approves in 24h.`,
+    };
+
+    await db.insert(userNotifications).values({
+      userId,
+      type: 'pending_change',
+      title: titleMap[changeType] || 'Confirm account change',
+      message: msgMap[changeType] || 'Admin requested a change to your account.',
+      data: JSON.stringify({ pendingId: (pending as any).id, changeType, payload }),
+      read: false,
+    } as any);
+
+    res.json({ success: true, pendingId: (pending as any).id, expiresAt });
+  } catch (error) {
+    console.error('Failed to create pending change', error);
+    res.status(500).json({ error: 'Failed to create request' });
   }
 });
 

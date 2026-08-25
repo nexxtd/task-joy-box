@@ -88,6 +88,36 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
 
   const handleSave = async () => {
     if (!form) return;
+    const needsApproval = form.email !== (user.email || '') || form.tier !== (user.tier || 'free') || form.status !== (user.status || 'inactive');
+    if (needsApproval) {
+      const changeType = form.email !== (user.email || '') ? 'email' : 'subscription';
+      const payload: any = {};
+      if (form.email !== (user.email || '')) payload.email = form.email;
+      if (form.tier !== (user.tier || 'free')) payload.tier = form.tier;
+      if (form.status !== (user.status || 'inactive')) payload.status = form.status;
+      if (form.name !== (user.name || '')) payload.name = form.name;
+      if (form.location !== (user.location || '')) payload.location = form.location;
+      if (form.language !== (user.language || 'en')) payload.language = form.language;
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/admin/users/${user.id}/request-change`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ changeType, payload }),
+        });
+        if (res.ok) {
+          toast({ title: 'Request sent', description: 'User will be notified to approve or deny. Auto-approves in 24h.' });
+          onUpdated?.();
+        } else {
+          const d = await res.json();
+          toast({ title: 'Error', description: d.error || 'Failed to send request', variant: 'destructive' });
+        }
+      } catch {
+        toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
+      } finally { setSaving(false); }
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
@@ -114,19 +144,19 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     if (!newEmail.trim() || newEmail.trim() === user.email) { setEditingEmail(false); return; }
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/admin/users/${user.id}/request-change`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: newEmail.trim() }),
+        body: JSON.stringify({ changeType: 'email', payload: { email: newEmail.trim() } }),
       });
       if (res.ok) {
-        toast({ title: 'Email updated', description: `Changed to ${newEmail.trim()}` });
+        toast({ title: 'Request sent', description: `Change email to ${newEmail.trim()} — user must approve or deny (auto-approves in 24h). Notification sent.` });
         setEditingEmail(false);
         onUpdated?.();
       } else {
         const d = await res.json();
-        toast({ title: 'Error', description: d.error || 'Failed to change email', variant: 'destructive' });
+        toast({ title: 'Error', description: d.error || 'Failed to send request', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
@@ -140,20 +170,20 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/admin/users/${user.id}/request-change`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ password: newPassword }),
+        body: JSON.stringify({ changeType: 'password', payload: { password: newPassword } }),
       });
       if (res.ok) {
-        toast({ title: 'Password updated', description: 'User password has been changed' });
+        toast({ title: 'Request sent', description: 'Password change — user must approve or deny (auto-approves in 24h). Notification sent.' });
         setNewPassword('');
         setEditingPassword(false);
         onUpdated?.();
       } else {
         const d = await res.json();
-        toast({ title: 'Error', description: d.error || 'Failed to change password', variant: 'destructive' });
+        toast({ title: 'Error', description: d.error || 'Failed to send request', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
@@ -164,18 +194,18 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     if (!confirm(`Cancel subscription for ${user.email || user.name}? This will downgrade the user to FREE and deactivate billing.`)) return;
     setCancelling(true);
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/admin/users/${user.id}/request-change`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ tier: 'free', status: 'inactive' }),
+        body: JSON.stringify({ changeType: 'subscription', payload: { tier: 'free', status: 'inactive' } }),
       });
       if (res.ok) {
-        toast({ title: 'Subscription cancelled', description: 'User downgraded to FREE' });
+        toast({ title: 'Request sent', description: 'Cancel subscription — user must approve or deny (auto-approves in 24h). Notification sent.' });
         onUpdated?.();
       } else {
         const d = await res.json();
-        toast({ title: 'Error', description: d.error || 'Failed to cancel subscription', variant: 'destructive' });
+        toast({ title: 'Error', description: d.error || 'Failed to send request', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Error', description: 'Server error', variant: 'destructive' });

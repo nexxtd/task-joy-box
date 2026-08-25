@@ -33,6 +33,7 @@ import { getSettingBoolean, getSetting } from './lib/settings.js';
 import milestonesRoutes from './routes/milestones.js';
 import taskTemplatesRoutes from './routes/taskTemplates.js';
 import noteTemplatesRoutes from './routes/noteTemplates.js';
+import notificationsRoutes from './routes/notifications.js';
 import dashboardRoutes from './routes/dashboard.js';
 import documentsRoutes from './routes/documents.js';
 import path from 'path';
@@ -259,6 +260,7 @@ app.use('/api/task-templates', taskTemplatesRoutes);
 app.use('/api/note-templates', noteTemplatesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {
