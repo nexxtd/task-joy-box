@@ -395,14 +395,16 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ...details,
         };
 
-        return {
+        const nextState = {
           ...prev,
           tasks: [...prev.tasks, newTask], // Add the correctly typed newTask
         };
+
+        // Log activity inside the setBoard callback
+        logActivity(newTask.id, `Task created`);
+
+        return nextState;
       });
-      // Log activity after the state update is scheduled
-      // Assuming logActivity relies on the new state being flushed or is handled via useEffect
-      logActivity(newTaskId, `Task created`);
     },
     [logActivity],
   );
@@ -448,27 +450,28 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addColumn = useCallback(
     (title: string, projectId?: number | null) => {
-      // Corrected implementation: Calculate order inside the setBoard callback
-      const newColumnId = genId();
       setBoard(prev => {
          // Calculate the order for the new column based on the current number of columns
          const newOrder = prev.columns.length;
 
          const newColumn: Column = {
-           id: newColumnId, // Use the ID generated outside
+           id: genId(), // Use the ID generated inside the updater
            title,
            projectId,
            order: newOrder, // Added required field, calculated based on prev state
            color: 'hsl(var(--muted-foreground))', // Added required field, using a default from elsewhere in the codebase
          };
 
-         return {
+         const nextState = {
            ...prev,
            columns: [...prev.columns, newColumn], // Add the correctly typed newColumn
          };
+
+         // Log activity inside the setBoard callback
+         logActivity(newColumn.id, `Column created`);
+
+         return nextState;
       });
-      // Log activity after the state update is scheduled
-      logActivity(newColumnId, `Column created`);
     },
     [logActivity],
   );
