@@ -22,6 +22,70 @@ const accentMap: Record<string, { bg: string; iconBg: string; iconColor: string;
   indigo: { bg: 'bg-indigo-50 dark:bg-indigo-950/30', iconBg: 'bg-indigo-100 dark:bg-indigo-900/40', iconColor: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200/60 dark:border-indigo-900/40', badge: 'bg-indigo-600 text-white', bullet: 'text-indigo-600', mockup: 'bg-indigo-100 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800', gradient: 'from-indigo-50/80 via-card to-card dark:from-indigo-950/20' },
 };
 
+const Mockup: React.FC<{ title: string; accent: string }> = ({ title, accent }) => {
+  const acc = accentMap[accent] || accentMap.blue;
+  const isCalendar = title.toLowerCase().includes('calendar');
+  const isDocument = title.toLowerCase().includes('document');
+  return (
+    <div className={`rounded-xl border-2 border-dashed ${acc.mockup} overflow-hidden`}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-dashed border-border/40 bg-muted/20">
+        <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-muted border text-muted-foreground">Mockup</span>
+        <span className="text-[9px] font-medium text-muted-foreground flex items-center gap-1"><Info className="w-3 h-3" /> Not real — preview only</span>
+      </div>
+      <div className="p-3">
+        {isCalendar ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
+              <span className="ml-auto text-[9px] font-bold text-muted-foreground">Calendar — Illustrative preview</span>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-[8px] text-center">
+              {['M','T','W','T','F','S','S'].map(d => <div key={d} className="font-bold text-muted-foreground py-1">{d}</div>)}
+              {Array.from({length: 21}).map((_,i) => (
+                <div key={i} className={`h-6 rounded-md flex items-center justify-center text-[9px] ${i===5 ? 'bg-primary text-primary-foreground font-bold' : i===8 ? `${acc.iconBg} ${acc.iconColor} font-semibold` : 'bg-muted/50 border border-dashed border-border/30'}`}>{i+1}</div>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <div className={`h-5 flex-1 rounded-md border border-dashed ${acc.iconBg} flex items-center justify-center text-[8px] font-bold ${acc.iconColor}`}>Time-block</div>
+              <div className="h-5 flex-1 rounded-md bg-muted border border-dashed flex items-center justify-center text-[8px] text-muted-foreground">Drag & drop</div>
+            </div>
+          </div>
+        ) : isDocument ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
+              <span className="ml-auto text-[9px] font-bold text-muted-foreground">Document — Illustrative preview</span>
+            </div>
+            <div className="space-y-1.5 p-2 rounded-lg bg-card border border-dashed">
+              <div className="h-2 w-3/4 rounded bg-foreground/10" /><div className="h-1.5 w-full rounded bg-muted border border-dashed" /><div className="h-1.5 w-5/6 rounded bg-muted border border-dashed" />
+              <div className="flex gap-1 pt-1">
+                <div className={`w-6 h-6 rounded border border-dashed ${acc.iconBg} flex items-center justify-center text-[10px]`}>🖼️</div>
+                <div className="flex-1 space-y-1"><div className="h-1.5 w-full rounded bg-muted border border-dashed" /><div className="h-1.5 w-4/5 rounded bg-muted border border-dashed" /></div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
+              <span className="ml-auto text-[9px] font-bold text-muted-foreground">Collaboration — Illustrative preview</span>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 space-y-1.5 p-2 rounded-lg bg-card border border-dashed">
+                <div className="flex -space-x-1">{['#60a5fa','#34d399','#fbbf24'].map(c => <div key={c} className="w-6 h-6 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold text-white" style={{background:c}}>A</div>)}</div>
+                <div className={`h-6 rounded-lg border border-dashed ${acc.iconBg} flex items-center justify-center text-[9px] font-bold ${acc.iconColor}`}>💬 Real-time chat</div>
+                <div className="h-2 w-full rounded bg-muted border border-dashed" /><div className="h-2 w-3/4 rounded bg-muted border border-dashed" />
+              </div>
+              <div className="w-20 p-2 rounded-lg bg-muted/30 border border-dashed space-y-1"><div className="h-6 rounded bg-muted border border-dashed" /><div className="h-6 rounded bg-muted border border-dashed" /></div>
+            </div>
+          </div>
+        )}
+        <p className="text-[9px] text-center text-muted-foreground mt-2 leading-relaxed">* Visual mockup only — not functional, for illustration purposes</p>
+      </div>
+    </div>
+  );
+};
+
 const ComingSoon: React.FC<ComingSoonProps> = ({ title, description, icon, accent = 'blue', preview, faqs, onNotify }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -90,6 +154,10 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title, description, icon, accen
         </div>
         <h3 className="text-base font-bold text-foreground">{title}</h3>
         <p className="text-xs text-muted-foreground mt-1 max-w-md leading-relaxed">{description}</p>
+      </div>
+
+      <div className="mt-5">
+        <Mockup title={title} accent={accent} />
       </div>
 
       <div className="mt-5">
