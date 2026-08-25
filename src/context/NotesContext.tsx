@@ -44,8 +44,12 @@ function getBoardKey(userId: number) {
 
 async function loadBoard(userId: number): Promise<Board> {
   try {
+    const cached = localStorage.getItem(getBoardKey(userId));
+    if (cached) {
+      try { const parsed = JSON.parse(cached); if (parsed?.columns) return parsed; } catch {}
+    }
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const tid = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
     clearTimeout(tid);
     if (res.ok) {
@@ -71,7 +75,7 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
 
     // Sync to server with retry logic
     const ac = new AbortController();
-    const at = setTimeout(() => ac.abort(), 10000);
+    const at = setTimeout(() => ac.abort(), 5000);
     const response = await fetch('/api/note-boards/snapshot', {
       signal: ac.signal,
       method: 'POST',
@@ -91,8 +95,8 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
     console.error('Failed to save board to server:', err);
 
     // Retry up to 3 times with exponential backoff
-    if (retryCount < 3) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+    if (retryCount < 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
       return saveBoard(userId, board, retryCount + 1);
     }
 
@@ -178,7 +182,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         try {
-          const vc = new AbortController(); setTimeout(() => vc.abort(), 8000);
+          const vc = new AbortController(); setTimeout(() => vc.abort(), 4000);
           const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: vc.signal });
           if (res.ok) {
             const data = await res.json();

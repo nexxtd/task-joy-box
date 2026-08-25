@@ -29,7 +29,7 @@ export const useAuth = () => {
   return ctx;
 };
 
-async function apiFetch(path: string, options?: RequestInit, timeoutMs = 10000) {
+async function apiFetch(path: string, options?: RequestInit, timeoutMs = 5000) {
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let cancelled = false;
-    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 12000);
+    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 4000);
     refreshUserData()
       .finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });
     return () => { cancelled = true; clearTimeout(t); };

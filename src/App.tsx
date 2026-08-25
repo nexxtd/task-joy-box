@@ -47,7 +47,7 @@ const AppearanceSync = () => {
     if (!user) return;
     let cancelled = false;
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const tid = setTimeout(() => ctrl.abort(), 4000);
     (async () => {
       try {
         const res = await fetch("/api/settings", { credentials: "include", signal: ctrl.signal });
@@ -134,7 +134,7 @@ function ProtectedRoutes() {
   useEffect(() => {
     let cancelled = false;
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const tid = setTimeout(() => ctrl.abort(), 4000);
     (async () => {
       try {
         const res = await fetch("/api/status", { signal: ctrl.signal });

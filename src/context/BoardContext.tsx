@@ -45,8 +45,12 @@ function getBoardKey(userId: number) {
 
 async function loadBoard(userId: number): Promise<Board> {
   try {
+    const cached = localStorage.getItem(getBoardKey(userId));
+    if (cached) {
+      try { const parsed = JSON.parse(cached); if (parsed?.columns) return parsed; } catch {}
+    }
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const tid = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch('/api/boards/snapshot', { credentials: 'include', signal: ctrl.signal });
     clearTimeout(tid);
     if (res.ok) {
@@ -71,7 +75,7 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
 
     const ac = new AbortController();
-    const at = setTimeout(() => ac.abort(), 10000);
+    const at = setTimeout(() => ac.abort(), 5000);
     const response = await fetch('/api/boards/snapshot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,8 +91,8 @@ async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<
     return true;
   } catch (err) {
     console.error('Failed to save board to server:', err);
-    if (retryCount < 3) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+    if (retryCount < 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
       return saveBoard(userId, board, retryCount + 1);
     }
     return false;
