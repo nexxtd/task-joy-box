@@ -22,92 +22,6 @@ const accentMap: Record<string, { bg: string; iconBg: string; iconColor: string;
   indigo: { bg: 'bg-indigo-50 dark:bg-indigo-950/30', iconBg: 'bg-indigo-100 dark:bg-indigo-900/40', iconColor: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-200/60 dark:border-indigo-900/40', badge: 'bg-indigo-600 text-white', bullet: 'text-indigo-600', mockup: 'bg-indigo-100 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800', gradient: 'from-indigo-50/80 via-card to-card dark:from-indigo-950/20' },
 };
 
-const Mockup: React.FC<{ title: string; accent: string }> = ({ title, accent }) => {
-  const acc = accentMap[accent] || accentMap.blue;
-  if (title.toLowerCase().includes('calendar')) {
-    return (
-      <div className={`rounded-xl border ${acc.mockup} p-3 overflow-hidden`}>
-        <div className="flex items-center gap-1 mb-2">
-          <div className="w-2 h-2 rounded-full bg-red-400" />
-          <div className="w-2 h-2 rounded-full bg-yellow-400" />
-          <div className="w-2 h-2 rounded-full bg-green-400" />
-          <span className="ml-auto text-[10px] font-bold text-muted-foreground">Calendar Preview</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1 text-[8px] text-center">
-          {['M','T','W','T','F','S','S'].map(d => <div key={d} className="font-bold text-muted-foreground py-1">{d}</div>)}
-          {Array.from({length: 21}).map((_,i) => (
-            <div key={i} className={`h-6 rounded-md flex items-center justify-center text-[9px] ${i===5 ? 'bg-primary text-primary-foreground font-bold' : i===8 || i===12 ? `${acc.iconBg} ${acc.iconColor} font-semibold` : 'bg-muted/50'}`}>{i+1}</div>
-          ))}
-        </div>
-        <div className="mt-2 flex gap-1">
-          <div className={`h-4 flex-1 rounded-md ${acc.iconBg} flex items-center justify-center text-[8px] font-bold ${acc.iconColor}`}>Time-block</div>
-          <div className="h-4 flex-1 rounded-md bg-muted flex items-center justify-center text-[8px]">Drag & drop</div>
-        </div>
-      </div>
-    );
-  }
-  if (title.toLowerCase().includes('document')) {
-    return (
-      <div className={`rounded-xl border ${acc.mockup} p-3 overflow-hidden`}>
-        <div className="flex items-center gap-1 mb-2">
-          <div className="w-2 h-2 rounded-full bg-red-400" />
-          <div className="w-2 h-2 rounded-full bg-yellow-400" />
-          <div className="w-2 h-2 rounded-full bg-green-400" />
-          <span className="ml-auto text-[10px] font-bold text-muted-foreground">Document Preview</span>
-        </div>
-        <div className="space-y-1.5">
-          <div className="h-2 w-3/4 rounded bg-foreground/15" />
-          <div className="h-1.5 w-full rounded bg-muted" />
-          <div className="h-1.5 w-full rounded bg-muted" />
-          <div className="h-1.5 w-5/6 rounded bg-muted" />
-          <div className="flex gap-1 mt-1">
-            <div className={`w-6 h-6 rounded ${acc.iconBg} flex items-center justify-center text-[10px]`}>🖼️</div>
-            <div className="flex-1 space-y-1">
-              <div className="h-1.5 w-full rounded bg-muted" />
-              <div className="h-1.5 w-4/5 rounded bg-muted" />
-            </div>
-          </div>
-          <div className="flex gap-1 pt-1">
-            <div className="h-3 flex-1 rounded bg-muted" />
-            <div className={`h-3 flex-1 rounded ${acc.iconBg}`} />
-            <div className="h-3 flex-1 rounded bg-muted" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className={`rounded-xl border ${acc.mockup} p-3 overflow-hidden`}>
-      <div className="flex items-center gap-1 mb-2">
-        <div className="w-2 h-2 rounded-full bg-red-400" />
-        <div className="w-2 h-2 rounded-full bg-yellow-400" />
-        <div className="w-2 h-2 rounded-full bg-green-400" />
-        <span className="ml-auto text-[10px] font-bold text-muted-foreground">Collaboration Preview</span>
-      </div>
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-1.5">
-          <div className="flex -space-x-1">
-            {['#60a5fa','#34d399','#fbbf24','#a78bfa'].map(c => <div key={c} className="w-6 h-6 rounded-full border-2 border-card flex items-center justify-center text-[8px] font-bold text-white" style={{background:c}}>A</div>)}
-          </div>
-          <div className="space-y-1">
-            <div className="h-2 w-full rounded bg-muted" />
-            <div className="h-2 w-3/4 rounded bg-muted" />
-            <div className={`h-6 rounded-lg ${acc.iconBg} flex items-center justify-center text-[9px] font-bold ${acc.iconColor}`}>💬 Real-time chat</div>
-          </div>
-        </div>
-        <div className="w-20 space-y-1">
-          <div className="h-10 rounded-lg bg-muted p-1.5 space-y-1">
-            <div className="h-1.5 w-full rounded bg-foreground/20" />
-            <div className="h-1.5 w-3/4 rounded bg-foreground/10" />
-            <div className={`h-2 rounded ${acc.iconBg}`} />
-          </div>
-          <div className="h-6 rounded bg-muted" />
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const ComingSoon: React.FC<ComingSoonProps> = ({ title, description, icon, accent = 'blue', preview, faqs, onNotify }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -176,10 +90,6 @@ const ComingSoon: React.FC<ComingSoonProps> = ({ title, description, icon, accen
         </div>
         <h3 className="text-base font-bold text-foreground">{title}</h3>
         <p className="text-xs text-muted-foreground mt-1 max-w-md leading-relaxed">{description}</p>
-      </div>
-
-      <div className="mt-5">
-        <Mockup title={title} accent={accent} />
       </div>
 
       <div className="mt-5">

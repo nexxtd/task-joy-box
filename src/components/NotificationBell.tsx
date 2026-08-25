@@ -85,7 +85,7 @@ export const NotificationBell: React.FC = () => {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+          <div className="absolute right-2 sm:right-0 top-full mt-2 w-80 max-w-[calc(100vw-16px)] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden -translate-x-1">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h4 className="text-sm font-bold">Notifications</h4>
               <span className="text-xs text-muted-foreground">{count} pending</span>
