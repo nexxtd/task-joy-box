@@ -646,6 +646,12 @@ export async function initDatabase() {
     `);
     console.log('Dashboard widget usage table verified');
 
+    // --- TICKET MESSAGE ATTACHMENTS ---
+    await addColumnIfNotExists('ticket_messages', 'attachment_url', 'TEXT');
+    await addColumnIfNotExists('ticket_messages', 'attachment_name', 'TEXT');
+    await addColumnIfNotExists('ticket_messages', 'attachment_type', 'TEXT');
+    await addColumnIfNotExists('ticket_messages', 'attachment_size', 'INTEGER');
+
     // --- DOCUMENTS (Document Editor) ---
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (

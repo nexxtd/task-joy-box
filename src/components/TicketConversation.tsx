@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Loader2, User, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Send, Loader2, User, Maximize2, Minimize2, Paperclip, Download, Image as ImageIcon, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 
 export interface TicketMessage {
@@ -12,6 +12,10 @@ export interface TicketMessage {
   readByStaff: boolean;
   createdAt: string;
   senderName: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentType?: string | null;
+  attachmentSize?: number | null;
 }
 
 export interface TicketData {
@@ -32,7 +36,7 @@ interface Props {
   currentUserName: string;
   onClose: () => void;
   onCloseTicket?: () => void;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, file?: File | null) => Promise<void>;
   onUserNameClick?: () => void;
   sending?: boolean;
   leftPanel?: React.ReactNode;
@@ -62,17 +66,34 @@ export const TicketConversation: React.FC<Props> = ({
   onToggleExpand,
 }) => {
   const [input, setInput] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (selectedFile && selectedFile.type.startsWith('image/')) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [selectedFile]);
+
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || sending) return;
+    if ((!trimmed && !selectedFile) || sending) return;
+    const fileToSend = selectedFile;
     setInput('');
-    await onSendMessage(trimmed);
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    await onSendMessage(trimmed, fileToSend);
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -80,6 +101,23 @@ export const TicketConversation: React.FC<Props> = ({
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f) {
+      if (f.size > 25 * 1024 * 1024) {
+        alert('File too large. Max 25MB');
+        return;
+      }
+      setSelectedFile(f);
+    }
+  };
+
+  const isImageAttachment = (msg: TicketMessage) => {
+    const t = msg.attachmentType || '';
+    const name = msg.attachmentName || '';
+    return t.startsWith('image/') || /\.(jpe?g|png|gif|webp|svg)$/i.test(name);
   };
 
   const isClosed = ticket.status === 'closed';
@@ -163,7 +201,24 @@ export const TicketConversation: React.FC<Props> = ({
                   ? 'bg-primary text-primary-foreground rounded-tr-sm'
                   : 'bg-muted text-foreground rounded-tl-sm'
               }`}>
-                {msg.message}
+                {msg.message && <div className="whitespace-pre-wrap break-words">{msg.message}</div>}
+                {msg.attachmentUrl && (
+                  <div className="mt-2">
+                    {isImageAttachment(msg) ? (
+                      <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
+                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[200px] rounded-lg border border-white/20 object-cover" />
+                        <span className="text-[11px] opacity-80 flex items-center gap-1 mt-1"><ImageIcon className="w-3 h-3" />{msg.attachmentName} {msg.attachmentSize ? `(${(msg.attachmentSize / 1024).toFixed(1)}KB)` : ''}</span>
+                      </a>
+                    ) : (
+                      <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" download={msg.attachmentName || undefined} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${isMe ? 'bg-white/15 text-white hover:bg-white/20' : 'bg-background border border-border hover:bg-muted'} transition-colors`}>
+                        <FileText className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{msg.attachmentName || 'File'}</span>
+                        {msg.attachmentSize && <span className="opacity-70">({(msg.attachmentSize / 1024).toFixed(1)}KB)</span>}
+                        <Download className="w-3.5 h-3.5 ml-auto flex-shrink-0" />
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
               <span className="text-[10px] text-muted-foreground">
                 {format(new Date(msg.createdAt), 'MMM d, HH:mm')}
@@ -176,25 +231,49 @@ export const TicketConversation: React.FC<Props> = ({
 
       <div className="p-3 border-t border-border flex-shrink-0">
         {isClosed ? (
-          <p className="text-xs text-center text-muted-foreground py-1 italic">This ticket has been closed.</p>
+          <p className="text-xs text-center text-muted-foreground py-1 italic">This ticket has been closed and its content was deleted to save storage.</p>
         ) : (
-          <div className="flex items-end gap-2">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Type a message…"
-              rows={1}
-              className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm resize-none outline-none focus:border-primary transition-colors"
-              style={{ minHeight: 36, maxHeight: 100 }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || sending}
-              className="p-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex-shrink-0"
-            >
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
+          <div className="space-y-2">
+            {selectedFile && (
+              <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-xl px-3 py-2">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-border" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{selectedFile.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)}KB</p>
+                </div>
+                <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value=''; }} className="p-1 hover:bg-muted rounded-lg">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <input ref={fileInputRef} type="file" accept="image/*,.pdf,.txt,.csv,.md,.zip,.doc,.docx" className="hidden" onChange={handleFileSelect} />
+              <button onClick={() => fileInputRef.current?.click()} disabled={sending} className="p-2 bg-muted border border-border rounded-xl hover:bg-muted/80 transition-colors flex-shrink-0" title="Attach image or file">
+                <Paperclip className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Type a message…"
+                rows={1}
+                className="flex-1 bg-muted/50 border border-border rounded-xl px-3 py-2 text-sm resize-none outline-none focus:border-primary transition-colors"
+                style={{ minHeight: 36, maxHeight: 100 }}
+              />
+              <button
+                onClick={handleSend}
+                disabled={(!input.trim() && !selectedFile) || sending}
+                className="p-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex-shrink-0"
+              >
+                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
         )}
       </div>

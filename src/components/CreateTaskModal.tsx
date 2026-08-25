@@ -893,7 +893,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         <span className="text-[10px] text-muted-foreground">min</span>
                                         <button
                                           onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                          className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -996,7 +996,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             {item.text}
                                           </span>
                                         )}
-                                        <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                        <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
@@ -1065,7 +1065,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         )}
                                       </button>
                                       <div className="flex items-center gap-1">
-                                        <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
+                                        <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200">
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                         <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
@@ -1114,7 +1114,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                                           {item.text}
                                                         </span>
                                                       )}
-                                                      <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                                      <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                       </button>
                                                     </div>

@@ -17,16 +17,27 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   zoom = 1,
   children,
 }) => {
-  const match = String(style?.transform || '').match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
-  const dx = match ? Number(match[1]) : 0;
-  const dy = match ? Number(match[2]) : 0;
-
-  // dnd's transform is the offset from where the drag started, and style.left/top
-  // is the element's original layout position. Adding them keeps the exact point
-  // the user grabbed (handle/grip) anchored under the cursor instead of centering.
-  const tx = dx + (style?.left ?? 0);
-  const ty = dy + (style?.top ?? 0);
-
+  if (!style) {
+    return (
+      <div ref={innerRef} {...draggableProps} {...dragHandleProps} style={{ pointerEvents: 'none' }}>
+        {children}
+      </div>
+    );
+  }
+  const rawTransform = String(style?.transform || '');
+  let dx = 0;
+  let dy = 0;
+  const m2 = rawTransform.match(/translate\(\s*([-\d.]+)px,?\s*([-\d.]+)px/);
+  const m3 = rawTransform.match(/translate3d\(\s*([-\d.]+)px,?\s*([-\d.]+)px/);
+  const m = m2 || m3;
+  if (m) {
+    dx = Number(m[1]) || 0;
+    dy = Number(m[2]) || 0;
+  }
+  const left = typeof style?.left === 'number' ? style.left : Number(style?.left) || 0;
+  const top = typeof style?.top === 'number' ? style.top : Number(style?.top) || 0;
+  const tx = dx + left;
+  const ty = dy + top;
   const renderedW = style?.width ?? 0;
   const renderedH = style?.height ?? 0;
 
@@ -40,12 +51,12 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
         top: 0,
         left: 0,
         boxSizing: 'border-box',
-        width: renderedW / zoom,
-        height: renderedH / zoom,
+        width: renderedW ? renderedW / zoom : undefined,
+        height: renderedH ? renderedH / zoom : undefined,
         zIndex: style?.zIndex ?? 5000,
         opacity: typeof style?.opacity === 'number' ? style.opacity : undefined,
         transition: 'none',
-        transform: `translate(${tx}px, ${ty}px) scale(${zoom})`,
+        transform: `translate(${tx}px, ${ty}px)${zoom !== 1 ? ` scale(${zoom})` : ''}`,
         transformOrigin: '0 0',
         pointerEvents: 'none',
       }}

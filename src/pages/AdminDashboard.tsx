@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAdminPreview } from '@/hooks/useAdminPreview';
 import {
   ShieldCheck, DollarSign, Users, CreditCard, Ticket, TrendingUp, Calendar,
   Trash2, Plus, Activity, X, Target, CheckSquare, BarChart3,
@@ -360,6 +361,8 @@ const AdminDashboard = () => {
   const [groupForm, setGroupForm] = useState({ name: '', color: GROUP_COLORS[0], icon: 'tag' });
   const [draftLayout, setDraftLayout] = useState<LayoutItem[] | null>(null);
   const dragRef = useRef<{ kind: 'group' | 'coupon'; id: number } | null>(null);
+
+  const { viewAsUser, setViewAsUser } = useAdminPreview();
 
   useEffect(() => {
     fetchData();
@@ -760,16 +763,27 @@ const AdminDashboard = () => {
     return () => clearInterval(interval);
   }, [activePanelTicket?.id]);
 
-  const handleAdminSendMessage = async (text: string) => {
+  const handleAdminSendMessage = async (text: string, file?: File | null) => {
     if (!activePanelTicket) return;
     setSendingAdminMessage(true);
     try {
-      await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ message: text }),
-      });
+      if (file) {
+        const form = new FormData();
+        form.append('message', text || '');
+        form.append('file', file);
+        await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, {
+          method: 'POST',
+          credentials: 'include',
+          body: form as any,
+        });
+      } else {
+        await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: text }),
+        });
+      }
       const res = await fetch(`/api/admin/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
@@ -1032,11 +1046,24 @@ if (loading && !stats) {
               )}
             </button>
           ))}
+          {viewAsUser !== undefined && (
+            <button
+              onClick={() => setViewAsUser(!viewAsUser)}
+              className="px-3 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm font-medium ${
+                viewAsUser ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }"
+            >
+              {viewAsUser ? 'View as Regular User' : 'View as Admin'}
+              {viewAsUser && (
+                <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+              )}
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 overscroll-contain" style={{ scrollbarGutter: 'stable' }}>
-        <div className="max-w-5xl mx-auto w-full min-w-0 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 overscroll-contain" style={{ scrollbarGutter: 'stable' }}>
+        <div className="max-w-7xl mx-auto w-full min-w-0 space-y-6 px-2 sm:px-4">
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             {loading ? (
@@ -2150,7 +2177,7 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-6 animate-in fade-in duration-300 pb-8 max-w-3xl mx-auto w-full min-w-0 overflow-y-auto overscroll-contain">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-8 w-full min-w-0 overflow-y-auto overscroll-contain">
           <div className="rounded-2xl bg-card border border-border p-6">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>

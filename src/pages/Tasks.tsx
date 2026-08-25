@@ -730,6 +730,7 @@ const Tasks: React.FC = () => {
   const [collapsedCompletedSections, setCollapsedCompletedSections] = useState<Record<string, boolean>>({});
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [isTaskDragging, setIsTaskDragging] = useState(false);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
@@ -1026,7 +1027,15 @@ const Tasks: React.FC = () => {
     if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
   };
 
+  useEffect(() => {
+    const onWindowUp = () => setIsTaskDragging(false);
+    window.addEventListener('mouseup', onWindowUp);
+    window.addEventListener('touchend', onWindowUp);
+    return () => { window.removeEventListener('mouseup', onWindowUp); window.removeEventListener('touchend', onWindowUp); };
+  }, []);
+
   const handleDragEnd = (result: DropResult) => {
+    setIsTaskDragging(false);
     if (!result.destination || sortByDueDate) return;
 
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
@@ -1794,7 +1803,7 @@ const Tasks: React.FC = () => {
             </div>
           </div>
         )}
-        {isExpanded && !isDeleteMode && (
+        {isExpanded && !isDeleteMode && !isTaskDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               task={task}
@@ -1883,7 +1892,7 @@ const Tasks: React.FC = () => {
       </span>
       <button
         onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
-        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+        className="p-1.5 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0"
         title="Delete task"
       >
         <Trash2 className="w-3.5 h-3.5" />
@@ -1991,7 +2000,7 @@ const Tasks: React.FC = () => {
                             {tmpl.title && <span className="text-[11px] text-muted-foreground truncate block">{tmpl.title}</span>}
                           </div>
                         </div>
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all ml-2">
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ml-2">
                           <button
                             onClick={() => {
                               setMainTmplPopupOpen(false);
@@ -2182,7 +2191,7 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragStart={() => setIsTaskDragging(true)} onDragEnd={(result) => { setIsTaskDragging(false); handleDragEnd(result); }}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">
@@ -2652,7 +2661,7 @@ const Tasks: React.FC = () => {
                                           <span className="text-[10px] text-muted-foreground">min</span>
                                           <button
                                             onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2727,7 +2736,7 @@ const Tasks: React.FC = () => {
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <span className="flex-1">{item.text}</span>
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
@@ -2796,7 +2805,7 @@ const Tasks: React.FC = () => {
                                       )}
                                     </button>
                                     <div className="flex items-center gap-1">
-                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
+                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
@@ -2817,7 +2826,7 @@ const Tasks: React.FC = () => {
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <span className="flex-1 text-foreground">{item.text}</span>
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                   </div>
@@ -3214,7 +3223,7 @@ const Tasks: React.FC = () => {
                           {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
                         </div>
                       </button>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
                         <button
                           onClick={() => {
                             setLoadTemplateOpen(false);
@@ -3691,7 +3700,7 @@ const Tasks: React.FC = () => {
                                         <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
                                           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
                                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
-                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"><Trash2 className="w-3.5 h-3.5" /></button>
                                         </div>
                                       </div>
                                     )}
@@ -4105,7 +4114,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -4286,7 +4295,7 @@ export const TaskDropdownExpanded: React.FC<{
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -4338,7 +4347,7 @@ export const TaskDropdownExpanded: React.FC<{
                                                 )}
                                                 <button
                                                   onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                                 >
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
@@ -4765,7 +4774,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -5322,7 +5331,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   <div className="flex items-center gap-1">
                                     <button
                                       onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
-                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -5374,7 +5383,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                     )}
                                                     <button
                                                       onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                                     >
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -5635,7 +5644,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   )}
                   <button
                     onClick={() => deleteComment(comment.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -5879,7 +5888,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                           {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
                         </div>
                       </button>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
                         <button
                           onClick={() => {
                             setFullViewLoadTmplOpen(false);

@@ -4,13 +4,70 @@ import { users, workspaces, transactions, coupons, couponGroups, couponRedemptio
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
-import { invalidateSettingCache } from '../lib/settings.js';
+import { invalidateSettingCache, getSettingNumber } from '../lib/settings.js';
+import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
 // Apply admin protection to all routes in this file
 router.use(requireAuth);
 router.use(requireAdmin);
+
+const ALLOWED_TICKET_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'application/pdf', 'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/markdown',
+];
+const ALLOWED_TICKET_EXT = /\.(jpe?g|png|gif|webp|svg|pdf|txt|csv|md|zip|docx?)$/i;
+
+const ticketStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = process.env.VERCEL === '1' ? path.join('/tmp', 'uploads', 'tickets') : path.join(process.cwd(), 'uploads', 'tickets');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '') || '';
+    cb(null, unique + ext);
+  },
+});
+
+const uploadTicket = multer({
+  storage: ticketStorage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_TICKET_MIMES.includes(file.mimetype) || ALLOWED_TICKET_EXT.test(file.originalname)) cb(null, true);
+    else cb(new Error('File type not allowed'));
+  },
+});
+
+async function deleteTicketContent(ticketId: number) {
+  try {
+    const msgs = await db.select({ attachmentUrl: ticketMessages.attachmentUrl }).from(ticketMessages).where(eq(ticketMessages.ticketId, ticketId));
+    for (const m of msgs as any[]) {
+      if (m.attachmentUrl) {
+        const fileName = path.basename(m.attachmentUrl);
+        const candidates = [
+          path.join(process.cwd(), 'uploads', 'tickets', fileName),
+          path.join('/tmp', 'uploads', 'tickets', fileName),
+          path.join(process.cwd(), 'uploads', fileName),
+          path.join('/tmp', 'uploads', fileName),
+        ];
+        for (const p of candidates) {
+          try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+        }
+      }
+    }
+    await db.delete(ticketMessages).where(eq(ticketMessages.ticketId, ticketId));
+  } catch (e) {
+    console.error('Failed to delete ticket content', e);
+  }
+}
 
 // Dashboard Statistics
 router.get('/stats', async (req: AuthRequest, res: Response) => {
@@ -368,9 +425,9 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
 router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = parseInt(req.params.id);
-    const { name, email, tier, status, location, language } = req.body;
+    const { name, email, tier, status, location, language, password } = req.body;
 
-    if (!name && email === undefined && tier === undefined && status === undefined && location === undefined && language === undefined) {
+    if (!name && email === undefined && tier === undefined && status === undefined && location === undefined && language === undefined && password === undefined) {
       return res.status(400).json({ error: 'Nothing to update' });
     }
 
@@ -389,10 +446,14 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
     if (status !== undefined && !['active', 'inactive', 'trialing'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
+    if (password !== undefined && (typeof password !== 'string' || password.length < 6)) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name.trim();
     if (email !== undefined) updateData.email = email.trim();
+    if (password !== undefined) updateData.passwordHash = await bcrypt.hash(password, 12);
     if (tier !== undefined) {
       updateData.subscriptionTier = tier;
       updateData.subscriptionStatus = tier === 'free' && status === undefined ? 'inactive' : (status || (tier === 'free' ? 'inactive' : 'active'));
@@ -514,6 +575,10 @@ router.get('/tickets/:id/messages', async (req: AuthRequest, res: Response) => {
       readByStaff: ticketMessages.readByStaff,
       createdAt: ticketMessages.createdAt,
       senderName: users.name,
+      attachmentUrl: ticketMessages.attachmentUrl,
+      attachmentName: ticketMessages.attachmentName,
+      attachmentType: ticketMessages.attachmentType,
+      attachmentSize: ticketMessages.attachmentSize,
     })
       .from(ticketMessages)
       .leftJoin(users, eq(ticketMessages.senderId, users.id))
@@ -530,22 +595,49 @@ router.get('/tickets/:id/messages', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/tickets/:id/messages', async (req: AuthRequest, res: Response) => {
+router.post('/tickets/:id/messages', uploadTicket.single('file'), async (req: any, res: Response) => {
   try {
     const ticketId = parseInt(req.params.id);
-    const { message } = req.body;
-    if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+    const message = (req.body?.message || '').trim();
+    const file = req.file as Express.Multer.File | undefined;
+    if (!message && !file) return res.status(400).json({ error: 'Message or file is required' });
 
     const ticket = await db.select().from(supportTickets).where(eq(supportTickets.id, ticketId)).limit(1);
-    if (!ticket.length) return res.status(404).json({ error: 'Not found' });
+    if (!ticket.length) {
+      if (file) fs.unlink(file.path, () => {});
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    if (file) {
+      const maxMb = await getSettingNumber('max_attachment_mb', 25);
+      if (file.size > maxMb * 1024 * 1024) {
+        fs.unlink(file.path, () => {});
+        return res.status(400).json({ error: `File too large. Max ${maxMb}MB` });
+      }
+    }
+
+    let attachmentUrl: string | null = null;
+    let attachmentName: string | null = null;
+    let attachmentType: string | null = null;
+    let attachmentSize: number | null = null;
+    if (file) {
+      attachmentUrl = `/uploads/tickets/${path.basename(file.path)}`;
+      attachmentName = file.originalname;
+      attachmentType = file.mimetype;
+      attachmentSize = file.size;
+    }
 
     await db.insert(ticketMessages).values({
       ticketId,
       senderId: req.userId!,
       senderType: 'staff',
-      message: message.trim(),
+      message: message || (file ? `[Attachment] ${file.originalname}` : ''),
       readByUser: false,
       readByStaff: true,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+      attachmentSize,
     });
 
     if (!ticket[0].staffReplied) {
@@ -581,6 +673,9 @@ router.patch('/tickets/:id/status', async (req: AuthRequest, res: Response) => {
     await db.update(supportTickets)
       .set(updateData)
       .where(eq(supportTickets.id, ticketId));
+    if (status === 'closed') {
+      await deleteTicketContent(ticketId);
+    }
     res.json({ success: true, status });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update ticket status' });
@@ -593,6 +688,7 @@ router.patch('/tickets/:id/close', async (req: AuthRequest, res: Response) => {
     await db.update(supportTickets)
       .set({ status: 'closed', closedAt: new Date().toISOString(), updatedAt: sql`NOW()` })
       .where(eq(supportTickets.id, ticketId));
+    await deleteTicketContent(ticketId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to close ticket' });

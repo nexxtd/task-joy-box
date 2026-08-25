@@ -554,6 +554,10 @@ export const ticketMessages = pgTable('ticket_messages', {
   readByUser: boolean('read_by_user').default(false).notNull(),
   readByStaff: boolean('read_by_staff').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  attachmentUrl: text('attachment_url'),
+  attachmentName: text('attachment_name'),
+  attachmentType: text('attachment_type'),
+  attachmentSize: integer('attachment_size'),
 });
 
 // Types exported via any to avoid inference issues on Render
