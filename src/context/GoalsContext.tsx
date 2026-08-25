@@ -377,9 +377,14 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newTask: Task = {
         id: genId(),
         title,
+        description: '', // Added required field
+        priority: 'none', // Added required field
+        labels: [], // Added required field
+        checklists: [], // Added required field
+        subtasks: [], // Added required field
         columnId,
         createdAt: new Date().toISOString(),
-        activityLog: [],
+        activityLog: [], // Changed 'activities' to 'activityLog'
         ...details,
       };
       setBoard(prev => ({
@@ -436,6 +441,8 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         id: genId(),
         title,
         projectId,
+        order: prev.columns.length, // Added required field
+        color: 'hsl(var(--muted-foreground))', // Added required field, using a default from elsewhere in the codebase
       };
       setBoard(prev => ({
         ...prev,
