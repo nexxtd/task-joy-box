@@ -161,7 +161,16 @@ export const HabitsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [board, setBoard] = useState<Board>({ ...emptyBoard });
   const [loading, setLoading] = useState(true);
   const boardRef = useRef<Board>({ ...emptyBoard });
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { boardRef.current = board; }, [board]);
+  const flushBoardSave = useCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (!dirtyRef.current || !user) return;
+    const boardToSave = boardRef.current;
+    dirtyRef.current = false;
+    saveBoard(user.id, boardToSave).then(ok => { if (ok) setLastSyncTime(new Date()); });
+  }, [user]);
 
   // Track sync status for cross-device sync
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -214,12 +223,17 @@ export const HabitsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     if (!user) return;
-    const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, boardRef.current);
-      if (success) setLastSyncTime(new Date());
-    }, 30000);
+    const syncInterval = setInterval(() => { flushBoardSave(); }, 30000);
     return () => clearInterval(syncInterval);
-  }, [user?.id]);
+  }, [user?.id, flushBoardSave]);
+  useEffect(() => {
+    if (!user) return;
+    const handleHide = () => flushBoardSave();
+    const handleVis = () => { if (document.visibilityState === 'hidden') flushBoardSave(); };
+    document.addEventListener('visibilitychange', handleVis);
+    window.addEventListener('pagehide', handleHide);
+    return () => { document.removeEventListener('visibilitychange', handleVis); window.removeEventListener('pagehide', handleHide); flushBoardSave(); };
+  }, [user?.id, flushBoardSave]);
 
   useEffect(() => {
     if (!user) return;
@@ -264,10 +278,13 @@ export const HabitsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const persist = useCallback((updater: (b: Board) => Board) => {
     setBoard(prev => {
       const next = updater(prev);
-      if (user) saveBoard(user.id, next);
+      boardRef.current = next;
+      dirtyRef.current = true;
       return next;
     });
-  }, [user]);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushBoardSave, 1500);
+  }, [flushBoardSave]);
 
   const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
     const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';

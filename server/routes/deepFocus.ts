@@ -10,11 +10,11 @@ const router = Router();
 
 async function requireFocusTier(req: AuthRequest, res: any): Promise<boolean> {
   const requiredTier = (await getSetting('feature_deepfocus_tier', 'free')) || 'free';
+  if (requiredTier === 'free') return true;
   const [user] = await db.select({ subscriptionTier: users.subscriptionTier, subscriptionStatus: users.subscriptionStatus })
     .from(users).where(eq(users.id, req.userId!)).limit(1);
   const userTier = user?.subscriptionTier?.toLowerCase() || 'free';
   const active = ['active', 'trialing'].includes(user?.subscriptionStatus || '');
-  if (requiredTier === 'free') return true;
   if (tierRank(userTier) < tierRank(requiredTier) || !active) {
     res.status(403).json({
       error: 'Feature locked',
@@ -24,7 +24,7 @@ async function requireFocusTier(req: AuthRequest, res: any): Promise<boolean> {
     });
     return false;
   }
-return true;
+  return true;
 }
 
 router.get('/sessions', requireAuth, async (req: AuthRequest, res) => {
