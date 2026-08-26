@@ -130,6 +130,18 @@ function ProtectedRoutes() {
   const { user, loading } = useAuth();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
+  useEffect(() => {
+    void import("@/pages/Dashboard");
+    void import("@/pages/Tasks");
+    void import("@/pages/Goals");
+    void import("@/pages/Habits");
+    void import("@/pages/Notes");
+    void import("@/pages/Projects");
+    void import("@/pages/CalendarPage");
+    void import("@/pages/Insights");
+    void import("@/pages/Documents");
+    void import("@/pages/Collaboration");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,11 +222,24 @@ function ProtectedRoutes() {
   );
 }
 
-const PageLoader = () => (
-  <div className="h-screen flex items-center justify-center bg-background">
-    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-  </div>
-);
+const PageLoader = () => {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setStuck(true), 3000); return () => clearTimeout(t); }, []);
+  if (stuck) {
+    return (
+      <div className="h-[60vh] flex flex-col items-center justify-center gap-3 bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground">Taking longer than expected…</p>
+        <button onClick={() => window.location.reload()} className="text-xs underline text-primary">Reload</button>
+      </div>
+    );
+  }
+  return (
+    <div className="h-[60vh] flex items-center justify-center bg-background">
+      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+};
 
 const App = () => (
   <ThemeProvider>
