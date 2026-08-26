@@ -164,15 +164,18 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (user) {
       setLoading(true);
+      const fallback = setTimeout(() => setLoading(false), 2000);
       loadBoard(user.id).then(loaded => {
+        clearTimeout(fallback);
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
           saveBoard(user.id, loaded);
         }
-        setBoard(loaded);
+        setBoard(prev => { boardRef.current = loaded; return loaded; });
         setLoading(false);
         setLastSyncTime(new Date());
-      }).catch(() => { setBoard({ ...emptyBoard }); setLoading(false); });
+      }).catch(() => { clearTimeout(fallback); setBoard({ ...emptyBoard }); setLoading(false); });
+      return () => clearTimeout(fallback);
     } else { setBoard({ ...emptyBoard }); setLoading(false); }
   }, [user?.id]);
 
@@ -212,8 +215,10 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         try {
-          const vc = new AbortController(); setTimeout(() => vc.abort(), 4000);
+          const vc = new AbortController();
+          const tid = setTimeout(() => vc.abort(), 4000);
           const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: vc.signal });
+          clearTimeout(tid);
           if (res.ok) {
             const data = await res.json();
             const serverBoard = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
@@ -222,6 +227,7 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               const serverBoardStr = JSON.stringify(serverBoard);
               if (serverBoardStr !== localBoardStr) {
                 setBoard(serverBoard);
+                boardRef.current = serverBoard;
                 localStorage.setItem(getBoardKey(user.id), JSON.stringify(serverBoard));
                 setLastSyncTime(new Date());
               }
@@ -230,11 +236,16 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } catch (err) {
           console.error('Failed to sync on visibility change:', err);
         }
+        if (loading) setLoading(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user?.id]);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [user?.id, loading]);
 
   const logActivity = useCallback((taskId: string, text: string) => {
     setBoard(prev => {
