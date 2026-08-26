@@ -163,19 +163,27 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (user) {
-      setLoading(true);
-      const fallback = setTimeout(() => setLoading(false), 2000);
+      try {
+        const cached = localStorage.getItem(getBoardKey(user.id));
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.columns) { setBoard(parsed); boardRef.current = parsed; setLoading(false); setLastSyncTime(new Date()); }
+          else setLoading(false);
+        } else {
+          const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
+          setBoard(def); boardRef.current = def; setLoading(false); saveBoard(user.id, def);
+        }
+      } catch { setLoading(false); }
       loadBoard(user.id).then(loaded => {
-        clearTimeout(fallback);
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
           saveBoard(user.id, loaded);
         }
-        setBoard(prev => { boardRef.current = loaded; return loaded; });
+        const cur = JSON.stringify(boardRef.current);
+        const nxt = JSON.stringify(loaded);
+        if (cur !== nxt) { setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date()); }
         setLoading(false);
-        setLastSyncTime(new Date());
-      }).catch(() => { clearTimeout(fallback); setBoard({ ...emptyBoard }); setLoading(false); });
-      return () => clearTimeout(fallback);
+      }).catch(() => setLoading(false));
     } else { setBoard({ ...emptyBoard }); setLoading(false); }
   }, [user?.id]);
 
