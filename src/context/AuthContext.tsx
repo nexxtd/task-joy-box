@@ -29,7 +29,7 @@ export const useAuth = () => {
   return ctx;
 };
 
-async function apiFetch(path: string, options?: RequestInit, timeoutMs = 5000) {
+async function apiFetch(path: string, options?: RequestInit, timeoutMs = 3000) {
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -68,33 +68,35 @@ async function apiFetch(path: string, options?: RequestInit, timeoutMs = 5000) {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    try { const c = localStorage.getItem('auth_user_cache'); return c ? JSON.parse(c) : null; } catch { return null; }
+  });
+  const [loading, setLoading] = useState(() => {
+    try { return !localStorage.getItem('auth_user_cache'); } catch { return true; }
+  });
 
-  // Function to refresh user data from server
   const refreshUserData = useCallback(async () => {
     try {
       const data = await apiFetch('/api/auth/me');
       if (data && typeof data.user === 'object' && data.user !== null) {
         setUser(data.user);
+        try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
         return data.user;
       } else {
         setUser(null);
+        try { localStorage.removeItem('auth_user_cache'); } catch {}
         return null;
       }
     } catch (error) {
       console.error('Error fetching user info:', error);
-      // If there's an error fetching user data, clear the user
-      setUser(null);
       return null;
     }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 4000);
-    refreshUserData()
-      .finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });
+    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 1500);
+    refreshUserData().finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });
     return () => { cancelled = true; clearTimeout(t); };
   }, [refreshUserData]);
 
@@ -105,6 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ email, password }),
     });
     setUser(data.user);
+    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     return data;
   }, []);
 
@@ -115,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ name, email, password }),
     });
     setUser(data.user);
+    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     return data;
   }, []);
 
@@ -125,15 +129,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: JSON.stringify({ credential }),
     });
     setUser(data.user);
+    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     return data;
   }, []);
 
   const logout = useCallback(async () => {
+    try { localStorage.removeItem('auth_user_cache'); } catch {}
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch (error) {
       console.error('Error during logout:', error);
-      // Even if the API call fails, we still want to clear the user data
     } finally {
       setUser(null);
     }
