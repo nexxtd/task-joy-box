@@ -818,61 +818,9 @@ const Habits: React.FC = () => {
     const isCrossColumn = srcId !== dstId;
     const isCrossProject = srcProject !== dstProject;
 
-    if (isCrossProject) {
-      if (localStorage.getItem('habits-drag-confirm-project') === 'true') {
-        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
-        return;
-      }
-      const srcHabits = getHabitsForDroppable(srcId);
-      if (!srcHabits) return;
-      const movingTaskId = srcHabits[result.source.index]?.id;
-      if (!movingTaskId) return;
-      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'project' });
+    if (isCrossProject || isCrossColumn) {
+      applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
       return;
-    }
-
-    if (isCrossColumn) {
-      if (localStorage.getItem('habits-drag-confirm-column') === 'true') {
-        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
-        return;
-      }
-      const srcHabits = getHabitsForDroppable(srcId);
-      const dstHabits = getHabitsForDroppable(dstId);
-      if (!srcHabits || !dstHabits) return;
-
-      const movingTaskId = srcHabits[result.source.index]?.id;
-      if (!movingTaskId) return;
-      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'column' });
-      return;
-
-      const srcIds = srcHabits.map(t => t.id);
-      const dstIds = dstHabits.map(t => t.id);
-      const [removed] = srcIds.splice(result.source.index, 1);
-      dstIds.splice(result.destination.index, 0, removed);
-
-      srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
-      dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
-
-      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-      const srcSet = new Set(srcHabits.map(t => t.id));
-      const dstSet = new Set(dstHabits.map(t => t.id));
-      const resultIds: string[] = [];
-      let srcInserted = false;
-      let dstInserted = false;
-      for (const id of base) {
-        if (srcSet.has(id) && !srcInserted) {
-          resultIds.push(...srcIds);
-          srcInserted = true;
-        } else if (dstSet.has(id) && !dstInserted) {
-          resultIds.push(...dstIds);
-          dstInserted = true;
-        } else if (!srcSet.has(id) && !dstSet.has(id)) {
-          resultIds.push(id);
-        }
-      }
-      if (!srcInserted) resultIds.push(...srcIds);
-      if (!dstInserted) resultIds.push(...dstIds);
-      setOrderedActiveIds(resultIds);
     } else {
       const sectionHabits = getHabitsForDroppable(srcId);
       if (!sectionHabits) return;

@@ -62,17 +62,19 @@ async function loadBoard(userId: number, cachedBoardOnEntry: Board | null): Prom
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
-    clearTimeout(tid);
 
-    // Check for 403/400 immediately and return cached board if present
+    // Check for 403/400 immediately after fetch resolves, before clearing timeout
     if (res.status === 403 || res.status === 400) {
         console.debug("Server responded with 403/400, returning cached board if available.");
+        clearTimeout(tid); // Clear timeout as the request is effectively handled
         if (cachedBoardOnEntry) {
             return cachedBoardOnEntry;
         }
         // If no cache and got 403/400, we must return empty board as per policy
         return { ...emptyBoard };
     }
+
+    clearTimeout(tid); // Clear timeout after status check passes
 
     if (res.ok) {
       const data = await res.json();
@@ -149,7 +151,16 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [board, setBoard] = useState<Board>({ ...emptyBoard });
   const [loading, setLoading] = useState(true);
   const boardRef = useRef<Board>({ ...emptyBoard });
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { boardRef.current = board; }, [board]);
+  const flushBoardSave = useCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (!dirtyRef.current || !user) return;
+    const boardToSave = boardRef.current;
+    dirtyRef.current = false;
+    saveBoard(user.id, boardToSave).then(ok => { if (ok) setLastSyncTime(new Date()); });
+  }, [user]);
 
   // Track sync status for cross-device sync
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -236,12 +247,17 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (!user) return;
-    const syncInterval = setInterval(async () => {
-      const success = await saveBoard(user.id, boardRef.current);
-      if (success) setLastSyncTime(new Date());
-    }, 30000);
+    const syncInterval = setInterval(() => { flushBoardSave(); }, 30000);
     return () => clearInterval(syncInterval);
-  }, [user?.id]);
+  }, [user?.id, flushBoardSave]);
+  useEffect(() => {
+    if (!user) return;
+    const handleHide = () => flushBoardSave();
+    const handleVis = () => { if (document.visibilityState === 'hidden') flushBoardSave(); };
+    document.addEventListener('visibilitychange', handleVis);
+    window.addEventListener('pagehide', handleHide);
+    return () => { document.removeEventListener('visibilitychange', handleVis); window.removeEventListener('pagehide', handleHide); flushBoardSave(); };
+  }, [user?.id, flushBoardSave]);
 
   // Periodic pull sync to check for server updates while on the page
   useEffect(() => {

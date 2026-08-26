@@ -1011,7 +1011,7 @@ const Tasks: React.FC = () => {
     const srcTasks = getTasksForDroppable(srcDroppableId);
     const dstTasks = getTasksForDroppable(dstDroppableId);
     if (!srcTasks || !dstTasks) return;
-    if (srcTasks.length <= srcIndex || dstTasks.length < dstIndex) return;
+    if (srcTasks.length <= srcIndex) return;
 
     const movingTaskId = srcTasks[srcIndex]?.id;
     if (!movingTaskId) return;
@@ -1021,10 +1021,40 @@ const Tasks: React.FC = () => {
     if (newColumnId) updateFields.columnId = newColumnId;
     if (dstProject === 'my-tasks') {
       updateFields.projectId = null;
+      updateFields.projectName = undefined;
     } else if (typeof dstProject === 'number') {
+      const proj = projects.find(p => p.id === dstProject);
       updateFields.projectId = dstProject;
+      if (proj) updateFields.projectName = proj.name;
     }
     if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
+
+    const isSameDroppable = srcDroppableId === dstDroppableId;
+    if (!isSameDroppable) {
+      const dstIds = dstTasks.map(t => t.id);
+      const srcIds = srcTasks.map(t => t.id);
+      if (srcDroppableId !== dstDroppableId) {
+        const insertIdx = Math.min(dstIndex, dstIds.length);
+        dstIds.splice(insertIdx, 0, movingTaskId);
+        const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
+        filteredSrcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+        dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+        const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+        const srcSet = new Set(srcTasks.map(t => t.id));
+        const dstSet = new Set(dstTasks.map(t => t.id));
+        const resultIds: string[] = [];
+        let srcInserted = false;
+        let dstInserted = false;
+        for (const id of base) {
+          if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
+          else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+          else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+        }
+        if (!srcInserted) resultIds.push(...filteredSrcIds);
+        if (!dstInserted) resultIds.push(...dstIds);
+        setOrderedActiveIds(resultIds);
+      }
+    }
   };
 
   useEffect(() => {
@@ -1047,31 +1077,8 @@ const Tasks: React.FC = () => {
     const isCrossColumn = srcId !== dstId;
     const isCrossProject = srcProject !== dstProject;
 
-    if (isCrossProject) {
-      if (localStorage.getItem('tasks-drag-confirm-project') === 'true') {
-        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
-        return;
-      }
-      const srcTasks = getTasksForDroppable(srcId);
-      if (!srcTasks) return;
-      const movingTaskId = srcTasks[result.source.index]?.id;
-      if (!movingTaskId) return;
-      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'project' });
-      return;
-    }
-
-    if (isCrossColumn) {
-      if (localStorage.getItem('tasks-drag-confirm-column') === 'true') {
-        applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
-        return;
-      }
-      const srcTasks = getTasksForDroppable(srcId);
-      const dstTasks = getTasksForDroppable(dstId);
-      if (!srcTasks || !dstTasks) return;
-
-      const movingTaskId = srcTasks[result.source.index]?.id;
-      if (!movingTaskId) return;
-      setPendingDragMove({ taskId: movingTaskId, srcDroppableId: srcId, dstDroppableId: dstId, srcIndex: result.source.index, dstIndex: result.destination.index, dstProject, moveType: 'column' });
+    if (isCrossProject || isCrossColumn) {
+      applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
       return;
     } else {
       const sectionTasks = getTasksForDroppable(srcId);
