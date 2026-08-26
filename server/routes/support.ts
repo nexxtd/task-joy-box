@@ -92,7 +92,7 @@ router.get('/tickets/my', async (req: AuthRequest, res: Response) => {
   try {
     const tickets = await db.select()
       .from(supportTickets)
-      .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.staffReplied, true)))
+      .where(eq(supportTickets.userId, req.userId!))
       .orderBy(desc(supportTickets.updatedAt));
     res.json(tickets);
   } catch (error) {
