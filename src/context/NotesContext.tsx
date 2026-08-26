@@ -78,37 +78,20 @@ async function loadBoard(userId: number): Promise<Board> {
     } catch {}
   }
 
-  // 3) No cache: fetch from server (but fast-path 403/400)
-  try {
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch('/api/note-boards/snapshot', { 
-      credentials: 'include', 
-      signal: ctrl.signal 
-    });
-    clearTimeout(tid);
-    
-    // Fast-path free tier restrictions
-    if (res.status === 403 || res.status === 400) {
-      return { ...emptyBoard };
-    }
-    
-    if (res.ok) {
-      const data = await res.json();
-      const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
-      if (board) {
-        localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-        return board as Board;
+  void (async () => {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+      clearTimeout(tid);
+      if (res.status === 403 || res.status === 400) return;
+      if (res.ok) {
+        const data = await res.json();
+        const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+        if (board) localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
       }
-    }
-  } catch {}
-  
-  // 4) Final fallback
-  try {
-    const saved = localStorage.getItem(getBoardKey(userId));
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  
+    } catch {}
+  })();
   return { ...emptyBoard };
 }
 
