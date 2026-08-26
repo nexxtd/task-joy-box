@@ -81,6 +81,16 @@ router.post('/tickets', async (req: AuthRequest, res: Response) => {
       readByUser: true,
       readByStaff: false,
     });
+    const staffUser = await db.select({ id: users.id }).from(users).where(eq(users.email, 'support@system.local')).limit(1);
+    const staffId = staffUser[0]?.id || req.userId!;
+    await db.insert(ticketMessages).values({
+      ticketId: ticket.id,
+      senderId: staffId,
+      senderType: 'staff',
+      message: `Hi there! Thanks for reaching out — we've received your ${type} request "${subject}". Our team will review it and get back to you soon. You can reply here if you have more details.`,
+      readByUser: false,
+      readByStaff: true,
+    });
     res.json({ success: true, ticket });
   } catch (error) {
     console.error('Failed to create ticket:', error);

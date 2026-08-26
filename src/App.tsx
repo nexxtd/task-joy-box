@@ -108,7 +108,7 @@ const Notifier = () => {
           }
         }
         if (overdue) {
-          const key = `overdue_${task.id}`;
+          const key = `overdue_${task.id}_${task.dueDate}_${task.dueTime || ""}`;
           if (!wasAlertSent(key)) {
             toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
             deviceNotify("Overdue", `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`, key);

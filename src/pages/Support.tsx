@@ -8,8 +8,10 @@ import { toast } from '@/hooks/use-toast';
 import { FAQS, RESOURCES } from '@/data/supportContent';
 import SupportContent from '@/components/SupportContent';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
+import { useAuth } from '@/context/AuthContext';
 
-type View = 'main' | 'faqs' | 'resources' | 'submit';
+type View = 'main' | 'faqs' | 'resources' | 'submit' | 'tickets';
 
 const TYPE_TOASTS: Record<string, string> = {
   suggestion: 'Thank you for your suggestion! We really appreciate your feedback.',
@@ -137,6 +139,105 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
           ) : (
             <p className="text-muted-foreground text-sm">Select a guide from the left to read it here.</p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { user } = useAuth();
+  const [tickets, setTickets] = useState<TicketData[]>([]);
+  const [selected, setSelected] = useState<TicketData | null>(null);
+  const [messages, setMessages] = useState<TicketMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const fetchTickets = async () => {
+    try {
+      const res = await fetch('/api/support/tickets/my', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setTickets(Array.isArray(data) ? data : []);
+      }
+    } catch {} finally { setLoading(false); }
+  };
+  useEffect(() => { fetchTickets(); }, []);
+
+  const fetchMessages = async (ticketId: number) => {
+    try {
+      const res = await fetch(`/api/support/tickets/${ticketId}/messages`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+        setSelected(data.ticket || tickets.find(t => t.id === ticketId) || null);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (selected) fetchMessages(selected.id);
+  }, [selected?.id]);
+
+  const handleSend = async (text: string, file?: File | null) => {
+    if (!selected) return;
+    setSending(true);
+    try {
+      const form = new FormData();
+      if (text) form.append('message', text);
+      if (file) form.append('file', file);
+      const res = await fetch(`/api/support/tickets/${selected.id}/messages`, { method: 'POST', credentials: 'include', body: form as any });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) setMessages(prev => [...prev, { ...data.message, senderName: user?.name || 'You' }]);
+        else fetchMessages(selected.id);
+      }
+    } catch {} finally { setSending(false); }
+  };
+
+  if (selected) {
+    return (
+      <TicketConversation
+        ticket={selected}
+        messages={messages}
+        viewAs="user"
+        currentUserName={user?.name || 'You'}
+        onClose={() => { setSelected(null); setMessages([]); fetchTickets(); }}
+        onSendMessage={handleSend}
+        sending={sending}
+      />
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <LifeBuoy className="w-4 h-4 text-primary" />
+          </div>
+          <h1 className="text-lg font-bold text-foreground">My Tickets</h1>
+        </div>
+        <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors">
+          <X className="w-5 h-5 text-muted-foreground" />
+        </button>
+      </header>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-2xl mx-auto space-y-3">
+          {loading ? (
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : tickets.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-12">No tickets yet. Submit a request to get started.</p>
+          ) : tickets.map(t => (
+            <button key={t.id} onClick={() => setSelected(t)} className="w-full text-left p-4 bg-card border border-border rounded-xl hover:border-primary/30 transition-colors">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-mono text-muted-foreground">#{t.id}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${t.status === 'open' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-muted text-muted-foreground'}`}>{t.status}</span>
+              </div>
+              <p className="text-sm font-semibold mt-1 truncate">{t.subject}</p>
+              <p className="text-xs text-muted-foreground capitalize">{t.type}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>
@@ -303,6 +404,7 @@ const Support: React.FC = () => {
   const openFaqs = (faqId?: string) => { setInitialFaqId(faqId); setView('faqs'); };
   const openResources = (catId?: string, guideId?: string) => { setInitialCatId(catId); setInitialGuideId(guideId); setView('resources'); };
   const openSubmit = () => { setView('submit'); };
+  const openTickets = () => { setView('tickets'); };
   const openAi = () => { navigate('/ai-chat'); };
 
   useEffect(() => {
@@ -323,6 +425,7 @@ const Support: React.FC = () => {
   if (view === 'faqs') return <FAQsView onClose={() => setView('main')} initialFaqId={initialFaqId} />;
   if (view === 'resources') return <ResourcesView onClose={() => setView('main')} initialCatId={initialCatId} initialGuideId={initialGuideId} />;
   if (view === 'submit') return <SubmitView onClose={() => setView('main')} />;
+  if (view === 'tickets') return <MyTicketsView onClose={() => setView('main')} />;
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
@@ -348,6 +451,7 @@ const Support: React.FC = () => {
           onOpenFaqs={openFaqs}
           onOpenResources={openResources}
           onOpenSubmit={openSubmit}
+          onOpenTickets={openTickets}
         />
       </div>
     </div>

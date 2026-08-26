@@ -8,6 +8,7 @@ interface SupportContentProps {
   onOpenFaqs?: (faqId?: string) => void;
   onOpenResources?: (catId?: string, guideId?: string) => void;
   onOpenSubmit?: () => void;
+  onOpenTickets?: () => void;
   showWhatsNew?: boolean;
 }
 
@@ -85,7 +86,7 @@ const CARDS: CardDef[] = [
   },
 ];
 
-const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, onOpenResources, onOpenSubmit, showWhatsNew = true }) => {
+const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, onOpenResources, onOpenSubmit, onOpenTickets, showWhatsNew = true }) => {
   const navigate = useNavigate();
 
   const openAi = () => { if (onOpenAi) { onOpenAi(); } else { navigate('/ai-chat'); } };
@@ -130,6 +131,13 @@ const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, o
           </div>
         ))}
       </div>
+      {onOpenTickets && (
+        <div className="mt-5 flex justify-center">
+          <button onClick={onOpenTickets} className="text-sm font-semibold text-primary hover:underline flex items-center gap-1.5">
+            View my tickets <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {showWhatsNew && (
         <div className="mt-10">

@@ -74,9 +74,9 @@ export const NotificationBell: React.FC = () => {
   const count = pendings.length;
 
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(true)}
         className="relative p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         title={count ? `${count} pending approval${count>1?'s':''}` : 'No notifications'}
       >
@@ -88,14 +88,19 @@ export const NotificationBell: React.FC = () => {
         )}
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-2 sm:right-0 top-full mt-2 w-80 max-w-[calc(100vw-16px)] bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden -translate-x-1">
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+          <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
               <h4 className="text-sm font-bold">Notifications</h4>
-              <span className="text-xs text-muted-foreground">{count} pending</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{count} pending</span>
+                <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="max-h-80 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto max-h-[60vh]">
               {count === 0 ? (
                 <div className="p-6 text-center">
                   <Bell className="w-8 h-8 mx-auto text-muted-foreground/30 mb-2" />
@@ -138,9 +143,9 @@ export const NotificationBell: React.FC = () => {
               )}
             </div>
           </div>
-        </>
+        </div>
       )}
-    </div>
+    </>
   );
 };
 
