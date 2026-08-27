@@ -197,15 +197,36 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   if (selected) {
     return (
-      <TicketConversation
-        ticket={selected}
-        messages={messages}
-        viewAs="user"
-        currentUserName={user?.name || 'You'}
-        onClose={() => { setSelected(null); setMessages([]); fetchTickets(); }}
-        onSendMessage={handleSend}
-        sending={sending}
-      />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setSelected(null); setMessages([]); fetchTickets(); }} className="p-2 hover:bg-muted rounded-xl transition-colors">
+              <ChevronRight className="w-5 h-5 text-muted-foreground rotate-180" />
+            </button>
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <LifeBuoy className="w-4 h-4 text-primary" />
+            </div>
+            <h1 className="text-lg font-bold text-foreground">Ticket #{selected.id}</h1>
+          </div>
+          <button onClick={() => { setSelected(null); setMessages([]); fetchTickets(); }} className="p-2 hover:bg-muted rounded-xl transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </header>
+        <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 bg-muted/20 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto">
+            <TicketConversation
+              ticket={selected}
+              messages={messages}
+              viewAs="user"
+              currentUserName={user?.name || 'You'}
+              onClose={() => { setSelected(null); setMessages([]); fetchTickets(); }}
+              onSendMessage={handleSend}
+              sending={sending}
+              embedded
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -248,18 +269,23 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [type, setType] = useState('support');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [hasOpenTicket, setHasOpenTicket] = useState(false);
+  const [openTypes, setOpenTypes] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch('/api/support/check', { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => setHasOpenTicket(d.hasOpenTicket))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const hasOpenType = openTypes.includes(type);
+
+  const fetchCheck = async () => {
+    try {
+      const res = await fetch('/api/support/check', { credentials: 'include' });
+      const d = await res.json();
+      setOpenTypes(d.openTypes || (d.hasOpenTicket ? ['unknown'] : []));
+      if (Array.isArray(d.openTickets)) setOpenTypes(d.openTickets.map((t: any) => t.type));
+    } catch {} finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchCheck(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -272,12 +298,13 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         credentials: 'include',
         body: JSON.stringify({ type, subject: subject.trim(), message: message.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setSubmitted(true);
         toast({ title: 'Submitted', description: TYPE_TOASTS[type] });
+        fetchCheck();
       } else {
-        const d = await res.json();
-        toast({ title: 'Error', description: d.error || 'Failed to submit', variant: 'destructive' });
+        toast({ title: 'Error', description: data.error || 'Failed to submit', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to submit', variant: 'destructive' });
@@ -357,14 +384,19 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   className="w-full bg-background border border-input rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none"
                 />
               </div>
-              {hasOpenTicket && (
+              {hasOpenType && (
                 <p className="text-sm text-destructive bg-destructive/10 rounded-xl px-4 py-3">
-                  You already have an open ticket. Please wait for a response before submitting a new one.
+                  You already have an open {type} ticket. You can still create tickets of other types while this one is open.
+                </p>
+              )}
+              {openTypes.length > 0 && !hasOpenType && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-4 py-2">
+                  You have open {openTypes.join(', ')} ticket(s). You can still submit a {type} ticket.
                 </p>
               )}
               <button
                 type="submit"
-                disabled={submitting || hasOpenTicket}
+                disabled={submitting || hasOpenType}
                 className="w-full py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</> : 'Submit'}

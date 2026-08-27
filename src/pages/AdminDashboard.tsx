@@ -1062,7 +1062,7 @@ if (loading && !stats) {
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 overscroll-contain" style={{ scrollbarGutter: 'stable' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
         <div className="max-w-[1440px] mx-auto w-full min-w-0 space-y-6">
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-in fade-in duration-300">

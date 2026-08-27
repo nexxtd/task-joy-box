@@ -98,6 +98,7 @@ const SettingsPage: React.FC = () => {
 
   const [userTickets, setUserTickets] = useState<TicketData[]>([]);
   const [hasTickets, setHasTickets] = useState(false);
+  const [ticketsLoaded, setTicketsLoaded] = useState(false);
   const [activePanelTicket, setActivePanelTicket] = useState<TicketData | null>(null);
   const [panelMessages, setPanelMessages] = useState<TicketMessage[]>([]);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -121,17 +122,26 @@ const SettingsPage: React.FC = () => {
       const res = await fetch('/api/support/tickets/my', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setUserTickets(data);
-        // Only ever transition false → true, never hide the nav item once visible
-        if (data.length > 0) setHasTickets(true);
+        const list = Array.isArray(data) ? data : [];
+        setUserTickets(list);
+        setHasTickets(list.length > 0);
+        setTicketsLoaded(true);
+      } else {
+        setTicketsLoaded(true);
       }
-    } catch {}
+    } catch {
+      setTicketsLoaded(true);
+    }
   };
 
   useEffect(() => {
     fetchSettings();
     fetchUserTickets();
   }, []);
+
+  useEffect(() => {
+    if (activeSection === 'tickets') fetchUserTickets();
+  }, [activeSection]);
 
   useEffect(() => {
     if (!activePanelTicket) return;
@@ -511,8 +521,8 @@ const SettingsPage: React.FC = () => {
   const tasksWithDates = board.tasks.filter(t => t.dueDate).length;
 
   return (
-    <div className="flex-1 overflow-y-auto relative">
-      <header className="px-6 h-16 border-b border-border flex items-center justify-between">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <header className="px-6 h-16 border-b border-border flex items-center justify-between flex-shrink-0 bg-background">
         <h1 className="text-base font-bold text-foreground">Settings</h1>
         {saved && (
           <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 animate-fade-in">
@@ -521,8 +531,8 @@ const SettingsPage: React.FC = () => {
         )}
       </header>
 
-      <div className="flex">
-        <div className="w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 min-h-full">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 overflow-y-auto">
           {sections.map(s => (
             <button
               key={s.id}
@@ -540,7 +550,8 @@ const SettingsPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex-1 p-6 max-w-2xl">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl">
           {activeSection === 'appearance' && (
             <div className="space-y-6">
               <div>
@@ -1099,7 +1110,7 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeSection === 'tickets' && (hasTickets ? (() => {
+          {activeSection === 'tickets' && ((ticketsLoaded && userTickets.length > 0) ? (() => {
             const TICKET_CATEGORIES = ['all', 'support', 'bug', 'suggestion', 'report'];
             const typeColor = (type: string) =>
               type === 'suggestion' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
@@ -1209,12 +1220,20 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             );
-          })() : (
+           })() : !ticketsLoaded ? (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
+              <div className="flex justify-center py-8"><span className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+            </div>
+          ) : (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
               <p className="text-xs text-muted-foreground">
                 You don't have any tickets yet. Need help? Explore the support hub below.
               </p>
+              <div className="flex gap-2 mb-2">
+                <button onClick={fetchUserTickets} className="text-xs text-primary hover:underline">Refresh</button>
+              </div>
               <SupportContent showWhatsNew={false} />
             </div>
           ))}
@@ -1246,17 +1265,23 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
         </div>
+        </div>
       </div>
       {activePanelTicket && (
-        <TicketConversation
-          ticket={activePanelTicket}
-          messages={panelMessages}
-          viewAs="user"
-          currentUserName={user?.name || 'You'}
-          onClose={() => { setActivePanelTicket(null); setPanelMessages([]); }}
-          onSendMessage={handleSendTicketMessage}
-          sending={sendingMessage}
-        />
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col p-4">
+          <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto bg-background rounded-2xl shadow-xl border border-border overflow-hidden">
+            <TicketConversation
+              ticket={activePanelTicket}
+              messages={panelMessages}
+              viewAs="user"
+              currentUserName={user?.name || 'You'}
+              onClose={() => { setActivePanelTicket(null); setPanelMessages([]); fetchUserTickets(); }}
+              onSendMessage={handleSendTicketMessage}
+              sending={sendingMessage}
+              embedded
+            />
+          </div>
+        </div>
       )}
     </div>
   );

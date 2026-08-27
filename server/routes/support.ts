@@ -43,11 +43,20 @@ const uploadTicket = multer({
 
 router.get('/check', async (req: AuthRequest, res: Response) => {
   try {
-    const openTicket = await db.select({ id: supportTickets.id })
+    const type = typeof req.query.type === 'string' ? req.query.type : undefined;
+    if (type) {
+      const open = await db.select({ id: supportTickets.id })
+        .from(supportTickets)
+        .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.status, 'open'), eq(supportTickets.type, type)))
+        .limit(1);
+      res.json({ hasOpenTicket: open.length > 0, openTypes: open.length > 0 ? [type] : [] });
+      return;
+    }
+    const openTickets = await db.select({ id: supportTickets.id, type: supportTickets.type })
       .from(supportTickets)
-      .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.status, 'open')))
-      .limit(1);
-    res.json({ hasOpenTicket: openTicket.length > 0 });
+      .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.status, 'open')));
+    const openTypes = [...new Set(openTickets.map(t => t.type))];
+    res.json({ hasOpenTicket: openTickets.length > 0, openTypes, openTickets });
   } catch (error) {
     res.status(500).json({ error: 'Failed to check ticket status' });
   }
@@ -61,10 +70,10 @@ router.post('/tickets', async (req: AuthRequest, res: Response) => {
     }
     const openTickets = await db.select({ id: supportTickets.id })
       .from(supportTickets)
-      .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.status, 'open')))
+      .where(and(eq(supportTickets.userId, req.userId!), eq(supportTickets.status, 'open'), eq(supportTickets.type, type)))
       .limit(1);
     if (openTickets.length > 0) {
-      return res.status(409).json({ error: 'You already have an open ticket' });
+      return res.status(409).json({ error: `You already have an open ${type} ticket. You can create tickets of other types while this one is open.` });
     }
     const [ticket] = await db.insert(supportTickets).values({
       userId: req.userId!,
@@ -73,24 +82,32 @@ router.post('/tickets', async (req: AuthRequest, res: Response) => {
       status: 'open',
       staffReplied: false,
     }).returning();
-    await db.insert(ticketMessages).values({
-      ticketId: ticket.id,
-      senderId: req.userId!,
-      senderType: 'user',
-      message,
-      readByUser: true,
-      readByStaff: false,
-    });
-    const staffUser = await db.select({ id: users.id }).from(users).where(eq(users.email, 'support@system.local')).limit(1);
-    const staffId = staffUser[0]?.id || req.userId!;
-    await db.insert(ticketMessages).values({
-      ticketId: ticket.id,
-      senderId: staffId,
-      senderType: 'staff',
-      message: `Hi there! Thanks for reaching out — we've received your ${type} request "${subject}". Our team will review it and get back to you soon. You can reply here if you have more details.`,
-      readByUser: false,
-      readByStaff: true,
-    });
+    try {
+      await db.insert(ticketMessages).values({
+        ticketId: ticket.id,
+        senderId: req.userId!,
+        senderType: 'user',
+        message,
+        readByUser: true,
+        readByStaff: false,
+      });
+    } catch (e) {
+      console.error('Failed to insert user message for ticket', ticket.id, e);
+    }
+    try {
+      const staffUser = await db.select({ id: users.id }).from(users).where(eq(users.email, 'support@system.local')).limit(1);
+      const staffId = staffUser[0]?.id || req.userId!;
+      await db.insert(ticketMessages).values({
+        ticketId: ticket.id,
+        senderId: staffId,
+        senderType: 'staff',
+        message: `Hi there! Thanks for reaching out — we've received your ${type} request "${subject}". Our team will review it and get back to you soon. You can reply here if you have more details.`,
+        readByUser: false,
+        readByStaff: true,
+      });
+    } catch (e) {
+      console.error('Failed to insert auto-reply for ticket', ticket.id, e);
+    }
     res.json({ success: true, ticket });
   } catch (error) {
     console.error('Failed to create ticket:', error);
