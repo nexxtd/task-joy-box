@@ -161,23 +161,34 @@ const SettingsPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [activePanelTicket?.id]);
 
-  const handleSendTicketMessage = async (text: string) => {
+  const handleSendTicketMessage = async (text: string, file?: File | null) => {
     if (!activePanelTicket) return;
+    if (!text.trim() && !file) return;
     setSendingMessage(true);
     try {
+      const form = new FormData();
+      if (text.trim()) form.append('message', text.trim());
+      if (file) form.append('file', file);
       const res = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ message: text }),
+        body: form as any,
       });
       if (res.ok) {
-        const data = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
-        if (data.ok) {
-          const msgs = await data.json();
+        const data = await res.json().catch(() => null);
+        if (data?.message) {
+          setPanelMessages(prev => [...prev, { ...data.message, senderName: user?.name || 'You' }]);
+        }
+        const refetch = await fetch(`/api/support/tickets/${activePanelTicket.id}/messages`, { credentials: 'include' });
+        if (refetch.ok) {
+          const msgs = await refetch.json();
           setPanelMessages(msgs.messages || []);
           setActivePanelTicket(prev => prev ? { ...prev, ...msgs.ticket } : null);
+          setUserTickets(prev => prev.map(t => t.id === msgs.ticket.id ? { ...t, ...msgs.ticket } : t));
         }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        console.error('Failed to send message', err);
       }
     } catch {} finally {
       setSendingMessage(false);
