@@ -76,9 +76,10 @@ interface BoardColumnProps {
   onAddClick?: () => void;
   canEdit?: boolean;
   boardZoom?: number;
+  isDragging?: boolean;
 }
 
-const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, boardZoom = 1 }) => {
+const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, boardZoom = 1, isDragging = false }) => {
   const { board, addTask, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -422,7 +423,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </div>
           </div>
         )}
-        {isExpanded && (
+        {isExpanded && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               task={task}

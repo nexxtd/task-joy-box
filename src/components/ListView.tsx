@@ -176,6 +176,8 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'
   ];
 
+  const [isDragging, setIsDragging] = useState(false);
+
   useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
 
@@ -322,6 +324,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     .sort((a, b) => a.order - b.order);
 
   const handleDragEnd = (result: DropResult) => {
+    setIsDragging(false);
     if (!result.destination) return;
     moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
   };
@@ -526,7 +529,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
             </div>
           </div>
         )}
-        {isExpanded && (
+        {isExpanded && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               task={task}
@@ -556,7 +559,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     <>
     <div className="flex-1 overflow-y-auto p-6 relative">
       <div className="max-w-4xl mx-auto space-y-2 pb-24">
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
           {sortedColumns.map(column => {
             const isColumnCollapsed = collapsedColumns.includes(column.id);
             const tasks = board.tasks

@@ -413,6 +413,7 @@ const Notes: React.FC = () => {
   const [completedOpen, setCompletedOpen] = useState(true);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
@@ -722,6 +723,7 @@ const Notes: React.FC = () => {
   };
 
   const handleDragEnd = (result: DropResult) => {
+    setIsDragging(false);
     if (!result.destination || sortByDueDate) return;
 
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
@@ -1447,7 +1449,7 @@ const Notes: React.FC = () => {
             </div>
           </div>
         )}
-        {isExpanded && !isDeleteMode && (
+        {isExpanded && !isDeleteMode && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <NoteDropdownExpanded
               note={note}
@@ -1745,7 +1747,7 @@ const Notes: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative">
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myNotesGroup.length === 0 && projectNoteGroups.length === 0 && filtered.completed.length === 0 && filtered.archived.length === 0 && (
             <div className="text-center py-16">

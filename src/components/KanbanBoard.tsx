@@ -15,10 +15,12 @@ const KanbanBoard: React.FC = () => {
   const [addingColumn, setAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState('');
   const [currentView, setCurrentView] = useState<ViewType>('board');
+  const [isDragging, setIsDragging] = useState(false);
 
   const sortedColumns = [...board.columns].sort((a, b) => a.order - b.order);
 
   const handleDragEnd = (result: DropResult) => {
+    setIsDragging(false);
     if (!result.destination) return;
     if (result.type === 'column') {
       reorderColumns(result.source.index, result.destination.index);
@@ -57,7 +59,7 @@ const KanbanBoard: React.FC = () => {
         {/* View content */}
         {currentView === 'board' && (
           <div className="flex-1 overflow-x-auto p-6">
-            <DragDropContext onDragEnd={handleDragEnd}>
+            <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
               <Droppable droppableId="board" type="column" direction="horizontal">
                 {(provided) => (
                   <div
@@ -76,6 +78,7 @@ const KanbanBoard: React.FC = () => {
                           tasks={tasks}
                           index={index}
                           onTaskClick={setSelectedTask}
+                          isDragging={isDragging}
                         />
                       );
                     })}
