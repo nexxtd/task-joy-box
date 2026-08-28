@@ -734,9 +734,6 @@ router.patch('/tickets/:id/status', async (req: AuthRequest, res: Response) => {
     await db.update(supportTickets)
       .set(updateData)
       .where(eq(supportTickets.id, ticketId));
-    if (status === 'closed') {
-      await deleteTicketContent(ticketId);
-    }
     res.json({ success: true, status });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update ticket status' });
@@ -749,7 +746,6 @@ router.patch('/tickets/:id/close', async (req: AuthRequest, res: Response) => {
     await db.update(supportTickets)
       .set({ status: 'closed', closedAt: new Date().toISOString(), updatedAt: sql`NOW()` })
       .where(eq(supportTickets.id, ticketId));
-    await deleteTicketContent(ticketId);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to close ticket' });
