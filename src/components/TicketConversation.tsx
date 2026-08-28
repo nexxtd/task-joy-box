@@ -70,6 +70,7 @@ export const TicketConversation: React.FC<Props> = ({
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -165,7 +166,9 @@ export const TicketConversation: React.FC<Props> = ({
                   <div className="mt-2">
                     {isImageAttachment(msg) ? (
                       <div className="block">
-                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[300px] rounded-lg border border-white/20 object-contain bg-black/5" />
+                        <button onClick={() => setLightbox({ url: msg.attachmentUrl!, name: msg.attachmentName || 'image' })} className="block text-left">
+                          <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[300px] rounded-lg border border-white/20 object-contain bg-black/5 cursor-zoom-in hover:opacity-90 transition-opacity" />
+                        </button>
                         <span className="text-[11px] opacity-80 flex items-center gap-1 mt-1"><ImageIcon className="w-3 h-3" />{msg.attachmentName} {msg.attachmentSize ? `(${(msg.attachmentSize / 1024).toFixed(1)}KB)` : ''}</span>
                       </div>
                     ) : (
@@ -206,20 +209,38 @@ export const TicketConversation: React.FC<Props> = ({
     </div>
   );
 
+  const lightboxOverlay = lightbox ? (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setLightbox(null)}>
+      <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+        <button onClick={() => setLightbox(null)} className="absolute -top-2 -right-2 p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-colors">
+          <X className="w-5 h-5 text-white" />
+        </button>
+        <img src={lightbox.url} alt={lightbox.name} className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl" />
+        <span className="text-sm text-white/80 mt-3">{lightbox.name}</span>
+      </div>
+    </div>
+  ) : null;
+
   if (embedded) {
     return (
-      <div className="flex-1 flex gap-3 min-h-0 overflow-hidden">
-        {leftPanel && <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">{leftPanel}</div>}
-        {conversationPanel}
-      </div>
+      <>
+        <div className="flex-1 flex gap-3 min-h-0 overflow-hidden">
+          {leftPanel && <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">{leftPanel}</div>}
+          {conversationPanel}
+        </div>
+        {lightboxOverlay}
+      </>
     );
   }
 
   return (
-    <div className={expanded ? 'fixed inset-3 z-50 flex gap-3' : 'fixed bottom-4 right-4 z-50 flex gap-3'} style={expanded ? { maxHeight: 'none' } : { maxHeight: '85vh' }}>
-      {leftPanel && <div className={`${expanded ? 'flex-1 h-full' : 'w-[520px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>{leftPanel}</div>}
-      {conversationPanel}
-    </div>
+    <>
+      <div className={expanded ? 'fixed inset-3 z-50 flex gap-3' : 'fixed bottom-4 right-4 z-50 flex gap-3'} style={expanded ? { maxHeight: 'none' } : { maxHeight: '85vh' }}>
+        {leftPanel && <div className={`${expanded ? 'flex-1 h-full' : 'w-[520px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>{leftPanel}</div>}
+        {conversationPanel}
+      </div>
+      {lightboxOverlay}
+    </>
   );
 };
 
