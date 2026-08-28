@@ -52,7 +52,7 @@ import {
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
+
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
   { value: 'to_do', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
@@ -247,67 +247,6 @@ interface AIGeneratedHabit {
   tags: string[];
 }
 
-const PRIORITY_COLORS: Record<string, { bg: string; label: string }> = {
-  urgent: { bg: '#dc2626', label: 'Urgent' },
-  high: { bg: '#ea580c', label: 'High' },
-  medium: { bg: '#ca8a04', label: 'Medium' },
-  low: { bg: '#2563eb', label: 'Low' },
-  none: { bg: '#9ca3af', label: 'None' },
-};
-
-const PriorityBadge: React.FC<{
-  habit: Habit;
-  onUpdate: (priority: Priority) => void;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ habit, onUpdate, isOpen, onToggle }) => {
-  const ref = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onToggle(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [isOpen, onToggle]);
-  const pc = PRIORITY_COLORS[habit.priority];
-  return (
-    <div className="relative flex-shrink-0 flex items-center" ref={ref}>
-      {habit.priority !== 'none' ? (
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          style={{ backgroundColor: pc?.bg }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
-        >
-          {pc?.label}
-        </button>
-      ) : isOpen ? (
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
-        >
-          Priority
-        </button>
-      ) : null}
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5">
-          {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => {
-            const c = PRIORITY_COLORS[p];
-            return (
-              <button
-                key={p}
-                onClick={e => { e.stopPropagation(); onUpdate(p); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded-lg transition-all ${habit.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
-              >
-                <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.bg }} />
-                {c.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const PremiumGate: React.FC<{
   title: string;
   description: string;
@@ -409,20 +348,16 @@ const Habits: React.FC = () => {
   });
 
   const [search, setSearch] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState<'all' | 'urgent' | 'high' | 'medium' | 'low'>('all');
+
   const [groupFilterId, setGroupFilterId] = useState<string | null>(null);
-  const [sortByDueDate, setSortByDueDate] = useState(false);
-  const [sortDueDateDesc, setSortDueDateDesc] = useState(false);
+
+
 
   const [addingHabit, setAddingHabit] = useState(false);
   const [newHabitTitle, setNewHabitTitle] = useState('');
   const [newHabitDescription, setNewHabitDescription] = useState('');
-  const [newHabitPriority, setNewHabitPriority] = useState<Priority>('medium');
+
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
-  const [newHabitStartDate, setNewHabitStartDate] = useState('');
-  const [newHabitStartTime, setNewHabitStartTime] = useState('');
-  const [newHabitDueDate, setNewHabitDueDate] = useState('');
-  const [newHabitDueTime, setNewHabitDueTime] = useState('');
   const [newHabitDuration, setNewHabitDuration] = useState<number>(60);
   const [newHabitColumnId, setNewHabitColumnId] = useState<string>('');
   const [newDailyTarget, setNewDailyTarget] = useState(1);
@@ -497,8 +432,6 @@ const Habits: React.FC = () => {
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
-  const [dateEditTaskId, setDateEditTaskId] = useState<string | null>(null);
-  const [dateEditField, setDateEditField] = useState<'start' | 'due' | null>(null);
   const [tagPopupTaskId, setTagPopupTaskId] = useState<string | null>(null);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
 
@@ -569,14 +502,14 @@ const Habits: React.FC = () => {
   const filteredHabitsByBase = useMemo(() => {
     return board.tasks.filter(habit => {
       const matchesSearch = habit.title.toLowerCase().includes(search.toLowerCase().trim());
-      const matchesPriority = priorityFilter === 'all' ? true : habit.priority === priorityFilter;
+
       const matchesProject = projectFilterId === 'all' ? true : habit.projectId === projectFilterId;
       const matchesTags = tagFilterIds.length === 0
         ? true
         : tagFilterIds.every(tagId => habit.labels.some(label => label.id === tagId));
-      return matchesSearch && matchesPriority && matchesProject && matchesTags;
+      return matchesSearch && matchesProject && matchesTags;
     });
-  }, [board.tasks, priorityFilter, projectFilterId, search, tagFilterIds]);
+  }, [board.tasks, projectFilterId, search, tagFilterIds]);
 
   const filtered = useMemo(() => {
     const byGroup = filteredHabitsByBase.filter(habit =>
@@ -586,34 +519,17 @@ const Habits: React.FC = () => {
     const active = byGroup.filter(habit => !isHabitCompleted(habit));
     const completed = byGroup.filter(habit => isHabitCompleted(habit));
 
-    const sortByDue = (a: Habit, b: Habit) => {
-      const aDate = a.dueDate ? new Date(`${a.dueDate}T${a.dueTime || '23:59'}`) : null;
-      const bDate = b.dueDate ? new Date(`${b.dueDate}T${b.dueTime || '23:59'}`) : null;
-      if (!aDate && !bDate) return 0;
-      if (!aDate) return 1;
-      if (!bDate) return -1;
-      const diff = aDate.getTime() - bDate.getTime();
-      return sortDueDateDesc ? -diff : diff;
-    };
-
-    const sortByPriorityOrder = (a: Habit, b: Habit) => {
-      const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
-      const diff = (order[a.priority] ?? 4) - (order[b.priority] ?? 4);
-      if (diff !== 0) return diff;
-      return (a.order || 0) - (b.order || 0);
-    };
+    const sortByOrder = (a: Habit, b: Habit) => (a.order || 0) - (b.order || 0);
 
     let activeSorted: Habit[];
-    if (sortByDueDate) {
-      activeSorted = [...active].sort(sortByDue);
-    } else if (orderedActiveIds.length > 0) {
+    if (orderedActiveIds.length > 0) {
       const idSet = new Set(active.map(t => t.id));
       const ordered = orderedActiveIds.filter(id => idSet.has(id));
       const unordered = active.filter(t => !orderedActiveIds.includes(t.id));
       const orderedHabits = ordered.map(id => active.find(t => t.id === id)!).filter(Boolean);
       activeSorted = [...orderedHabits, ...unordered];
     } else {
-      activeSorted = [...active].sort(sortByPriorityOrder);
+      activeSorted = [...active].sort(sortByOrder);
     }
 
     const completedSorted = [...completed].sort((a, b) => {
@@ -623,7 +539,7 @@ const Habits: React.FC = () => {
     });
 
     return { active: activeSorted, completed: completedSorted };
-  }, [filteredHabitsByBase, groupFilterId, sortByDueDate, sortDueDateDesc, orderedActiveIds]);
+  }, [filteredHabitsByBase, groupFilterId, orderedActiveIds]);
 
   const myHabitsGroup = useMemo(() =>
     filtered.active.filter(t => !t.projectId),
@@ -730,17 +646,6 @@ const Habits: React.FC = () => {
     }
   }, [editingTemplateMeta, templateEditOverrides, templateEditName]);
 
-  const toggleSortByDueDate = () => {
-    if (!sortByDueDate) {
-      setSortByDueDate(true);
-      setSortDueDateDesc(false);
-    } else if (!sortDueDateDesc) {
-      setSortDueDateDesc(true);
-    } else {
-      setSortByDueDate(false);
-      setSortDueDateDesc(false);
-    }
-  };
 
   const getProjectIdForDroppable = (id: string): number | 'my-habits' | null => {
     if (id === 'my-habits') return 'my-habits';
@@ -809,7 +714,7 @@ const Habits: React.FC = () => {
 
   const handleDragEnd = (result: DropResult) => {
     setIsDragging(false);
-    if (!result.destination || sortByDueDate) return;
+    if (!result.destination) return;
 
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
     const dstProject = getProjectIdForDroppable(result.destination.droppableId);
@@ -1047,7 +952,7 @@ const Habits: React.FC = () => {
   const resetHabitDraft = () => {
     setNewHabitTitle('');
     setNewHabitDescription('');
-    setNewHabitPriority('medium');
+
     setNewTaskStatus('to_do');
     setNewHabitDuration(60);
     setNewHabitColumnId('');
@@ -1146,12 +1051,12 @@ const Habits: React.FC = () => {
 
       setNewHabitTitle(data.title || '');
       setNewHabitDescription(data.description || '');
-      setNewHabitPriority((data.priority as Priority) || 'medium');
+
       setNewTaskStatus((data.status as TaskStatus) || 'to_do');
-      setNewHabitStartDate(data.startDate || '');
-      setNewHabitStartTime(data.startTime || '');
-      setNewHabitDueDate(data.dueDate || '');
-      setNewHabitDueTime(data.dueTime || '');
+
+
+
+
       setNewHabitDuration(data.duration || 60);
 
       if (data.group) {
@@ -1191,7 +1096,7 @@ const Habits: React.FC = () => {
   const newSubtaskRemaining = newHabitDuration - newSubtaskTotal;
 
   const openQuickEdit = (habit: Habit, field: 'duration' | 'project') => {
-    setQuickEditTaskId(habit.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
+    setQuickEditTaskId(habit.id);  setTagPopupTaskId(null);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(habit));
     setQuickEditDuration(Math.max(0, Number(habit.duration) || 0));
@@ -1452,16 +1357,17 @@ const Habits: React.FC = () => {
             className="flex-1 min-w-0 cursor-pointer"
             onClick={e => { if (!isDeleteMode) { e.stopPropagation(); setOpenTaskId(habit.id); } }}
           >
+              <span className="text-[9px] font-bold tracking-widest text-muted-foreground/70 uppercase block">Habit</span>
               <span className="text-sm font-medium text-foreground truncate block">{habit.title}</span>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {/* Duration pill — only if set */}
               {habitDurFmt && (
-                <button onClick={e => { e.stopPropagation(); setQuickEditTaskId(habit.id); setQuickEditField('duration'); setQuickEditDuration(habit.duration || 0); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null); }} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1 hover:bg-muted/80">
+                <button onClick={e => { e.stopPropagation(); setQuickEditTaskId(habit.id); setQuickEditField('duration'); setQuickEditDuration(habit.duration || 0);  setTagPopupTaskId(null); }} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 flex items-center gap-1 hover:bg-muted/80">
                   <Clock className="w-2.5 h-2.5" />{habitDurFmt}
                 </button>
               )}
               {/* Frequency pill */}
-              <button onClick={e => { e.stopPropagation(); const logs=parseLogs(habit); const days=Array.isArray(logs.frequencyDays)?logs.frequencyDays as string[]:[]; const mode=days.length>0 && days.length<7?'custom':(habit.recurrencePattern||'daily') as any; setFrequencyDraftMode(mode); setFrequencyDraftDays(days); setQuickEditTaskId(habit.id); setQuickEditField('frequency'); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null); }} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium hover:bg-primary/20">
+              <button onClick={e => { e.stopPropagation(); const logs=parseLogs(habit); const days=Array.isArray(logs.frequencyDays)?logs.frequencyDays as string[]:[]; const mode=days.length>0 && days.length<7?'custom':(habit.recurrencePattern||'daily') as any; setFrequencyDraftMode(mode); setFrequencyDraftDays(days); setQuickEditTaskId(habit.id); setQuickEditField('frequency');  setTagPopupTaskId(null); }} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium hover:bg-primary/20">
                 {getFrequencyLabel(habit)}
               </button>
               {/* Streak counter */}
@@ -1472,7 +1378,7 @@ const Habits: React.FC = () => {
               {habitTags.map(label => (
                 <button
                   key={label.id}
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null);  setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
                   className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
@@ -1480,7 +1386,7 @@ const Habits: React.FC = () => {
               ))}
               {habit.labels.length > habitTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null);  setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{habit.labels.length - habitTags.length}
@@ -1488,7 +1394,7 @@ const Habits: React.FC = () => {
               )}
               {habit.labels.length === 0 && (
                 <button
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null);  setTagPopupTaskId(tagPopupTaskId === habit.id ? null : habit.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
                 >
                   <Tag className="w-2.5 h-2.5" />Tags
@@ -1546,51 +1452,7 @@ const Habits: React.FC = () => {
             </div>
           </div>
         )}
-        {dateEditTaskId === habit.id && dateEditField && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={dateEditField === 'start' ? (habit.startDate || '') : (habit.dueDate || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(habit.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[140px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={dateEditField === 'start' ? (habit.startTime || '') : (habit.dueTime || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(habit.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              {((dateEditField === 'start' && habit.startDate) || (dateEditField === 'due' && habit.dueDate)) && (
-                <button
-                  onClick={() => {
-                    updateTask(habit.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
-                    setDateEditTaskId(null);
-                    setDateEditField(null);
-                  }}
-                  className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
-                >
-                  Clear
-                </button>
-              )}
-              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
-              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
-            </div>
-          </div>
-        )}
-        {isExpanded && !isDeleteMode && !isDragging && (
+                {isExpanded && !isDeleteMode && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-4 space-y-4 bg-muted/10 rounded-b-xl">
             {/* Summary row */}
             <div className="flex items-center flex-wrap gap-2 pb-2 border-b border-border/60">
@@ -1639,16 +1501,7 @@ const Habits: React.FC = () => {
                 className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <HabitDropdownExpanded
-              habit={habit}
-              onUpdateHabit={updateTask}
-              onToggleChecklistItem={toggleChecklistItem}
-              onAddChecklistItem={addChecklistItem}
-              onDeleteChecklistItem={deleteChecklistItem}
-              isPremium={isPremium}
-              isPro={isPro}
-              onToggleDailyUnit={toggleDailyUnit}
-            />
+
             {/* Archive + Delete buttons */}
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
               <button
@@ -1893,24 +1746,7 @@ const Habits: React.FC = () => {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={toggleSortByDueDate}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border transition-all ${
-                sortByDueDate
-                  ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground'
-              }`}
-              title={sortByDueDate ? (sortDueDateDesc ? 'Latest first — click to disable' : 'Soonest first — click for latest first') : 'Sort by due date'}
-            >
-              {sortByDueDate && sortDueDateDesc ? (
-                <ArrowDown className="w-3.5 h-3.5" />
-              ) : sortByDueDate ? (
-                <ArrowUp className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowUp className="w-3.5 h-3.5 opacity-40" />
-              )}
-              Sort by Due Date
-            </button>
+
             <button
               onClick={() => { setAnalysisPanelOpen(true); runHabitAnalysis(activeAnalysisTab); }}
               className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
@@ -2296,37 +2132,6 @@ const Habits: React.FC = () => {
                 />
               </div>
 
-              {/* Target */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Target</h3>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      min={1}
-                      value={newDailyTarget}
-                      onChange={e => setNewDailyTarget(Math.max(1, Number(e.target.value) || 1))}
-                      className="w-24 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      placeholder="5"
-                    />
-                    <span className="text-xs text-muted-foreground">units</span>
-                    <Select value={newTargetPeriod} onValueChange={v => setNewTargetPeriod(v as any)}>
-                      <SelectTrigger className="bg-muted/40 border-border rounded-lg px-3 py-2 text-sm h-auto w-auto">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">per day</SelectItem>
-                        <SelectItem value="weekly">per week</SelectItem>
-                        <SelectItem value="monthly">per month</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
               {/* Attachments Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
@@ -2585,14 +2390,10 @@ const Habits: React.FC = () => {
                   try {
                     await createTemplate({
                       name: templateName.trim(),
+                      priority: 'medium' as any,
                       title: newHabitTitle || '',
                       description: newHabitDescription || '',
-                      priority: newHabitPriority || 'medium',
                       duration: newHabitDuration || 0,
-                      startDate: newHabitStartDate || undefined,
-                      startTime: newHabitStartTime || undefined,
-                      dueDate: newHabitDueDate || undefined,
-                      dueTime: newHabitDueTime || undefined,
                       projectId: newHabitProjectId ? Number(newHabitProjectId) : null,
                       columnId: newHabitColumnId || undefined,
                       labels: newHabitLabels || [],
@@ -2654,13 +2455,8 @@ const Habits: React.FC = () => {
                         onClick={() => {
                           setNewHabitTitle(tmpl.title || '');
                           setNewHabitDescription(tmpl.description || '');
-                          setNewHabitPriority(tmpl.priority || 'medium');
-                          setNewHabitDuration(tmpl.duration || 0);
-                          setNewHabitStartDate(tmpl.startDate || '');
-                          setNewHabitStartTime(tmpl.startTime || '');
-                          setNewHabitDueDate(tmpl.dueDate || '');
-                          setNewHabitDueTime(tmpl.dueTime || '');
-                          setNewHabitProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+                                                    setNewHabitDuration(tmpl.duration || 0);
+                                                                                                                                  setNewHabitProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
                           setNewHabitColumnId(tmpl.columnId || '');
                           setNewHabitLabels(tmpl.labels || []);
                           setNewHabitSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
@@ -4738,7 +4534,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                         name: fullViewTmplName.trim(),
                         title: habit.title || '',
                         description: habit.description || '',
-                        priority: habit.priority || 'medium',
+                        priority: 'medium' as any,
                         duration: Number(habit.duration) || 0,
                         startDate: habit.startDate || undefined,
                         startTime: habit.startTime || undefined,
@@ -4770,7 +4566,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                       name: fullViewTmplName.trim(),
                       title: habit.title || '',
                       description: habit.description || '',
-                      priority: habit.priority || 'medium',
+                      priority: 'medium' as any,
                       duration: Number(habit.duration) || 0,
                       startDate: habit.startDate || undefined,
                       startTime: habit.startTime || undefined,
