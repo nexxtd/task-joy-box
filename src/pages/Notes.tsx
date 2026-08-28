@@ -1230,16 +1230,6 @@ const Notes: React.FC = () => {
 
   const renderNoteRow = (note: Note, dragHandleProps?: any, isDragging?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
-    const checklistTotal = note.checklists.reduce((s, l) => s + l.items.length, 0);
-    const checklistDone = note.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-    const noteDurFmt = formatDuration(note.duration || 0);
-    const noteTags = note.labels.slice(0, 3);
-    const noteSnippet = (note.description || '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 90);
     return (
       <div
         key={note.id}
@@ -1262,9 +1252,9 @@ const Notes: React.FC = () => {
               : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-start gap-1 px-3 py-3">
           {dragHandleProps && (
-            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mt-1">
               <GripVertical className="w-4 h-4" />
             </div>
           )}
@@ -1278,99 +1268,27 @@ const Notes: React.FC = () => {
                 );
               }}
               onClick={e => e.stopPropagation()}
-              className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
+              className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer mt-1"
             />
           ) : null}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold flex-shrink-0">Note</span>
               <span className="text-sm font-medium text-left text-foreground truncate">{note.title}</span>
             </div>
-            {noteSnippet && (
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{noteSnippet}</p>
-            )}
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
-                <PriorityBadge
-                  note={note}
-                  onUpdate={(priority) => updateTask(note.id, { priority })}
-                  isOpen={priorityEditTaskId === note.id}
-                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === note.id ? null : note.id)}
-                />
+            <div className="mt-1.5">
+              {note.labels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {note.labels.map(label => (
+                    <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>{label.name}</span>
+                  ))}
+                </div>
               )}
-              {noteDurFmt && (
-                <button
-                  onClick={e => { e.stopPropagation(); openQuickEdit(note, 'duration'); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  {noteDurFmt}
-                </button>
-              )}
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === note.id && dateEditField === 'start' ? null : note.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {note.startDate ? `${formatDate(note.startDate)}${note.startTime ? ` ${note.startTime}` : ''}` : 'Add start date'}
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setDateEditTaskId(dateEditTaskId === note.id && dateEditField === 'due' ? null : note.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
-                }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  note.dueDate
-                    ? (() => {
-                        const warning = getDueTimeWarning(note);
-                        return warning === 'overdue'
-                          ? 'bg-destructive/10 text-destructive'
-                          : warning === 'imminent' || warning === 'soon'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            : 'bg-muted text-muted-foreground';
-                      })()
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {note.dueDate ? `${formatDate(note.dueDate)}${note.dueTime ? ` ${note.dueTime}` : ''}` : 'Add due date'}
-              </button>
-              {checklistTotal > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {checklistDone}/{checklistTotal} checklist
-                </span>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1"
-              >
-                <Tag className="w-2.5 h-2.5" />
-                Tags
-              </button>
-              {noteTags.map(label => (
-                <button
-                  key={label.id}
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                </button>
-              ))}
-              {note.labels.length > noteTags.length && (
-                <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  +{note.labels.length - noteTags.length}
-                </button>
-              )}
+              <button onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }} className="mt-1.5 text-[10px] px-2.5 py-1 rounded-full flex-shrink-0 bg-muted text-muted-foreground flex items-center gap-1 hover:bg-muted/80"><Tag className="w-3 h-3" />Tags</button>
             </div>
           </div>
           {!isDeleteMode && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
               <button
                 onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
                 className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
@@ -1378,77 +1296,10 @@ const Notes: React.FC = () => {
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-
             </div>
           )}
         </div>
-        {quickEditTaskId === note.id && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              {quickEditField === 'duration' && (
-                <div className="flex items-center gap-2">
-                  <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(note)} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                  <span className="text-xs text-muted-foreground">minutes</span>
-                </div>
-              )}
-              {quickEditField === 'project' && (
-                <Select value={quickEditProjectId === '' ? 'my-notes' : String(quickEditProjectId)} onValueChange={val => setQuickEditProjectId(val === 'my-notes' ? '' : Number(val))}>
-                  <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
-                    <SelectValue placeholder="My Notes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="my-notes">My Notes</SelectItem>
-                    {projects.map(project => (<SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              )}
-              <button onClick={() => applyQuickEdit(note)} className="ml-auto rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
-              <button onClick={closeQuickEdit} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
-            </div>
-          </div>
-        )}
-        {dateEditTaskId === note.id && dateEditField && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={dateEditField === 'start' ? (note.startDate || '') : (note.dueDate || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(note.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[140px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={dateEditField === 'start' ? (note.startTime || '') : (note.dueTime || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(note.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              {((dateEditField === 'start' && note.startDate) || (dateEditField === 'due' && note.dueDate)) && (
-                <button
-                  onClick={() => {
-                    updateTask(note.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
-                    setDateEditTaskId(null);
-                    setDateEditField(null);
-                  }}
-                  className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+
         {isExpanded && !isDeleteMode && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <NoteDropdownExpanded
@@ -1959,7 +1810,7 @@ const Notes: React.FC = () => {
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <div>
+                <div className="hidden">
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
                   <Select value={newNotePriority} onValueChange={v => setNewNotePriority(v as Priority)}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
@@ -1974,7 +1825,7 @@ const Notes: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
+                <div className="hidden">
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
                   <input
                     type="number"
@@ -2066,8 +1917,7 @@ const Notes: React.FC = () => {
             </div>
           </div>
 
-          {/* Start Date and Time Section */}
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="hidden grid md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
               <input
@@ -2088,8 +1938,7 @@ const Notes: React.FC = () => {
             </div>
           </div>
 
-          {/* Due Date and Time Section */}
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="hidden grid md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
               <input
@@ -2111,17 +1960,11 @@ const Notes: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
-                <textarea
-                  value={newNoteDescription}
-                  onChange={e => setNewNoteDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
-                />
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Note Body</label>
+            <RichTextEditor value={newNoteDescription} onChange={html=>setNewNoteDescription(html)} placeholder="Write your note..." minHeight={260} />
               </div>
 
-              {/* Checklist Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
+              <div className="hidden">
                 <button
                   onClick={() => setDraftChecklistCollapsed(prev => !prev)}
                   className="w-full flex items-center justify-between px-4 py-3"
@@ -2366,8 +2209,7 @@ const Notes: React.FC = () => {
                 )}
               </div>
 
-              {/* Images Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
+              <div className="hidden">
                 <button
                   onClick={() => setDraftImagesCollapsed(prev => !prev)}
                   className="w-full flex items-center justify-between px-4 py-3"
@@ -3124,7 +2966,8 @@ const NoteDropdownExpanded: React.FC<{
   onDeleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
   isPremium: boolean;
   isPro: boolean;
-}> = ({ note, onUpdateNote, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro }) => {
+  onOpenTags?: () => void;
+}> = ({ note, onUpdateNote, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro, onOpenTags }) => {
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
@@ -3252,7 +3095,11 @@ const NoteDropdownExpanded: React.FC<{
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-xs font-semibold text-muted-foreground mb-1.5">Body</h4>
+        <label className="text-xs font-semibold text-muted-foreground mb-1 block">Title</label>
+        <input value={note.title} onChange={e=>onUpdateNote(note.id,{title:e.target.value})} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm font-medium" placeholder="Title" />
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold text-muted-foreground mb-1.5">Note Body</h4>
         <RichTextEditor
           value={note.description}
           onChange={(html) => onUpdateNote(note.id, { description: html })}
@@ -3260,9 +3107,16 @@ const NoteDropdownExpanded: React.FC<{
           minHeight={140}
         />
       </div>
+      <div>
+        <div className="flex flex-wrap gap-1.5">
+          {note.labels.map(label => (
+            <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>{label.name}</span>
+          ))}
+        </div>
+        <button onClick={e=>{e.stopPropagation(); onOpenTags?.();}} className="mt-1.5 text-[10px] px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex items-center gap-1 hover:bg-muted/80"><Tag className="w-3 h-3" />Tags</button>
+      </div>
 
-      {/* Checklist Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
+      <div className="hidden">
         <button
           onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
           className="w-full flex items-center justify-between px-4 py-3"
@@ -3524,8 +3378,7 @@ const NoteDropdownExpanded: React.FC<{
         )}
       </div>
 
-      {/* Images Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
+      <div className="hidden">
         <button
           onClick={() => setImagesCollapsed(prev => !prev)}
           className="w-full flex items-center justify-between px-4 py-3"
@@ -3897,7 +3750,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <div>
+          <div className="hidden">
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
             <Select value={note.priority} onValueChange={v => onUpdateNote(note.id, { priority: v as Priority })}>
               <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
@@ -3912,7 +3765,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="hidden">
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
             <input
               type="number"
@@ -3963,7 +3816,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="hidden grid md:grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <Calendar className="w-3 h-3" /> Start
@@ -4017,12 +3870,12 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Body</label>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Note Body</label>
           <RichTextEditor
             value={note.description}
             onChange={(html) => onUpdateNote(note.id, { description: html })}
             placeholder="Write your note..."
-            minHeight={220}
+            minHeight={300}
           />
         </div>
 
@@ -4085,7 +3938,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/20">
+        <div className="hidden">
           <button
             onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
             className="w-full flex items-center justify-between px-4 py-3"
@@ -4346,7 +4199,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/20">
+        <div className="hidden">
           <button
             onClick={() => setImagesCollapsed(prev => !prev)}
             className="w-full flex items-center justify-between px-4 py-3"

@@ -164,10 +164,10 @@ export const TicketConversation: React.FC<Props> = ({
                 {msg.attachmentUrl && (
                   <div className="mt-2">
                     {isImageAttachment(msg) ? (
-                      <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block">
-                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[200px] rounded-lg border border-white/20 object-cover" />
+                      <div className="block">
+                        <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[300px] rounded-lg border border-white/20 object-contain bg-black/5" />
                         <span className="text-[11px] opacity-80 flex items-center gap-1 mt-1"><ImageIcon className="w-3 h-3" />{msg.attachmentName} {msg.attachmentSize ? `(${(msg.attachmentSize / 1024).toFixed(1)}KB)` : ''}</span>
-                      </a>
+                      </div>
                     ) : (
                       <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" download={msg.attachmentName || undefined} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${isMe ? 'bg-white/15 text-white hover:bg-white/20' : 'bg-background border border-border hover:bg-muted'} transition-colors`}>
                         <FileText className="w-4 h-4 flex-shrink-0" /><span className="truncate">{msg.attachmentName || 'File'}</span>{msg.attachmentSize && <span className="opacity-70">({(msg.attachmentSize / 1024).toFixed(1)}KB)</span>}<Download className="w-3.5 h-3.5 ml-auto flex-shrink-0" />

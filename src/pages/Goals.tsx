@@ -256,6 +256,8 @@ const PriorityBadge: React.FC<{
   onToggle: () => void;
 }> = ({ goal, onUpdate, isOpen, onToggle }) => {
   const ref = React.useRef<HTMLDivElement>(null);
+  const [pending, setPending] = React.useState<Priority>(goal.priority);
+  React.useEffect(() => { if (isOpen) setPending(goal.priority); }, [isOpen, goal.priority]);
   React.useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onToggle(); };
@@ -265,37 +267,32 @@ const PriorityBadge: React.FC<{
   const pc = PRIORITY_COLORS[goal.priority];
   return (
     <div className="relative flex-shrink-0 flex items-center" ref={ref}>
-      {goal.priority !== 'none' ? (
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          style={{ backgroundColor: pc?.bg }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
-        >
-          {pc?.label}
-        </button>
-      ) : isOpen ? (
-        <button
-          onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
-        >
-          Priority
-        </button>
-      ) : null}
+      <button
+        onClick={e => { e.stopPropagation(); onToggle(); }}
+        style={goal.priority !== 'none' ? { backgroundColor: pc?.bg } : undefined}
+        className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 inline-flex items-center ${goal.priority !== 'none' ? 'text-white' : 'border border-border text-muted-foreground'}`}
+      >
+        {goal.priority !== 'none' ? pc?.label : 'Priority'}
+      </button>
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5">
-          {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => {
+        <div className="absolute top-full left-0 mt-1 z-50 w-40 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5" onClick={e => e.stopPropagation()}>
+          {(['high', 'medium', 'low'] as const).map(p => {
             const c = PRIORITY_COLORS[p];
             return (
               <button
                 key={p}
-                onClick={e => { e.stopPropagation(); onUpdate(p); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded-lg transition-all ${goal.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
+                onClick={e => { e.stopPropagation(); setPending(p); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded-lg transition-all ${pending === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
               >
                 <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.bg }} />
                 {c.label}
               </button>
             );
           })}
+          <div className="flex gap-1.5 pt-1.5 border-t border-border mt-1">
+            <button onClick={e => { e.stopPropagation(); onUpdate(pending); onToggle(); }} className="flex-1 py-1.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg">Save</button>
+            <button onClick={e => { e.stopPropagation(); onToggle(); }} className="flex-1 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
+          </div>
         </div>
       )}
     </div>
@@ -492,6 +489,8 @@ const Goals: React.FC = () => {
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
   const [dateEditTaskId, setDateEditTaskId] = useState<string | null>(null);
   const [dateEditField, setDateEditField] = useState<'start' | 'due' | null>(null);
+  const [pendingTargetDate, setPendingTargetDate] = useState('');
+  const [pendingTargetTime, setPendingTargetTime] = useState('');
   const [tagPopupTaskId, setTagPopupTaskId] = useState<string | null>(null);
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
 
@@ -1398,7 +1397,8 @@ const Goals: React.FC = () => {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase flex-shrink-0">Goal</span>
               <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
             </div>
             <button onClick={e => { e.stopPropagation(); toggleExpand(goal.id); }} className="flex items-center gap-2 mt-1 hover:opacity-80">
@@ -1408,29 +1408,26 @@ const Goals: React.FC = () => {
                   <>
                     <ProgressBar percent={gp.percent} size="sm" className="max-w-[120px]" />
                     <span className="text-[10px] font-semibold text-muted-foreground flex-shrink-0">
-                          {`?${gp.current}/${gp.target}`}
-                          : {`${gp.percent}%`}
+                      {gp.mode === 'numeric' || gp.mode === 'auto' ? `${gp.current} / ${gp.target}` : `${gp.percent}%`}
                     </span>
                   </>
                 );
               })()}
             </button>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {(goal.priority !== 'none' || priorityEditTaskId === goal.id) && (
-                <PriorityBadge
-                  goal={goal}
-                  onUpdate={(priority) => updateTask(goal.id, { priority })}
-                  isOpen={priorityEditTaskId === goal.id}
-                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === goal.id ? null : goal.id)}
-                />
-              )}
+              <PriorityBadge
+                goal={goal}
+                onUpdate={(priority) => updateTask(goal.id, { priority })}
+                isOpen={priorityEditTaskId === goal.id}
+                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === goal.id ? null : goal.id)}
+              />
 
 
               <button
                 onClick={e => {
                   e.stopPropagation();
-                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === goal.id && dateEditField === 'due' ? null : goal.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
+                  if (dateEditTaskId === goal.id) { setDateEditTaskId(null); setDateEditField(null); }
+                  else { setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(goal.id); setDateEditField('due'); setPendingTargetDate(goal.dueDate || ''); setPendingTargetTime(goal.dueTime || ''); }
                 }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   goal.dueDate
@@ -1530,11 +1527,8 @@ const Goals: React.FC = () => {
                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
                   type="date"
-                  value={dateEditField === 'start' ? (goal.startDate || '') : (goal.dueDate || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(goal.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
-                  }}
+                  value={pendingTargetDate}
+                  onChange={e => setPendingTargetDate(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
                 />
               </div>
@@ -1542,27 +1536,20 @@ const Goals: React.FC = () => {
                 <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
                   type="time"
-                  value={dateEditField === 'start' ? (goal.startTime || '') : (goal.dueTime || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(goal.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
-                  }}
+                  value={pendingTargetTime}
+                  onChange={e => setPendingTargetTime(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
                 />
               </div>
-              {((dateEditField === 'start' && goal.startDate) || (dateEditField === 'due' && goal.dueDate)) && (
+              {pendingTargetDate && (
                 <button
-                  onClick={() => {
-                    updateTask(goal.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
-                    setDateEditTaskId(null);
-                    setDateEditField(null);
-                  }}
+                  onClick={() => { setPendingTargetDate(''); setPendingTargetTime(''); }}
                   className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
                 >
                   Clear
                 </button>
               )}
-              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
+              <button onClick={() => { updateTask(goal.id, { dueDate: pendingTargetDate || undefined, dueTime: pendingTargetTime || undefined }); setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
               <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
             </div>
           </div>
@@ -2121,11 +2108,9 @@ const Goals: React.FC = () => {
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
                       <SelectItem value="high">High</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2166,6 +2151,37 @@ const Goals: React.FC = () => {
                   </div>
                 )}
           </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
+              <input
+                type="date"
+                value={newGoalStartDate}
+                onChange={e => setNewGoalStartDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Target Date</label>
+              <input
+                type="date"
+                value={newGoalDueDate}
+                onChange={e => setNewGoalDueDate(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
+                <textarea
+                  value={newGoalDescription}
+                  onChange={e => setNewGoalDescription(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                />
+              </div>
 
           <div className="relative">
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
@@ -2211,60 +2227,6 @@ const Goals: React.FC = () => {
               )}
             </div>
           </div>
-
-          {/* Start Date and Time Section */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
-              <input
-                type="date"
-                value={newGoalStartDate}
-                onChange={e => setNewGoalStartDate(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Time</label>
-              <input
-                type="time"
-                value={newGoalStartTime}
-                onChange={e => setNewGoalStartTime(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Due Date and Time Section */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
-              <input
-                type="date"
-                value={newGoalDueDate}
-                onChange={e => setNewGoalDueDate(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Time</label>
-              <input
-                type="time"
-                value={newGoalDueTime}
-                onChange={e => setNewGoalDueTime(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
-                <textarea
-                  value={newGoalDescription}
-                  onChange={e => setNewGoalDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
-                />
-              </div>
 
               {/* Milestones */}
               <div className="rounded-2xl border border-border bg-muted/20">
@@ -3191,6 +3153,10 @@ const GoalDropdownExpanded: React.FC<{
   const [newMilestoneName, setNewMilestoneName] = useState('');
   const [newMilestoneDate, setNewMilestoneDate] = useState('');
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('');
+  const [pendingPercent, setPendingPercent] = useState(() => String(Math.min(100, Math.max(0, Math.round(Number(goal.goalProgressValue) || 0)))));
+  const [pendingCurrent, setPendingCurrent] = useState(() => String(Math.max(0, Number(goal.goalProgressValue) || 0)));
+  const [pendingTarget, setPendingTarget] = useState(() => String(Math.max(0, Number(goal.goalProgressTarget) || 100)));
+  React.useEffect(() => { const gp = getGoalProgress(goal); if (gp.mode === 'percent') setPendingPercent(String(gp.percent)); else if (gp.mode === 'numeric') { setPendingCurrent(String(gp.current)); setPendingTarget(String(gp.target)); } }, [goal.goalProgressValue, goal.goalProgressTarget, goal.goalProgressMode]);
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(goal.id));
@@ -3528,23 +3494,23 @@ const GoalDropdownExpanded: React.FC<{
                         type="range"
                         min={0}
                         max={100}
-                        value={gp.percent}
-                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Number(e.target.value) })}
+                        value={Number(pendingPercent) || 0}
+                        onChange={e => setPendingPercent(e.target.value)}
                         className="flex-1 accent-[hsl(var(--primary))] cursor-pointer"
                       />
                       <input
                         type="number"
                         min={0}
                         max={100}
-                        value={gp.percent}
-                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
+                        value={pendingPercent}
+                        onChange={e => setPendingPercent(e.target.value)}
                         className="w-20 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm text-right"
                       />
                       <span className="text-xs text-muted-foreground">%</span>
                     </div>
                     <div className="flex gap-2">
-                      <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
-                      <button className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
+                      <button onClick={() => onUpdateGoal(goal.id, { goalProgressMode: 'percent', goalProgressValue: Math.min(100, Math.max(0, Number(pendingPercent) || 0)) })} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
+                      <button onClick={() => setPendingPercent(String(gp.percent))} className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
                     </div>
                   </div>
                 )}
@@ -3554,24 +3520,24 @@ const GoalDropdownExpanded: React.FC<{
                       <input
                         type="number"
                         min={0}
-                        value={gp.current}
-                        onChange={e => onUpdateGoal(goal.id, { goalProgressValue: Math.max(0, Number(e.target.value) || 0) })}
+                        value={pendingCurrent}
+                        onChange={e => setPendingCurrent(e.target.value)}
                         className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
                       />
                       <span className="text-sm text-muted-foreground">/</span>
                       <input
                         type="number"
                         min={0}
-                        value={gp.target || ''}
+                        value={pendingTarget}
                         placeholder="target"
-                        onChange={e => onUpdateGoal(goal.id, { goalProgressTarget: Math.max(0, Number(e.target.value) || 0) })}
+                        onChange={e => setPendingTarget(e.target.value)}
                         className="w-24 bg-muted/40 border border-border rounded-lg px-2 py-1.5 text-sm"
                       />
                       <span className="text-xs text-muted-foreground">units</span>
                     </div>
                     <div className="flex gap-2">
-                      <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
-                      <button className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
+                      <button onClick={() => onUpdateGoal(goal.id, { goalProgressMode: 'numeric', goalProgressValue: Math.max(0, Number(pendingCurrent) || 0), goalProgressTarget: Math.max(1, Number(pendingTarget) || 1) })} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg">Save</button>
+                      <button onClick={() => { setPendingCurrent(String(gp.current)); setPendingTarget(String(gp.target)); }} className="px-3 py-1.5 text-xs border border-border rounded-lg">Cancel</button>
                     </div>
                   </div>
                 )}

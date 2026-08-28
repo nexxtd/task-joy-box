@@ -184,29 +184,28 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
-// Vercel's filesystem is read-only except /tmp — write uploads there on Vercel.
 const uploadsDir = process.env.VERCEL === '1'
   ? path.join('/tmp', 'uploads')
   : path.join(process.cwd(), 'uploads');
 
-// Serve uploads folder with auth check
-if (fs.existsSync(uploadsDir)) {
-  app.use('/uploads', (req, res, next) => {
-    const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({ error: 'Server configuration error' });
-    }
-    try {
-      jwt.verify(token, process.env.JWT_SECRET);
-      next();
-    } catch {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-  }, express.static(uploadsDir));
-}
+try { if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true }); } catch {}
+try { if (!fs.existsSync(path.join(uploadsDir, 'tickets'))) fs.mkdirSync(path.join(uploadsDir, 'tickets'), { recursive: true }); } catch {}
+
+app.use('/uploads', (req, res, next) => {
+  const token = req.cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+  try {
+    jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}, express.static(uploadsDir));
 
 app.use(session({
   store: sessionStore,

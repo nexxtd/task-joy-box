@@ -220,6 +220,33 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (!user) return;
+    const cleanup = () => {
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      setBoard(prev => {
+        const hasOld = prev.tasks.some(t => {
+          if (!t.completed || !t.completedAt) return false;
+          return new Date(t.completedAt) < fiveDaysAgo;
+        });
+        if (!hasOld) return prev;
+        const next = {
+          ...prev,
+          tasks: prev.tasks.filter(t => {
+            if (!t.completed || !t.completedAt) return true;
+            return new Date(t.completedAt) >= fiveDaysAgo;
+          }),
+        };
+        saveBoard(user.id, next);
+        return next;
+      });
+    };
+    cleanup();
+    const timer = setInterval(cleanup, 60 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         try {
