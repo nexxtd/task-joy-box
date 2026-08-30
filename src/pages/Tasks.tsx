@@ -1965,10 +1965,14 @@ const Tasks: React.FC = () => {
           <div className="relative">
             <button
               onClick={async () => {
+                if (mainTmplPopupOpen) {
+                  setMainTmplPopupOpen(false);
+                  return;
+                }
+                setMainTmplPopupOpen(true);
                 try {
                   const t = await fetchTemplates();
                   setMainTemplates(t);
-                  setMainTmplPopupOpen(true);
                 } catch (err) {
                   console.error('Failed to fetch templates:', err);
                 }
@@ -1979,7 +1983,9 @@ const Tasks: React.FC = () => {
               Templates
             </button>
             {mainTmplPopupOpen && (
-              <div className="absolute right-0 mt-1.5 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMainTmplPopupOpen(false)} />
+                <div className="absolute right-0 mt-1.5 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-primary" />
@@ -2040,7 +2046,8 @@ const Tasks: React.FC = () => {
                     ))}
                   </div>
                 )}
-              </div>
+                </div>
+              </>
             )}
           </div>
 
