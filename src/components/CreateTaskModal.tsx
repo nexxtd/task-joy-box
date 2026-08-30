@@ -481,6 +481,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
     const tag = await createTag({ name, color });
+    setSharedTags(prev => [...prev, tag]);
     return sharedTagToLabel(tag);
   };
 

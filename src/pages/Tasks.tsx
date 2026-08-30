@@ -1479,6 +1479,7 @@ const Tasks: React.FC = () => {
 
   const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
     const tag = await createTag({ name, color });
+    setSharedTags(prev => [...prev, tag]);
     return sharedTagToLabel(tag);
   };
 
@@ -1506,6 +1507,7 @@ const Tasks: React.FC = () => {
       if (!Number.isNaN(sharedTagId)) {
         try {
           await deleteTag(sharedTagId);
+          setSharedTags(prev => prev.filter(t => t.id !== sharedTagId));
         } catch (error) {
           console.error('Failed to delete shared tag:', error);
           return;
