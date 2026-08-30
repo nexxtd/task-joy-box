@@ -618,7 +618,26 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS task_templates_user_id_idx ON task_templates(user_id);`);
     await addColumnIfNotExists('task_templates', 'images', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('task_templates', 'attachments', "TEXT DEFAULT '[]'");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS note_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        content TEXT DEFAULT '',
+        color TEXT NOT NULL DEFAULT 'hsl(var(--card))',
+        project_id INTEGER,
+        column_id TEXT,
+        tags TEXT DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS note_templates_user_id_idx ON note_templates(user_id);`);
+    await addColumnIfNotExists('note_templates', 'column_id', "TEXT");
+    await addColumnIfNotExists('note_templates', 'tags', "TEXT DEFAULT '[]'");
     console.log('Task templates table verified');
+    console.log('Note templates table verified');
 
     // Project chat messages
     await pool.query(`

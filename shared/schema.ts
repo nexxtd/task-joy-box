@@ -635,6 +635,7 @@ export const noteTemplates = pgTable('note_templates', {
   content: text('content'),
   color: text('color').notNull(),
   projectId: integer('project_id'),
+  columnId: text('column_id'),
   tags: text('tags').default('[]'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),

@@ -6,6 +6,7 @@ export interface NoteTemplate {
   content: string;
   color: string;
   projectId?: number | null;
+  columnId?: string | null;
   tags: { id: number; name: string; color: string }[];
 }
 
@@ -18,7 +19,7 @@ export async function fetchNoteTemplates(): Promise<NoteTemplate[]> {
 
 export async function createNoteTemplate(data: {
   name: string; title: string; content: string; color: string;
-  projectId?: number | null; tags: { id: number; name: string; color: string }[];
+  projectId?: number | null; columnId?: string | null; tags: { id: number; name: string; color: string }[];
 }): Promise<NoteTemplate> {
   const res = await fetch('/api/note-templates', {
     method: 'POST',
@@ -31,7 +32,7 @@ export async function createNoteTemplate(data: {
 
 export async function updateNoteTemplate(id: number, data: Partial<{
   name: string; title: string; content: string; color: string;
-  projectId?: number | null; tags: { id: number; name: string; color: string }[];
+  projectId?: number | null; columnId?: string | null; tags: { id: number; name: string; color: string }[];
 }>): Promise<NoteTemplate> {
   const res = await fetch(`/api/note-templates/${id}`, {
     method: 'PUT',
