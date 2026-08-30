@@ -1399,10 +1399,7 @@ const Goals: React.FC = () => {
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase flex-shrink-0">Goal</span>
-              <span className="text-sm font-medium text-left text-foreground truncate">{goal.title}</span>
-            </div>
+            <span className="text-sm font-medium text-left text-foreground truncate block">{goal.title}</span>
             <button onClick={e => { e.stopPropagation(); toggleExpand(goal.id); }} className="flex items-center gap-2 mt-1 hover:opacity-80">
               {(() => {
                 const gp = getGoalProgress(goal);

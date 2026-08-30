@@ -1359,7 +1359,6 @@ const Habits: React.FC = () => {
             className="flex-1 min-w-0 cursor-pointer"
             onClick={e => { if (!isDeleteMode) { e.stopPropagation(); setOpenTaskId(habit.id); } }}
           >
-              <span className="text-[9px] font-bold tracking-widest text-muted-foreground/70 uppercase block">Habit</span>
               <span className="text-sm font-medium text-foreground truncate block">{habit.title}</span>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
               {/* Duration pill — only if set */}
