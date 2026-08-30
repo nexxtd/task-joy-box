@@ -3,8 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Note, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import type { NoteTemplate } from '@/services/noteTemplateService';
-import { fetchNoteTemplates as fetchTemplates, createNoteTemplate as createTemplate, updateNoteTemplate as updateTemplate, deleteNoteTemplate as deleteTemplateApi } from '@/services/noteTemplateService';
+import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
@@ -428,7 +427,7 @@ const Notes: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [mainTmplPopupOpen, setMainTmplPopupOpen] = useState(false);
-  const [mainTemplates, setMainTemplates] = useState<NoteTemplate[]>([]);
+  const [mainTemplates, setMainTemplates] = useState<TaskTemplate[]>([]);
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [aiBuilderInput, setAiBuilderInput] = useState('');
@@ -437,13 +436,13 @@ const Notes: React.FC = () => {
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
 
-  const [templates, setTemplates] = useState<NoteTemplate[]>([]);
+  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
-  const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: NoteTemplate } | null>(null);
+  const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
   const [templateEditOverrides, setTemplateEditOverrides] = useState<Partial<Note> | null>(null);
   const [templateEditName, setTemplateEditName] = useState('');
 
@@ -576,24 +575,24 @@ const Notes: React.FC = () => {
 
   const templateEditNote = useMemo(() => {
     if (!editingTemplateMeta) return null;
-    const tmpl = editingTemplateMeta.template as any;
+    const tmpl = editingTemplateMeta.template;
     const base = {
       id: `template-edit-${tmpl.id}`,
       title: tmpl.title || '',
-      description: tmpl.content || tmpl.description || '',
-      priority: ('medium' as Priority),
-      duration: 0,
-      startDate: '',
-      startTime: '',
-      dueDate: '',
-      dueTime: '',
+      description: tmpl.description || '',
+      priority: tmpl.priority || ('medium' as Priority),
+      duration: tmpl.duration || 0,
+      startDate: tmpl.startDate || '',
+      startTime: tmpl.startTime || '',
+      dueDate: tmpl.dueDate || '',
+      dueTime: tmpl.dueTime || '',
       projectId: tmpl.projectId ?? null,
       columnId: tmpl.columnId || '',
-      labels: tmpl.tags || tmpl.labels || [],
-      subtasks: [],
-      checklists: [],
-      images: [],
-      attachments: [],
+      labels: tmpl.labels || [],
+      subtasks: tmpl.subtasks || [],
+      checklists: tmpl.checklists || [],
+      images: tmpl.images || [],
+      attachments: tmpl.attachments || [],
       comments: [],
       columnName: '',
       projectName: '',
@@ -602,7 +601,7 @@ const Notes: React.FC = () => {
     return (templateEditOverrides ? { ...base, ...templateEditOverrides } : base) as unknown as Note;
   }, [editingTemplateMeta, templateEditOverrides]);
 
-  const handleEditTemplate = useCallback((template: NoteTemplate) => {
+  const handleEditTemplate = useCallback((template: TaskTemplate) => {
     setTemplateEditOverrides(null);
     setTemplateEditName(template.name);
     setEditingTemplateMeta({ id: template.id, name: template.name, template });
@@ -619,15 +618,14 @@ const Notes: React.FC = () => {
   const handleSaveTemplate = useCallback(async () => {
     if (!editingTemplateMeta) return;
     const edited = templateEditOverrides || {};
-    const tmplAny = editingTemplateMeta.template as any;
     try {
       const saved = await updateTemplate(editingTemplateMeta.id, {
         name: templateEditName || editingTemplateMeta.name,
-        title: (edited.title ?? tmplAny.title) || '',
-        content: (edited.description ?? tmplAny.content ?? tmplAny.description) || '',
-        projectId: (edited.projectId !== undefined ? edited.projectId : tmplAny.projectId) ?? null,
-        columnId: (edited.columnId ?? tmplAny.columnId) || undefined,
-        tags: (edited.labels ?? tmplAny.tags ?? tmplAny.labels) || [],
+        title: (edited.title ?? editingTemplateMeta.template.title) || '',
+        description: (edited.description ?? editingTemplateMeta.template.description) || '',
+        projectId: (edited.projectId !== undefined ? edited.projectId : editingTemplateMeta.template.projectId) ?? null,
+        columnId: (edited.columnId ?? editingTemplateMeta.template.columnId) || undefined,
+        labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
       } as any);
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
@@ -2306,11 +2304,14 @@ const Notes: React.FC = () => {
                     await createTemplate({
                       name: templateName.trim(),
                       title: newNoteTitle || '',
-                      content: newNoteDescription || '',
-                      color: 'hsl(var(--card))',
+                      description: newNoteDescription || '',
+                      priority: 'medium',
+                      duration: 0,
                       projectId: newNoteProjectId ? Number(newNoteProjectId) : null,
                       columnId: newNoteColumnId || undefined,
-                      tags: newNoteLabels || [],
+                      labels: newNoteLabels || [],
+                      subtasks: [],
+                      checklists: [],
                     } as any);
                     setSaveTemplateOpen(false);
                     setTemplateName('');
@@ -2365,12 +2366,11 @@ const Notes: React.FC = () => {
                     <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
                       <button
                         onClick={() => {
-                          const anyTmpl = tmpl as any;
-                          setNewNoteTitle(anyTmpl.title || '');
-                          setNewNoteDescription(anyTmpl.content || anyTmpl.description || '');
-                          setNewNoteProjectId(anyTmpl.projectId ? Number(anyTmpl.projectId) : '');
-                          setNewNoteColumnId(anyTmpl.columnId || '');
-                          setNewNoteLabels(anyTmpl.tags || anyTmpl.labels || []);
+                          setNewNoteTitle(tmpl.title || '');
+                          setNewNoteDescription(tmpl.description || '');
+                          setNewNoteProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+                          setNewNoteColumnId(tmpl.columnId || '');
+                          setNewNoteLabels(tmpl.labels || []);
                           setLoadTemplateOpen(false);
                         }}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
@@ -2851,9 +2851,9 @@ interface NoteFullViewProps {
   isPremium: boolean;
   isPro: boolean;
   onJumpToNote?: (taskId: string) => void;
-  onEditTemplate?: (template: NoteTemplate) => void;
+  onEditTemplate?: (template: TaskTemplate) => void;
   onSaveTemplate?: () => Promise<void>;
-  editingTemplateMeta?: { id: number; name: string; template: NoteTemplate } | null;
+  editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
   templateEditName?: string;
   onTemplateEditNameChange?: (name: string) => void;
 }
@@ -3042,15 +3042,15 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
 
   const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
-  const [fullViewTemplates, setFullViewTemplates] = useState<NoteTemplate[]>([]);
-  const [editingTmpl, setEditingTmpl] = useState<NoteTemplate | null>(null);
+  const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
+  const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
   const [editingTmplName, setEditingTmplName] = useState('');
   const [editingTmplTitle, setEditingTmplTitle] = useState('');
   const [editingTmplDesc, setEditingTmplDesc] = useState('');
   const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
-  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<NoteTemplate[]>([]);
+  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
@@ -4004,11 +4004,14 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                       await createTemplate({
                         name: fullViewTmplName.trim(),
                         title: note.title || '',
-                        content: note.description || '',
-                        color: 'hsl(var(--card))',
+                        description: note.description || '',
+                        priority: 'medium',
+                        duration: 0,
                         projectId: note.projectId ?? null,
                         columnId: note.columnId || undefined,
-                        tags: note.labels || [],
+                        labels: note.labels || [],
+                        subtasks: [],
+                        checklists: [],
                       } as any);
                       setFullViewSaveTmplOpen(false);
                       setFullViewTmplName('');
@@ -4196,12 +4199,11 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                 onClick={async () => {
                   if (!editingTmpl || !editingTmplName.trim()) return;
                   try {
-                    const anyTmpl = editingTmpl as any;
-                    await updateTemplate(anyTmpl.id, {
+                    await updateTemplate(editingTmpl.id, {
                       name: editingTmplName,
                       title: editingTmplTitle,
-                      content: editingTmplDesc,
-                      tags: anyTmpl.tags || anyTmpl.labels || [],
+                      description: editingTmplDesc,
+                      labels: (editingTmpl as any).labels || [],
                     } as any);
                     const t = await fetchTemplates();
                     setFullViewTemplates(t);
