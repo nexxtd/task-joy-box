@@ -2182,50 +2182,46 @@ const Goals: React.FC = () => {
                 />
               </div>
 
-          <div className="relative">
+          <div>
             <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
-            <div className="mt-1">
-              {newGoalLabels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {newGoalLabels.map(label => (
-                    <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                      {label.name}
-                      <button onClick={() => setNewGoalLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setNewTagPickerOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                <Tag className="w-3.5 h-3.5" />
-                {newGoalLabels.length > 0 ? `${newGoalLabels.length} tag${newGoalLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-              </button>
-              {newTagPickerOpen && (
-                <TagsModal
-                  open={newTagPickerOpen}
-                  onClose={() => setNewTagPickerOpen(false)}
-                  title="Tags"
-                  tags={allTags}
-                  selectedIds={newGoalLabels.map(label => label.id)}
-                  onToggle={labelId => setNewGoalLabels(prev =>
-                    prev.some(l => l.id === labelId) ? prev.filter(l => l.id !== labelId) : [...prev, ...allTags.filter(t => t.id === labelId)]
-                  )}
-                  onCreate={async (name, color) => {
-                    const newLabel = await createSharedGoalLabel(name, color);
-                    setNewGoalLabels(prev => [...prev, newLabel]);
-                  }}
-                  onDelete={deleteTagEverywhere}
-                  onRename={renameTagEverywhere}
-                  onColorChange={changeTagColorEverywhere}
-                  emptyText="No tags yet. Create one below."
-                />
-              )}
-            </div>
+            {newGoalLabels.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {newGoalLabels.map(label => (
+                  <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${LABEL_COLORS[label.color]} text-primary-foreground flex-shrink-0`}>
+                    {label.name}
+                    <button onClick={() => setNewGoalLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setNewTagPickerOpen(true)}
+              className="mt-2 flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              {newGoalLabels.length > 0 ? 'Add more tags' : 'Add tags'}
+            </button>
           </div>
+          <TagsModal
+            open={newTagPickerOpen}
+            onClose={() => setNewTagPickerOpen(false)}
+            title="Tags"
+            tags={allTags}
+            selectedIds={newGoalLabels.map(label => label.id)}
+            onToggle={labelId => setNewGoalLabels(prev =>
+              prev.some(l => l.id === labelId) ? prev.filter(l => l.id !== labelId) : [...prev, ...allTags.filter(t => t.id === labelId)]
+            )}
+            onCreate={async (name, color) => {
+              const newLabel = await createSharedGoalLabel(name, color);
+              setNewGoalLabels(prev => [...prev, newLabel]);
+            }}
+            onDelete={deleteTagEverywhere}
+            onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
 
               {/* Milestones */}
               <div className="rounded-2xl border border-border bg-muted/20">
@@ -4622,50 +4618,40 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Tag className="w-4 h-4 text-muted-foreground" />
-              Tags
-            </h3>
-            <button
-              onClick={() => setTagPickerOpen(prev => !prev)}
-              className="text-xs text-primary hover:underline"
-            >
-              {tagPickerOpen ? 'Close' : 'Edit'}
-            </button>
-          </div>
-
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
           {goal.labels.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {goal.labels.map(label => (
-                <button
-                  key={label.id}
-                  onClick={() => setTagPickerOpen(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
+                <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${LABEL_COLORS[label.color]} text-primary-foreground flex-shrink-0`}>
                   {label.name}
-                  <X className="w-3 h-3 opacity-80" />
-                </button>
+                  <button onClick={() => onToggleTag(goal.id, label)} className="hover:opacity-70">
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
               ))}
             </div>
           )}
-
-          {tagPickerOpen && (
-            <TagsModal
-              open={tagPickerOpen}
-              onClose={() => setTagPickerOpen(false)}
-              title="Tags"
-              tags={allTags}
-              selectedIds={goal.labels.map(label => label.id)}
-              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(goal.id, label); }}
-              onCreate={(name, color) => { onCreateTag(goal.id, name, color); }}
-              onDelete={onDeleteTagEverywhere}
-              onRename={onRenameTagEverywhere}
-              onColorChange={onColorChangeTagEverywhere}
-              emptyText="No tags yet. Create one below."
-            />
-          )}
+          <button
+            onClick={() => setTagPickerOpen(true)}
+            className="mt-2 flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+          >
+            <Tag className="w-3.5 h-3.5" />
+            {goal.labels.length > 0 ? 'Add more tags' : 'Add tags'}
+          </button>
+          <TagsModal
+            open={tagPickerOpen}
+            onClose={() => setTagPickerOpen(false)}
+            title="Tags"
+            tags={allTags}
+            selectedIds={goal.labels.map(label => label.id)}
+            onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(goal.id, label); }}
+            onCreate={(name, color) => { onCreateTag(goal.id, name, color); }}
+            onDelete={onDeleteTagEverywhere}
+            onRename={onRenameTagEverywhere}
+            onColorChange={onColorChangeTagEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
           {tagDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
               <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />

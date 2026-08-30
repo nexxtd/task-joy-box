@@ -3101,50 +3101,40 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Tag className="w-4 h-4 text-muted-foreground" />
-              Tags
-            </h3>
-            <button
-              onClick={() => setTagPickerOpen(prev => !prev)}
-              className="text-xs text-primary hover:underline"
-            >
-              {tagPickerOpen ? 'Close' : 'Edit'}
-            </button>
-          </div>
-
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
           {note.labels.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {note.labels.map(label => (
-                <button
-                  key={label.id}
-                  onClick={() => setTagPickerOpen(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
+                <span key={label.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${LABEL_COLORS[label.color]} text-primary-foreground flex-shrink-0`}>
                   {label.name}
-                  <X className="w-3 h-3 opacity-80" />
-                </button>
+                  <button onClick={() => onToggleTag(note.id, label)} className="hover:opacity-70">
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
               ))}
             </div>
           )}
-
-          {tagPickerOpen && (
-            <TagsModal
-              open={tagPickerOpen}
-              onClose={() => setTagPickerOpen(false)}
-              title="Tags"
-              tags={allTags}
-              selectedIds={note.labels.map(label => label.id)}
-              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(note.id, label); }}
-              onCreate={(name, color) => { onCreateTag(note.id, name, color); }}
-              onDelete={onDeleteTagEverywhere}
-              onRename={onRenameTagEverywhere}
-              onColorChange={onColorChangeTagEverywhere}
-              emptyText="No tags yet. Create one below."
-            />
-          )}
+          <button
+            onClick={() => setTagPickerOpen(true)}
+            className="mt-2 flex items-center gap-1.5 rounded-xl border border-border bg-muted/50 px-3.5 py-2 text-xs text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+          >
+            <Tag className="w-3.5 h-3.5" />
+            {note.labels.length > 0 ? 'Add more tags' : 'Add tags'}
+          </button>
+          <TagsModal
+            open={tagPickerOpen}
+            onClose={() => setTagPickerOpen(false)}
+            title="Tags"
+            tags={allTags}
+            selectedIds={note.labels.map(label => label.id)}
+            onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(note.id, label); }}
+            onCreate={(name, color) => { onCreateTag(note.id, name, color); }}
+            onDelete={onDeleteTagEverywhere}
+            onRename={onRenameTagEverywhere}
+            onColorChange={onColorChangeTagEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
           {tagDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
               <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
