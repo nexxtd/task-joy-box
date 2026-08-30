@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useHabitsContext } from '@/context/HabitsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Habit, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchHabitTemplates, createHabitTemplate, updateHabitTemplate, deleteHabitTemplate } from '@/services/habitTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import PageTemplate from '@/components/PageTemplate';
@@ -617,7 +617,7 @@ const Habits: React.FC = () => {
     if (!editingTemplateMeta) return;
     const edited = templateEditOverrides || {};
     try {
-      const saved = await updateTemplate(editingTemplateMeta.id, {
+      const saved = await updateHabitTemplate(editingTemplateMeta.id, {
         name: templateEditName || editingTemplateMeta.name,
         title: (edited.title ?? editingTemplateMeta.template.title) || '',
         description: (edited.description ?? editingTemplateMeta.template.description) || '',
@@ -1560,7 +1560,7 @@ const Habits: React.FC = () => {
             <button
               onClick={async () => {
                 try {
-                  const t = await fetchTemplates();
+                  const t = await fetchHabitTemplates();
                   setMainTemplates(t);
                   setMainTmplPopupOpen(true);
                 } catch (err) {
@@ -1618,8 +1618,8 @@ const Habits: React.FC = () => {
                             onClick={async () => {
                               if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                               try {
-                                await deleteTemplateApi(tmpl.id);
-                                setMainTemplates(await fetchTemplates());
+                                await deleteHabitTemplate(tmpl.id);
+                                setMainTemplates(await fetchHabitTemplates());
                               } catch (err) {
                                 console.error('Failed to delete template:', err);
                               }
@@ -2313,7 +2313,7 @@ const Habits: React.FC = () => {
                         setTemplateMenuOpen(false);
                         setTemplateError('');
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchHabitTemplates();
                           setTemplates(t);
                           setLoadTemplateOpen(true);
                         } catch (err) {
@@ -2389,7 +2389,7 @@ const Habits: React.FC = () => {
                   if (!templateName.trim()) return;
                   setTemplateError('');
                   try {
-                    await createTemplate({
+                    await createHabitTemplate({
                       name: templateName.trim(),
                       priority: 'medium' as any,
                       title: newHabitTitle || '',
@@ -2489,8 +2489,8 @@ const Habits: React.FC = () => {
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setTemplates(await fetchTemplates());
+                              await deleteHabitTemplate(tmpl.id);
+                              setTemplates(await fetchHabitTemplates());
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -4426,7 +4426,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
               <button
                 onClick={async () => {
                   try {
-                    const t = await fetchTemplates();
+                    const t = await fetchHabitTemplates();
                     setFullViewTemplates(t);
                     setTemplatePopupOpen(true);
                   } catch (err) {
@@ -4455,7 +4455,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                       onClick={async () => {
                         setTemplatePopupOpen(false);
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchHabitTemplates();
                           setFullViewLoadTemplates(t);
                           setFullViewLoadTmplOpen(true);
                         } catch (err) {
@@ -4531,7 +4531,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                   onChange={e => setFullViewTmplName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
                     try {
-                      await createTemplate({
+                      await createHabitTemplate({
                         name: fullViewTmplName.trim(),
                         title: habit.title || '',
                         description: habit.description || '',
@@ -4563,7 +4563,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                 onClick={async () => {
                   if (!fullViewTmplName.trim()) return;
                   try {
-                    await createTemplate({
+                    await createHabitTemplate({
                       name: fullViewTmplName.trim(),
                       title: habit.title || '',
                       description: habit.description || '',
@@ -4653,8 +4653,8 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setFullViewLoadTemplates(await fetchTemplates());
+                              await deleteHabitTemplate(tmpl.id);
+                              setFullViewLoadTemplates(await fetchHabitTemplates());
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -4780,7 +4780,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                 onClick={async () => {
                   if (!editingTmpl || !editingTmplName.trim()) return;
                   try {
-                    await updateTemplate(editingTmpl.id, {
+                    await updateHabitTemplate(editingTmpl.id, {
                       name: editingTmplName,
                       title: editingTmplTitle,
                       description: editingTmplDesc,
@@ -4794,7 +4794,7 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
                       subtasks: editingTmpl.subtasks,
                       checklists: editingTmpl.checklists,
                     });
-                    const t = await fetchTemplates();
+                    const t = await fetchHabitTemplates();
                     setFullViewTemplates(t);
                     setEditingTmpl(null);
                   } catch (err) {

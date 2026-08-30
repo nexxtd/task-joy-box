@@ -636,8 +636,60 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS note_templates_user_id_idx ON note_templates(user_id);`);
     await addColumnIfNotExists('note_templates', 'column_id', "TEXT");
     await addColumnIfNotExists('note_templates', 'tags', "TEXT DEFAULT '[]'");
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS goal_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        priority TEXT DEFAULT 'medium',
+        duration INTEGER,
+        start_date TEXT,
+        start_time TEXT,
+        due_date TEXT,
+        due_time TEXT,
+        project_id INTEGER,
+        column_id TEXT,
+        labels TEXT DEFAULT '[]',
+        subtasks TEXT DEFAULT '[]',
+        checklists TEXT DEFAULT '[]',
+        images TEXT DEFAULT '[]',
+        attachments TEXT DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS goal_templates_user_id_idx ON goal_templates(user_id);`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS habit_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        priority TEXT DEFAULT 'medium',
+        duration INTEGER,
+        start_date TEXT,
+        start_time TEXT,
+        due_date TEXT,
+        due_time TEXT,
+        project_id INTEGER,
+        column_id TEXT,
+        labels TEXT DEFAULT '[]',
+        subtasks TEXT DEFAULT '[]',
+        checklists TEXT DEFAULT '[]',
+        images TEXT DEFAULT '[]',
+        attachments TEXT DEFAULT '[]',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS habit_templates_user_id_idx ON habit_templates(user_id);`);
     console.log('Task templates table verified');
     console.log('Note templates table verified');
+    console.log('Goal templates table verified');
+    console.log('Habit templates table verified');
 
     // Project chat messages
     await pool.query(`
@@ -759,7 +811,7 @@ export async function initDatabase() {
     const rlsTables = [
       'habit_tag_assignments', 'coupon_redemptions', 'habit_tags', 'goal_tags',
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
-      'task_templates', 'note_templates', 'note_snapshots', 'goal_snapshots',
+      'task_templates', 'note_templates', 'goal_templates', 'habit_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
       'pending_payments', 'documents',
     ];

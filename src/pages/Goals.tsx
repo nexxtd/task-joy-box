@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useGoalsContext } from '@/context/GoalsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Goal, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchGoalTemplates, createGoalTemplate, updateGoalTemplate, deleteGoalTemplate } from '@/services/goalTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import PageTemplate from '@/components/PageTemplate';
@@ -691,7 +691,7 @@ const Goals: React.FC = () => {
     if (!editingTemplateMeta) return;
     const edited = templateEditOverrides || {};
     try {
-      const saved = await updateTemplate(editingTemplateMeta.id, {
+      const saved = await updateGoalTemplate(editingTemplateMeta.id, {
         name: templateEditName || editingTemplateMeta.name,
         title: (edited.title ?? editingTemplateMeta.template.title) || '',
         description: (edited.description ?? editingTemplateMeta.template.description) || '',
@@ -1620,7 +1620,7 @@ const Goals: React.FC = () => {
             <button
               onClick={async () => {
                 try {
-                  const t = await fetchTemplates();
+                  const t = await fetchGoalTemplates();
                   setMainTemplates(t);
                   setMainTmplPopupOpen(true);
                 } catch (err) {
@@ -1678,8 +1678,8 @@ const Goals: React.FC = () => {
                             onClick={async () => {
                               if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                               try {
-                                await deleteTemplateApi(tmpl.id);
-                                setMainTemplates(await fetchTemplates());
+                                await deleteGoalTemplate(tmpl.id);
+                                setMainTemplates(await fetchGoalTemplates());
                               } catch (err) {
                                 console.error('Failed to delete template:', err);
                               }
@@ -2466,7 +2466,7 @@ const Goals: React.FC = () => {
                         setTemplateMenuOpen(false);
                         setTemplateError('');
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchGoalTemplates();
                           setTemplates(t);
                           setLoadTemplateOpen(true);
                         } catch (err) {
@@ -2542,7 +2542,7 @@ const Goals: React.FC = () => {
                   if (!templateName.trim()) return;
                   setTemplateError('');
                   try {
-                    await createTemplate({
+                    await createGoalTemplate({
                       name: templateName.trim(),
                       title: newGoalTitle || '',
                       description: newGoalDescription || '',
@@ -2651,8 +2651,8 @@ const Goals: React.FC = () => {
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setTemplates(await fetchTemplates());
+                              await deleteGoalTemplate(tmpl.id);
+                              setTemplates(await fetchGoalTemplates());
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -4950,7 +4950,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
               <button
                 onClick={async () => {
                   try {
-                    const t = await fetchTemplates();
+                    const t = await fetchGoalTemplates();
                     setFullViewTemplates(t);
                     setTemplatePopupOpen(true);
                   } catch (err) {
@@ -4979,7 +4979,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                       onClick={async () => {
                         setTemplatePopupOpen(false);
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchGoalTemplates();
                           setFullViewLoadTemplates(t);
                           setFullViewLoadTmplOpen(true);
                         } catch (err) {
@@ -5055,7 +5055,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                   onChange={e => setFullViewTmplName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
                     try {
-                      await createTemplate({
+                      await createGoalTemplate({
                         name: fullViewTmplName.trim(),
                         title: goal.title || '',
                         description: goal.description || '',
@@ -5087,7 +5087,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                 onClick={async () => {
                   if (!fullViewTmplName.trim()) return;
                   try {
-                    await createTemplate({
+                    await createGoalTemplate({
                       name: fullViewTmplName.trim(),
                       title: goal.title || '',
                       description: goal.description || '',
@@ -5177,8 +5177,8 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setFullViewLoadTemplates(await fetchTemplates());
+                              await deleteGoalTemplate(tmpl.id);
+                              setFullViewLoadTemplates(await fetchGoalTemplates());
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -5304,7 +5304,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                 onClick={async () => {
                   if (!editingTmpl || !editingTmplName.trim()) return;
                   try {
-                    await updateTemplate(editingTmpl.id, {
+                    await updateGoalTemplate(editingTmpl.id, {
                       name: editingTmplName,
                       title: editingTmplTitle,
                       description: editingTmplDesc,
@@ -5318,7 +5318,7 @@ const GoalFullView: React.FC<GoalFullViewProps> = ({
                       subtasks: editingTmpl.subtasks,
                       checklists: editingTmpl.checklists,
                     });
-                    const t = await fetchTemplates();
+                    const t = await fetchGoalTemplates();
                     setFullViewTemplates(t);
                     setEditingTmpl(null);
                   } catch (err) {

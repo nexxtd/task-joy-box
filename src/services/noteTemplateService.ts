@@ -11,7 +11,7 @@ export interface NoteTemplate {
 }
 
 export async function fetchNoteTemplates(): Promise<NoteTemplate[]> {
-  const res = await fetch('/api/note-templates');
+  const res = await fetch('/api/note-templates', { credentials: 'include' });
   if (!res.ok) throw new Error('Failed to fetch note templates');
   const data = await res.json();
   return data.templates || [];
@@ -24,6 +24,7 @@ export async function createNoteTemplate(data: {
   const res = await fetch('/api/note-templates', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create note template');
@@ -37,6 +38,7 @@ export async function updateNoteTemplate(id: number, data: Partial<{
   const res = await fetch(`/api/note-templates/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to update note template');
@@ -44,6 +46,6 @@ export async function updateNoteTemplate(id: number, data: Partial<{
 }
 
 export async function deleteNoteTemplate(id: number): Promise<void> {
-  const res = await fetch(`/api/note-templates/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/note-templates/${id}`, { method: 'DELETE', credentials: 'include' });
   if (!res.ok) throw new Error('Failed to delete note template');
 }

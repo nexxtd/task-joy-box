@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
-import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Note, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Note, TaskStatus, LABEL_COLORS } from '@/types/board';
+import { fetchNoteTemplates, createNoteTemplate, updateNoteTemplate, deleteNoteTemplate } from '@/services/noteTemplateService';
+import type { NoteTemplate } from '@/services/noteTemplateService';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
@@ -409,6 +410,12 @@ const Notes: React.FC = () => {
   useEffect(() => { localStorage.setItem('notes-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
   useEffect(() => { localStorage.setItem('notes-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
   useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
+  useEffect(() => {
+    const onWindowUp = () => setIsDragging(false);
+    window.addEventListener('mouseup', onWindowUp);
+    window.addEventListener('touchend', onWindowUp);
+    return () => { window.removeEventListener('mouseup', onWindowUp); window.removeEventListener('touchend', onWindowUp); };
+  }, []);
 
   const [completedOpen, setCompletedOpen] = useState(true);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -427,7 +434,7 @@ const Notes: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [mainTmplPopupOpen, setMainTmplPopupOpen] = useState(false);
-  const [mainTemplates, setMainTemplates] = useState<TaskTemplate[]>([]);
+  const [mainTemplates, setMainTemplates] = useState<NoteTemplate[]>([]);
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [aiBuilderInput, setAiBuilderInput] = useState('');
@@ -436,13 +443,13 @@ const Notes: React.FC = () => {
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
 
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [templates, setTemplates] = useState<NoteTemplate[]>([]);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
-  const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
+  const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: NoteTemplate } | null>(null);
   const [templateEditOverrides, setTemplateEditOverrides] = useState<Partial<Note> | null>(null);
   const [templateEditName, setTemplateEditName] = useState('');
 
@@ -575,24 +582,24 @@ const Notes: React.FC = () => {
 
   const templateEditNote = useMemo(() => {
     if (!editingTemplateMeta) return null;
-    const tmpl = editingTemplateMeta.template;
+    const tmpl: any = editingTemplateMeta.template;
     const base = {
       id: `template-edit-${tmpl.id}`,
       title: tmpl.title || '',
-      description: tmpl.description || '',
-      priority: tmpl.priority || ('medium' as Priority),
-      duration: tmpl.duration || 0,
-      startDate: tmpl.startDate || '',
-      startTime: tmpl.startTime || '',
-      dueDate: tmpl.dueDate || '',
-      dueTime: tmpl.dueTime || '',
+      description: tmpl.content || tmpl.description || '',
+      priority: 'medium' as Priority,
+      duration: 0,
+      startDate: '',
+      startTime: '',
+      dueDate: '',
+      dueTime: '',
       projectId: tmpl.projectId ?? null,
       columnId: tmpl.columnId || '',
-      labels: tmpl.labels || [],
-      subtasks: tmpl.subtasks || [],
-      checklists: tmpl.checklists || [],
-      images: tmpl.images || [],
-      attachments: tmpl.attachments || [],
+      labels: tmpl.tags || tmpl.labels || [],
+      subtasks: [],
+      checklists: [],
+      images: [],
+      attachments: [],
       comments: [],
       columnName: '',
       projectName: '',
@@ -601,7 +608,7 @@ const Notes: React.FC = () => {
     return (templateEditOverrides ? { ...base, ...templateEditOverrides } : base) as unknown as Note;
   }, [editingTemplateMeta, templateEditOverrides]);
 
-  const handleEditTemplate = useCallback((template: TaskTemplate) => {
+  const handleEditTemplate = useCallback((template: NoteTemplate) => {
     setTemplateEditOverrides(null);
     setTemplateEditName(template.name);
     setEditingTemplateMeta({ id: template.id, name: template.name, template });
@@ -619,14 +626,14 @@ const Notes: React.FC = () => {
     if (!editingTemplateMeta) return;
     const edited = templateEditOverrides || {};
     try {
-      const saved = await updateTemplate(editingTemplateMeta.id, {
+      const saved = await updateNoteTemplate(editingTemplateMeta.id, {
         name: templateEditName || editingTemplateMeta.name,
         title: (edited.title ?? editingTemplateMeta.template.title) || '',
-        description: (edited.description ?? editingTemplateMeta.template.description) || '',
+        content: ((edited as any).description ?? (editingTemplateMeta.template as any).content ?? editingTemplateMeta.template.title) || '',
         projectId: (edited.projectId !== undefined ? edited.projectId : editingTemplateMeta.template.projectId) ?? null,
         columnId: (edited.columnId ?? editingTemplateMeta.template.columnId) || undefined,
-        labels: (edited.labels ?? editingTemplateMeta.template.labels) || [],
-      } as any);
+        tags: ((edited.labels ?? (editingTemplateMeta.template as any).tags ?? (editingTemplateMeta.template as any).labels) || []) as any,
+      });
       setTemplates(prev => prev.map(t => t.id === saved.id ? saved : t));
       setMainTemplates(prev => prev.map(t => (t as any).id === saved.id ? saved : t));
       setTemplateEditName('');
@@ -677,7 +684,7 @@ const Notes: React.FC = () => {
     const srcNotes = getNotesForDroppable(srcDroppableId);
     const dstNotes = getNotesForDroppable(dstDroppableId);
     if (!srcNotes || !dstNotes) return;
-    if (srcNotes.length <= srcIndex || dstNotes.length < dstIndex) return;
+    if (srcNotes.length <= srcIndex) return;
 
     const movingTaskId = srcNotes[srcIndex]?.id;
     if (!movingTaskId) return;
@@ -687,32 +694,38 @@ const Notes: React.FC = () => {
     if (newColumnId) updateFields.columnId = newColumnId;
     if (dstProject === 'my-notes') {
       updateFields.projectId = null;
+      updateFields.projectName = undefined;
     } else if (typeof dstProject === 'number') {
+      const proj = projects.find(p => p.id === dstProject);
       updateFields.projectId = dstProject;
+      if (proj) updateFields.projectName = proj.name;
     }
     if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
 
-    const srcIds = srcNotes.map(t => t.id);
-    const dstIds = dstNotes.map(t => t.id);
-    const [removed] = srcIds.splice(srcIndex, 1);
-    dstIds.splice(dstIndex, 0, removed);
-    srcIds.forEach((id, idx) => updateTask(id, { order: idx }));
-    dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
-
-    const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-    const srcSet = new Set(srcNotes.map(t => t.id));
-    const dstSet = new Set(dstNotes.map(t => t.id));
-    const resultIds: string[] = [];
-    let srcInserted = false;
-    let dstInserted = false;
-    for (const id of base) {
-      if (srcSet.has(id) && !srcInserted) { resultIds.push(...srcIds); srcInserted = true; }
-      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
-      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    const isSameDroppable = srcDroppableId === dstDroppableId;
+    if (!isSameDroppable) {
+      const srcIds = srcNotes.map(t => t.id);
+      const dstIds = dstNotes.map(t => t.id);
+      const insertIdx = Math.min(dstIndex, dstIds.length);
+      dstIds.splice(insertIdx, 0, movingTaskId);
+      const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
+      filteredSrcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+      dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const srcSet = new Set(srcNotes.map(t => t.id));
+      const dstSet = new Set(dstNotes.map(t => t.id));
+      const resultIds: string[] = [];
+      let srcInserted = false;
+      let dstInserted = false;
+      for (const id of base) {
+        if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
+        else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+        else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+      }
+      if (!srcInserted) resultIds.push(...filteredSrcIds);
+      if (!dstInserted) resultIds.push(...dstIds);
+      setOrderedActiveIds(resultIds);
     }
-    if (!srcInserted) resultIds.push(...srcIds);
-    if (!dstInserted) resultIds.push(...dstIds);
-    setOrderedActiveIds(resultIds);
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -1237,7 +1250,7 @@ const Notes: React.FC = () => {
             setOpenTaskId(note.id);
           }
         }}
-        className={`group border rounded-xl bg-card transition-all duration-200 cursor-pointer ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDeleteMode
             ? selectedDeleteTaskIds.includes(note.id)
               ? 'border-destructive bg-destructive/5 hover:bg-destructive/10'
@@ -1347,7 +1360,7 @@ const Notes: React.FC = () => {
             <button
               onClick={async () => {
                 try {
-                  const t = await fetchTemplates();
+                  const t = await fetchNoteTemplates();
                   setMainTemplates(t);
                   setMainTmplPopupOpen(true);
                 } catch (err) {
@@ -1405,8 +1418,8 @@ const Notes: React.FC = () => {
                             onClick={async () => {
                               if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                               try {
-                                await deleteTemplateApi(tmpl.id);
-                                setMainTemplates(await fetchTemplates());
+                                await deleteNoteTemplate(tmpl.id);
+                                setMainTemplates(await fetchNoteTemplates());
                               } catch (err) {
                                 console.error('Failed to delete template:', err);
                               }
@@ -1547,7 +1560,7 @@ const Notes: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative">
-        <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
+        <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={(result) => { setIsDragging(false); handleDragEnd(result); }}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myNotesGroup.length === 0 && projectNoteGroups.length === 0 && filtered.completed.length === 0 && filtered.archived.length === 0 && (
             <div className="text-center py-16">
@@ -1697,7 +1710,7 @@ const Notes: React.FC = () => {
         </button>
       </div>
 
-      {addingNote && (
+            {addingNote && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => setAddingNote(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div
@@ -1713,41 +1726,17 @@ const Notes: React.FC = () => {
 
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Note title</label>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Title</label>
                 <input
                   autoFocus
                   value={newNoteTitle}
                   onChange={e => setNewNoteTitle(e.target.value)}
+                  placeholder="Untitled"
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                 />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="hidden">
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
-                  <Select value={newNotePriority} onValueChange={v => setNewNotePriority(v as Priority)}>
-                    <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="none">None</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="hidden">
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={newNoteDuration}
-                    onChange={e => setNewNoteDuration(Math.max(0, Number(e.target.value) || 0))}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  />
-                </div>
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                   <Select value={newNoteProjectId === '' ? 'my-notes' : String(newNoteProjectId)} onValueChange={v => { setNewNoteProjectId(v === 'my-notes' ? '' : Number(v)); setNewNoteColumnId(''); }}>
@@ -1783,272 +1772,58 @@ const Notes: React.FC = () => {
                     )}
                   </div>
                 )}
-          </div>
+              </div>
 
-          <div className="relative">
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
-            <div className="mt-1">
-              {newNoteLabels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {newNoteLabels.map(label => (
-                    <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                      {label.name}
-                      <button onClick={() => setNewNoteLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Tags</label>
+                <div className="mt-1">
+                  {newNoteLabels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {newNoteLabels.map(label => (
+                        <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                          {label.name}
+                          <button onClick={() => setNewNoteLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setNewTagPickerOpen(prev => !prev)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    <Tag className="w-3.5 h-3.5" />
+                    {newNoteLabels.length > 0 ? `${newNoteLabels.length} tag${newNoteLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
+                  </button>
+                  {newTagPickerOpen && (
+                    <TagsModal
+                      open={newTagPickerOpen}
+                      onClose={() => setNewTagPickerOpen(false)}
+                      title="Tags"
+                      tags={allTags}
+                      selectedIds={newNoteLabels.map(label => label.id)}
+                      onToggle={labelId => setNewNoteLabels(prev =>
+                        prev.some(l => l.id === labelId) ? prev.filter(l => l.id !== labelId) : [...prev, ...allTags.filter(t => t.id === labelId)]
+                      )}
+                      onCreate={async (name, color) => {
+                        const newLabel = await createSharedNoteLabel(name, color);
+                        setNewNoteLabels(prev => [...prev, newLabel]);
+                      }}
+                      onDelete={deleteTagEverywhere}
+                      onRename={renameTagEverywhere}
+                      onColorChange={changeTagColorEverywhere}
+                      emptyText="No tags yet. Create one below."
+                    />
+                  )}
                 </div>
-              )}
-              <button
-                onClick={() => setNewTagPickerOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                <Tag className="w-3.5 h-3.5" />
-                {newNoteLabels.length > 0 ? `${newNoteLabels.length} tag${newNoteLabels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-              </button>
-              {newTagPickerOpen && (
-                <TagsModal
-                  open={newTagPickerOpen}
-                  onClose={() => setNewTagPickerOpen(false)}
-                  title="Tags"
-                  tags={allTags}
-                  selectedIds={newNoteLabels.map(label => label.id)}
-                  onToggle={labelId => setNewNoteLabels(prev =>
-                    prev.some(l => l.id === labelId) ? prev.filter(l => l.id !== labelId) : [...prev, ...allTags.filter(t => t.id === labelId)]
-                  )}
-                  onCreate={async (name, color) => {
-                    const newLabel = await createSharedNoteLabel(name, color);
-                    setNewNoteLabels(prev => [...prev, newLabel]);
-                  }}
-                  onDelete={deleteTagEverywhere}
-                  onRename={renameTagEverywhere}
-                  onColorChange={changeTagColorEverywhere}
-                  emptyText="No tags yet. Create one below."
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="hidden grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
-              <input
-                type="date"
-                value={newNoteStartDate}
-                onChange={e => setNewNoteStartDate(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Time</label>
-              <input
-                type="time"
-                value={newNoteStartTime}
-                onChange={e => setNewNoteStartTime(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="hidden grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
-              <input
-                type="date"
-                value={newNoteDueDate}
-                onChange={e => setNewNoteDueDate(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Time</label>
-              <input
-                type="time"
-                value={newNoteDueTime}
-                onChange={e => setNewNoteDueTime(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Note Body</label>
-            <RichTextEditor value={newNoteDescription} onChange={html=>setNewNoteDescription(html)} placeholder="Write your note..." minHeight={260} />
               </div>
 
-              <div className="hidden">
-                <button
-                  onClick={() => setDraftChecklistCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-                    {newChecklistLists.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newChecklistLists.length})</span>
-                    )}
-                  </div>
-                  {draftChecklistCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftChecklistCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
-                <DragDropContext onDragEnd={handleDraftReorder}>
-                  {newChecklistItems.length > 0 && (
-                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                      <div className="flex items-center px-3 py-2">
-                        <span className="text-xs font-semibold text-foreground">Checklist</span>
-                      </div>
-                      <div className="px-3 pb-2 space-y-1.5">
-                        <Droppable droppableId="draft-checklist">
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                              {newChecklistItems.map((item, index) => (
-                                <Draggable key={item.id} draggableId={item.id} index={index}>
-                                  {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                        <GripVertical className="w-4 h-4" />
-                                      </div>
-                                      <span className="flex-1">{item.text}</span>
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </div>
-                          )}
-                        </Droppable>
-                        <div className="flex gap-2 pt-1">
-                          <input
-                            value={newChecklistText}
-                            onChange={e => setNewChecklistText(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
-                            placeholder="Add checklist item"
-                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                          />
-                          <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <Droppable droppableId="draft-checklist-lists" type="checklistList">
-                    {(provided) => (
-                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                        {newChecklistLists.map((list, listIndex) => {
-                          const isCollapsed = collapsedDraftChecklists.has(list.id);
-                          return (
-                            <Draggable key={list.id} draggableId={list.id} index={listIndex}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                  <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0 mr-1">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    <button
-                                      onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                                      className="flex-1 flex items-center gap-2 text-left"
-                                    >
-                                      {editingDraftChecklistId === list.id ? (
-                                        <input
-                                          autoFocus
-                                          className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                          value={editingDraftChecklistTitle}
-                                          onChange={e => setEditingDraftChecklistTitle(e.target.value)}
-                                          onBlur={() => {
-                                            if (editingDraftChecklistTitle.trim()) {
-                                              setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                            }
-                                            setEditingDraftChecklistId(null);
-                                          }}
-                                          onKeyDown={e => {
-                                            if (e.key === 'Enter') {
-                                              if (editingDraftChecklistTitle.trim()) {
-                                                setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
-                                              }
-                                              setEditingDraftChecklistId(null);
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
-                                          {list.title}
-                                        </span>
-                                      )}
-                                    </button>
-                                    <div className="flex items-center gap-1">
-                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
-                                        {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  {!isCollapsed && (
-                                    <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                      <Droppable droppableId={`draft-checklist-items-${list.id}`} type="checklistItem">
-                                        {(provided) => (
-                                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                            {list.items.map((item, itemIndex) => (
-                                              <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
-                                                {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                      <GripVertical className="w-4 h-4" />
-                                                    </div>
-                                                    <span className="flex-1 text-foreground">{item.text}</span>
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                  </div>
-                                                )}
-                                              </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                          </div>
-                                        )}
-                                      </Droppable>
-                                      <div className="flex gap-2 pt-1">
-                                        <input
-                                          value={perChecklistInput[list.id] ?? ''}
-                                          onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
-                                          placeholder="Add checklist item"
-                                          className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                        />
-                                        <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </Draggable>
-                          );
-                        })}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-                    <div className="flex gap-2">
-                      <input
-                        value={newChecklistTitle}
-                        onChange={e => setNewChecklistTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
-                        placeholder="New checklist name"
-                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <button onClick={addDraftChecklist} disabled={!newChecklistTitle.trim()} className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg">Add checklist</button>
-                    </div>
-                  </div>
-                )}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Note Body</label>
+                <RichTextEditor value={newNoteDescription} onChange={html=>setNewNoteDescription(html)} placeholder="Write your note..." minHeight={260} />
               </div>
 
-              {/* Attachments Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
                   onClick={() => setDraftAttachmentsCollapsed(prev => !prev)}
@@ -2121,82 +1896,6 @@ const Notes: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              <div className="hidden">
-                <button
-                  onClick={() => setDraftImagesCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Image className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
-                    {newNoteImages.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newNoteImages.length})</span>
-                    )}
-                  </div>
-                  {draftImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftImagesCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {!isPremium ? (
-                      <div className="border border-dashed border-border rounded-xl">
-                        <PremiumGate
-                          title="Image Attachments"
-                          description="Upload images directly to your notes."
-                          icon={<Image className="w-6 h-6 text-primary" />}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                          <div className="flex flex-col items-center justify-center py-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              <Image className="w-5 h-5 text-primary" />
-                            </div>
-                            <p className="text-sm font-medium text-foreground">Click to upload</p>
-                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                          </div>
-                          <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                            if (!e.target.files) return;
-                            const files = Array.from(e.target.files);
-                            const newImgs: Attachment[] = [];
-                            for (const file of files) {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                            }
-                            setNewNoteImages(prev => [...prev, ...newImgs]);
-                            e.target.value = '';
-                          }} className="hidden" />
-                        </label>
-                        {newNoteImages.length > 0 && (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {newNoteImages.map(img => (
-                              <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
-                                {img.fileUrl.match(/^data:image/) ? (
-                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                                </div>
-                                <button
-                                  onClick={() => setNewNoteImages(prev => prev.filter(x => x.id !== img.id))}
-                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
@@ -2227,7 +1926,7 @@ const Notes: React.FC = () => {
                         setTemplateMenuOpen(false);
                         setTemplateError('');
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchNoteTemplates();
                           setTemplates(t);
                           setLoadTemplateOpen(true);
                         } catch (err) {
@@ -2303,18 +2002,15 @@ const Notes: React.FC = () => {
                   if (!templateName.trim()) return;
                   setTemplateError('');
                   try {
-                    await createTemplate({
+                    await createNoteTemplate({
                       name: templateName.trim(),
                       title: newNoteTitle || '',
-                      description: newNoteDescription || '',
-                      priority: 'medium',
-                      duration: 0,
+                      content: newNoteDescription || '',
+                      color: 'hsl(var(--card))',
                       projectId: newNoteProjectId ? Number(newNoteProjectId) : null,
                       columnId: newNoteColumnId || undefined,
-                      labels: newNoteLabels || [],
-                      subtasks: [],
-                      checklists: [],
-                    } as any);
+                      tags: (newNoteLabels || []) as any,
+                    });
                     setSaveTemplateOpen(false);
                     setTemplateName('');
                   } catch (err) {
@@ -2369,10 +2065,10 @@ const Notes: React.FC = () => {
                       <button
                         onClick={() => {
                           setNewNoteTitle(tmpl.title || '');
-                          setNewNoteDescription(tmpl.description || '');
+                          setNewNoteDescription((tmpl as any).content || (tmpl as any).description || '');
                           setNewNoteProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
                           setNewNoteColumnId(tmpl.columnId || '');
-                          setNewNoteLabels(tmpl.labels || []);
+                          setNewNoteLabels(((tmpl as any).tags || (tmpl as any).labels || []) as any);
                           setLoadTemplateOpen(false);
                         }}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
@@ -2400,8 +2096,8 @@ const Notes: React.FC = () => {
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setTemplates(await fetchTemplates());
+                              await deleteNoteTemplate(tmpl.id);
+                              setTemplates(await fetchNoteTemplates());
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -2853,9 +2549,9 @@ interface NoteFullViewProps {
   isPremium: boolean;
   isPro: boolean;
   onJumpToNote?: (taskId: string) => void;
-  onEditTemplate?: (template: TaskTemplate) => void;
+  onEditTemplate?: (template: NoteTemplate) => void;
   onSaveTemplate?: () => Promise<void>;
-  editingTemplateMeta?: { id: number; name: string; template: TaskTemplate } | null;
+  editingTemplateMeta?: { id: number; name: string; template: NoteTemplate } | null;
   templateEditName?: string;
   onTemplateEditNameChange?: (name: string) => void;
 }
@@ -3044,15 +2740,15 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
 
   const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
-  const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
-  const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
+  const [fullViewTemplates, setFullViewTemplates] = useState<NoteTemplate[]>([]);
+  const [editingTmpl, setEditingTmpl] = useState<NoteTemplate | null>(null);
   const [editingTmplName, setEditingTmplName] = useState('');
   const [editingTmplTitle, setEditingTmplTitle] = useState('');
   const [editingTmplDesc, setEditingTmplDesc] = useState('');
   const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
-  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
+  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<NoteTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
@@ -3905,7 +3601,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
               <button
                 onClick={async () => {
                   try {
-                    const t = await fetchTemplates();
+                    const t = await fetchNoteTemplates();
                     setFullViewTemplates(t);
                     setTemplatePopupOpen(true);
                   } catch (err) {
@@ -3934,7 +3630,7 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                       onClick={async () => {
                         setTemplatePopupOpen(false);
                         try {
-                          const t = await fetchTemplates();
+                          const t = await fetchNoteTemplates();
                           setFullViewLoadTemplates(t);
                           setFullViewLoadTmplOpen(true);
                         } catch (err) {
@@ -4003,18 +3699,15 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                   onChange={e => setFullViewTmplName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
                     try {
-                      await createTemplate({
+                      await createNoteTemplate({
                         name: fullViewTmplName.trim(),
                         title: note.title || '',
-                        description: note.description || '',
-                        priority: 'medium',
-                        duration: 0,
+                        content: note.description || '',
+                        color: 'hsl(var(--card))',
                         projectId: note.projectId ?? null,
                         columnId: note.columnId || undefined,
-                        labels: note.labels || [],
-                        subtasks: [],
-                        checklists: [],
-                      } as any);
+                        tags: note.labels as any || [],
+                      });
                       setFullViewSaveTmplOpen(false);
                       setFullViewTmplName('');
                     } catch (err) {
@@ -4031,15 +3724,15 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                 onClick={async () => {
                   if (!fullViewTmplName.trim()) return;
                   try {
-                    await createTemplate({
+                    await createNoteTemplate({
                         name: fullViewTmplName.trim(),
                         title: note.title || '',
                         content: note.description || '',
                         color: 'hsl(var(--card))',
                         projectId: note.projectId ?? null,
                         columnId: note.columnId || undefined,
-                        tags: note.labels || [],
-                    } as any);
+                        tags: note.labels as any || [],
+                      });
                     setFullViewSaveTmplOpen(false);
                     setFullViewTmplName('');
                   } catch (err) {
@@ -4114,8 +3807,8 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                           onClick={async () => {
                             if (!window.confirm(`Delete template "${tmpl.name}"?`)) return;
                             try {
-                              await deleteTemplateApi(tmpl.id);
-                              setFullViewLoadTemplates(await fetchTemplates());
+                              await deleteNoteTemplate(tmpl.id);
+                              setFullViewLoadTemplates(await fetchNoteTemplates() as any);
                             } catch (err) {
                               console.error('Failed to delete template:', err);
                             }
@@ -4201,13 +3894,13 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
                 onClick={async () => {
                   if (!editingTmpl || !editingTmplName.trim()) return;
                   try {
-                    await updateTemplate(editingTmpl.id, {
+                    await updateNoteTemplate(editingTmpl.id, {
                       name: editingTmplName,
                       title: editingTmplTitle,
-                      description: editingTmplDesc,
-                      labels: (editingTmpl as any).labels || [],
+                      content: editingTmplDesc,
+                      tags: (editingTmpl as any).tags || (editingTmpl as any).labels || [],
                     } as any);
-                    const t = await fetchTemplates();
+                    const t = await fetchNoteTemplates();
                     setFullViewTemplates(t);
                     setEditingTmpl(null);
                   } catch (err) {
