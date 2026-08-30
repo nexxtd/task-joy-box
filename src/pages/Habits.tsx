@@ -4418,10 +4418,14 @@ const HabitFullView: React.FC<HabitFullViewProps> = ({
             <div className="relative">
               <button
                 onClick={async () => {
+                  if (templatePopupOpen) {
+                    setTemplatePopupOpen(false);
+                    return;
+                  }
+                  setTemplatePopupOpen(true);
                   try {
                     const t = await fetchHabitTemplates();
                     setFullViewTemplates(t);
-                    setTemplatePopupOpen(true);
                   } catch (err) {
                     console.error('Failed to fetch templates:', err);
                   }

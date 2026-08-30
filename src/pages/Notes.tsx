@@ -3597,10 +3597,14 @@ const NoteFullView: React.FC<NoteFullViewProps> = ({
             <div className="relative">
               <button
                 onClick={async () => {
+                  if (templatePopupOpen) {
+                    setTemplatePopupOpen(false);
+                    return;
+                  }
+                  setTemplatePopupOpen(true);
                   try {
                     const t = await fetchNoteTemplates();
                     setFullViewTemplates(t);
-                    setTemplatePopupOpen(true);
                   } catch (err) {
                     console.error('Failed to fetch templates:', err);
                   }
