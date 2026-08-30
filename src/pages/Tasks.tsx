@@ -4970,8 +4970,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0 pt-1">
             {editingTemplateMeta && (
               <div className="mb-2">
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
@@ -4989,7 +4989,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               onChange={e => onUpdateTask(task.id, { title: e.target.value })}
             />
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 mt-1">
             <X className="w-4 h-4" />
           </button>
         </div>
