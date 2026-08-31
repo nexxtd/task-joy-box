@@ -362,6 +362,7 @@ const AdminDashboard = () => {
   const [draftLayout, setDraftLayout] = useState<LayoutItem[] | null>(null);
   const dragRef = useRef<{ kind: 'group' | 'coupon'; id: number } | null>(null);
 
+  const [activeSettingGroup, setActiveSettingGroup] = useState<string>('platform-access');
   const { viewAsUser, setViewAsUser } = useAdminPreview();
 
   useEffect(() => {
@@ -2177,123 +2178,139 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="rounded-2xl bg-card border border-border p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
-                <Settings className="w-4 h-4" style={{ color: 'hsl(var(--label-purple))' }} />
-              </div>
-              <div>
-                <h2 className="text-base font-bold">System Settings</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  These settings are enforced by the server in real time — prices, usage limits, signup rules
-                  and maintenance mode all take effect within seconds of saving.
-                </p>
-              </div>
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+          <div className="rounded-2xl bg-card border border-border p-6 flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+              <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-bold">System Settings</h2>
+              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+                Server-enforced controls — pricing, usage limits, signup rules and maintenance mode apply within seconds of saving.
+              </p>
             </div>
           </div>
 
           {loading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-2xl bg-card border border-border p-6">
-                  <Skeleton className="h-5 w-32 mb-4" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              ))}
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col md:flex-row min-h-[480px]">
+              <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border p-4 space-y-2 bg-muted/20">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}
+              </div>
+              <div className="flex-1 p-6 space-y-4">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-20 w-full rounded-xl" />
+              </div>
             </div>
           ) : (
-          <div className="space-y-4">
-            {SETTINGS_GROUPS.map(group => {
-              const GroupIcon = group.icon;
-              const accentMap: Record<string, string> = {
-                'platform-access': 'label-red',
-                'pricing': 'label-green',
-                'usage-limits': 'label-orange',
-                'notifications': 'label-blue',
-                'support': 'label-purple',
-              };
-              const accent = accentMap[group.id] || 'label-purple';
-              return (
-                <section key={group.id} className="space-y-3">
-                  <div className="flex items-center gap-3 px-1">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
-                      <GroupIcon className="h-4 w-4" style={{ color: `hsl(var(--${accent}))` }} />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-foreground">{group.label}</h3>
-                      <p className="text-xs text-muted-foreground">{group.description}</p>
-                    </div>
-                  </div>
-                  <div className="overflow-hidden rounded-2xl border border-border bg-card">
-                    <div className="divide-y divide-border">
-                      {group.rows.map(row => {
-                        const current = settings[row.key] ?? row.defaultValue;
-                        if (row.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true') return null;
-                        return (
-                          <div key={row.key} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                              <p className="font-semibold text-sm flex items-center gap-2">
-                                {row.label}
-                                {savingSetting === row.key && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{row.description}</p>
-                            </div>
-                            <div className={`flex-shrink-0 w-full ${row.type === 'text' ? 'sm:w-96' : 'sm:w-64'}`}>
-                              {row.type === 'boolean' ? (
-                                <button
-                                  onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
-                                  disabled={savingSetting === row.key}
-                                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${current === 'true' ? 'bg-primary' : 'bg-muted'}`}
-                                >
-                                  <span className={`inline-block h-5 w-5 transform rounded-full bg-background transition-transform ${current === 'true' ? 'translate-x-6' : 'translate-x-1'}`} />
-                                  <span className="ml-14 text-xs font-medium text-muted-foreground">{current === 'true' ? 'On' : 'Off'}</span>
-                                </button>
-                              ) : row.type === 'select' ? (
-                                <Select
-                                  value={current}
-                                  onValueChange={v => handleUpdateSetting(row, v)}
-                                  disabled={savingSetting === row.key}
-                                >
-                                  <SelectTrigger className="w-full bg-background border border-input rounded-xl text-sm h-9">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {row.options?.map(opt => (
-                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    key={current}
-                                    type={row.type === 'currency' ? 'number' : row.type === 'number' ? 'number' : 'text'}
-                                    step="any"
-                                    min="0"
-                                    defaultValue={current}
-                                    onBlur={e => {
-                                      const v = e.target.value.trim();
-                                      if (v && v !== current) handleUpdateSetting(row, v);
-                                    }}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                    }}
-                                    className="w-full bg-background border border-input rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                                  />
-                                  {row.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{row.suffix}</span>}
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col md:flex-row min-h-[480px]">
+              <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border p-3 space-y-1 flex-shrink-0 bg-muted/20">
+                {SETTINGS_GROUPS.map(group => {
+                  const GroupIcon = group.icon;
+                  const isActive = activeSettingGroup === group.id;
+                  const count = group.id === 'notifications' && (settings['announcement_banner'] ?? 'false') !== 'true' ? group.rows.length - 1 : group.rows.length;
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => setActiveSettingGroup(group.id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all duration-200 ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                    >
+                      <GroupIcon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-primary-foreground' : ''}`} />
+                      <span className="text-sm font-medium flex-1 truncate">{group.label}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'}`}>{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col">
+                {(() => {
+                  const group = SETTINGS_GROUPS.find(g => g.id === activeSettingGroup) || SETTINGS_GROUPS[0];
+                  const GroupIcon = group.icon;
+                  const accentMap: Record<string, string> = {
+                    'platform-access': 'label-red',
+                    'pricing': 'label-green',
+                    'usage-limits': 'label-orange',
+                    'notifications': 'label-blue',
+                    'support': 'label-purple',
+                  };
+                  const accent = accentMap[group.id] || 'label-purple';
+                  const visibleRows = group.rows.filter(r => !(r.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true'));
+                  return (
+                    <>
+                      <div className="px-6 py-5 border-b border-border flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
+                          <GroupIcon className="w-4 h-4" style={{ color: `hsl(var(--${accent}))` }} />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold">{group.label}</h3>
+                          <p className="text-xs text-muted-foreground">{group.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex-1 p-6">
+                        <div className="max-w-2xl space-y-4">
+                          {visibleRows.map(row => {
+                            const current = settings[row.key] ?? row.defaultValue;
+                            return (
+                              <div key={row.key} className="p-4 bg-card border border-border rounded-xl">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                      {row.label}
+                                      {savingSetting === row.key && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{row.description}</p>
+                                  </div>
+                                  <div className={`flex-shrink-0 ${row.type === 'text' ? 'w-full sm:w-72' : row.type === 'boolean' ? 'w-auto' : 'w-44'}`}>
+                                    {row.type === 'boolean' ? (
+                                      <button
+                                        onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
+                                        disabled={savingSetting === row.key}
+                                        className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 disabled:opacity-50 ${current === 'true' ? 'bg-primary' : 'bg-muted'}`}
+                                      >
+                                        <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform duration-200 ${current === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                                      </button>
+                                    ) : row.type === 'select' ? (
+                                      <Select value={current} onValueChange={v => handleUpdateSetting(row, v)} disabled={savingSetting === row.key}>
+                                        <SelectTrigger className="w-full bg-muted/30 border border-border rounded-lg text-sm h-10">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {row.options?.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          key={`${row.key}-${current}`}
+                                          type={row.type === 'currency' || row.type === 'number' ? 'number' : 'text'}
+                                          step="any"
+                                          min="0"
+                                          defaultValue={current}
+                                          placeholder={row.defaultValue}
+                                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== current) handleUpdateSetting(row, v); }}
+                                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                          className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                        />
+                                        {row.suffix && <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">{row.suffix}</span>}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-              );
-            })}
-          </div>
+                                {row.type === 'boolean' && (
+                                  <p className="text-[11px] font-medium mt-2 ${current === 'true' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}">{current === 'true' ? 'Enabled' : 'Disabled'}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
           )}
         </div>
       )}

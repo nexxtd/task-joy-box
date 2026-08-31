@@ -1372,6 +1372,8 @@ const Tasks: React.FC = () => {
           input: aiBuilderInput,
           columns: board.columns.map(c => ({ id: c.id, title: c.title })),
           tags: allTags.map(t => t.name),
+          attachedFiles: aiBuilderFiles.map(f => f.name),
+          attachedImages: aiBuilderImages.map(img => img.fileName),
         }),
       });
       if (!res.ok) {
@@ -2634,7 +2636,7 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group min-w-0">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
@@ -2677,7 +2679,7 @@ const Tasks: React.FC = () => {
                                           <span className="text-[10px] text-muted-foreground">min</span>
                                           <button
                                             onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
@@ -2736,7 +2738,7 @@ const Tasks: React.FC = () => {
                     {newChecklistItems.length === 0 && newChecklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add a checklist to get started.</p>}
                 <DragDropContext onDragEnd={handleDraftReorder}>
                   {newChecklistItems.length > 0 && (
-                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                    <div className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
                       <div className="flex items-center px-3 py-2">
                         <span className="text-xs font-semibold text-foreground">Checklist</span>
                       </div>
@@ -2747,12 +2749,12 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <span className="flex-1">{item.text}</span>
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
@@ -2784,8 +2786,8 @@ const Tasks: React.FC = () => {
                           return (
                             <Draggable key={list.id} draggableId={list.id} index={listIndex}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/list">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -2821,7 +2823,7 @@ const Tasks: React.FC = () => {
                                       )}
                                     </button>
                                     <div className="flex items-center gap-1">
-                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                      <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">
@@ -2837,12 +2839,12 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <span className="flex-1 text-foreground">{item.text}</span>
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                   </div>
@@ -3711,12 +3713,12 @@ const Tasks: React.FC = () => {
                                 {aiBuilderFiles.map((file, fileIdx) => (
                                   <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-task-file-${fileIdx}-${file.name}`} index={fileIdx}>
                                     {provided => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/file">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
                                         <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
                                           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
                                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
-                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"><Trash2 className="w-3.5 h-3.5" /></button>
+                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/file:opacity-100 transition-opacity duration-200"><Trash2 className="w-3.5 h-3.5" /></button>
                                         </div>
                                       </div>
                                     )}
@@ -4093,7 +4095,7 @@ export const TaskDropdownExpanded: React.FC<{
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
@@ -4130,7 +4132,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -4262,8 +4264,8 @@ export const TaskDropdownExpanded: React.FC<{
                       return (
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {(provided) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                              <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group">
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                              <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/list">
                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
@@ -4311,7 +4313,7 @@ export const TaskDropdownExpanded: React.FC<{
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -4335,7 +4337,7 @@ export const TaskDropdownExpanded: React.FC<{
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
@@ -4363,7 +4365,7 @@ export const TaskDropdownExpanded: React.FC<{
                                                 )}
                                                 <button
                                                   onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                                                 >
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
@@ -4753,7 +4755,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group">
+            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
@@ -4790,7 +4792,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -5298,8 +5300,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                         return (
                           <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                             {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group">
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/list">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -5347,7 +5349,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   <div className="flex items-center gap-1">
                                     <button
                                       onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
-                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -5371,7 +5373,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -5399,7 +5401,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                     )}
                                                     <button
                                                       onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
                                                     >
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
