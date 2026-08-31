@@ -23,6 +23,7 @@ interface NotesContextType {
   getColumnByName: (name: string) => Column | undefined;
   bulkDeleteTasks: (taskIds: string[]) => void;
   reorderTasks: (orderedIds: string[]) => void;
+  reorderTasksInSection: (orderedIds: string[]) => void;
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';
@@ -628,12 +629,25 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [persist]);
 
+  const reorderTasksInSection = useCallback((orderedIds: string[]) => {
+    persist(b => {
+      const ids = new Set(orderedIds);
+      return {
+        ...b,
+        tasks: b.tasks.map(t => {
+          const idx = orderedIds.indexOf(t.id);
+          return ids.has(t.id) && idx >= 0 ? { ...t, order: idx } : t;
+        }),
+      };
+    });
+  }, [persist]);
+
   return (
     <NotesContext.Provider value={{
       board, addTask, updateTask, deleteTask, moveTask,
       addColumn, updateColumn, deleteColumn, reorderColumns,
       addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
-      findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks,
+      findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
       lastSyncTime, syncStatus,
     }}>
       {children}

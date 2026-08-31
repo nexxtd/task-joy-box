@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useBoardContext } from '@/context/BoardContext';
+import { useGoalsContext } from '@/context/GoalsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchGoalTemplates as fetchTemplates, createGoalTemplate as createTemplate, updateGoalTemplate as updateTemplate, deleteGoalTemplate as deleteTemplateApi } from '@/services/goalTemplateService';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
@@ -616,7 +616,7 @@ const Tasks: React.FC = () => {
     deleteTask,
     updateColumn,
     reorderTasksInSection,
-  } = useBoardContext();
+  } = useGoalsContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 

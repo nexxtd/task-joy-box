@@ -23,6 +23,7 @@ interface GoalsContextType {
   getColumnByName: (name: string) => Column | undefined;
   bulkDeleteTasks: (taskIds: string[]) => void;
   reorderTasks: (orderedIds: string[]) => void;
+  reorderTasksInSection: (orderedIds: string[]) => void;
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';
@@ -607,6 +608,19 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [logActivity],
   );
 
+  const reorderTasksInSection = useCallback((orderedIds: string[]) => {
+    setBoard(prev => {
+      const ids = new Set(orderedIds);
+      return {
+        ...prev,
+        tasks: prev.tasks.map(t => {
+          const idx = orderedIds.indexOf(t.id);
+          return ids.has(t.id) && idx >= 0 ? { ...t, order: idx } : t;
+        }),
+      };
+    });
+  }, []);
+
   return (
     <GoalsContext.Provider
       value={{
@@ -628,6 +642,7 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         getColumnByName,
         bulkDeleteTasks,
         reorderTasks,
+        reorderTasksInSection,
         lastSyncTime,
         syncStatus,
       }}
