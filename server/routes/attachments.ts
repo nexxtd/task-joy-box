@@ -119,6 +119,11 @@ router.get('/:taskId', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+function resolveAttachmentPath(fileUrl: string): string {
+  const base = process.env.VERCEL === '1' ? path.join('/tmp', 'uploads') : path.join(process.cwd(), 'uploads');
+  return path.join(base, path.basename(fileUrl));
+}
+
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -134,7 +139,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const filePath = path.join(process.cwd(), attachment.fileUrl);
+    const filePath = resolveAttachmentPath(attachment.fileUrl);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
@@ -162,7 +167,7 @@ router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => 
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const filePath = path.join(process.cwd(), attachment.fileUrl);
+    const filePath = resolveAttachmentPath(attachment.fileUrl);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found on disk' });
     }

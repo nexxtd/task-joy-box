@@ -156,9 +156,11 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     if (!dirtyRef.current || !user) return;
     const boardToSave = boardRef.current;
-    dirtyRef.current = false;
     saveBoard(user.id, boardToSave).then(ok => {
-      if (ok) setLastSyncTime(new Date());
+      if (ok) {
+        dirtyRef.current = false;
+        setLastSyncTime(new Date());
+      }
     });
   }, [user]);
 
@@ -245,6 +247,10 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
+        if (dirtyRef.current) {
+          flushBoardSave();
+          return;
+        }
         try {
           const vc = new AbortController();
           const tid = setTimeout(() => vc.abort(), 4000);
@@ -295,11 +301,12 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const next = updater(prev);
       boardRef.current = next;
       dirtyRef.current = true;
+      try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(next)); } catch {}
       return next;
     });
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(flushBoardSave, 1500);
-  }, [flushBoardSave]);
+    saveTimerRef.current = setTimeout(flushBoardSave, 800);
+  }, [flushBoardSave, user]);
 
   const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
     const isPro = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
