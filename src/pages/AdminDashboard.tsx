@@ -361,10 +361,8 @@ const AdminDashboard = () => {
   const [groupForm, setGroupForm] = useState({ name: '', color: GROUP_COLORS[0], icon: 'tag' });
   const [draftLayout, setDraftLayout] = useState<LayoutItem[] | null>(null);
   const dragRef = useRef<{ kind: 'group' | 'coupon'; id: number } | null>(null);
-
   const [activeSettingGroup, setActiveSettingGroup] = useState<string>('platform-access');
   const { viewAsUser, setViewAsUser } = useAdminPreview();
-
   useEffect(() => {
     fetchData();
   }, []);
@@ -1050,9 +1048,9 @@ if (loading && !stats) {
           {viewAsUser !== undefined && (
             <button
               onClick={() => setViewAsUser(!viewAsUser)}
-              className="px-3 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm font-medium ${
+              className={`px-3 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm font-medium ${
                 viewAsUser ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }"
+              }`}
             >
               {viewAsUser ? 'View as Regular User' : 'View as Admin'}
               {viewAsUser && (
@@ -2178,7 +2176,8 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-300">
+        <div className="min-h-[calc(100vh-220px)] flex items-center justify-center p-2 animate-in fade-in duration-300">
+          <div className="w-full max-w-4xl space-y-6">
           <div className="rounded-2xl bg-card border border-border p-6 flex items-start gap-4">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
               <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
@@ -2312,6 +2311,7 @@ if (loading && !stats) {
               </div>
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
