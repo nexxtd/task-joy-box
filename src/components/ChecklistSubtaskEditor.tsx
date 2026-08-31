@@ -302,8 +302,8 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                       return (
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {provided => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                              <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all">
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
+                              <div className="flex items-center px-3 py-2 hover:bg-muted/30 transition-all group/header">
                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
@@ -347,7 +347,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => onChecklistsChange(checklists.filter(cl => cl.id !== list.id))}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all"
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 transition-all checklist-header-delete"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -371,7 +371,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {provided => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>

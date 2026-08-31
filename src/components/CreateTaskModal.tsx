@@ -1029,8 +1029,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                             return (
                               <Draggable key={list.id} draggableId={list.id} index={listIndex}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden group/list">
-                                    <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
+                                    <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/header">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
@@ -1066,7 +1066,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         )}
                                       </button>
                                       <div className="flex items-center gap-1">
-                                        <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-opacity duration-200">
+                                        <button onClick={() => setNewChecklistLists(prev => prev.filter(l => l.id !== list.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 transition-opacity duration-200">
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                         <button onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })} className="p-1 text-muted-foreground hover:text-foreground">

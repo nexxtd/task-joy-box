@@ -9,6 +9,7 @@ interface DraggableImageGridProps {
   onReorder: (newImages: Attachment[]) => void;
   onRemove: (id: string) => void;
   disabledInBuilder?: boolean;
+  droppableId?: string;
 }
 
 export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
@@ -16,6 +17,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
   onReorder,
   onRemove,
   disabledInBuilder = false,
+  droppableId = "images-grid",
 }) => {
   const { t } = useLanguage();
   const handleDragEnd = (result: DropResult) => {
@@ -30,12 +32,12 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable droppableId="images-grid" direction="horizontal">
+      <Droppable droppableId={droppableId}>
         {(droppableProvided) => (
           <div
             ref={droppableProvided.innerRef}
             {...droppableProvided.droppableProps}
-            className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+            className="grid grid-cols-2 sm:grid-cols-3 gap-3 draggable-image-grid"
           >
             {images.map((img, index) => (
               <Draggable key={img.id} draggableId={img.id} index={index}>
@@ -58,11 +60,12 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
                       <GripVertical className="w-3.5 h-3.5" />
                     </div>
 
-                    {img.fileUrl && img.fileUrl.match(/^data:image|https?:\/\//) ? (
+                    {img.fileUrl ? (
                       <img
                         src={img.fileUrl}
                         alt={img.fileName}
                         className="w-full h-full object-cover pointer-events-none"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

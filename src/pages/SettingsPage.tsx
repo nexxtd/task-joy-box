@@ -561,10 +561,10 @@ const SettingsPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl">
           {activeSection === 'appearance' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-foreground mb-3">Theme</h2>
                 <div className="flex gap-3">
@@ -712,7 +712,7 @@ const SettingsPage: React.FC = () => {
                 </Select>
               </div>
               
-              <div className="pt-4">
+              <div className="pt-2">
                 <button
                   onClick={resetDefaults}
                   data-testid="button-reset-defaults-appearance"
@@ -924,8 +924,8 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-{activeSection === 'energy' && (
-            <div className="space-y-6">
+          {activeSection === 'energy' && (
+            <div className="space-y-4">
               <div className="bg-card border border-border rounded-2xl p-6">
                 <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">

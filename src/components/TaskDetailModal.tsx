@@ -529,17 +529,36 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 </label>
               </div>
 
-              <div className="space-y-1.5 mt-3">
-                {(task.attachments || []).map(a => (
-                  <AttachmentRow
-                    key={a.id}
-                    attachment={a}
-                    taskId={task.id}
-                    taskTitle={task.title}
-                    onDelete={() => deleteAttachment(a.id)}
-                  />
-                ))}
-              </div>
+              <DragDropContext onDragEnd={(result) => {
+                if (!result.destination) return;
+                const items = Array.from(task.attachments || []);
+                const [removed] = items.splice(result.source.index, 1);
+                items.splice(result.destination.index, 0, removed);
+                updateTask(task.id, { attachments: items });
+              }}>
+                <Droppable droppableId={`modal-attachments-${task.id}`}>
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5 mt-3">
+                      {(task.attachments || []).map((a, idx) => (
+                        <Draggable key={a.id} draggableId={a.id} index={idx}>
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps}>
+                              <AttachmentRow
+                                attachment={a}
+                                taskId={task.id}
+                                taskTitle={task.title}
+                                onDelete={() => deleteAttachment(a.id)}
+                                dragHandleProps={provided.dragHandleProps}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
             </div>
           </div>
 
@@ -581,8 +600,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                         return (
                           <Draggable key={cl.id} draggableId={cl.id} index={index}>
                             {(provided) => (
-                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
-                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/list">
+                              <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden checklist-card">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -592,7 +611,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                   </div>
                                   <button
                                     onClick={() => handleDeleteChecklist(cl.id)}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all shrink-0"
+                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 transition-all shrink-0 checklist-header-delete"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -611,7 +630,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                       {cl.items.map((item, idx) => (
                                         <Draggable key={item.id} draggableId={item.id} index={idx}>
                                           {(provided) => (
-                                            <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/item min-w-0">
+                                             <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/item min-w-0 checklist-item">
                                               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                 <GripVertical className="w-3.5 h-3.5" />
                                               </div>

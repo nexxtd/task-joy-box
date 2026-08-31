@@ -256,3 +256,9 @@
 .ta-result-warning {
   @apply border-l-4 border-l-gray-400;
 }
+.checklist-card:has(.checklist-item:hover) .checklist-header-delete {
+  opacity: 0 !important;
+}
+.draggable-image-grid {
+  transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
+}

@@ -377,7 +377,16 @@ const DocumentsInternal: React.FC = () => {
         selectedId === doc.id ? 'bg-primary/10 text-foreground font-semibold' : 'hover:bg-muted/70 text-foreground/90'
       }`}
       style={{ marginLeft: groupKey ? 8 : 0 }}
-      onClick={() => openDocument(doc)}
+      onClick={() => {
+        if (doc.fileUrl) {
+          const a = document.createElement('a');
+          a.href = `/api/documents/file/${doc.id}`;
+          a.download = doc.title || 'document';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+      }}
     >
       {renamingId === doc.id ? (
         <input
@@ -396,18 +405,6 @@ const DocumentsInternal: React.FC = () => {
         <>
           <FileText className="w-3.5 h-3.5 text-primary flex-shrink-0" />
           <span className="flex-1 min-w-0 text-xs truncate">{doc.title}</span>
-          <a
-            href={doc.fileUrl ? `/api/documents/file/${doc.id}` : '#'}
-            download
-            onClick={e => {
-              if (!doc.fileUrl) { e.preventDefault(); handleSaveToFile(); return; }
-              e.stopPropagation();
-            }}
-            title="Download document file"
-            className="p-1 rounded hover:bg-background text-muted-foreground hover:text-primary transition-all"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </a>
           <div className="relative">
             <button
               onClick={e => { e.stopPropagation(); setMenuFor(menuFor === doc.id ? null : doc.id); }}

@@ -884,7 +884,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                 return (
                                   <Draggable key={list.id} draggableId={list.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
                                         <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                             <GripVertical className="w-4 h-4" />
@@ -925,7 +925,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
                                               onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
-                                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all shrink-0"
+                                              className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 transition-all shrink-0"
                                             >
                                               <Trash2 className="w-3.5 h-3.5" />
                                             </button>
@@ -1405,7 +1405,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   return (
                                     <Draggable key={list.id} draggableId={list.id} index={index}>
                                       {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden group/list">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
                                         <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                             <GripVertical className="w-4 h-4" />
@@ -1449,7 +1449,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
                                                 onClick={() => updateTask(selectedTask.id, { checklists: selectedTask.checklists.filter(cl => cl.id !== list.id) })}
-                                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/list:opacity-100 transition-all shrink-0"
+                                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 transition-all shrink-0"
                                               >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                               </button>

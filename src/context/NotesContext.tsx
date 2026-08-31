@@ -344,6 +344,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         completedAt: details.completedAt,
         recurrencePattern: details.recurrencePattern,
         attachments: details.attachments || [],
+        images: details.images || [],
         comments: details.comments || [],
         projectId: details.projectId,
         projectName: details.projectName,
