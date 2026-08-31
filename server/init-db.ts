@@ -636,6 +636,18 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS note_templates_user_id_idx ON note_templates(user_id);`);
     await addColumnIfNotExists('note_templates', 'column_id', "TEXT");
     await addColumnIfNotExists('note_templates', 'tags', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'description', "TEXT");
+    await addColumnIfNotExists('note_templates', 'priority', "TEXT DEFAULT 'medium'");
+    await addColumnIfNotExists('note_templates', 'duration', "INTEGER");
+    await addColumnIfNotExists('note_templates', 'start_date', "TEXT");
+    await addColumnIfNotExists('note_templates', 'start_time', "TEXT");
+    await addColumnIfNotExists('note_templates', 'due_date', "TEXT");
+    await addColumnIfNotExists('note_templates', 'due_time', "TEXT");
+    await addColumnIfNotExists('note_templates', 'labels', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'subtasks', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'checklists', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'images', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'attachments', "TEXT DEFAULT '[]'");
     await pool.query(`
       CREATE TABLE IF NOT EXISTS goal_templates (
         id SERIAL PRIMARY KEY,

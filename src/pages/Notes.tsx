@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchNoteTemplates as fetchTemplates, createNoteTemplate as createTemplate, updateNoteTemplate as updateTemplate, deleteNoteTemplate as deleteTemplateApi } from '@/services/noteTemplateService';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
