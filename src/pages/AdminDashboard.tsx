@@ -2299,7 +2299,7 @@ if (loading && !stats) {
                                   </div>
                                 </div>
                                 {row.type === 'boolean' && (
-                                  <p className="text-[11px] font-medium mt-2 ${current === 'true' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}">{current === 'true' ? 'Enabled' : 'Disabled'}</p>
+                                  <p className={`text-[11px] font-medium mt-2 ${current === 'true' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>{current === 'true' ? 'Enabled' : 'Disabled'}</p>
                                 )}
                               </div>
                             );
