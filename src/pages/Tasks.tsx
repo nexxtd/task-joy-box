@@ -33,13 +33,13 @@ import {
   Trash2,
   X,
   Zap,
+  Loader2,
 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
-import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -692,6 +692,9 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
+  const [uploadingMainImages, setUploadingMainImages] = useState(false);
+  const uploadingImages = uploadingMainImages;
+  const setUploadingImages = setUploadingMainImages;
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-tasks' | null; moveType: 'column' | 'project' } | null>(null);
@@ -2996,9 +2999,9 @@ const Tasks: React.FC = () => {
                         <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              <Image className="w-5 h-5 text-primary" />
+                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                             </div>
-                            <p className="text-sm font-medium text-foreground">Click to upload</p>
+                            <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                           </div>
                           <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -3749,9 +3752,9 @@ const Tasks: React.FC = () => {
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Image className="w-5 h-5 text-primary" />
+                            {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload</p>
+                          <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); e.target.value=''; }} className="hidden" />
@@ -3928,6 +3931,7 @@ export const TaskDropdownExpanded: React.FC<{
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const [uploadingImages, setUploadingImages] = useState(false);
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
 
@@ -4056,9 +4060,7 @@ export const TaskDropdownExpanded: React.FC<{
     onUpdateTask(task.id, { images: items });
   }, [task.images, onUpdateTask]);
 
-  const handleAttachmentReorder = useCallback((arg: DropResult | Attachment[]) => {
-    if (Array.isArray(arg)) { onUpdateTask(task.id, { attachments: arg }); return; }
-    const result = arg as DropResult;
+  const handleAttachmentReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
     const items = Array.from(task.attachments || []);
     const [removed] = items.splice(result.source.index, 1);
@@ -4476,7 +4478,30 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                 )}
                 {(task.attachments || []).length > 0 && (
-                  <FreeAttachmentList attachments={task.attachments || []} taskId={task.id} taskTitle={task.title} onDelete={deleteAttachment} onReorder={handleAttachmentReorder as any} />
+                  <DragDropContext onDragEnd={handleAttachmentReorder}>
+                    <Droppable droppableId={"dropdown-attachments-" + task.id}>
+                      {(provided) => (
+                        <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {(task.attachments || []).map((attachment, idx) => (
+                            <Draggable key={attachment.id} draggableId={attachment.id} index={idx}>
+                              {(provided) => (
+                                <div ref={provided.innerRef} {...provided.draggableProps}>
+                                  <AttachmentRow
+                                    attachment={attachment}
+                                    taskId={task.id}
+                                    taskTitle={task.title}
+                                    onDelete={() => deleteAttachment(attachment.id)}
+                                    dragHandleProps={provided.dragHandleProps}
+                                  />
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 )}
               </>
             )}
@@ -4517,14 +4542,17 @@ export const TaskDropdownExpanded: React.FC<{
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <Image className="w-5 h-5 text-primary" />
+                        {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">Click to upload</p>
+                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                     </div>
                     <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                       if (!e.target.files) return;
                       const files = Array.from(e.target.files);
+                      e.currentTarget.value = '';
+                      setUploadingImages(true);
+                      try {
                       const newImages: Attachment[] = [];
                       for (const file of files) {
                         const fileUrl = await imageToDataUrl(file);
@@ -4532,7 +4560,9 @@ export const TaskDropdownExpanded: React.FC<{
                         newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
                       }
                       onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
-                      e.target.value = '';
+                      } finally {
+                        setUploadingImages(false);
+                      }
                     }} className="hidden" />
                   </label>
                 )}
@@ -4589,6 +4619,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -4867,9 +4898,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     onUpdateTask(task.id, { images: items });
   }, [task.images, onUpdateTask]);
 
-  const handleAttachmentReorder = useCallback((arg: DropResult | Attachment[]) => {
-    if (Array.isArray(arg)) { onUpdateTask(task.id, { attachments: arg }); return; }
-    const result = arg as DropResult;
+  const handleAttachmentReorder = useCallback((result: DropResult) => {
     if (!result.destination) return;
     const items = Array.from(task.attachments || []);
     const [removed] = items.splice(result.source.index, 1);
@@ -5526,23 +5555,28 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      <Image className="w-5 h-5 text-primary" />
+                      {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                     </div>
-                    <p className="text-sm font-medium text-foreground">Click to upload</p>
+                    <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                     if (!e.target.files) return;
-                    const files = Array.from(e.target.files);
-                    const newImages: Attachment[] = [];
-                    for (const file of files) {
+                      const files = Array.from(e.target.files);
+                      e.currentTarget.value = '';
+                      setUploadingImages(true);
+                      try {
+                      const newImages: Attachment[] = [];
+                      for (const file of files) {
                       const fileUrl = await imageToDataUrl(file);
                       const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
                       newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
                     }
                     onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
-                    e.target.value = '';
-                  }} className="hidden" />
+                      } finally {
+                        setUploadingImages(false);
+                      }
+                    }} className="hidden" />
                 </label>
               )}
               {task.images && task.images.length > 0 && (

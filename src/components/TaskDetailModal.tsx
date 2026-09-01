@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical, Loader2 } from 'lucide-react';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
-import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -518,19 +517,45 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 <FileUp className="w-3.5 h-3.5" /> Attachments {!isPremium && <Sparkles className="w-2.5 h-2.5 text-primary" />}
               </h4>
               <div className="group relative mt-1">
-                <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${(!isPremium || uploading) && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
+                <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${!isPremium && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
                   <div className="flex flex-col items-center justify-center py-2">
-                    <FileUp className="w-5 h-5 text-primary mb-1" />
+                    {uploading ? <Loader2 className="w-5 h-5 text-primary mb-1 animate-spin" /> : <FileUp className="w-5 h-5 text-primary mb-1" />}
                     <p className="text-[10px] font-medium text-foreground">{uploading ? 'Uploading...' : 'Click to upload'}</p>
                   </div>
-                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium || uploading} />
+                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium} />
                 </label>
               </div>
 
-              
-              <div className="mt-3">
-                <FreeAttachmentList attachments={task.attachments || []} taskId={task.id} taskTitle={task.title} onDelete={deleteAttachment} onReorder={(items) => updateTask(task.id, { attachments: items })} />
-              </div>
+              <DragDropContext onDragEnd={(result) => {
+                if (!result.destination) return;
+                const items = Array.from(task.attachments || []);
+                const [removed] = items.splice(result.source.index, 1);
+                items.splice(result.destination.index, 0, removed);
+                updateTask(task.id, { attachments: items });
+              }}>
+                <Droppable droppableId={`modal-attachments-${task.id}`}>
+                  {(provided, snapshot) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className={`space-y-1.5 mt-3 rounded-xl transition-colors p-1 -m-1 ${snapshot.isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/20' : ''}`}>
+                      {(task.attachments || []).map((a, idx) => (
+                        <Draggable key={a.id} draggableId={a.id} index={idx}>
+                          {(provided, snap) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, transition: snap.isDragging ? provided.draggableProps.style?.transition : 'all 180ms cubic-bezier(0.22,1,0.36,1)' } as any} className={snap.isDragging ? 'shadow-lg ring-2 ring-primary/30 rounded-xl' : ''}>
+                              <AttachmentRow
+                                attachment={a}
+                                taskId={task.id}
+                                taskTitle={task.title}
+                                onDelete={() => deleteAttachment(a.id)}
+                                dragHandleProps={provided.dragHandleProps}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
             </div>
           </div>
 

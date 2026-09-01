@@ -1,11 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, Subtask } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
-import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
-import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import {
   DragDropContext,
   Droppable,
@@ -215,6 +213,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
@@ -580,12 +580,17 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     if (!selectedTask || files.length === 0) return;
     const input = e.currentTarget;
     input.value = '';
-    const base = [...(selectedTask.attachments || [])];
-    for (const file of files) {
-      const dataUrl = await fileToDataUrl(file);
-      const att = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
-      base.push(att);
-      updateTask(selectedTask.id, { attachments: [...base] });
+    setUploadingFiles(true);
+    try {
+      const base = [...(selectedTask.attachments || [])];
+      for (const file of files) {
+        const dataUrl = await fileToDataUrl(file);
+        const att = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
+        base.push(att);
+        updateTask(selectedTask.id, { attachments: [...base] });
+      }
+    } finally {
+      setUploadingFiles(false);
     }
   }, [selectedTask, updateTask]);
 
@@ -594,12 +599,17 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     if (!selectedTask || files.length === 0) return;
     const input = e.currentTarget;
     input.value = '';
-    const base = [...(selectedTask.images || [])];
-    for (const file of files) {
-      const dataUrl = await fileToDataUrl(file);
-      const img = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
-      base.push(img);
-      updateTask(selectedTask.id, { images: [...base] });
+    setUploadingImages(true);
+    try {
+      const base = [...(selectedTask.images || [])];
+      for (const file of files) {
+        const dataUrl = await fileToDataUrl(file);
+        const img = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
+        base.push(img);
+        updateTask(selectedTask.id, { images: [...base] });
+      }
+    } finally {
+      setUploadingImages(false);
     }
   }, [selectedTask, updateTask]);
 
@@ -1610,15 +1620,44 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                       <div className="flex flex-col items-center justify-center py-4">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Paperclip className="w-5 h-5 text-primary" />
+                          {uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                        <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
                       <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="hidden" />
                     </label>
                     {(selectedTask.attachments?.length ?? 0) > 0 ? (
-                      <FreeAttachmentList attachments={selectedTask.attachments || []} taskId={selectedTask.id} taskTitle={selectedTask.title} onDelete={deleteAttachment} onReorder={(items)=>updateTask(selectedTask.id,{attachments: items})} />
+                      <DragDropContext onDragEnd={handleDeepFocusReorder}>
+                        <Droppable droppableId="deepfocus-attachments">
+                          {(provided, snapshot) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className={`grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl p-1 -m-1 ${snapshot.isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/20' : ''}`}>
+                              {(selectedTask.attachments || []).map((att: any, idx: number) => (
+                                <Draggable key={att.id} draggableId={att.id} index={idx}>
+                                  {(provided, snap) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style } as any} className={`relative group/att ${snap.isDragging ? 'shadow-lg ring-2 ring-primary/30 rounded-xl' : ''}`}>
+                                      <div {...provided.dragHandleProps} className="absolute left-1 top-1/2 -translate-y-1/2 p-1 text-muted-foreground/30 hover:text-muted-foreground cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover/att:opacity-100 transition-opacity">
+                                        <GripVertical className="w-4 h-4" />
+                                      </div>
+                                      <a href={att.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 pl-7 rounded-xl border border-border bg-muted/40 hover:bg-muted transition-all">
+                                        <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
+                                          <Paperclip className="w-5 h-5 text-muted-foreground" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium text-foreground truncate">{att.fileName}</p>
+                                          <p className="text-xs text-muted-foreground">{att.fileSize ? `${(att.fileSize / 1024).toFixed(1)} KB` : 'Attached file'}</p>
+                                        </div>
+                                      </a>
+                                      <button onClick={() => deleteAttachment(att.id)} className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
                     ) : null}
                   </div>
                 )}
@@ -1643,15 +1682,35 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                       <div className="flex flex-col items-center justify-center py-4">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Image className="w-5 h-5 text-primary" />
+                          {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload</p>
+                        <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
                       <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="hidden" />
                     </label>
                     {(selectedTask.images?.length ?? 0) > 0 ? (
-                      <DraggableImageGrid images={selectedTask.images || []} onReorder={(items)=>updateTask(selectedTask.id,{images: items})} onRemove={deleteImage} droppableId={`deepfocus-images-${selectedTask.id}`} />
+                      <DragDropContext onDragEnd={handleDeepFocusReorder}>
+                        <Droppable droppableId="deepfocus-images" direction="horizontal">
+                          {(provided, snapshot) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className={`grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-xl p-1 -m-1 ${snapshot.isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/20' : ''}`}>
+                              {(selectedTask.images || []).map((img: any, idx: number) => (
+                                <Draggable key={img.id} draggableId={img.id} index={idx}>
+                                  {(provided, snap) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style } as any} className={`relative aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden group/img ${snap.isDragging ? 'shadow-2xl ring-2 ring-primary/40 z-50 scale-105' : ''}`}>
+                                      <div {...provided.dragHandleProps} className="absolute top-1.5 left-1.5 p-1 rounded-lg bg-black/40 text-white/80 opacity-0 group-hover/img:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-20"><GripVertical className="w-3.5 h-3.5" /></div>
+                                      {img.fileUrl?.match(/^data:image/) ? (<img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover pointer-events-none" />) : (<div className="w-full h-full flex items-center justify-center"><Image className="w-6 h-6 text-muted-foreground" /></div>)}
+                                      <button onClick={() => deleteImage(img.id)} className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all z-20 shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
+                                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6 pointer-events-none"><p className="text-xs font-medium text-white truncate">{img.fileName}</p>{img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}</div>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
                     ) : null}
                   </div>
                 )}
