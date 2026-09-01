@@ -39,6 +39,7 @@ import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
+import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -4055,7 +4056,9 @@ export const TaskDropdownExpanded: React.FC<{
     onUpdateTask(task.id, { images: items });
   }, [task.images, onUpdateTask]);
 
-  const handleAttachmentReorder = useCallback((result: DropResult) => {
+  const handleAttachmentReorder = useCallback((arg: DropResult | Attachment[]) => {
+    if (Array.isArray(arg)) { onUpdateTask(task.id, { attachments: arg }); return; }
+    const result = arg as DropResult;
     if (!result.destination) return;
     const items = Array.from(task.attachments || []);
     const [removed] = items.splice(result.source.index, 1);
@@ -4473,30 +4476,7 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                 )}
                 {(task.attachments || []).length > 0 && (
-                  <DragDropContext onDragEnd={handleAttachmentReorder}>
-                    <Droppable droppableId={"dropdown-attachments-" + task.id}>
-                      {(provided) => (
-                        <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {(task.attachments || []).map((attachment, idx) => (
-                            <Draggable key={attachment.id} draggableId={attachment.id} index={idx}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps}>
-                                  <AttachmentRow
-                                    attachment={attachment}
-                                    taskId={task.id}
-                                    taskTitle={task.title}
-                                    onDelete={() => deleteAttachment(attachment.id)}
-                                    dragHandleProps={provided.dragHandleProps}
-                                  />
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
+                  <FreeAttachmentList attachments={task.attachments || []} taskId={task.id} taskTitle={task.title} onDelete={deleteAttachment} onReorder={handleAttachmentReorder as any} />
                 )}
               </>
             )}
@@ -4887,7 +4867,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     onUpdateTask(task.id, { images: items });
   }, [task.images, onUpdateTask]);
 
-  const handleAttachmentReorder = useCallback((result: DropResult) => {
+  const handleAttachmentReorder = useCallback((arg: DropResult | Attachment[]) => {
+    if (Array.isArray(arg)) { onUpdateTask(task.id, { attachments: arg }); return; }
+    const result = arg as DropResult;
     if (!result.destination) return;
     const items = Array.from(task.attachments || []);
     const [removed] = items.splice(result.source.index, 1);
