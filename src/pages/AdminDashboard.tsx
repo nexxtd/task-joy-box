@@ -114,7 +114,7 @@ const SETTINGS_GROUPS: SystemSettingGroup[] = [
     icon: DollarSign,
     rows: [
       { key: 'price_pro_monthly', label: 'Pro plan price', description: 'Monthly price shown on the pricing page for the Pro plan.', type: 'currency', defaultValue: '9.99', suffix: '$/mo' },
-      { key: 'price_premium_monthly', label: 'Premium plan price', description: 'Monthly price shown on the pricing page for the Premium plan.', type: 'currency', defaultValue: '14.99', suffix: '$/mo' },
+      { key: 'price_premium_monthly', label: 'Premium plan price', description: 'Monthly price shown on the pricing page for the Premium plan.', type: 'currency', defaultValue: '4.99', suffix: '$/mo' },
     ],
   },
   {
@@ -1061,7 +1061,7 @@ if (loading && !stats) {
         </div>
       </header>
 
-      <div className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${activeTab === 'settings' ? 'p-4 sm:p-6 lg:p-5 lg:pt-4' : 'p-4 sm:p-6 lg:p-8'}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8">
         <div className="max-w-[1440px] mx-auto w-full min-w-0 space-y-6">
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -2176,34 +2176,53 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="w-full max-w-4xl mx-auto space-y-3 animate-in fade-in duration-300">
-          <div className="rounded-2xl bg-card border border-border p-5 flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
-              <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
+        <div className="w-full space-y-6 animate-in fade-in duration-300">
+          <div className="rounded-2xl bg-card border border-border p-6 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold">System Settings</h2>
+                <p className="text-sm text-muted-foreground mt-1 leading-relaxed max-w-2xl">
+                  Server-enforced controls — pricing, usage limits, signup rules and maintenance mode apply within seconds of saving. Changes are live on the pricing page immediately.
+                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                  </span>
+                  <span className="text-xs text-muted-foreground">Pricing updates reflect instantly on <span className="font-semibold text-foreground">/pricing</span></span>
+                </div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-base font-bold">System Settings</h2>
-              <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
-                Server-enforced controls — pricing, usage limits, signup rules and maintenance mode apply within seconds of saving.
-              </p>
+            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+              <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pro</p>
+                <p className="text-sm font-black">${settings['price_pro_monthly'] ?? '9.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+              </div>
+              <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Premium</p>
+                <p className="text-sm font-black">${settings['price_premium_monthly'] ?? '4.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+              </div>
             </div>
           </div>
 
           {loading ? (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col md:flex-row min-h-[480px]">
-              <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border p-4 space-y-2 bg-muted/20">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row min-h-[520px]">
+              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-2 bg-muted/20">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
               </div>
               <div className="flex-1 p-6 space-y-4">
                 <Skeleton className="h-6 w-40" />
                 <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-20 w-full rounded-xl" />
-                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-24 w-full rounded-xl" />
+                <Skeleton className="h-24 w-full rounded-xl" />
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col md:flex-row min-h-[480px]">
-              <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border p-3 space-y-1 flex-shrink-0 bg-muted/20">
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row min-h-[520px] shadow-sm">
+              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-3 space-y-1.5 flex-shrink-0 bg-muted/20">
+                <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categories</p>
                 {SETTINGS_GROUPS.map(group => {
                   const GroupIcon = group.icon;
                   const isActive = activeSettingGroup === group.id;
@@ -2212,17 +2231,22 @@ if (loading && !stats) {
                     <button
                       key={group.id}
                       onClick={() => setActiveSettingGroup(group.id)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all duration-200 ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 ${isActive ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border hover:shadow-sm'}`}
                     >
-                      <GroupIcon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-primary-foreground' : ''}`} />
-                      <span className="text-sm font-medium flex-1 truncate">{group.label}</span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'}`}>{count}</span>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-white/15' : 'bg-card border border-border'}`}>
+                        <GroupIcon className={`w-3.5 h-3.5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                      </div>
+                      <span className="text-sm font-semibold flex-1 truncate">{group.label}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground border border-border'}`}>{count}</span>
                     </button>
                   );
                 })}
+                <div className="pt-3 mt-2 border-t border-border">
+                  <p className="px-3 text-[11px] text-muted-foreground leading-relaxed">All changes save instantly and invalidate the server cache. Pricing is fetched live by the pricing page.</p>
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0 flex flex-col">
+              <div className="flex-1 min-w-0 flex flex-col bg-background/30">
                 {(() => {
                   const group = SETTINGS_GROUPS.find(g => g.id === activeSettingGroup) || SETTINGS_GROUPS[0];
                   const GroupIcon = group.icon;
@@ -2237,41 +2261,56 @@ if (loading && !stats) {
                   const visibleRows = group.rows.filter(r => !(r.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true'));
                   return (
                     <>
-                      <div className="px-6 py-5 border-b border-border flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
+                      <div className="px-6 py-5 border-b border-border bg-card/50 flex items-center gap-3 sticky top-0 backdrop-blur-sm">
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
                           <GroupIcon className="w-4 h-4" style={{ color: `hsl(var(--${accent}))` }} />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="text-sm font-bold">{group.label}</h3>
+                          <h3 className="text-sm font-black">{group.label}</h3>
                           <p className="text-xs text-muted-foreground">{group.description}</p>
                         </div>
+                        <div className="ml-auto hidden sm:flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
+                          <Save className="w-3.5 h-3.5" /> Auto-saves on change
+                        </div>
                       </div>
-                      <div className="flex-1 p-6">
-                        <div className="max-w-2xl space-y-4">
+                      <div className="flex-1 p-6 bg-muted/10">
+                        <div className="grid gap-4">
                           {visibleRows.map(row => {
                             const current = settings[row.key] ?? row.defaultValue;
+                            const isSaving = savingSetting === row.key;
                             return (
-                              <div key={row.key} className="p-4 bg-card border border-border rounded-xl">
-                                <div className="flex items-start justify-between gap-4">
+                              <div key={row.key} className="p-5 bg-card border border-border rounded-2xl hover:border-primary/15 hover:shadow-sm transition-all">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                   <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                                    <p className="text-sm font-bold text-foreground flex items-center gap-2">
                                       {row.label}
-                                      {savingSetting === row.key && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                                      {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+                                      {!isSaving && row.type !== 'boolean' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" />}
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{row.description}</p>
+                                    {row.key.includes('price_') && (
+                                      <p className="text-[11px] font-medium mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/5 border border-primary/10 text-primary">
+                                        <Eye className="w-3 h-3" /> Live on pricing page
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className={`flex-shrink-0 ${row.type === 'text' ? 'w-full sm:w-72' : row.type === 'boolean' ? 'w-auto' : 'w-44'}`}>
+                                  <div className={`flex-shrink-0 ${row.type === 'text' ? 'w-full sm:w-80' : row.type === 'boolean' ? 'w-auto' : 'w-full sm:w-48'}`}>
                                     {row.type === 'boolean' ? (
-                                      <button
-                                        onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
-                                        disabled={savingSetting === row.key}
-                                        className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 disabled:opacity-50 ${current === 'true' ? 'bg-primary' : 'bg-muted'}`}
-                                      >
-                                        <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform duration-200 ${current === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                      </button>
+                                      <div className="flex flex-col items-start sm:items-end gap-2">
+                                        <button
+                                          onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
+                                          disabled={isSaving}
+                                          className={`w-12 h-7 rounded-full transition-all duration-200 relative flex-shrink-0 disabled:opacity-50 shadow-inner ${current === 'true' ? 'bg-primary' : 'bg-muted border border-border'}`}
+                                        >
+                                          <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-200 flex items-center justify-center ${current === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`}>
+                                            {current === 'true' ? <CheckSquare className="w-2.5 h-2.5 text-primary" /> : null}
+                                          </div>
+                                        </button>
+                                        <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${current === 'true' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-muted text-muted-foreground border border-border'}`}>{current === 'true' ? 'Enabled' : 'Disabled'}</span>
+                                      </div>
                                     ) : row.type === 'select' ? (
-                                      <Select value={current} onValueChange={v => handleUpdateSetting(row, v)} disabled={savingSetting === row.key}>
-                                        <SelectTrigger className="w-full bg-muted/30 border border-border rounded-lg text-sm h-10">
+                                      <Select value={current} onValueChange={v => handleUpdateSetting(row, v)} disabled={isSaving}>
+                                        <SelectTrigger className="w-full bg-card border border-border rounded-xl text-sm h-11 shadow-sm">
                                           <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2280,29 +2319,35 @@ if (loading && !stats) {
                                       </Select>
                                     ) : (
                                       <div className="flex items-center gap-2">
-                                        <input
-                                          key={`${row.key}-${current}`}
-                                          type={row.type === 'currency' || row.type === 'number' ? 'number' : 'text'}
-                                          step="any"
-                                          min="0"
-                                          defaultValue={current}
-                                          placeholder={row.defaultValue}
-                                          onBlur={e => { const v = e.target.value.trim(); if (v && v !== current) handleUpdateSetting(row, v); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                          className="w-full bg-muted/30 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                                        />
-                                        {row.suffix && <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">{row.suffix}</span>}
+                                        <div className="relative flex-1">
+                                          {row.type === 'currency' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">$</span>}
+                                          <input
+                                            key={`${row.key}-${current}`}
+                                            type={row.type === 'currency' || row.type === 'number' ? 'number' : 'text'}
+                                            step="any"
+                                            min="0"
+                                            defaultValue={current}
+                                            placeholder={row.defaultValue}
+                                            onBlur={e => { const v = e.target.value.trim(); if (v && v !== current) handleUpdateSetting(row, v); }}
+                                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                            className={`w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${row.type === 'currency' ? 'pl-7' : ''}`}
+                                          />
+                                        </div>
+                                        {row.suffix && <span className="text-xs font-bold text-muted-foreground whitespace-nowrap px-2 py-1 rounded-full bg-muted border border-border">{row.suffix}</span>}
                                       </div>
                                     )}
                                   </div>
                                 </div>
-                                {row.type === 'boolean' && (
-                                  <p className={`text-[11px] font-medium mt-2 ${current === 'true' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>{current === 'true' ? 'Enabled' : 'Disabled'}</p>
-                                )}
                               </div>
                             );
                           })}
                         </div>
+                        {group.id === 'pricing' && (
+                          <div className="mt-6 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
+                            <TrendingUp className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly — refresh the pricing page to see the new price.</p>
+                          </div>
+                        )}
                       </div>
                     </>
                   );

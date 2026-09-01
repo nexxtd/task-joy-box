@@ -82,6 +82,21 @@ async function startPayPalCheckout(tier: string, planType = 'personal', seats = 
 // Main pricing page
 // ──────────────────────────────────────────────────────────────────────────────
 const PricingPage = () => {
+  const [pricing, setPricing] = React.useState<{ pro: number; premium: number }>({ pro: 9.99, premium: 4.99 });
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/payment/pricing');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.pro?.price != null && data?.premium?.price != null) {
+          setPricing({ pro: Number(data.pro.price), premium: Number(data.premium.price) });
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
   return (
     <div className="h-full overflow-y-auto py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
@@ -145,7 +160,7 @@ const PricingPage = () => {
                 The standard for advanced productivity.
               </p>
               <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold">$4.99</span>
+                <span className="text-4xl font-extrabold">${pricing.premium.toFixed(2)}</span>
                 <span className="text-muted-foreground">/mo</span>
               </div>
             </div>
@@ -153,7 +168,7 @@ const PricingPage = () => {
               {PRO_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
             </ul>
             <button
-              onClick={() => startPayPalCheckout('pro', 'personal')}
+              onClick={() => startPayPalCheckout('premium', 'personal')}
               className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <DollarSign className="inline w-4 h-4 mr-1" />
@@ -172,7 +187,7 @@ const PricingPage = () => {
                 Peak performance with AI-powered intelligence.
               </p>
               <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold">$9.99</span>
+                <span className="text-4xl font-extrabold">${pricing.pro.toFixed(2)}</span>
                 <span className="text-muted-foreground">/mo</span>
               </div>
             </div>
@@ -180,7 +195,7 @@ const PricingPage = () => {
               {PREMIUM_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
             </ul>
             <button
-              onClick={() => startPayPalCheckout('premium', 'personal')}
+              onClick={() => startPayPalCheckout('pro', 'personal')}
               className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Sparkles className="inline w-4 h-4 mr-1" />

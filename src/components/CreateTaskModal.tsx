@@ -492,9 +492,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
     const taskId = crypto.randomUUID();
 
-    const attachmentUrls = newFiles.length > 0
-      ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
-      : [];
+    const attachmentUrls: string[] = [];
+    for (const f of newFiles) { attachmentUrls.push(await fileToDataUrl(f)); }
 
     const existingImageIds = newTaskImages.filter(img => !img.fileUrl.startsWith('data:image')).map(img => img.id);
     const newImageFiles = newTaskImages.filter(img => img.fileUrl.startsWith('data:image'));
@@ -620,7 +619,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => onClose()}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
         <div
-          className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+          className="relative w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">

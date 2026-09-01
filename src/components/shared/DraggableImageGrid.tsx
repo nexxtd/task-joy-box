@@ -32,12 +32,12 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable droppableId={droppableId}>
-        {(droppableProvided) => (
+      <Droppable droppableId={droppableId} direction="horizontal">
+        {(droppableProvided, droppableSnapshot) => (
           <div
             ref={droppableProvided.innerRef}
             {...droppableProvided.droppableProps}
-            className="grid grid-cols-2 sm:grid-cols-3 gap-3 draggable-image-grid"
+            className={`grid grid-cols-2 sm:grid-cols-3 gap-3 draggable-image-grid transition-colors ${droppableSnapshot.isDraggingOver ? 'bg-primary/5 rounded-xl p-1' : ''}`}
           >
             {images.map((img, index) => (
               <Draggable key={img.id} draggableId={img.id} index={index}>
@@ -50,7 +50,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
                         ? 'shadow-2xl ring-2 ring-primary border-primary/50 z-50 scale-105 opacity-90'
                         : 'hover:border-primary/40 hover:shadow-md'
                     }`}
-                    style={draggableProvided.draggableProps.style}
+                    style={{ ...draggableProvided.draggableProps.style, transition: snapshot.isDragging ? draggableProvided.draggableProps.style?.transition : 'all 180ms cubic-bezier(0.22,1,0.36,1)' } as any}
                   >
                     <div
                       {...draggableProvided.dragHandleProps}

@@ -123,8 +123,21 @@ const PRICING_TIERS = {
     ],
   },
   pro: {
+    name: 'Pro',
+    price: 9.99,
+    features: [
+      'Everything in Premium',
+      'AI planning assistant',
+      'Advanced analytics & productivity tracking',
+      'Goal tracking with progress charts',
+      'Collaboration & team sharing',
+      'Priority support',
+      'Full customisation (themes, layouts)',
+    ],
+  },
+  premium: {
     name: 'Premium',
-    price: 5.99,
+    price: 4.99,
     features: [
       'Everything in Free',
       'Unlimited tasks and projects',
@@ -134,19 +147,6 @@ const PRICING_TIERS = {
       'Notes section',
       'Custom categories',
       'Cloud sync across devices',
-    ],
-  },
-  premium: {
-    name: 'Pro',
-    price: 12.99,
-    features: [
-      'Everything in Premium',
-      'AI planning assistant',
-      'Advanced analytics & productivity tracking',
-      'Goal tracking with progress charts',
-      'Collaboration & team sharing',
-      'Priority support',
-      'Full customisation (themes, layouts)',
     ],
   },
 };
@@ -236,12 +236,17 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
     const selectedTier = PRICING_TIERS[tier];
     const appBaseUrl = getAppBaseUrl(req);
 
-    let adjustedPrice = selectedTier.price;
-    if (planType === 'education' || planType === 'business') {
+    const livePrice = await getSettingNumber(tier === 'pro' ? 'price_pro_monthly' : 'price_premium_monthly', selectedTier.price);
+    let adjustedPrice = livePrice;
+    if (planType === 'personal') {
+      adjustedPrice = livePrice;
+    } else {
       const seats = req.body?.seats || 1;
-      adjustedPrice = tier === 'premium' ? 3 * seats : 8 * seats;
-    } else if (planType === 'family') {
-      adjustedPrice = tier === 'premium' ? 9.99 : 14.99;
+      if (planType === 'family') {
+        adjustedPrice = livePrice;
+      } else {
+        adjustedPrice = livePrice * seats;
+      }
     }
 
     // Apply coupon discount
@@ -320,8 +325,9 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
     }
 
     const selectedTier = PRICING_TIERS[tier as SubscriptionTier];
+    const liveUnit = await getSettingNumber(tier === 'pro' ? 'price_pro_monthly' : 'price_premium_monthly', selectedTier.price);
     const appBaseUrl = getAppBaseUrl(req);
-    const totalCents = Math.round(selectedTier.price * parsedSeats * 100);
+    const totalCents = Math.round(liveUnit * parsedSeats * 100);
     const total = (totalCents / 100).toFixed(2);
 
     const { approvalUrl, paymentId } = await createPayPalOrder({

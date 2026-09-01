@@ -40,8 +40,23 @@ const Pricing: React.FC = () => {
   const [workspaceName, setWorkspaceName] = useState('');
   const [seats, setSeats] = useState(1);
 
+  const [pricing, setPricing] = useState<{ pro: number; premium: number }>({ pro: 9.99, premium: 4.99 });
+  const [pricingLoading, setPricingLoading] = useState(true);
+
   useEffect(() => {
     setCurrency(detectCurrency());
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/payment/pricing');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.pro?.price != null && data?.premium?.price != null) {
+          setPricing({ pro: Number(data.pro.price), premium: Number(data.premium.price) });
+        }
+      } catch {} finally { if (!cancelled) setPricingLoading(false); }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const convertPrice = (usd: number): string => {
@@ -53,12 +68,15 @@ const Pricing: React.FC = () => {
     return Math.round((1 - (yearly * 12) / (monthly * 12)) * 100) || Math.round((1 - yearly / monthly) * 100);
   };
 
+  const yearlyFromMonthly = (m: number) => Math.round(m * 0.8 * 100) / 100;
+
   const personalPlans = [
     {
       name: 'Free',
       monthlyPrice: 0,
       yearlyPrice: 0,
       icon: Zap,
+      tier: 'free' as const,
       description: 'Basic organisation for students and individuals.',
       cta: 'Get Free',
       features: [
@@ -72,9 +90,10 @@ const Pricing: React.FC = () => {
     },
     {
       name: 'Premium',
-      monthlyPrice: 4.99,
-      yearlyPrice: 3.99,
+      monthlyPrice: pricing.premium,
+      yearlyPrice: yearlyFromMonthly(pricing.premium),
       icon: Crown,
+      tier: 'premium' as const,
       description: 'The standard for advanced productivity.',
       cta: 'Get Premium',
       features: [
@@ -92,9 +111,10 @@ const Pricing: React.FC = () => {
     },
     {
       name: 'Pro',
-      monthlyPrice: 9.99,
-      yearlyPrice: 7.99,
+      monthlyPrice: pricing.pro,
+      yearlyPrice: yearlyFromMonthly(pricing.pro),
       icon: Sparkles,
+      tier: 'pro' as const,
       description: 'Peak performance with AI-powered intelligence.',
       cta: 'Get Pro',
       popular: true,
@@ -114,18 +134,18 @@ const Pricing: React.FC = () => {
   ];
 
   const familyPlans = [
-    { name: 'Premium Family', tier: 'premium' as const, monthlyPrice: 9.99, yearlyPrice: 99, popular: true, features: ['Up to 6 family members', 'Shared family calendar', 'Priority support'] },
-    { name: 'Pro Family', tier: 'pro' as const, monthlyPrice: 14.99, yearlyPrice: 149, features: ['Separate accounts for each member', 'AI features for all members'] },
+    { name: 'Premium Family', tier: 'premium' as const, monthlyPrice: pricing.premium, yearlyPrice: Math.round(pricing.premium * 10 * 100)/100, popular: true, features: ['Up to 6 family members', 'Shared family calendar', 'Priority support'] },
+    { name: 'Pro Family', tier: 'pro' as const, monthlyPrice: pricing.pro, yearlyPrice: Math.round(pricing.pro * 10 * 100)/100, features: ['Separate accounts for each member', 'AI features for all members'] },
   ];
 
   const schoolPlans = [
-    { name: 'School Premium', tier: 'premium' as const, monthlyPrice: 4, yearlyPrice: 40, perSeat: true, features: ['Seat-based licences', 'Optional groups with random join codes'] },
-    { name: 'School Pro', tier: 'pro' as const, monthlyPrice: 8, yearlyPrice: 80, perSeat: true, popular: true, features: ['Organisation-wide join code', 'Admin dashboard showing seats used and remaining'] },
+    { name: 'School Premium', tier: 'premium' as const, monthlyPrice: Math.round(pricing.premium * 0.8 * 100)/100, yearlyPrice: Math.round(pricing.premium * 8 * 100)/100, perSeat: true, features: ['Seat-based licences', 'Optional groups with random join codes'] },
+    { name: 'School Pro', tier: 'pro' as const, monthlyPrice: Math.round(pricing.pro * 0.8 * 100)/100, yearlyPrice: Math.round(pricing.pro * 8 * 100)/100, perSeat: true, popular: true, features: ['Organisation-wide join code', 'Admin dashboard showing seats used and remaining'] },
   ];
 
   const businessPlans = [
-    { name: 'Business Premium', tier: 'premium' as const, monthlyPrice: 5, yearlyPrice: 50, perSeat: true, features: ['Everything in Premium per seat', 'Advanced analytics per user'] },
-    { name: 'Business Pro', tier: 'pro' as const, monthlyPrice: 9, yearlyPrice: 90, perSeat: true, popular: true, features: ['AI prioritisation and smart scheduling', 'Priority support'] },
+    { name: 'Business Premium', tier: 'premium' as const, monthlyPrice: pricing.premium, yearlyPrice: Math.round(pricing.premium * 10 * 100)/100, perSeat: true, features: ['Everything in Premium per seat', 'Advanced analytics per user'] },
+    { name: 'Business Pro', tier: 'pro' as const, monthlyPrice: pricing.pro, yearlyPrice: Math.round(pricing.pro * 10 * 100)/100, perSeat: true, popular: true, features: ['AI prioritisation and smart scheduling', 'Priority support'] },
   ];
 
   const currentTier = (user?.subscriptionTier || 'free').toLowerCase();
@@ -305,7 +325,7 @@ const Pricing: React.FC = () => {
                 <button
                   onClick={() => {
                     if (plan.current || plan.price === 0) return;
-                    openCheckout(plan.name, plan.name.toLowerCase() as 'premium' | 'pro', 'personal', plan.price);
+                    openCheckout(plan.name, (plan as any).tier as 'premium' | 'pro', 'personal', plan.price);
                   }}
                   disabled={plan.current || plan.price === 0}
                   className={`w-full py-5 rounded-2xl font-black tracking-widest uppercase text-xs transition-all shadow-xl active:scale-95 ${

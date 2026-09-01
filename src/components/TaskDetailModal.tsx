@@ -222,30 +222,25 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !isPremium) return;
-
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0 || !isPremium) return;
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch(`/api/attachments/${task.id}`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (res.ok) {
-        const newAttachment = await res.json();
-        updateTask(task.id, {
-          attachments: [...(task.attachments || []), newAttachment]
-        });
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+        if (res.ok) {
+          const newAttachment = await res.json();
+          updateTask(task.id, { attachments: [...(task.attachments || []), newAttachment] });
+          (task as any).attachments = [...((task as any).attachments || []), newAttachment];
+        }
       }
     } catch (error) {
       console.error('Error uploading file:', error);
     } finally {
       setUploading(false);
+      e.currentTarget.value = '';
     }
   };
 
@@ -525,7 +520,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                     <FileUp className="w-5 h-5 text-primary mb-1" />
                     <p className="text-[10px] font-medium text-foreground">{uploading ? 'Uploading...' : 'Click to upload'}</p>
                   </div>
-                  <input type="file" className="hidden" onChange={handleFileUpload} disabled={!isPremium || uploading} />
+                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium || uploading} />
                 </label>
               </div>
 
@@ -537,12 +532,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 updateTask(task.id, { attachments: items });
               }}>
                 <Droppable droppableId={`modal-attachments-${task.id}`}>
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5 mt-3">
+                  {(provided, snapshot) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className={`space-y-1.5 mt-3 rounded-xl transition-colors p-1 -m-1 ${snapshot.isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/20' : ''}`}>
                       {(task.attachments || []).map((a, idx) => (
                         <Draggable key={a.id} draggableId={a.id} index={idx}>
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps}>
+                          {(provided, snap) => (
+                            <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, transition: snap.isDragging ? provided.draggableProps.style?.transition : 'all 180ms cubic-bezier(0.22,1,0.36,1)' } as any} className={snap.isDragging ? 'shadow-lg ring-2 ring-primary/30 rounded-xl' : ''}>
                               <AttachmentRow
                                 attachment={a}
                                 taskId={task.id}

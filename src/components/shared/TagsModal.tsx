@@ -142,7 +142,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
           </div>
         )}
 
-        <div className="mb-4 max-h-52 space-y-2 overflow-y-auto pr-1">
+        <div className="mb-4 max-h-80 sm:max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
           {tags.length === 0 && (
             <p className="py-3 text-center text-xs text-muted-foreground">{emptyText}</p>
           )}
