@@ -2176,7 +2176,7 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="max-w-[1440px] mx-auto w-full min-w-0 space-y-6 animate-in fade-in duration-300">
+        <div className="w-full space-y-6 animate-in fade-in duration-300">
           <div className="rounded-2xl bg-card border border-border p-6 flex items-start justify-between gap-4">
             <div className="flex items-start gap-4 min-w-0">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
@@ -2276,7 +2276,7 @@ if (loading && !stats) {
                       <div className="flex-1 p-6">
                         <div className="grid gap-4">
                           {visibleRows.map(row => {
-                            const current = settings[row.key] ?? row.defaultValue;
+                            const current = String(settings[row.key] ?? row.defaultValue ?? '');
                             const isSaving = savingSetting === row.key;
                             return (
                               <div key={row.key} className="p-4 bg-card border border-border rounded-xl hover:border-primary/15 transition-all">
