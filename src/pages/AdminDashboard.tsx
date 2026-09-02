@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import {
   ShieldCheck, DollarSign, Users, CreditCard, Ticket, TrendingUp, Calendar,
@@ -162,10 +162,10 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
     guides: [
       { id: 'ht-overview', title: 'Overview', sections: [
         { heading: 'First principles', body: 'When a user submits a ticket, respond within 24 hours. Always acknowledge their issue first before diving into troubleshooting.\n\nKey principles:\n- Be empathetic and professional\n- Ask clarifying questions early\n- Set clear expectations about resolution time\n- Document everything in the ticket\n- Never blame the user or assume prior knowledge' },
-        { heading: 'Ticket lifecycle', body: 'Every ticket moves through the same pipeline: Received → Acknowledged → Investigated → Resolved → Closed.\n\nAn acknowledgement is a simple human message ("We received your report and we are looking into it"). An investigation is a status update, even if nothing is fixed yet. Never close a ticket without the user confirming the fix worked - unless they stop replying for 7 days.\n\nKeep the ticket status updated in real time. It is the user\'s only window into your work.' },
+        { heading: 'Ticket lifecycle', body: 'Every ticket moves through the same pipeline: Received â†’ Acknowledged â†’ Investigated â†’ Resolved â†’ Closed.\n\nAn acknowledgement is a simple human message ("We received your report and we are looking into it"). An investigation is a status update, even if nothing is fixed yet. Never close a ticket without the user confirming the fix worked - unless they stop replying for 7 days.\n\nKeep the ticket status updated in real time. It is the user\'s only window into your work.' },
       ]},
       { id: 'ht-response-time', title: 'Response Time', sections: [
-        { heading: 'Targets', body: 'Target response times:\n\n• Urgent (app down): 2 hours\n• High (feature broken): 4 hours\n• Medium (workaround exists): 24 hours\n• Low (enhancement): 48 hours\n\nAlways update the ticket status if you need more time. Users appreciate transparency.' },
+        { heading: 'Targets', body: 'Target response times:\n\nâ€¢ Urgent (app down): 2 hours\nâ€¢ High (feature broken): 4 hours\nâ€¢ Medium (workaround exists): 24 hours\nâ€¢ Low (enhancement): 48 hours\n\nAlways update the ticket status if you need more time. Users appreciate transparency.' },
         { heading: 'Managing delays', body: 'If a reply will exceed the target, send a short holding message: "I am still on this - here is what I have done so far, and when you will hear from me next."\n\nBatch small updates when possible, but never go silent on a ticket that is being actively worked. Silence is what converts a support request into a complaint.' },
       ]},
       { id: 'ht-escalation', title: 'Escalation Process', sections: [
@@ -173,7 +173,7 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
         { heading: 'Escalation workflow', body: '1. Tag the ticket as in_progress and note the escalation in a message to the user ("our team is taking a closer look").\n2. Inform the on-call engineer with a short summary.\n3. Check back after 24 hours - escalation only works if someone follows up.\n4. When engineering responds, relay findings to the user in plain language, never in internal jargon.' },
       ]},
       { id: 'ht-priorities', title: 'Ticket Priorities', sections: [
-        { heading: 'Priority levels', body: 'Priority levels:\n\n🔴 Urgent: App unusable, data loss, security issue, payments broken\n🟠 High: Key feature broken, no workaround\n🟡 Medium: Feature impaired but workaround exists\n🟢 Low: Enhancement, cosmetic issue, question\n\nAlways match the user\'s perceived severity with the appropriate priority. Dismissing a user\'s sense of urgency is the fastest way to earn a bad review.' },
+        { heading: 'Priority levels', body: 'Priority levels:\n\nðŸ”´ Urgent: App unusable, data loss, security issue, payments broken\nðŸŸ  High: Key feature broken, no workaround\nðŸŸ¡ Medium: Feature impaired but workaround exists\nðŸŸ¢ Low: Enhancement, cosmetic issue, question\n\nAlways match the user\'s perceived severity with the appropriate priority. Dismissing a user\'s sense of urgency is the fastest way to earn a bad review.' },
         { heading: 'Prioritizing workload', body: 'Work in this order: security issues first, then data loss, then payment/billing, then functional breakage, then everything else.\n\nIf several high-priority tickets arrive at once, tell lower-priority requesters you are working through a queue. Two messages cost nothing; radio silence costs a customer.' },
       ]},
     ],
@@ -190,7 +190,7 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
         { heading: 'When you cannot reproduce', body: 'Ask for: a screen recording, the exact error text, and what changed before the bug started.\n\nSet expectations: "we could not reproduce it yet, but we are digging. Could you send a quick video?" Most users are happy to help when asked kindly.' },
       ]},
       { id: 'br-communication', title: 'User Communication', sections: [
-        { heading: 'Tone', body: 'When communicating about bugs:\n\n• Thank the user for reporting\n• Explain what you are doing to investigate\n• Give a timeline if possible\n• Do not promise a fix date unless confirmed\n• Update them when there is progress\n• Close with next steps\n\nUse plain words. Technical jargon means nothing to a user; consequences mean everything.' },
+        { heading: 'Tone', body: 'When communicating about bugs:\n\nâ€¢ Thank the user for reporting\nâ€¢ Explain what you are doing to investigate\nâ€¢ Give a timeline if possible\nâ€¢ Do not promise a fix date unless confirmed\nâ€¢ Update them when there is progress\nâ€¢ Close with next steps\n\nUse plain words. Technical jargon means nothing to a user; consequences mean everything.' },
         { heading: 'Progress updates', body: 'Send a progress update at least every 2 days while a bug is under investigation, even if it is "no news yet".\n\nWhen fixed: tell them what was wrong, what you changed, and invite them to verify. Users who are told the fix and asked to confirm feel like collaborators, not customers.' },
       ]},
       { id: 'br-documentation', title: 'Documenting Bugs', sections: [
@@ -207,7 +207,7 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
         { heading: 'Common requests', body: 'Email changes, password resets, plan switches and data exports all require verification.\n\nFor password resets, always use the in-app reset flow with a link - never set passwords manually unless the user cannot receive email.' },
       ]},
       { id: 'ai-subscription', title: 'Subscription Issues', sections: [
-        { heading: 'Recurring scenarios', body: 'Common subscription issues:\n\n• Cancelled but still charged → Check the billing cycle and proration\n• Cannot upgrade → Clear cache, try another browser, check payment provider errors\n• Missing features → Verify tier after refresh\n• Proration questions → Explain billing logic\n\nAlways confirm what the user actually purchased before promising anything.' },
+        { heading: 'Recurring scenarios', body: 'Common subscription issues:\n\nâ€¢ Cancelled but still charged â†’ Check the billing cycle and proration\nâ€¢ Cannot upgrade â†’ Clear cache, try another browser, check payment provider errors\nâ€¢ Missing features â†’ Verify tier after refresh\nâ€¢ Proration questions â†’ Explain billing logic\n\nAlways confirm what the user actually purchased before promising anything.' },
         { heading: 'Entitlement flows', body: 'When a user has paid but the app still shows Free: wait 60 seconds and refresh. If it persists, verify the payment status on the provider dashboard, then confirm the webhook was delivered.\n\nIf you manually grant a tier, immediately tell the user so they can verify it looks right.' },
       ]},
       { id: 'ai-billing', title: 'Billing Problems', sections: [
@@ -215,7 +215,7 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
         { heading: 'Failed payments', body: 'Failed payments are not the user\'s fault to fix alone. Offer the direct update-card link and explain what failed (expired card, insufficient funds, provider block).\n\nIf a charge failed but the user believes they paid, verify both sides before giving any refund - banks often show pending charges for days.' },
       ]},
       { id: 'ai-data-request', title: 'Data & Privacy Requests', sections: [
-        { heading: 'Legal requests', body: 'Data requests (GDPR/CCPA):\n\n• Data export: process within 30 days\n• Account deletion: confirm with the user first, and list what gets lost (boards, notes, history)\n• Data correction: verify and update\n• Portable export: provide a clear, documented format (JSON)\n\nLog all requests in the compliance tracker.' },
+        { heading: 'Legal requests', body: 'Data requests (GDPR/CCPA):\n\nâ€¢ Data export: process within 30 days\nâ€¢ Account deletion: confirm with the user first, and list what gets lost (boards, notes, history)\nâ€¢ Data correction: verify and update\nâ€¢ Portable export: provide a clear, documented format (JSON)\n\nLog all requests in the compliance tracker.' },
         { heading: 'Account deletion', body: 'Never delete on first message. Confirm: "This permanently removes all your data. Are you sure?"\n\nOffer the pause or downgrade alternative first - most "deletions" are actually users wanting to stop paying. If they confirm twice, delete fully and send a confirmation.' },
       ]},
       { id: 'ai-security', title: 'Security Incidents', sections: [
@@ -232,11 +232,11 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
         { heading: 'Answering users', body: 'Every feature request deserves a real answer: "Planned for Q3", "We are exploring this", or "Not on the roadmap - here is why".\n\nExplain the reasoning briefly and offer the closest alternative that exists today.' },
       ]},
       { id: 'fr-roadmap', title: 'Roadmap Communication', sections: [
-        { heading: 'Safe communication', body: 'Communicating roadmap:\n\n• Never share specific dates unless confirmed by product\n• Mention if it is planned, exploring, or not planned\n• Offer workarounds when available\n• Thank them for the suggestion\n• Add them to the update list if appropriate\n\nA roadmap that slips quietly is worse than not promising at all.' },
+        { heading: 'Safe communication', body: 'Communicating roadmap:\n\nâ€¢ Never share specific dates unless confirmed by product\nâ€¢ Mention if it is planned, exploring, or not planned\nâ€¢ Offer workarounds when available\nâ€¢ Thank them for the suggestion\nâ€¢ Add them to the update list if appropriate\n\nA roadmap that slips quietly is worse than not promising at all.' },
         { heading: 'Update list', body: 'Keep a short "voters" list per roadmap item. When an item ships, message the voters inviting them to try it.\n\nThis is the single highest-ROI support habit: users who requested a feature and see it ship feel ownership.' },
       ]},
       { id: 'fr-feedback', title: 'Collecting Feedback', sections: [
-        { heading: 'Getting usable input', body: 'Collecting quality feedback:\n\n• Ask "what problem does this solve?"\n• Get specific use cases, not adjectives\n• Understand their current workflow\n• Check if it aligns with product vision\n• Pass the raw feedback, not your summary, to product\n\n"Make it better" is noise. "I lose my place every time the list reorders" is a spec.' },
+        { heading: 'Getting usable input', body: 'Collecting quality feedback:\n\nâ€¢ Ask "what problem does this solve?"\nâ€¢ Get specific use cases, not adjectives\nâ€¢ Understand their current workflow\nâ€¢ Check if it aligns with product vision\nâ€¢ Pass the raw feedback, not your summary, to product\n\n"Make it better" is noise. "I lose my place every time the list reorders" is a spec.' },
         { heading: 'Closing the loop', body: 'After a request is declined or deferred, tell the user within a week so they are not left hanging.\n\nFor deferred requests, note when it may be reconsidered. Transparency builds more trust than vague positivity.' },
       ]},
     ],
@@ -245,13 +245,13 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
     id: 'refund-policy', label: 'Refund Policy',
     guides: [
       { id: 'rp-eligibility', title: 'Eligibility Criteria', sections: [
-        { heading: 'Eligibility', body: 'Refund eligibility:\n\n• Within 14 days of purchase: full refund\n• Annual plan (first 30 days): full refund\n• Annual plan (after 30 days): prorated\n• Monthly plan: refund for the current month\n• Violation of terms of service: no refund\n\nGrace exceptions (double charges, provider errors) always get refunded in full.' },
+        { heading: 'Eligibility', body: 'Refund eligibility:\n\nâ€¢ Within 14 days of purchase: full refund\nâ€¢ Annual plan (first 30 days): full refund\nâ€¢ Annual plan (after 30 days): prorated\nâ€¢ Monthly plan: refund for the current month\nâ€¢ Violation of terms of service: no refund\n\nGrace exceptions (double charges, provider errors) always get refunded in full.' },
       ]},
       { id: 'rp-process', title: 'Processing Refunds', sections: [
         { heading: 'Steps', body: 'Processing a refund:\n\n1. Verify eligibility criteria\n2. Process via the payment provider dashboard\n3. Send a confirmation email with the amount and timing\n4. Update the ticket status\n5. Note the refund in the ticket\n6. Follow up in 3-5 business days if not visible on their statement\n\nBank processing can take up to 10 days - set expectations so users are not surprised.' },
       ]},
       { id: 'rp-disputes', title: 'Handling Disputes', sections: [
-        { heading: 'De-escalation', body: 'Handling refund disputes:\n\n• Listen to the user\'s concern fully first\n• Review the case objectively against policy\n• Offer alternatives (credit, downgrade, trial extension)\n• Escalate to management if the user requests it\n• Document the resolution\n• Update policies if the case exposes a gap\n\nA refund costs money; a dispute costs money plus chargeback fees plus reputation. De-escalate early.' },
+        { heading: 'De-escalation', body: 'Handling refund disputes:\n\nâ€¢ Listen to the user\'s concern fully first\nâ€¢ Review the case objectively against policy\nâ€¢ Offer alternatives (credit, downgrade, trial extension)\nâ€¢ Escalate to management if the user requests it\nâ€¢ Document the resolution\nâ€¢ Update policies if the case exposes a gap\n\nA refund costs money; a dispute costs money plus chargeback fees plus reputation. De-escalate early.' },
       ]},
     ],
   },
@@ -259,13 +259,13 @@ const GUIDE_CATS: { id: string; label: string; guides: { id: string; title: stri
     id: 'sla-metrics', label: 'SLA & Quality',
     guides: [
       { id: 'sm-targets', title: 'Team Targets', sections: [
-        { heading: 'Core metrics', body: 'Track each week:\n\n• First response time (target: under 24h, stretch 12h)\n• Resolution time (target: under 4 days)\n• Customer satisfaction per ticket\n• Reopen rate (target: under 8%)\n• Backlog of open tickets\n\nPick two to improve per sprint - teams that track everything improve nothing.' },
+        { heading: 'Core metrics', body: 'Track each week:\n\nâ€¢ First response time (target: under 24h, stretch 12h)\nâ€¢ Resolution time (target: under 4 days)\nâ€¢ Customer satisfaction per ticket\nâ€¢ Reopen rate (target: under 8%)\nâ€¢ Backlog of open tickets\n\nPick two to improve per sprint - teams that track everything improve nothing.' },
       ]},
       { id: 'sm-tracking', title: 'Tracking Issues', sections: [
-        { heading: 'Tools', body: 'Mark every metric in this dashboard:\n\n• Use ticket statuses as the source of truth\n• Tag delays with a reason so patterns emerge (waiting on user, waiting on engineering)\n• Review weekly, celebrate wins with the team\n\nIf a metric is red for two weeks straight, stop and fix the process, not the number.' },
+        { heading: 'Tools', body: 'Mark every metric in this dashboard:\n\nâ€¢ Use ticket statuses as the source of truth\nâ€¢ Tag delays with a reason so patterns emerge (waiting on user, waiting on engineering)\nâ€¢ Review weekly, celebrate wins with the team\n\nIf a metric is red for two weeks straight, stop and fix the process, not the number.' },
       ]},
       { id: 'sm-improvement', title: 'Continuous Improvement', sections: [
-        { heading: 'Rituals', body: 'Improve by ritual:\n\n• Monthly: review the 5 most painful tickets\n• Monthly: update template messages from what you learned\n• Every quarter: re-check SLA targets against reality\n• After every incident: one-paragraph postmortem\n\nQuality is compounding: fixing the root cause of one recurring ticket saves fifty future tickets.' },
+        { heading: 'Rituals', body: 'Improve by ritual:\n\nâ€¢ Monthly: review the 5 most painful tickets\nâ€¢ Monthly: update template messages from what you learned\nâ€¢ Every quarter: re-check SLA targets against reality\nâ€¢ After every incident: one-paragraph postmortem\n\nQuality is compounding: fixing the root cause of one recurring ticket saves fifty future tickets.' },
       ]},
     ],
   },
@@ -884,7 +884,7 @@ if (loading && !stats) {
           </div>
           <span className="font-semibold text-sm tracking-wide">{coupon.code}</span>
           <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-muted">
-            {coupon.usedCount} / {coupon.maxUses || '∞'}
+            {coupon.usedCount} / {coupon.maxUses || 'âˆž'}
           </span>
           <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
             isExpired ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'
@@ -1007,7 +1007,7 @@ if (loading && !stats) {
         {expanded && (
           <div className="ml-8 space-y-2 border-l-2 border-border/40 pl-4">
             {gCoupons.length === 0 && (
-              <p className="text-xs text-muted-foreground py-1 px-2">No coupons in this group yet — drag one here, or pick the group when creating a coupon.</p>
+              <p className="text-xs text-muted-foreground py-1 px-2">No coupons in this group yet â€” drag one here, or pick the group when creating a coupon.</p>
             )}
             {gCoupons.map(cup => renderCouponRow(cup))}
           </div>
@@ -1219,7 +1219,7 @@ if (loading && !stats) {
                       <div key={c.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                         <span className="font-mono text-xs font-semibold">{c.code}</span>
                         <span className="text-xs text-muted-foreground">
-                          {c.discountType === 'percentage' ? `${c.discountValue}%` : `$${c.discountValue}`} · {c.usedCount}/{c.maxUses || '∞'} used
+                          {c.discountType === 'percentage' ? `${c.discountValue}%` : `$${c.discountValue}`} Â· {c.usedCount}/{c.maxUses || 'âˆž'} used
                         </span>
                       </div>
                     ))}
@@ -1245,7 +1245,7 @@ if (loading && !stats) {
                   </div>
                   <div>
                     <h2 className="text-base font-bold">Promotions & Discounts</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Create and manage active coupon codes. Drag to reorder — coupons stay with their group.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Create and manage active coupon codes. Drag to reorder â€” coupons stay with their group.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1368,7 +1368,7 @@ if (loading && !stats) {
                         <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                           <td className="px-6 py-3 font-medium">
                             <button onClick={() => handleViewUserData(u.id, true)} className="hover:text-primary transition-colors flex items-center gap-1 text-sm">
-                              {u.name || '—'}
+                              {u.name || 'â€”'}
                               <Eye className="w-3 h-3 opacity-50" />
                             </button>
                             {u.location && <p className="text-xs text-muted-foreground font-normal lg:hidden">{u.location}</p>}
@@ -1391,12 +1391,12 @@ if (loading && !stats) {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
-                            {u.createdAt ? format(new Date(u.createdAt), 'MMM dd, yyyy') : '—'}
+                            {u.createdAt ? format(new Date(u.createdAt), 'MMM dd, yyyy') : 'â€”'}
                           </td>
                           <td className="p-4 text-muted-foreground whitespace-nowrap">
-                            {u.lastActiveAt ? format(new Date(u.lastActiveAt), 'MMM dd, HH:mm') : '—'}
+                            {u.lastActiveAt ? format(new Date(u.lastActiveAt), 'MMM dd, HH:mm') : 'â€”'}
                           </td>
-                          <td className="p-4 text-muted-foreground hidden lg:table-cell">{u.location || '—'}</td>
+                          <td className="p-4 text-muted-foreground hidden lg:table-cell">{u.location || 'â€”'}</td>
                           <td className="p-4 text-right pr-8">
                             <div className="flex items-center justify-end gap-2">
                               <button
@@ -1506,7 +1506,7 @@ if (loading && !stats) {
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{ticket.subject}</p>
-                        <p className="text-xs text-muted-foreground">{ticket.userName} · {ticket.userEmail}</p>
+                        <p className="text-xs text-muted-foreground">{ticket.userName} Â· {ticket.userEmail}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-3">
@@ -1531,8 +1531,192 @@ if (loading && !stats) {
             )}
           </div>
         )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="rounded-2xl bg-card border border-border p-6 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4 min-w-0">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                  <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold">System Settings</h2>
+                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed max-w-2xl">
+                    Server-enforced controls â€” pricing, usage limits, signup rules and maintenance mode apply within seconds of saving. Changes are live on the pricing page immediately.
+                  </p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                    </span>
+                    <span className="text-xs text-muted-foreground">Pricing updates reflect instantly on <span className="font-semibold text-foreground">/pricing</span></span>
+                  </div>
+                </div>
+              </div>
+              <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+                <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pro</p>
+                  <p className="text-sm font-black">${settings['price_pro_monthly'] ?? '9.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                </div>
+                <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Premium</p>
+                  <p className="text-sm font-black">${settings['price_premium_monthly'] ?? '4.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row">
+                <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
+                </div>
+                <div className="flex-1 p-6 space-y-4">
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-24 w-full rounded-xl" />
+                  <Skeleton className="h-24 w-full rounded-xl" />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row shadow-sm">
+                <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-1 flex-shrink-0">
+                  <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categories</p>
+                  {SETTINGS_GROUPS.map(group => {
+                    const GroupIcon = group.icon;
+                    const isActive = activeSettingGroup === group.id;
+                    const count = group.id === 'notifications' && (settings['announcement_banner'] ?? 'false') !== 'true' ? group.rows.length - 1 : group.rows.length;
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => setActiveSettingGroup(group.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 ${isActive ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border hover:shadow-sm'}`}
+                      >
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-white/15' : 'bg-card border border-border'}`}>
+                          <GroupIcon className={`w-3.5 h-3.5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                        </div>
+                        <span className="text-sm font-semibold flex-1 truncate">{group.label}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground border border-border'}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                  <div className="pt-3 mt-2 border-t border-border">
+                    <p className="px-3 text-[11px] text-muted-foreground leading-relaxed">All changes save instantly and invalidate the server cache. Pricing is fetched live by the pricing page.</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0 flex flex-col">
+                  {(() => {
+                    const group = SETTINGS_GROUPS.find(g => g.id === activeSettingGroup) || SETTINGS_GROUPS[0];
+                    const GroupIcon = group.icon;
+                    const accentMap: Record<string, string> = {
+                      'platform-access': 'label-red',
+                      'pricing': 'label-green',
+                      'usage-limits': 'label-orange',
+                      'notifications': 'label-blue',
+                      'support': 'label-purple',
+                    };
+                    const accent = accentMap[group.id] || 'label-purple';
+                    const visibleRows = group.rows.filter(r => !(r.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true'));
+                    return (
+                      <>
+                        <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
+                            <GroupIcon className="w-4 h-4" style={{ color: `hsl(var(--${accent}))` }} />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-black">{group.label}</h3>
+                            <p className="text-xs text-muted-foreground">{group.description}</p>
+                          </div>
+                          <div className="ml-auto hidden sm:flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
+                            <Save className="w-3.5 h-3.5" /> Auto-saves on change
+                          </div>
+                        </div>
+                        <div className="flex-1 p-6">
+                          <div className="grid gap-4">
+                            {visibleRows.map(row => {
+                              const current = String(settings[row.key] ?? row.defaultValue ?? '');
+                              const isSaving = savingSetting === row.key;
+                              return (
+                                <div key={row.key} className="p-4 bg-card border border-border rounded-xl hover:border-primary/15 transition-all">
+                                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                                        {row.label}
+                                        {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
+                                        {!isSaving && row.type !== 'boolean' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" />}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{row.description}</p>
+                                      {row.key.includes('price_') && (
+                                        <p className="text-[11px] font-medium mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/5 border border-primary/10 text-primary">
+                                          <Eye className="w-3 h-3" /> Live on pricing page
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className={`flex-shrink-0 ${row.type === 'text' ? 'w-full sm:w-80' : row.type === 'boolean' ? 'w-auto' : 'w-full sm:w-48'}`}>
+                                      {row.type === 'boolean' ? (
+                                        <div className="flex flex-col items-start sm:items-end gap-2">
+                                          <button
+                                            onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
+                                            disabled={isSaving}
+                                            className={`w-12 h-7 rounded-full transition-all duration-200 relative flex-shrink-0 disabled:opacity-50 shadow-inner ${current === 'true' ? 'bg-primary' : 'bg-muted border border-border'}`}
+                                          >
+                                            <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-200 flex items-center justify-center ${current === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`}>
+                                              {current === 'true' ? <CheckSquare className="w-2.5 h-2.5 text-primary" /> : null}
+                                            </div>
+                                          </button>
+                                          <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${current === 'true' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-muted text-muted-foreground border border-border'}`}>{current === 'true' ? 'Enabled' : 'Disabled'}</span>
+                                        </div>
+                                      ) : row.type === 'select' ? (
+                                        <Select value={current} onValueChange={v => handleUpdateSetting(row, v)} disabled={isSaving}>
+                                          <SelectTrigger className="w-full bg-card border border-border rounded-xl text-sm h-11 shadow-sm">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {row.options?.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <div className="relative flex-1">
+                                            {row.type === 'currency' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">$</span>}
+                                            <input
+                                              key={`${row.key}-${current}`}
+                                              type={row.type === 'currency' || row.type === 'number' ? 'number' : 'text'}
+                                              step="any"
+                                              min="0"
+                                              defaultValue={current}
+                                              placeholder={row.defaultValue}
+                                              onBlur={e => { const v = e.target.value.trim(); if (v && v !== current) handleUpdateSetting(row, v); }}
+                                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                              className={`w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${row.type === 'currency' ? 'pl-7' : ''}`}
+                                            />
+                                          </div>
+                                          {row.suffix && <span className="text-xs font-bold text-muted-foreground whitespace-nowrap px-2 py-1 rounded-full bg-muted border border-border">{row.suffix}</span>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {group.id === 'pricing' && (
+                            <div className="mt-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
+                              <TrendingUp className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly â€” refresh the pricing page to see the new price.</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         </div>
       </div>
+
 
       {/* Group Modal (Add / Edit) - same design as Edit Column popup */}
       {groupModal && (
@@ -2175,188 +2359,6 @@ if (loading && !stats) {
         />
       )}
 
-      {activeTab === 'settings' && (
-        <div className="w-full space-y-6 animate-in fade-in duration-300">
-          <div className="rounded-2xl bg-card border border-border p-6 flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4 min-w-0">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
-                <Settings className="w-5 h-5" style={{ color: 'hsl(var(--label-purple))' }} />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base font-bold">System Settings</h2>
-                <p className="text-sm text-muted-foreground mt-1 leading-relaxed max-w-2xl">
-                  Server-enforced controls — pricing, usage limits, signup rules and maintenance mode apply within seconds of saving. Changes are live on the pricing page immediately.
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
-                  </span>
-                  <span className="text-xs text-muted-foreground">Pricing updates reflect instantly on <span className="font-semibold text-foreground">/pricing</span></span>
-                </div>
-              </div>
-            </div>
-            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
-              <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Pro</p>
-                <p className="text-sm font-black">${settings['price_pro_monthly'] ?? '9.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
-              </div>
-              <div className="px-3 py-2 rounded-xl bg-muted/50 border border-border text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Premium</p>
-                <p className="text-sm font-black">${settings['price_premium_monthly'] ?? '4.99'}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
-              </div>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row">
-              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
-              </div>
-              <div className="flex-1 p-6 space-y-4">
-                <Skeleton className="h-6 w-40" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-24 w-full rounded-xl" />
-                <Skeleton className="h-24 w-full rounded-xl" />
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row shadow-sm">
-              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-1 flex-shrink-0">
-                <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categories</p>
-                {SETTINGS_GROUPS.map(group => {
-                  const GroupIcon = group.icon;
-                  const isActive = activeSettingGroup === group.id;
-                  const count = group.id === 'notifications' && (settings['announcement_banner'] ?? 'false') !== 'true' ? group.rows.length - 1 : group.rows.length;
-                  return (
-                    <button
-                      key={group.id}
-                      onClick={() => setActiveSettingGroup(group.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 ${isActive ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border hover:shadow-sm'}`}
-                    >
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? 'bg-white/15' : 'bg-card border border-border'}`}>
-                        <GroupIcon className={`w-3.5 h-3.5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                      </div>
-                      <span className="text-sm font-semibold flex-1 truncate">{group.label}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground border border-border'}`}>{count}</span>
-                    </button>
-                  );
-                })}
-                <div className="pt-3 mt-2 border-t border-border">
-                  <p className="px-3 text-[11px] text-muted-foreground leading-relaxed">All changes save instantly and invalidate the server cache. Pricing is fetched live by the pricing page.</p>
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-0 flex flex-col">
-                {(() => {
-                  const group = SETTINGS_GROUPS.find(g => g.id === activeSettingGroup) || SETTINGS_GROUPS[0];
-                  const GroupIcon = group.icon;
-                  const accentMap: Record<string, string> = {
-                    'platform-access': 'label-red',
-                    'pricing': 'label-green',
-                    'usage-limits': 'label-orange',
-                    'notifications': 'label-blue',
-                    'support': 'label-purple',
-                  };
-                  const accent = accentMap[group.id] || 'label-purple';
-                  const visibleRows = group.rows.filter(r => !(r.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true'));
-                  return (
-                    <>
-                      <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
-                          <GroupIcon className="w-4 h-4" style={{ color: `hsl(var(--${accent}))` }} />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-black">{group.label}</h3>
-                          <p className="text-xs text-muted-foreground">{group.description}</p>
-                        </div>
-                        <div className="ml-auto hidden sm:flex items-center gap-2 text-[11px] font-bold text-muted-foreground">
-                          <Save className="w-3.5 h-3.5" /> Auto-saves on change
-                        </div>
-                      </div>
-                      <div className="flex-1 p-6">
-                        <div className="grid gap-4">
-                          {visibleRows.map(row => {
-                            const current = String(settings[row.key] ?? row.defaultValue ?? '');
-                            const isSaving = savingSetting === row.key;
-                            return (
-                              <div key={row.key} className="p-4 bg-card border border-border rounded-xl hover:border-primary/15 transition-all">
-                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-bold text-foreground flex items-center gap-2">
-                                      {row.label}
-                                      {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
-                                      {!isSaving && row.type !== 'boolean' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" />}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{row.description}</p>
-                                    {row.key.includes('price_') && (
-                                      <p className="text-[11px] font-medium mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/5 border border-primary/10 text-primary">
-                                        <Eye className="w-3 h-3" /> Live on pricing page
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className={`flex-shrink-0 ${row.type === 'text' ? 'w-full sm:w-80' : row.type === 'boolean' ? 'w-auto' : 'w-full sm:w-48'}`}>
-                                    {row.type === 'boolean' ? (
-                                      <div className="flex flex-col items-start sm:items-end gap-2">
-                                        <button
-                                          onClick={() => handleUpdateSetting(row, current === 'true' ? 'false' : 'true')}
-                                          disabled={isSaving}
-                                          className={`w-12 h-7 rounded-full transition-all duration-200 relative flex-shrink-0 disabled:opacity-50 shadow-inner ${current === 'true' ? 'bg-primary' : 'bg-muted border border-border'}`}
-                                        >
-                                          <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-transform duration-200 flex items-center justify-center ${current === 'true' ? 'translate-x-5' : 'translate-x-0.5'}`}>
-                                            {current === 'true' ? <CheckSquare className="w-2.5 h-2.5 text-primary" /> : null}
-                                          </div>
-                                        </button>
-                                        <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${current === 'true' ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-muted text-muted-foreground border border-border'}`}>{current === 'true' ? 'Enabled' : 'Disabled'}</span>
-                                      </div>
-                                    ) : row.type === 'select' ? (
-                                      <Select value={current} onValueChange={v => handleUpdateSetting(row, v)} disabled={isSaving}>
-                                        <SelectTrigger className="w-full bg-card border border-border rounded-xl text-sm h-11 shadow-sm">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {row.options?.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                                        </SelectContent>
-                                      </Select>
-                                    ) : (
-                                      <div className="flex items-center gap-2">
-                                        <div className="relative flex-1">
-                                          {row.type === 'currency' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">$</span>}
-                                          <input
-                                            key={`${row.key}-${current}`}
-                                            type={row.type === 'currency' || row.type === 'number' ? 'number' : 'text'}
-                                            step="any"
-                                            min="0"
-                                            defaultValue={current}
-                                            placeholder={row.defaultValue}
-                                            onBlur={e => { const v = e.target.value.trim(); if (v && v !== current) handleUpdateSetting(row, v); }}
-                                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                            className={`w-full bg-card border border-border rounded-xl px-3 py-2.5 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ${row.type === 'currency' ? 'pl-7' : ''}`}
-                                          />
-                                        </div>
-                                        {row.suffix && <span className="text-xs font-bold text-muted-foreground whitespace-nowrap px-2 py-1 rounded-full bg-muted border border-border">{row.suffix}</span>}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {group.id === 'pricing' && (
-                          <div className="mt-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
-                            <TrendingUp className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly — refresh the pricing page to see the new price.</p>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
