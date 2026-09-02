@@ -2176,7 +2176,7 @@ if (loading && !stats) {
       )}
 
       {activeTab === 'settings' && (
-        <div className="w-full space-y-6 animate-in fade-in duration-300">
+        <div className="w-full space-y-4 animate-in fade-in duration-300">
           <div className="rounded-2xl bg-card border border-border p-6 flex items-start justify-between gap-4">
             <div className="flex items-start gap-4 min-w-0">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
@@ -2208,8 +2208,8 @@ if (loading && !stats) {
           </div>
 
           {loading ? (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row min-h-[520px]">
-              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-2 bg-muted/20">
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row">
+              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-xl" />)}
               </div>
               <div className="flex-1 p-6 space-y-4">
@@ -2220,8 +2220,8 @@ if (loading && !stats) {
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row min-h-[520px] shadow-sm">
-              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-3 space-y-1.5 flex-shrink-0 bg-muted/20">
+            <div className="rounded-2xl bg-card border border-border overflow-hidden flex flex-col lg:flex-row shadow-sm">
+              <div className="w-full lg:w-60 border-b lg:border-b-0 lg:border-r border-border p-4 space-y-1 flex-shrink-0">
                 <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categories</p>
                 {SETTINGS_GROUPS.map(group => {
                   const GroupIcon = group.icon;
@@ -2246,7 +2246,7 @@ if (loading && !stats) {
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0 flex flex-col bg-background/30">
+              <div className="flex-1 min-w-0 flex flex-col">
                 {(() => {
                   const group = SETTINGS_GROUPS.find(g => g.id === activeSettingGroup) || SETTINGS_GROUPS[0];
                   const GroupIcon = group.icon;
@@ -2261,8 +2261,8 @@ if (loading && !stats) {
                   const visibleRows = group.rows.filter(r => !(r.key === 'announcement_banner_message' && (settings['announcement_banner'] ?? 'false') !== 'true'));
                   return (
                     <>
-                      <div className="px-6 py-5 border-b border-border bg-card/50 flex items-center gap-3 sticky top-0 backdrop-blur-sm">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
+                      <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `hsl(var(--${accent}) / 0.12)` }}>
                           <GroupIcon className="w-4 h-4" style={{ color: `hsl(var(--${accent}))` }} />
                         </div>
                         <div className="min-w-0">
@@ -2273,13 +2273,13 @@ if (loading && !stats) {
                           <Save className="w-3.5 h-3.5" /> Auto-saves on change
                         </div>
                       </div>
-                      <div className="flex-1 p-6 bg-muted/10">
-                        <div className="grid gap-4">
+                      <div className="flex-1 p-6">
+                        <div className="grid gap-3">
                           {visibleRows.map(row => {
                             const current = settings[row.key] ?? row.defaultValue;
                             const isSaving = savingSetting === row.key;
                             return (
-                              <div key={row.key} className="p-5 bg-card border border-border rounded-2xl hover:border-primary/15 hover:shadow-sm transition-all">
+                              <div key={row.key} className="p-4 bg-card border border-border rounded-xl hover:border-primary/15 transition-all">
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                   <div className="min-w-0 flex-1">
                                     <p className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -2343,7 +2343,7 @@ if (loading && !stats) {
                           })}
                         </div>
                         {group.id === 'pricing' && (
-                          <div className="mt-6 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
+                          <div className="mt-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
                             <TrendingUp className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
                             <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly — refresh the pricing page to see the new price.</p>
                           </div>
