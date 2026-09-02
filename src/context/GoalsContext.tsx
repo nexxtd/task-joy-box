@@ -144,12 +144,12 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
     if (!dirtyRef.current || !user) return;
     const boardToSave = boardRef.current;
-    dirtyRef.current = false;
-    saveBoard(user.id, boardToSave).then(ok => { if (ok) setLastSyncTime(new Date()); });
+    saveBoard(user.id, boardToSave).then(ok => { if (ok) { dirtyRef.current = false; setLastSyncTime(new Date()); } });
   }, [user]);
   const isInitialRef = useRef(true);
   useEffect(() => {
     boardRef.current = board;
+    try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(board)); } catch {}
     if (isInitialRef.current) { isInitialRef.current = false; return; }
     if (!loading) {
       dirtyRef.current = true;
@@ -187,23 +187,6 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }).catch(() => setLoading(false));
     } else { setBoard({ ...emptyBoard }); setLoading(false); }
   }, [user?.id]);
-
-  // One-time project data reset to ensure fresh independent projects columns and tasks state
-  useEffect(() => {
-    if (user && !loading && board) {
-      const resetKey = `projects_reset_done_v3_${user.id}`;
-      if (!localStorage.getItem(resetKey)) {
-        setBoard(prev => {
-          const nextColumns = prev.columns.filter(c => !c.projectId);
-          const nextTasks = prev.tasks.filter(t => !t.projectId);
-          const nextBoard = { ...prev, columns: nextColumns, tasks: nextTasks };
-          saveBoard(user.id, nextBoard);
-          return nextBoard;
-        });
-        localStorage.setItem(resetKey, 'true');
-      }
-    }
-  }, [user?.id, loading, board?.id]);
 
   useEffect(() => {
     if (!user) return;

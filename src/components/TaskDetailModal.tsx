@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
+import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -526,36 +527,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 </label>
               </div>
 
-              <DragDropContext onDragEnd={(result) => {
-                if (!result.destination) return;
-                const items = Array.from(task.attachments || []);
-                const [removed] = items.splice(result.source.index, 1);
-                items.splice(result.destination.index, 0, removed);
-                updateTask(task.id, { attachments: items });
-              }}>
-                <Droppable droppableId={`modal-attachments-${task.id}`}>
-                  {(provided, snapshot) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className={`space-y-1.5 mt-3 rounded-xl transition-colors p-1 -m-1 ${snapshot.isDraggingOver ? 'bg-primary/5 border border-dashed border-primary/20' : ''}`}>
-                      {(task.attachments || []).map((a, idx) => (
-                        <Draggable key={a.id} draggableId={a.id} index={idx}>
-                          {(provided, snap) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} style={{ ...provided.draggableProps.style, transition: snap.isDragging ? provided.draggableProps.style?.transition : 'all 180ms cubic-bezier(0.22,1,0.36,1)' } as any} className={snap.isDragging ? 'shadow-lg ring-2 ring-primary/30 rounded-xl' : ''}>
-                              <AttachmentRow
-                                attachment={a}
-                                taskId={task.id}
-                                taskTitle={task.title}
-                                onDelete={() => deleteAttachment(a.id)}
-                                dragHandleProps={provided.dragHandleProps}
-                              />
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
+              <FreeAttachmentList
+                attachments={task.attachments || []}
+                onReorder={(newItems) => updateTask(task.id, { attachments: newItems })}
+                onDelete={(id) => deleteAttachment(id)}
+                taskId={task.id}
+                taskTitle={task.title}
+              />
             </div>
           </div>
 

@@ -7,6 +7,7 @@ import { fetchNoteTemplates as fetchTemplates, createNoteTemplate as createTempl
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
+import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import {
   ArrowDown,
   ArrowUp,
@@ -775,7 +776,7 @@ const Tasks: React.FC = () => {
     const loadProjects = async () => {
       try {
         const response = await fetch('/api/projects', { credentials: 'include' });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(String(response.status));
         const data = await response.json().catch(() => ({}));
         setProjects(Array.isArray(data.projects) ? data.projects : []);
       } catch {
@@ -4473,30 +4474,13 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                 )}
                 {(task.attachments || []).length > 0 && (
-                  <DragDropContext onDragEnd={handleAttachmentReorder}>
-                    <Droppable droppableId={"dropdown-attachments-" + task.id}>
-                      {(provided) => (
-                        <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {(task.attachments || []).map((attachment, idx) => (
-                            <Draggable key={attachment.id} draggableId={attachment.id} index={idx}>
-                              {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps}>
-                                  <AttachmentRow
-                                    attachment={attachment}
-                                    taskId={task.id}
-                                    taskTitle={task.title}
-                                    onDelete={() => deleteAttachment(attachment.id)}
-                                    dragHandleProps={provided.dragHandleProps}
-                                  />
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
+                  <FreeAttachmentList
+                    attachments={task.attachments || []}
+                    onReorder={(newItems) => onUpdateTask(task.id, { attachments: newItems })}
+                    onDelete={(id) => deleteAttachment(id)}
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
                 )}
               </>
             )}
@@ -4561,7 +4545,6 @@ export const TaskDropdownExpanded: React.FC<{
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
                     onRemove={(id) => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) })}
-                    droppableId={`dropdown-images-${task.id}`}
                   />
                 )}
               </>
@@ -5481,30 +5464,13 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                   )}
                   {(task.attachments || []).length > 0 && (
-                    <DragDropContext onDragEnd={handleAttachmentReorder}>
-                      <Droppable droppableId={"attachments-" + task.id}>
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {(task.attachments || []).map((attachment, idx) => (
-                              <Draggable key={attachment.id} draggableId={attachment.id} index={idx}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="relative group/att">
-                                    <AttachmentRow
-                                      attachment={attachment}
-                                      taskId={task.id}
-                                      taskTitle={task.title}
-                                      onDelete={() => deleteAttachment(attachment.id)}
-                                      dragHandleProps={provided.dragHandleProps}
-                                    />
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
+                    <FreeAttachmentList
+                    attachments={task.attachments || []}
+                    onReorder={(newItems) => onUpdateTask(task.id, { attachments: newItems })}
+                    onDelete={(id) => deleteAttachment(id)}
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
                   )}
                 </>
               )}
@@ -5568,7 +5534,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
                   onRemove={(id) => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) })}
-                  droppableId={`fullview-images-${task.id}`}
                 />
               )}
                 </>

@@ -303,7 +303,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const loadProjects = async () => {
       try {
         const response = await fetch('/api/projects', { credentials: 'include' });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(String(response.status));
         const data = await response.json().catch(() => ({}));
         setProjects(Array.isArray(data.projects) ? data.projects : []);
       } catch {
@@ -620,7 +620,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => onClose()}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
         <div
-          className="relative w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+          className="relative w-full max-w-6xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">

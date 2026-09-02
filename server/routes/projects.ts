@@ -66,7 +66,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
       .innerJoin(projects, eq(projects.id, projectMembers.projectId))
       .where(eq(projectMembers.userId, req.userId!));
 
-    const serialised = await Promise.all(rows.map(row => serializeProject(row.id)));
+    const serialised = (await Promise.all(rows.map(row => serializeProject(row.id).catch(() => null)))) as any;
     res.json({ projects: serialised.filter(Boolean) });
   } catch (error) {
     console.error('Get projects error:', error);

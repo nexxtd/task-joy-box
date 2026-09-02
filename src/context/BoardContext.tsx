@@ -193,23 +193,6 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [user?.id]);
 
-  // One-time project data reset to ensure fresh independent projects columns and tasks state
-  useEffect(() => {
-    if (user && !loading && board) {
-      const resetKey = `projects_reset_done_v3_${user.id}`;
-      if (!localStorage.getItem(resetKey)) {
-        setBoard(prev => {
-          const nextColumns = prev.columns.filter(c => !c.projectId);
-          const nextTasks = prev.tasks.filter(t => !t.projectId);
-          const nextBoard = { ...prev, columns: nextColumns, tasks: nextTasks };
-          saveBoard(user.id, nextBoard);
-          return nextBoard;
-        });
-        localStorage.setItem(resetKey, 'true');
-      }
-    }
-  }, [user?.id, loading, board?.id]);
-
   // Periodic safety-net sync to server (every 30 seconds) — only uploads when the
   // board actually changed since the last save (dirty flag), so idle tabs upload nothing
   useEffect(() => {
@@ -337,6 +320,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })),
       subtasks: task.subtasks.map(st => ({ ...st, id: genId(), completed: false })),
       attachments: [],
+      images: [],
       comments: [],
     };
 
