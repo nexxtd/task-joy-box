@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "coverage": "vitest run --coverage",
-    "dev:server": "npx nodemon --exec npx tsx server/index.ts",
+    "dev:server": "npx nodemon --ignore uploads/ --exec npx tsx server/index.ts",
     "dev:client": "vite",
     "dev:tunnel": "npx wrangler tunnel quick-start http://localhost:5173",
     "dev:all": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

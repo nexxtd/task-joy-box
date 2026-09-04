@@ -406,29 +406,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           changed.forEach(s => activityTexts.push(s.completed ? `Subtask "${s.text}" completed` : `Subtask "${s.text}" uncompleted`));
         }
       }
-      return { ...b, tasks: b.tasks.map(t => {
-        if (t.id !== taskId) return t;
-        let merged: any = { ...t, ...updates };
-        if (Array.isArray((updates as any).images) && Array.isArray((t as any).images)) {
-          const upd = (updates as any).images as any[];
-          const cur = (t as any).images as any[];
-          const curIds = new Set(cur.map((x: any) => x.id));
-          const missing = cur.filter((x: any) => !upd.some((u: any) => u.id === x.id));
-          if (missing.length > 0) {
-            merged.images = [...cur, ...upd.filter((u: any) => !curIds.has(u.id))];
-          }
-        }
-        if (Array.isArray((updates as any).attachments) && Array.isArray((t as any).attachments)) {
-          const upd = (updates as any).attachments as any[];
-          const cur = (t as any).attachments as any[];
-          const curIds = new Set(cur.map((x: any) => x.id));
-          const missing = cur.filter((x: any) => !upd.some((u: any) => u.id === x.id));
-          if (missing.length > 0) {
-            merged.attachments = [...cur, ...upd.filter((u: any) => !curIds.has(u.id))];
-          }
-        }
-        return merged;
-      }) };
+      return { ...b, tasks: b.tasks.map(t => t.id !== taskId ? t : { ...t, ...updates }) };
     });
     activityTexts.forEach(text => logActivity(taskId, text));
   }, [persist, logActivity]);

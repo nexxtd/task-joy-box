@@ -3008,38 +3008,25 @@ const Tasks: React.FC = () => {
                           <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                             if (!e.target.files) return;
                             const files = Array.from(e.target.files);
-                            const newImgs: Attachment[] = [];
-                            for (const file of files) {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                            }
-                            setNewTaskImages(prev => [...prev, ...newImgs]);
-                            e.target.value = '';
+                            e.currentTarget.value = '';
+                            setUploadingImages(true);
+                            try {
+                              const newImgs: Attachment[] = [];
+                              for (const file of files) {
+                                const fileUrl = await imageToDataUrl(file);
+                                const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                                newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                              }
+                              setNewTaskImages(prev => [...prev, ...newImgs]);
+                            } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
                         {newTaskImages.length > 0 && (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {newTaskImages.map(img => (
-                              <div key={img.id} className="relative group/img aspect-square rounded-xl border border-border bg-muted/40 overflow-hidden">
-                                {img.fileUrl ? (
-                                  <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                                </div>
-                                <button
-                                  onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
-                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                          <DraggableImageGrid
+                            images={newTaskImages}
+                            onReorder={setNewTaskImages}
+                            onRemove={(id) => setNewTaskImages(prev => prev.filter(x => x.id !== id))}
+                          />
                         )}
                       </>
                     )}
@@ -3758,7 +3745,7 @@ const Tasks: React.FC = () => {
                           <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); e.target.value=''; }} className="hidden" />
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />

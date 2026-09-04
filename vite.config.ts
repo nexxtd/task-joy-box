@@ -29,6 +29,9 @@ export default defineConfig({
         secure: false,
       },
     },
+    watch: {
+      ignored: ['**/uploads/**']
+    },
   },
   define: {
     global: 'globalThis',

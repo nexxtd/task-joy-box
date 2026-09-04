@@ -620,7 +620,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => onClose()}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
         <div
-          className="relative w-full max-w-6xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+          className="relative w-full max-w-5xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
@@ -1606,7 +1606,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <label onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
                         <Image className="w-3.5 h-3.5 text-primary" />
                         <span>Add Image</span>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); e.target.value=''; }} className="hidden" />
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
                       {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>

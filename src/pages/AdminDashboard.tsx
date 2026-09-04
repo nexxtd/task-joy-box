@@ -884,7 +884,7 @@ if (loading && !stats) {
           </div>
           <span className="font-semibold text-sm tracking-wide">{coupon.code}</span>
           <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-muted">
-            {coupon.usedCount} / {coupon.maxUses || 'âˆž'}
+            {coupon.usedCount} / {coupon.maxUses || '∞'}
           </span>
           <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
             isExpired ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'
@@ -1219,7 +1219,7 @@ if (loading && !stats) {
                       <div key={c.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                         <span className="font-mono text-xs font-semibold">{c.code}</span>
                         <span className="text-xs text-muted-foreground">
-                          {c.discountType === 'percentage' ? `${c.discountValue}%` : `$${c.discountValue}`} Â· {c.usedCount}/{c.maxUses || 'âˆž'} used
+                          {c.discountType === 'percentage' ? `${c.discountValue}%` : `$${c.discountValue}`} · {c.usedCount}/{c.maxUses || '∞'} used
                         </span>
                       </div>
                     ))}
@@ -1506,7 +1506,7 @@ if (loading && !stats) {
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{ticket.subject}</p>
-                        <p className="text-xs text-muted-foreground">{ticket.userName} Â· {ticket.userEmail}</p>
+                        <p className="text-xs text-muted-foreground">{ticket.userName} · {ticket.userEmail}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-3">

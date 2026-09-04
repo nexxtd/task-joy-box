@@ -397,7 +397,7 @@ export const energyLogs = pgTable('energy_logs', {
 
 export const taskAttachments = pgTable('task_attachments', {
   id: serial('id').primaryKey(),
-  taskId: integer('task_id').references(() => tasks.id).notNull(),
+  taskId: text('task_id').notNull(),
   fileName: text('file_name').notNull(),
   fileType: text('file_type').notNull(),
   fileSize: integer('file_size').notNull(),
