@@ -3026,20 +3026,6 @@ const Tasks: React.FC = () => {
                             onRemove={(id) => setNewTaskImages(prev => prev.filter(x => x.id !== id))}
                           />
                         )}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
-                                  <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
-                                  {img.fileSize != null && <p className="text-[10px] text-white/70">{(img.fileSize / 1024).toFixed(1)} KB</p>}
-                                </div>
-                                <button
-                                  onClick={() => setNewTaskImages(prev => prev.filter(x => x.id !== img.id))}
-                                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm z-10"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </>
                     )}
                   </div>
