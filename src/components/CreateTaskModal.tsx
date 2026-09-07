@@ -1030,15 +1030,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                               <Draggable key={list.id} draggableId={list.id} index={listIndex}>
                                 {(provided) => (
                                   <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden">
-                                    <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/header">
+                                    <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <button
                                         onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
-                                        className="flex-1 flex items-center gap-2 text-left"
-                                      >
-                                        {editingDraftChecklistId === list.id ? (
+                                        className="flex-1 flex items-center gap-2 text-left">
+                                      <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                      {editingDraftChecklistId === list.id ? (
                                           <input
                                             autoFocus
                                             className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"

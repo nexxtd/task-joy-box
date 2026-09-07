@@ -2364,7 +2364,7 @@ const Tasks: React.FC = () => {
         {/* Floating AI Task button */}
         <button
           onClick={() => setAiBuilderOpen(true)}
-          className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-foreground text-background shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
+          className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
           title="AI Task Builder"
         >
           <Sparkles className="w-5 h-5" />
@@ -2792,7 +2792,7 @@ const Tasks: React.FC = () => {
                             <Draggable key={list.id} draggableId={list.id} index={listIndex}>
                               {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
-                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/header">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -2800,6 +2800,7 @@ const Tasks: React.FC = () => {
                                       onClick={() => setCollapsedDraftChecklists(prev => { const next = new Set(prev); isCollapsed ? next.delete(list.id) : next.add(list.id); return next; })}
                                       className="flex-1 flex items-center gap-2 text-left"
                                     >
+                                      <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                       {editingDraftChecklistId === list.id ? (
                                         <input
                                           autoFocus
@@ -3614,7 +3615,7 @@ const Tasks: React.FC = () => {
                     />
                     <button
                       onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); closeColumnEdit(); }}
-                      className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
+                      className="px-5 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
                     >
                       Save
                     </button>
@@ -4266,7 +4267,7 @@ export const TaskDropdownExpanded: React.FC<{
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {(provided) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
-                              <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/header">
+                              <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
@@ -4278,7 +4279,8 @@ export const TaskDropdownExpanded: React.FC<{
                                   }}
                                   className="flex-1 flex items-center gap-2 text-left"
                                 >
-                                  {editingChecklistId === list.id ? (
+                                  <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                   {editingChecklistId === list.id ? (
                                     <input
                                       autoFocus
                                       className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
@@ -5263,7 +5265,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                           <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
-                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all group/header">
+                                <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -5275,7 +5277,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                     }}
                                     className="flex-1 flex items-center gap-2 text-left"
                                   >
-                                    {editingChecklistId === list.id ? (
+                                    <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
+                                   {editingChecklistId === list.id ? (
                                       <input
                                         autoFocus
                                         className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"

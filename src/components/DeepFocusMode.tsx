@@ -856,7 +856,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         placeholder="min"
                         className="w-16 bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
                       />
-                      <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg shrink-0">Add</button>
+                      <button onClick={addSubtask} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg shrink-0">Add</button>
                     </div>
                 </div>
               )}
@@ -895,11 +895,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                   <Draggable key={list.id} draggableId={list.id} index={index}>
                                     {(provided) => (
                                       <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                                        <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                        <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                             <GripVertical className="w-4 h-4" />
                                           </div>
                                           <div className="flex-1 flex items-center gap-2 min-w-0">
+                                            <span className="text-sm text-muted-foreground shrink-0">({list.items.length})</span>
                                             {editingDraftChecklistId === list.id ? (
                                               <input
                                                 autoFocus
@@ -930,7 +931,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 {list.title}
                                               </span>
                                             )}
-                                            <span className="text-sm text-muted-foreground shrink-0">({list.items.length})</span>
                                           </div>
                                           <div className="flex items-center gap-1 shrink-0">
                                             <button
@@ -1098,7 +1098,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       <div
-        className="relative z-10 w-[95vw] sm:w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
+        className="relative z-10 w-[95vw] sm:w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
@@ -1161,7 +1161,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   disabled={isRunning}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-50 ${
                     activePill === p
-                      ? 'bg-foreground text-background'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
@@ -1174,7 +1174,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                   disabled={isRunning}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-50 ${
                     activePill === 'custom'
-                      ? 'bg-foreground text-background'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
@@ -1382,7 +1382,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         placeholder="min"
                         className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
                       />
-                      <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg shrink-0">Add</button>
+                      <button onClick={addSubtask} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg shrink-0">Add</button>
                     </div>
                   </div>
                 )}
@@ -1416,7 +1416,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                     <Draggable key={list.id} draggableId={list.id} index={index}>
                                       {(provided) => (
                                       <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border bg-muted/20 overflow-hidden">
-                                        <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0">
+                                        <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                             <GripVertical className="w-4 h-4" />
                                           </div>
