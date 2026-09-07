@@ -794,7 +794,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
       ? await db.select({ id: checklists.id, checklistItems: sql<number>`(SELECT count(*) FROM checklist_items ci WHERE ci.checklist_id = checklists.id)` }).from(checklists).where(inArray(checklists.taskId, taskIds))
       : [];
     const attachmentRows = taskIds.length > 0
-      ? await db.select({ id: taskAttachments.id }).from(taskAttachments).where(inArray(taskAttachments.taskId, taskIds))
+      ? await db.select({ id: taskAttachments.id }).from(taskAttachments).where(inArray(taskAttachments.taskId, taskIds.map(String) as any))
       : [];
     const labelRows = taskIds.length > 0
       ? await db.select({ id: labels.id }).from(labels).where(inArray(labels.taskId, taskIds))
