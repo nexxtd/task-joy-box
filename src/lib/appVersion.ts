@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.3.0";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.3.0",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Dashboard & Insights now focus on Tasks, Notes, Tags and Projects only",
+      "New note widgets added to Dashboard and Insights",
+      "Goals and Habits removed from navigation and hidden from Dashboard/Insights",
+      "Admin panel cleaned: whiteboard, goals and habit settings removed",
+    ],
+  },
   {
     version: "0.2.0",
     date: "2026-09-09",

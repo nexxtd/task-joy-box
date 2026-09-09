@@ -124,8 +124,6 @@ const SETTINGS_GROUPS: SystemSettingGroup[] = [
     icon: Package,
     rows: [
       { key: 'free_tier_task_limit', label: 'Free task limit', description: 'Maximum tasks a Free user can have on their board.', type: 'number', defaultValue: '40' },
-      { key: 'free_tier_goal_limit', label: 'Free goal limit', description: 'Maximum goals a Free user can create.', type: 'number', defaultValue: '5' },
-      { key: 'free_tier_habit_limit', label: 'Free habit limit', description: 'Maximum habits a Free user can create.', type: 'number', defaultValue: '4' },
       { key: 'max_attachment_mb', label: 'Attachment size limit', description: 'Maximum upload size for task attachments.', type: 'number', defaultValue: '25', suffix: 'MB' },
     ],
   },

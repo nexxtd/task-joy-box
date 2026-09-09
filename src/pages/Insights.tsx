@@ -15,7 +15,7 @@ import { Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import {
   InsightWidget, InsightWidgetType,
   CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody,
-  WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody,
+  WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody, NotesOverviewBody,
 } from '@/components/insights/InsightWidgets';
 import {
   CompletionTrendBody, AvgCompletionTimeBody, BusiestDaysBody, MultiProjectBody,
@@ -42,15 +42,7 @@ const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
   { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 4, h: 3, tier: 'free' },
   { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 4, h: 3, tier: 'free' },
   { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 4, h: 3, tier: 'free' },
-  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 4, h: 4, tier: 'premium' },
-  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 4, h: 4, tier: 'premium' },
-  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
-  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 4, h: 4, tier: 'premium' },
-  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 4, h: 4, tier: 'premium' },
-  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 4, h: 4, tier: 'premium' },
-  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 4, h: 4, tier: 'pro' },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 4, h: 4, tier: 'pro' },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
 ];
 
 const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
@@ -63,7 +55,7 @@ const defaultLayout = (): InsightWidget[] => [
   w('w4', 'weekly-activity', 'Weekly Activity', 1, 4, 4, 3),
   w('w5', 'project-breakdown', 'Project Breakdown', 5, 4, 4, 3),
   w('w6', 'tags-overview', 'Tags Overview', 9, 4, 4, 3),
-  w('w9', 'energy-insights', 'Energy Insights', 1, 7, 4, 4),
+  w('w7', 'notes-overview', 'Notes Overview', 1, 7, 4, 3),
 ];
 
 const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
@@ -377,6 +369,8 @@ const Insights: React.FC = () => {
         return <ProjectBreakdownBody tasks={tasks} columns={columns} ctx={ctx} />;
       case 'tags-overview':
         return <TagsOverviewBody tasks={tasks} ctx={ctx} />;
+      case 'notes-overview':
+        return <NotesOverviewBody />;
       case 'completion-trend':
         return <CompletionTrendBody tasks={tasks} ctx={ctx} />;
       case 'avg-completion-time':

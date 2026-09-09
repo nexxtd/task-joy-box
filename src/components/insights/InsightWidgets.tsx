@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays } from 'lucide-react';
+import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays, StickyNote } from 'lucide-react';
 import { Task, Column, Priority } from '@/types/board';
+import { useNotesContext } from '@/context/NotesContext';
 import {
   DoneCtx, isTaskDone, dueEnd, formatDate, formatDateTime, formatDuration, PRIORITY_LABEL, ReportMetric,
   buildCompletionOverview, buildOverdue, buildPriorityGroups, buildWeeklyActivity,
@@ -15,7 +16,7 @@ export type InsightWidgetType =
   | 'completion-overview' | 'active-vs-overdue' | 'tasks-by-priority' | 'weekly-activity'
   | 'project-breakdown' | 'tags-overview' | 'completion-trend' | 'avg-completion-time'
   | 'busiest-days-times' | 'multi-project-comparison' | 'subtask-checklist-health'
-  | 'custom-report' | 'energy-insights' | 'ai-bottlenecks' | 'ai-score';
+  | 'custom-report' | 'energy-insights' | 'ai-bottlenecks' | 'ai-score' | 'notes-overview';
 
 export interface InsightWidget {
   id: string;
@@ -478,4 +479,28 @@ function TagsOverviewBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
   );
 }
 
-export { CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody, WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody };
+function NotesOverviewBody() {
+  const { board } = useNotesContext();
+  const notes = board.tasks || [];
+  const recent = [...notes].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 8);
+  if (notes.length === 0) return <EmptyState icon={StickyNote} text="No notes yet. Create a note to see it here." />;
+  return (
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-bold text-foreground bg-muted/60 border border-border rounded-full px-2.5 py-1">{notes.length} notes</span>
+        <span className="text-[11px] text-muted-foreground">{recent.length} recent</span>
+      </div>
+      <div className="space-y-1.5">
+        {recent.map(n => (
+          <div key={n.id} className="p-2 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+            <p className="text-xs font-medium text-foreground truncate">{n.title || 'Untitled note'}</p>
+            {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description.slice(0, 80)}</p>}
+            <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export { CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody, WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody, NotesOverviewBody };

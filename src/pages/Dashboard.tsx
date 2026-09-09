@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
+import { useNotesContext } from '@/context/NotesContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import { useEnergyAnalysis, isEnergyTrackerEnabled, ENERGY_SLOTS } from '@/utils/energyStats';
+import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import {
   CheckSquare, Clock, Plus, ArrowRight,
-  TrendingUp, TrendingDown, Bot, Calendar, Zap, X,
+  TrendingUp, TrendingDown, Calendar, Zap, X,
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles,
-  AlertTriangle, Flag, History, PieChart, Tags, LineChart, SlidersHorizontal,
-  GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw,
+  AlertTriangle, Flag, History, PieChart, Tags,
+  StickyNote, FileText,
   Flame, Crown, Lock, CheckCircle2, Pencil
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority, Task, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
@@ -32,10 +33,9 @@ const sharedTagToLabel = (tag: SharedTag): Label => ({
 
 type DashboardWidgetType =
   | 'stats' | 'tasks' | 'projects' | 'project-tasks' | 'insights'
-  | 'energy' | 'peak-hours' | 'weekly' | 'account'
+  | 'weekly'
   | 'overdue' | 'deadlines' | 'project-progress' | 'recently-completed' | 'priority-breakdown' | 'tags-overview'
-  | 'advanced-insights' | 'custom-report' | 'multi-project'
-  | 'ai-score' | 'ai-prioritize' | 'ai-bottlenecks' | 'ai-weekly';
+  | 'notes-overview' | 'recent-notes';
 
 type DashboardWidgetTier = 'free' | 'premium' | 'pro';
 type ReportMetric = 'completed' | 'created' | 'checklist';
@@ -65,28 +65,20 @@ interface WidgetDef {
 }
 
 const WIDGET_DEFS: WidgetDef[] = [
-  { type: 'stats', title: 'Stats Overview', desc: 'Tasks Active, Completion, Deep Work & Streak', icon: LayoutDashboard, accent: 'label-purple', w: 8, h: 2, tier: 'free' },
+  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 8, h: 2, tier: 'free' },
   { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 3, tier: 'free' },
   { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 4, h: 3, tier: 'free' },
   { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 4, h: 3, tier: 'free' },
   { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 4, h: 2, tier: 'free' },
-  { type: 'energy', title: 'Energy-Aware Recommendations', desc: 'Top open tasks scheduled into your logged peak windows', icon: Zap, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
-  { type: 'peak-hours', title: 'Your Peak Hours', desc: 'Your strongest window, built from your real energy logs', icon: Clock, accent: 'label-green', w: 4, h: 1, tier: 'free' },
   { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 4, h: 2, tier: 'free' },
-  { type: 'account', title: 'Account Status', desc: 'Your plan and completed work', icon: Bot, accent: 'label-blue', w: 4, h: 1, tier: 'free' },
   { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 4, h: 2, tier: 'free' },
   { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 4, h: 2, tier: 'free' },
   { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 4, h: 2, tier: 'free' },
   { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 4, h: 3, tier: 'free' },
   { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 4, h: 2, tier: 'free' },
   { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 4, h: 2, tier: 'free' },
-  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 4, h: 3, tier: 'premium' },
-  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 4, h: 3, tier: 'premium' },
-  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 4, h: 3, tier: 'premium' },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 4, h: 2, tier: 'pro' },
-  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 4, h: 3, tier: 'pro' },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 4, h: 3, tier: 'pro' },
-  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 8, h: 2, tier: 'pro' },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 4, h: 2, tier: 'free' },
+  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
 ];
 
 const TIER_SECTIONS: { tier: DashboardWidgetTier; label: string }[] = [
@@ -264,6 +256,7 @@ const LockedWidget: React.FC<{ tierLabel: string; onUpgrade: () => void }> = ({ 
 
 const Dashboard: React.FC = () => {
   const { board, updateTask } = useBoardContext();
+  const { board: notesBoard } = useNotesContext();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { open: openDeepFocus } = useDeepFocus();
@@ -398,11 +391,12 @@ const Dashboard: React.FC = () => {
     return [
       w('stats', 'Stats Overview', 1, 1, 8, 2),
       w('tasks', 'Tasks', 1, 3, 8, 3),
-      w('peak-hours', 'Your Peak Hours', 9, 1, 4, 1),
-      w('energy', 'Energy-Aware Recommendations', 9, 2, 4, 3),
-      w('weekly', 'Weekly Activity', 9, 5, 4, 2),
-      w('account', 'Account Status', 5, 7, 4, 1),
-      w('insights', 'Insights', 1, 8, 4, 2),
+      w('notes-overview', 'Notes Overview', 9, 1, 4, 2),
+      w('weekly', 'Weekly Activity', 9, 3, 4, 2),
+      w('tags-overview', 'Tags Overview', 9, 5, 4, 2),
+      w('insights', 'Insights', 1, 6, 4, 2),
+      w('projects', 'Projects', 5, 6, 4, 3),
+      w('recent-notes', 'Recent Notes', 9, 7, 4, 3),
     ];
   };
 
@@ -1240,95 +1234,6 @@ style={{ background: 'hsl(var(--primary))' }}>
           </div>
         );
       }
-      case 'peak-hours':
-        return (
-          <div className="space-y-2.5 mt-1">
-            {!energyPremium ? (
-              <div className="flex flex-col items-center justify-center py-4 text-center gap-1.5">
-                <Lock className="w-5 h-5 text-muted-foreground opacity-60" />
-                <p className="text-xs text-muted-foreground max-w-[230px] leading-snug">
-                  Peak hours unlock with Premium — energy checks at 8am, 12pm and 4pm reveal your strongest windows.
-                </p>
-                <button onClick={() => navigate('/pricing')} className="mt-1 text-[11px] font-bold text-primary hover:underline">
-                  Upgrade
-                </button>
-              </div>
-            ) : !energyEnabled ? (
-              <p className="text-xs text-muted-foreground text-center py-4 px-2 leading-snug">
-                Turn on the Energy Tracker in Settings to reveal your peak hours from real logs.
-              </p>
-            ) : energyAnalysis.daysLogged === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4 px-2 leading-snug">
-                No energy logs yet — complete the daily checks and your peak window will appear here.
-              </p>
-            ) : (
-              <>
-                {energyAnalysis.peak && (() => {
-                  const peak = ENERGY_SLOTS.find(s => s.id === energyAnalysis.peak);
-                  if (!peak) return null;
-                  const avg = energyAnalysis.slots[peak.id].avg;
-                  return (
-                    <div
-                      className="flex items-center gap-2 p-3 rounded-xl text-white"
-                      style={{
-                        background: `linear-gradient(135deg, hsl(var(--${peak.accent})) 0%, hsl(var(--${peak.accent}) / 0.72) 130%)`,
-                        boxShadow: '0 10px 24px -16px hsl(228 25% 25% / 0.5)',
-                      }}
-                    >
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/20 shrink-0">
-                        <Zap className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black uppercase tracking-wide opacity-90">Peak window</p>
-                        <p className="text-sm font-black leading-tight truncate">{peak.label} · {peak.window}</p>
-                      </div>
-                      <span className="ml-auto text-[10px] font-bold bg-white/20 rounded-full px-2 py-0.5 shrink-0">
-                        {avg.toFixed(1)}/3 avg
-                      </span>
-                    </div>
-                  );
-                })()}
-                <div className="grid grid-cols-3 gap-2">
-                  {ENERGY_SLOTS.map(s => {
-                    const st = energyAnalysis.slots[s.id];
-                    const isPeak = energyAnalysis.peak === s.id;
-                    return (
-                      <div
-                        key={s.id}
-                        className="rounded-xl px-2 py-2 text-center"
-                        style={{
-                          background: isPeak ? `hsl(var(--${s.accent}) / 0.12)` : 'hsl(var(--muted) / 0.35)',
-                          border: isPeak ? `1px solid hsl(var(--${s.accent}) / 0.4)` : '1px solid hsl(var(--border))',
-                        }}
-                      >
-                        <p
-                          className="text-[9px] font-black uppercase tracking-wide"
-                          style={{ color: isPeak ? `hsl(var(--${s.accent}))` : undefined }}
-                        >
-                          {s.label}
-                        </p>
-                        <p className={`text-sm font-black mt-0.5 ${isPeak ? '' : 'text-foreground'}`}>
-                          {st.logged > 0 ? `${st.avg.toFixed(1)}/3` : '—'}
-                        </p>
-                        <p className="text-[9px] text-muted-foreground mt-0.5">
-                          {st.logged > 0 ? `${st.logged} logged` : 'No logs'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {energyAnalysis.daysLogged} of the last 7 days logged ·{' '}
-                  {energyAnalysis.trendDelta >= 0.15
-                    ? `energy up ${energyAnalysis.trendDelta.toFixed(1)}/3 since last week`
-                    : energyAnalysis.trendDelta <= -0.15
-                      ? `energy down ${(-energyAnalysis.trendDelta).toFixed(1)}/3 since last week`
-                      : 'energy steady since last week'}
-                </p>
-              </>
-            )}
-          </div>
-        );
       case 'weekly': {
         const totalWeek = weeklyData.reduce((s, v) => s + v, 0);
         const prevWeekAvg = totalWeek > 0 ? Math.round(totalWeek / 7 * 10) / 10 : 0;
@@ -1368,43 +1273,6 @@ style={{ background: 'hsl(var(--primary))' }}>
                 <span>·</span>
                 <span>avg {prevWeekAvg}/day</span>
                 {totalWeek > 0 && <span className="ml-auto font-bold text-foreground">{weekDays[peakDay]} peak</span>}
-              </div>
-            </div>
-          </div>
-        );
-      }
-      case 'account': {
-        const tier = user?.subscriptionTier || 'free';
-        const tierLabel = tier === 'pro' ? 'Pro' : tier === 'premium' ? 'Premium' : 'Free';
-        const isPaid = tier === 'pro' || tier === 'premium';
-        const createdThisWeek = board.tasks.filter(t => {
-          const d = t.createdAt ? new Date(t.createdAt) : null;
-          if (!d || Number.isNaN(d.getTime())) return false;
-          return (Date.now() - d.getTime()) / DAY_MS <= 7;
-        }).length;
-        return (
-          <div className="space-y-2.5 mt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground flex items-center gap-2"><Sparkles className="w-3.5 h-3.5" /> Plan</span>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase ${isPaid ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground border border-border'}`}>
-                {tierLabel}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground flex items-center gap-2"><CheckSquare className="w-3.5 h-3.5" /> Tasks completed</span>
-              <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-muted/50 text-muted-foreground border border-border">{completedTasks.length} of {board.tasks.length}</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Created this week</span>
-              <span className="font-bold text-foreground">{createdThisWeek}</span>
-            </div>
-            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {isPaid ? `You're on ${tierLabel} — ${completedTasks.length} tasks completed across ${board.tasks.length} total. Keep the completion rate climbing.` : `Free plan — ${completedTasks.length} completed. Upgrade to unlock Premium/Pro insights and close overdue faster.`}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] font-bold text-primary">
-                <span>{completionRate}% completion</span>
-                <span className="text-muted-foreground font-normal">· {streakDays}d streak</span>
               </div>
             </div>
           </div>
@@ -1693,343 +1561,64 @@ style={{ background: 'hsl(var(--primary))' }}>
           </div>
         );
       }
-      case 'advanced-insights': {
-        const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
-        const avg = advancedInsights.avgHours;
-        const trendUp = total30 > 5 && avg != null && avg < 24;
+      case 'notes-overview': {
+        const notes = notesBoard.tasks || [];
+        const recentCount = notes.filter(n => { const d = n.createdAt ? new Date(n.createdAt) : null; return d && (Date.now() - d.getTime()) / DAY_MS <= 7; }).length;
         return (
-          <div className="space-y-2.5 mt-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Avg completion</p>
-                <p className="text-base font-black text-foreground mt-0.5">
-                  {avg != null ? `${avg.toFixed(1)}h` : '—'}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-1">{avg != null && avg < 10 ? 'Fast turnover' : avg != null && avg < 48 ? 'Moderate pace' : 'Slow cycle'}</p>
-              </div>
-              <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Busiest day</p>
-                <p className="text-base font-black text-foreground mt-0.5">{advancedInsights.busiestDay || '—'}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">{advancedInsights.busiestDay ? `${total30} in 30 days` : 'No data yet'}</p>
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">{notes.length} notes · {recentCount} in last 7 days</span>
+              <button onClick={() => navigate('/notes')} className="text-[10px] font-bold text-primary hover:underline">Open Notes</button>
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">30-day trend</p>
-                <p className="text-[10px] font-semibold text-muted-foreground">{total30} completed · avg {(total30 / 30).toFixed(1)}/day</p>
-              </div>
-              <MiniBars values={advancedInsights.trend30} accent={accent} containerClass="h-12" />
-            </div>
-            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                <span className="font-bold text-foreground">Premium insight:</span> {total30 === 0 ? 'No completions in 30 days — the trend will form once you close tasks.' : trendUp ? `Activity is building — ${total30} in 30 days with ${advancedInsights.busiestDay} as peak. Keep the daily close rate above 1.` : `Long cycle at ${avg?.toFixed(1) || '—'}h avg — break large tasks to shorten completion time.`}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">{trendUp ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{trendUp ? 'building' : 'needs lift'}</span>
-                <span className="ml-auto font-bold text-foreground">{total30} total</span>
-              </div>
-            </div>
-          </div>
-        );
-      }
-      case 'custom-report': {
-        const metric = widget.metric || 'completed';
-        const range = widget.range || 14;
-        const series = buildReportSeries(metric, range);
-        const total = series.reduce((s, v) => s + v, 0);
-        const maxSeries = Math.max(...series, 1);
-        const avgPerDay = range > 0 ? (total / range).toFixed(1) : '0';
-        const metricLabel = metric === 'created' ? 'Created' : metric === 'checklist' ? 'Checklist items done' : 'Completed';
-        const peakIdx = series.indexOf(maxSeries);
-        return (
-          <div className="mt-1">
-            <div className="flex gap-2 mb-3">
-              <Select value={metric} onValueChange={v => updateWidget(widget.id, { metric: v as ReportMetric })}>
-                <SelectTrigger className="flex-1 rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="created">Created</SelectItem>
-                  <SelectItem value="checklist">Checklist items</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={String(range)} onValueChange={v => updateWidget(widget.id, { range: Number(v) })}>
-                <SelectTrigger className="rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">7 days</SelectItem>
-                  <SelectItem value="14">14 days</SelectItem>
-                  <SelectItem value="30">30 days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {total === 0 ? (
+            {notes.length === 0 ? (
               <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground">No {metricLabel.toLowerCase()} in this range yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Switch metric or extend the range to surface a pattern.</p>
+                <StickyNote className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
+                <p className="text-sm text-muted-foreground">No notes yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Create a note to capture ideas and keep them in sight.</p>
               </div>
             ) : (
               <>
-                <MiniBars values={series} accent={accent} containerClass="h-14" />
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-[10px] font-bold text-foreground">{total} {metricLabel.toLowerCase()} · avg {avgPerDay}/day</p>
-                  <p className="text-[10px] text-muted-foreground">peak {maxSeries}/day on day {peakIdx + 1}</p>
-                </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one {metricLabel.toLowerCase()} daily to lift the trend.`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{total} total</span>
-                    <span>·</span>
-                    <span>peak {maxSeries}</span>
-                    <span className="ml-auto font-bold text-foreground">{avgPerDay}/day avg</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Total Notes</p>
+                    <p className="text-xl font-black text-foreground mt-0.5">{notes.length}</p>
                   </div>
+                  <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">This Week</p>
+                    <p className="text-xl font-black text-foreground mt-0.5">{recentCount}</p>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{recentCount > 0 ? `${recentCount} notes added in the last 7 days — your knowledge base is growing.` : 'No new notes this week — capture one thing you learned today.'}</p>
                 </div>
               </>
             )}
           </div>
         );
       }
-      case 'multi-project': {
-        const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
-        const spread = projectsInfo.length > 1 ? Math.max(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) - Math.min(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) : 0;
+      case 'recent-notes': {
+        const notes = [...(notesBoard.tasks || [])].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 6);
         return (
-          <div className="space-y-2.5 mt-1">
-            {projectsInfo.length === 0 ? (
+          <div>
+            {notes.length === 0 ? (
               <div className="text-center py-6">
-                <GitCompareArrows className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No projects yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Create at least two projects — comparison appears once you have more than one.</p>
+                <FileText className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
+                <p className="text-sm text-muted-foreground">No recent notes</p>
               </div>
             ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} projects · avg {avgPct}%</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${spread > 0.5 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{spread > 0.5 ? 'Wide spread' : 'Tight range'}</span>
-                </div>
-                {projectsInfo.slice(0, 6).map(p => {
-                  const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-                  const vsAvg = pct - avgPct;
-                  return (
-                    <div key={p.id}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                          {p.name}
-                        </span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">{p.done}/{p.total} · {pct}% <span className={vsAvg >= 0 ? 'text-emerald-600' : 'text-red-500'}>{vsAvg >= 0 ? `+${vsAvg}` : vsAvg}% vs avg</span></span>
-                      </div>
-                      <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
-                        <div className="rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vsAvg >= 0 ? 'hsl(var(--label-green))' : 'hsl(var(--label-orange))' }} />
-                        <div className="rounded-full flex-1 transition-all duration-500" style={{ background: `hsl(var(--${accent}) / 0.25)` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Premium comparison — avg {avgPct}% across {projectsInfo.length} projects{spread > 0.5 ? `, ${Math.round(spread * 100)}pt spread signals uneven progress — the lagging project needs the next deep-work block.` : ' with tight spread — progress is evenly distributed.'}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>Spread {Math.round(spread * 100)}pt</span>
-                    <span>·</span>
-                    <span>{projectsInfo.length} compared</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      }
-      case 'ai-score': {
-        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
-        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
-        const score = aiState.data?.productivityScore;
-        return (
-          <div className="mt-1">
-            {score ? (
-              <div className="space-y-3">
-                <div className="flex items-start gap-4">
-                  <div className="relative w-20 h-20 flex-shrink-0">
-                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" style={{ stroke: `hsl(var(--${accent}) / 0.14)` }} />
-                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" strokeLinecap="round"
-                        strokeDasharray={`${Math.max(0, Math.min(100, score.score)) * 2.01} 201`} style={{ stroke: `hsl(var(--${accent}))` }} />
-                    </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-foreground">{score.score}</span>
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">AI Productivity Score</p>
-                    <p className="text-xs text-muted-foreground leading-snug">{score.summary}</p>
-                    {score.focusAreas.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {score.focusAreas.map((f: string, i: number) => (
-                          <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full text-primary-foreground" style={{ background: 'hsl(var(--label-orange))' }}>
-                            {f}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors">
-                      <RefreshCw className="w-3 h-3" /> Refresh
-                    </button>
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> Score {score.score}/100 — {score.score >= 70 ? 'health is strong; keep the overdue count at zero to hold it' : score.score >= 40 ? 'mid-range — overdue and high-priority open tasks are the drag' : 'critical — overdue tasks and stalled breakdowns dominate the penalty'}.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1">{score.score >= 70 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{score.score >= 50 ? 'trending stable' : 'needs lift'}</span>
-                    <span className="ml-auto font-bold text-foreground">{score.focusAreas.length} focus areas</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <AiWidgetStatus onRetry={loadAiWidgets} />
-            )}
-          </div>
-        );
-      }
-      case 'ai-prioritize': {
-        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
-        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
-        const nextTasks = Array.isArray(aiState.data?.nextTasks) ? aiState.data.nextTasks : null;
-        return (
-          <div className="mt-1">
-            {nextTasks === null ? (
-              <AiWidgetStatus onRetry={loadAiWidgets} />
-            ) : nextTasks.length === 0 ? (
-              <div className="text-center py-6">
-                <ListOrdered className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No tasks to prioritize right now</p>
-                <p className="text-[11px] text-muted-foreground mt-1">AI ranks by overdue, priority and project balance — add more tasks to get a ranked list.</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{nextTasks.length} ranked · by urgency & impact</span>
-                  <span className="text-[10px] font-bold text-primary">Pro ranked</span>
-                </div>
-                <div className="space-y-1.5">
-                  {nextTasks.map((nt: { id: string; reason: string }, i: number) => {
-                    const task = board.tasks.find(t => String(t.id) === String(nt.id));
-                    const cfg = task && task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
-                    return (
-                      <div key={nt.id} className="flex items-start gap-2 p-2 rounded-lg"
-                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                        <span className="w-5 h-5 flex-shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white mt-0.5"
-                          style={{ background: `hsl(var(--${accent}))` }}>
-                          {i + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
-                            {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{nt.reason}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> Top 3 are chosen for deadline proximity and priority weight — {nextTasks.length > 1 ? `start with #1, then sequence through ${nextTasks.length} in order.` : 'clear it to lift the whole queue.'}
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      }
-      case 'ai-bottlenecks': {
-        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
-        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
-        const bottlenecks = Array.isArray(aiState.data?.bottlenecks) ? aiState.data.bottlenecks : null;
-        return (
-          <div className="mt-1">
-            {bottlenecks === null ? (
-              <AiWidgetStatus onRetry={loadAiWidgets} />
-            ) : bottlenecks.length === 0 ? (
-              <div className="text-center py-6">
-                <Siren className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
-                <p className="text-sm text-muted-foreground">No bottlenecks detected</p>
-                <p className="text-[11px] text-muted-foreground mt-1">AI sees no stalled work — your breakdowns are moving. Keep the daily close rate up.</p>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{bottlenecks.length} stalled · needs attention</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Pro flagged</span>
-                </div>
-                <div className="space-y-1.5">
-                  {bottlenecks.map((bn: { id: string; reason: string }) => {
-                    const task = board.tasks.find(t => String(t.id) === String(bn.id));
-                    return (
-                      <div key={bn.id} className="p-2 rounded-lg"
-                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                        <div className="flex items-center gap-2">
-                          <Siren className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
-                          <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600">Stalled</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground leading-snug mt-1 pl-5">{bn.reason}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> {bottlenecks.length} tasks are stalled — they have breakdown items untouched for 7+ days. Restart one today or cut it to clear the drag on completion.
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      }
-      case 'ai-weekly': {
-        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
-        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
-        const summary = aiState.data?.weeklySummary || null;
-        return (
-          <div className="mt-1">
-            {summary === null ? (
-              <AiWidgetStatus onRetry={loadAiWidgets} />
-            ) : (
-              <div className="space-y-3">
-                <div className="flex gap-2 p-3 rounded-lg"
-                  style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                  <MessageSquareText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: `hsl(var(--${accent}))` }} />
-                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{summary}</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro recap:</span> Week over week — {completedTasks.length} completed, {overdueTasks.length} still overdue, {streakDays}d streak. Next step: close the oldest overdue to tilt next week up.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{weeklyData.reduce((s, v) => s + v, 0)} this week</span>
-                    <span>·</span>
-                    <span>{completionRate}% completion</span>
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                {notes.map(n => (
+                  <button key={n.id} onClick={() => navigate('/notes')} className="w-full text-left p-2 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                    <p className="text-xs font-medium text-foreground truncate">{n.title || 'Untitled note'}</p>
+                    {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description}</p>}
+                    <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
+                  </button>
+                ))}
               </div>
             )}
           </div>
         );
       }
-      case 'energy':
-        return (
-          <EnergyTaskRecommendations
-            tasks={activeTasks}
-            tier={user?.subscriptionTier}
-            onUpgrade={() => navigate('/pricing')}
-          />
-        );
       default:
         return null;
     }
