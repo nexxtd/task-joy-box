@@ -180,7 +180,7 @@ function playCompletionBeep(ctx: AudioContext) {
 }
 
 const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
-  const { board, updateTask, addChecklist, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem, deleteChecklistItem } = useBoardContext();
+  const { board, updateTask, appendTaskImages, appendTaskAttachments, addChecklist, addChecklistItem: addChecklistItemToBoard, toggleChecklistItem, deleteChecklistItem } = useBoardContext();
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(propTask || null);
   const [activePill, setActivePill] = useState<Pill>('30');
@@ -395,9 +395,19 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const handleFinalComplete = useCallback(async () => {
     await saveSession(true);
+    if (selectedTask) {
+      const doneCol = board.columns.find(c => c.title.toLowerCase().trim() === 'done' || c.title.toLowerCase().trim() === 'completed');
+      updateTask(selectedTask.id, {
+        completed: true,
+        completedAt: new Date().toISOString(),
+        status: 'completed',
+        ...(doneCol ? { columnId: doneCol.id } : {}),
+      });
+    }
     setShowDetailDialog(false);
+    setShowCompletionDialog(false);
     document.dispatchEvent(new CustomEvent('closeDeepFocus'));
-  }, [saveSession]);
+  }, [saveSession, selectedTask, board.columns, updateTask]);
 
   const handleBackToCompletion = useCallback(() => {
     setShowDetailDialog(false);
@@ -407,9 +417,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const handleAnotherSession = useCallback(async () => {
     await saveSession(false);
     setShowCompletionDialog(false);
-    const secs = getDurationSecs(activePill, customMinutes);
+    const secs = getDurationSecs(activePill ?? '30', customMinutes);
     setTimeLeft(secs);
     setTotalSecs(secs);
+    totalSecsRef.current = secs;
+    startedAtRef.current = null;
+    setIsRunning(false);
   }, [activePill, customMinutes, getDurationSecs, saveSession]);
 
   const selectPill = useCallback((pill: Pill) => {
@@ -584,17 +597,16 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     input.value = '';
     setUploadingFiles(true);
     try {
-      const base = [...(selectedTask.attachments || [])];
+      const newAtts: any[] = [];
       for (const file of files) {
         const dataUrl = await fileToDataUrl(file);
-        const att = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
-        base.push(att);
-        updateTask(selectedTask.id, { attachments: [...base] });
+        newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
       }
+      if (newAtts.length) appendTaskAttachments(selectedTask.id, newAtts);
     } finally {
       setUploadingFiles(false);
     }
-  }, [selectedTask, updateTask]);
+  }, [selectedTask, appendTaskAttachments]);
 
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -603,17 +615,16 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     input.value = '';
     setUploadingImages(true);
     try {
-      const base = [...(selectedTask.images || [])];
+      const newImgs: any[] = [];
       for (const file of files) {
         const dataUrl = await fileToDataUrl(file);
-        const img = { id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() };
-        base.push(img);
-        updateTask(selectedTask.id, { images: [...base] });
+        newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
       }
+      if (newImgs.length) appendTaskImages(selectedTask.id, newImgs);
     } finally {
       setUploadingImages(false);
     }
-  }, [selectedTask, updateTask]);
+  }, [selectedTask, appendTaskImages]);
 
   const deleteAttachment = useCallback((id: string) => {
     if (!selectedTask) return;
@@ -1619,15 +1630,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 </button>
                 {!attachmentsCollapsed && (
                   <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-4">
+                    <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
+                      <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                           {uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                         </div>
                         <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
-                      <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="hidden" />
+                      <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </label>
                     {(selectedTask.attachments?.length ?? 0) > 0 ? (
                       <FreeAttachmentList
@@ -1658,15 +1669,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 </button>
                 {!imagesCollapsed && (
                   <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                      <div className="flex flex-col items-center justify-center py-4">
+                    <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
+                      <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                           {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                         </div>
                         <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
-                      <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="hidden" />
+                      <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </label>
                     {(selectedTask.images?.length ?? 0) > 0 ? (
                       <DraggableImageGrid
