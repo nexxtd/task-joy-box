@@ -108,6 +108,8 @@ const SettingsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -140,6 +142,7 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     fetchSettings();
     fetchUserTickets();
+    fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json()).then(d => { if (d?.user) setTwoFactorEnabled(!!d.user.twoFactorEnabled); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1298,6 +1301,27 @@ const SettingsPage: React.FC = () => {
           {activeSection === 'security' && (
             <div className="space-y-4">
               <h2 className="text-sm font-semibold text-foreground mb-3">Privacy & Security</h2>
+              <div className="p-4 bg-card border border-border rounded-xl flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Two-factor authentication (email)</p>
+                  <p className="text-xs text-muted-foreground">Get a 6-digit code by email on every login</p>
+                </div>
+                <button
+                  disabled={twoFactorLoading}
+                  onClick={async () => {
+                    setTwoFactorLoading(true);
+                    try {
+                      const res = await fetch('/api/auth/two-factor/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ enabled: !twoFactorEnabled }) });
+                      if (!res.ok) throw new Error('Failed');
+                      setTwoFactorEnabled(!twoFactorEnabled);
+                    } catch {} finally { setTwoFactorLoading(false); }
+                  }}
+                  className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 ${twoFactorEnabled ? 'bg-primary' : 'bg-muted'}`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full shadow absolute top-0.5 transition-transform ${twoFactorEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              {twoFactorEnabled && <p className="text-xs text-muted-foreground">A code will be emailed to you on next login. Check your inbox (and spam) for the 6-digit code.</p>}
               <div className="space-y-3">
                 {[
                   { label: 'Passwords hashed with bcrypt (cost 12)', desc: 'Your password is never stored in plain text' },

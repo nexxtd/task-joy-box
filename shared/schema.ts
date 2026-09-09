@@ -8,6 +8,7 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   googleId: text('google_id').unique(),
   emailVerified: boolean('email_verified').default(false).notNull(),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
   subscriptionTier: text('subscription_tier').default('free'),
@@ -38,6 +39,25 @@ export const emailVerificationTokens = pgTable('email_verification_tokens', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
   token: text('token').notNull().unique(),
+  expiresAt: text('expires_at').notNull(),
+  used: boolean('used').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const pendingSignups = pgTable('pending_signups', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  token: text('token').notNull().unique(),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const twoFactorTokens = pgTable('two_factor_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  code: text('code').notNull(),
   expiresAt: text('expires_at').notNull(),
   used: boolean('used').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),

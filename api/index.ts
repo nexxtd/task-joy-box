@@ -9,8 +9,12 @@ function ensureDatabase(): Promise<void> {
       try {
         const { pool } = await import('../server/db.js');
         await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE`);
         await pool.query(`CREATE TABLE IF NOT EXISTS email_verification_tokens (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens(user_id)`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS pending_signups (id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, password_hash TEXT NOT NULL, token TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS pending_signups_token_idx ON pending_signups(token)`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS two_factor_tokens (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, code TEXT NOT NULL, expires_at TEXT NOT NULL, used BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
       } catch {}
     });
   }

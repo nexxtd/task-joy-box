@@ -13,7 +13,7 @@ interface Props {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
 
 const LoginPage: React.FC<Props> = ({ initialToken }) => {
-  const { login, signup, loginWithGoogle, forgotPassword, resetPassword } = useAuth();
+  const { login, signup, loginWithGoogle, forgotPassword, resetPassword, verify2FA } = useAuth();
   const [mode, setMode] = useState<Mode>(initialToken ? 'reset' : 'login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -25,6 +25,9 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [resetToken, setResetToken] = useState(initialToken || '');
   const [success, setSuccess] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
+  const [twoFARequired, setTwoFARequired] = useState(false);
+  const [twoFAEmail, setTwoFAEmail] = useState('');
+  const [twoFACode, setTwoFACode] = useState('');
   const googleWrapRef = useRef<HTMLDivElement>(null);
   const [googleWidth, setGoogleWidth] = useState(360);
 
@@ -59,7 +62,13 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     setLoading(true);
     try {
       if (mode === 'login') {
-        await login(email, password);
+        const res: any = await login(email, password);
+        if (res?.requires2FA) {
+          setTwoFARequired(true);
+          setTwoFAEmail(res.email || email);
+          setSuccess(res.message || 'Code sent to your email.');
+          return;
+        }
       } else if (mode === 'signup') {
         if (password !== confirmPassword) throw new Error('Passwords do not match');
         const res: any = await signup(name, email, password);
@@ -85,9 +94,18 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
       const msg = err.message || 'Something went wrong';
       setError(msg);
       if (msg.toLowerCase().includes('verify')) setVerificationSent(true);
+      if (msg.toLowerCase().includes('two-factor') || msg.toLowerCase().includes('2fa')) { setTwoFARequired(true); setTwoFAEmail(email); }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handle2FASubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      await verify2FA(twoFAEmail, twoFACode);
+    } catch (err: any) { setError(err.message || 'Invalid code'); } finally { setLoading(false); }
   };
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -166,7 +184,20 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {twoFARequired && (
+              <form onSubmit={handle2FASubmit} className="space-y-4 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-foreground mb-1.5">Two-factor code</label>
+                  <input type="text" inputMode="numeric" value={twoFACode} onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" required className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  <p className="text-[11px] text-muted-foreground mt-1">Code sent to {twoFAEmail}</p>
+                </div>
+                <button type="submit" disabled={loading} className="w-full py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg disabled:opacity-50">{loading ? 'Verifying...' : 'Verify code'}</button>
+                <button type="button" onClick={() => setTwoFARequired(false)} className="w-full text-xs text-muted-foreground underline">Back to login</button>
+              </form>
+            )}
+
+            {!twoFARequired && (
+              <form onSubmit={handleSubmit} className="space-y-4">
               {/* Name (signup only) */}
               {mode === 'signup' && (
                 <div>
@@ -273,9 +304,10 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
                 )}
               </button>
             </form>
+            )}
 
             {/* Google OAuth - only on login/signup */}
-            {(mode === 'login' || mode === 'signup') && (
+            {!twoFARequired && (mode === 'login' || mode === 'signup') && (
               <>
                 <div className="relative my-5">
                   <div className="absolute inset-0 flex items-center">

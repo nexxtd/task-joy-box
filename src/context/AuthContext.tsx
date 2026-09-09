@@ -14,12 +14,14 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  signup: (name: string, email: string, password: string) => Promise<any>;
   loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ message: string; resetToken?: string }>;
   resetPassword: (token: string, password: string) => Promise<void>;
+  verify2FA: (email: string, code: string) => Promise<void>;
+  toggle2FA: (enabled: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -149,8 +151,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    setUser(data.user);
-    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    if (data.requires2FA) return data;
+    if (data.user) {
+      setUser(data.user);
+      try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    }
     return data;
   }, []);
 
@@ -220,8 +225,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
+  const verify2FA = useCallback(async (email: string, code: string) => {
+    const data = await apiFetch('/api/auth/two-factor/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    setUser(data.user);
+    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    return data;
+  }, []);
+
+  const toggle2FA = useCallback(async (enabled: boolean) => {
+    const data = await apiFetch('/api/auth/two-factor/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ enabled }),
+    });
+    return data;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword, verify2FA, toggle2FA }}>
       {children}
     </AuthContext.Provider>
   );
