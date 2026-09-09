@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.5.0";
+export const APP_VERSION = "0.5.1";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.5.1",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: custom accent colour now requires Premium/Pro (free users see presets only)",
+      "Server now enforces premium for custom colours, fonts and themes",
+    ],
+  },
   {
     version: "0.5.0",
     date: "2026-09-09",
