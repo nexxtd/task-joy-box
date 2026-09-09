@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.6.0";
+export const APP_VERSION = "0.6.1";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.6.1",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: removed stray � character (encoding fix in Settings)",
+      "Email Notifications now really sends weekly AI summaries via Resend/SMTP",
+      "Weekly cron at Mondays 08:00 UTC via /api/cron/weekly-ai-summary (Vercel Cron)",
+      "Test your weekly email via GET /api/cron/weekly-ai-summary/test?email=you@example.com",
+    ],
+  },
   {
     version: "0.6.0",
     date: "2026-09-09",

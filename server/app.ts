@@ -38,6 +38,7 @@ import habitTemplatesRoutes from './routes/habitTemplates.js';
 import notificationsRoutes from './routes/notifications.js';
 import dashboardRoutes from './routes/dashboard.js';
 import documentsRoutes from './routes/documents.js';
+import cronRoutes from './routes/cron.js';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
 import { pool } from './db.js';
@@ -264,6 +265,7 @@ app.use('/api/habit-templates', habitTemplatesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/cron', cronRoutes);
 
 app.get('/api/health', async (_req, res) => {
   try {

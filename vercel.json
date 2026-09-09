@@ -6,5 +6,8 @@
   ],
   "functions": {
     "api/index.ts": { "maxDuration": 60 }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/weekly-ai-summary", "schedule": "0 8 * * 1" }
+  ]
 }
