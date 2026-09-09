@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.6.1";
+export const APP_VERSION = "0.6.2";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.6.2",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: delete account now works (cascading deletes for all user data)",
+      "All popups now in-app (no more native browser confirm/alert)",
+      "Delete Account uses in-app two-step confirmation modal",
+    ],
+  },
   {
     version: "0.6.1",
     date: "2026-09-09",

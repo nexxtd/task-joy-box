@@ -105,6 +105,9 @@ const SettingsPage: React.FC = () => {
   const [ticketTab, setTicketTab] = useState<'open' | 'resolved'>('open');
   const [ticketSearch, setTicketSearch] = useState('');
   const [ticketCategory, setTicketCategory] = useState('all');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -1118,16 +1121,7 @@ const SettingsPage: React.FC = () => {
                   Sign Out
                 </button>
                 <button
-                  onClick={async () => {
-                    if (!confirm('Delete your account? This will permanently delete all your tasks, notes, projects and settings. This cannot be undone.')) return;
-                    if (!confirm('Are you absolutely sure? Type OK to confirm.')) return;
-                    try {
-                      const res = await fetch('/api/auth/account', { method: 'DELETE', credentials: 'include' });
-                      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to delete');
-                      localStorage.clear();
-                      window.location.href = '/login';
-                    } catch (e: any) { alert(e.message || 'Failed to delete account'); }
-                  }}
+                  onClick={() => { setDeleteStep(1); setDeleteDialogOpen(true); }}
                   data-testid="button-delete-account"
                   className="px-4 py-2 text-sm text-white bg-destructive border border-destructive rounded-lg hover:bg-destructive/90 transition-colors flex items-center gap-2"
                 >
@@ -1135,6 +1129,41 @@ const SettingsPage: React.FC = () => {
                   Delete Account
                 </button>
               </div>
+              {deleteDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteDialogOpen(false)} />
+                  <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
+                    <h3 className="text-base font-bold text-foreground mb-2">{deleteStep === 1 ? 'Delete your account?' : 'Are you absolutely sure?'}</h3>
+                    <p className="text-sm text-muted-foreground mb-6">{deleteStep === 1 ? 'This will permanently delete all your tasks, notes, projects and settings. This cannot be undone.' : 'This is permanent and cannot be recovered. All your data will be erased.'}</p>
+                    <div className="flex gap-3 justify-end">
+                      <button onClick={() => setDeleteDialogOpen(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Cancel</button>
+                      {deleteStep === 1 ? (
+                        <button onClick={() => setDeleteStep(2)} className="px-4 py-2 text-sm bg-destructive text-white rounded-lg hover:bg-destructive/90">Delete</button>
+                      ) : (
+                        <button
+                          disabled={deleteLoading}
+                          onClick={async () => {
+                            setDeleteLoading(true);
+                            try {
+                              const res = await fetch('/api/auth/account', { method: 'DELETE', credentials: 'include' });
+                              const data = await res.json().catch(() => ({}));
+                              if (!res.ok) throw new Error(data.error || 'Failed to delete');
+                              localStorage.clear();
+                              window.location.href = '/login';
+                            } catch (e: any) {
+                              setDeleteLoading(false);
+                              console.error(e);
+                            }
+                          }}
+                          className="px-4 py-2 text-sm bg-destructive text-white rounded-lg hover:bg-destructive/90 disabled:opacity-50"
+                        >
+                          {deleteLoading ? 'Deleting...' : 'Confirm Delete'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

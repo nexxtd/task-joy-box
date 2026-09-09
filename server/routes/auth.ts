@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import { db } from '../db.js';
+import { pool } from '../db.js';
 import { users, passwordResetTokens, emailVerificationTokens, userSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
@@ -348,14 +349,45 @@ router.post('/logout', (_req, res: Response) => {
 });
 
 router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
   try {
-    const userId = req.userId!;
-    await db.delete(users).where(eq(users.id, userId));
+    await pool.query('BEGIN');
+    const tables = [
+      'email_verification_tokens', 'password_reset_tokens', 'sessions', 'user_settings',
+      'board_snapshots', 'note_snapshots', 'goal_snapshots', 'habit_snapshots',
+      'task_tag_assignments', 'note_tag_assignments', 'goal_tag_assignments', 'habit_tag_assignments',
+      'tags', 'notes', 'goals', 'habits', 'documents', 'deep_focus_sessions',
+      'support_tickets', 'ticket_messages', 'pending_user_changes', 'user_notifications',
+      'activity_logs', 'energy_logs', 'ai_requests', 'google_calendar_tokens',
+      'dashboard_widget_usage', 'project_members', 'workspace_members', 'organization_members',
+      'group_members', 'task_templates', 'note_templates', 'goal_templates', 'habit_templates',
+      'project_chat_messages', 'chat_messages', 'milestones', 'board_snapshots'
+    ];
+    for (const tbl of tables) {
+      try { await pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]); } catch {}
+      try { await pool.query(`DELETE FROM ${tbl} WHERE owner_id = $1`, [userId]); } catch {}
+      try { await pool.query(`DELETE FROM ${tbl} WHERE sender_id = $1`, [userId]); } catch {}
+      try { await pool.query(`DELETE FROM ${tbl} WHERE assigned_to_user_id = $1`, [userId]); } catch {}
+      try { await pool.query(`DELETE FROM ${tbl} WHERE created_by_user_id = $1`, [userId]); } catch {}
+    }
+    try { await pool.query('DELETE FROM projects WHERE owner_id = $1', [userId]); } catch {}
+    try { await pool.query('DELETE FROM workspaces WHERE owner_id = $1', [userId]); } catch {}
+    try { await pool.query('DELETE FROM organizations WHERE owner_id = $1', [userId]); } catch {}
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    await pool.query('COMMIT');
     res.clearCookie('token');
     res.json({ message: 'Account deleted' });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Failed to delete account' });
+    try { await pool.query('ROLLBACK'); } catch {}
+    console.error('delete account failed', e);
+    try {
+      await db.delete(users).where(eq(users.id, userId));
+      res.clearCookie('token');
+      return res.json({ message: 'Account deleted' });
+    } catch (e2) {
+      console.error(e2);
+      res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+    }
   }
 });
 
