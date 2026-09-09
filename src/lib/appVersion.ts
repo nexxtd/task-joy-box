@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.5.1";
+export const APP_VERSION = "0.5.2";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.5.2",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: signup 500 on Vercel — ensure email verification table exists",
+      "Fix: silence AbortError spam on visibility sync (4 contexts)",
+      "Google sign-in init warning is harmless (StrictMode double mount)",
+    ],
+  },
   {
     version: "0.5.1",
     date: "2026-09-09",

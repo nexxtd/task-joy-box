@@ -225,8 +225,8 @@ export const HabitsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               }
             }
           }
-        } catch (err) {
-          console.error('Failed to sync on visibility change:', err);
+        } catch (err: any) {
+          if (err?.name !== 'AbortError') console.error('Failed to sync on visibility change:', err);
         }
         if (loading) setLoading(false);
       }

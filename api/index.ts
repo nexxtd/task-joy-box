@@ -4,12 +4,15 @@ import { initDatabase, initDatabasePoolOnly } from '../server/init-db.js';
 let dbInit: Promise<void> | null = null;
 
 function ensureDatabase(): Promise<void> {
-  // Vercel serverless functions have tight execution limits — running the
-  // full idempotent schema pass on every cold start can exceed them. Tables
-  // already exist (created via Render/boot), so on Vercel we only verify the
-  // connection instead of re-running every CREATE/ALTER check.
   if (process.env.VERCEL === '1') {
-    return initDatabasePoolOnly();
+    return initDatabasePoolOnly().then(async () => {
+      try {
+        const { pool } = await import('../server/db.js');
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS email_verification_tokens (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE, expires_at TEXT NOT NULL, used BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens(user_id)`);
+      } catch {}
+    });
   }
   if (!dbInit) {
     dbInit = initDatabase().catch((err: any) => {

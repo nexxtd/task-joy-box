@@ -252,8 +252,8 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               }
             }
           }
-        } catch (err) {
-          console.error('Failed to sync on visibility change:', err);
+        } catch (err: any) {
+          if (err?.name !== 'AbortError') console.error('Failed to sync on visibility change:', err);
         }
         if (loading) setLoading(false);
       }
