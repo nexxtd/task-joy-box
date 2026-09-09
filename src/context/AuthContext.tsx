@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { APP_VERSION } from '@/lib/appVersion';
 
 interface AuthUser {
   id: number;
@@ -94,6 +95,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
+    try {
+      const stored = localStorage.getItem('app_version');
+      if (stored !== APP_VERSION) {
+        const hadSession = !!localStorage.getItem('auth_user_cache');
+        if (stored !== null && hadSession) {
+          try { localStorage.setItem('whats_new_pending', APP_VERSION); } catch {}
+          try { localStorage.removeItem('auth_user_cache'); } catch {}
+          setUser(null);
+          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+        }
+        try { localStorage.setItem('app_version', APP_VERSION); } catch {}
+        if (stored !== null && hadSession) {
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {}
     let cancelled = false;
     const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 1500);
     refreshUserData().finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });

@@ -32,6 +32,8 @@ import Tutorial from "@/pages/Tutorial";
 import NotFound from "@/pages/NotFound";
 import WhiteboardPage from "@/pages/WhiteboardPage";
 import Documents from "@/pages/Documents";
+import WhatsNew from "@/pages/WhatsNew";
+import WhatsNewModal from "@/components/WhatsNewModal";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
@@ -179,6 +181,7 @@ function ProtectedRoutes() {
             <Notifier />
             <AppearanceSync />
             <EnergyPopup />
+            <WhatsNewModal />
             {shouldShowTutorial && <Suspense fallback={null}><Tutorial /></Suspense>}
             {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
             <Routes>
@@ -192,6 +195,7 @@ function ProtectedRoutes() {
                 <Route path="/goals" element={<Suspense fallback={<PageLoader />}><Goals /></Suspense>} />
                 <Route path="/habits" element={<Suspense fallback={<PageLoader />}><Habits /></Suspense>} />
                 <Route path="/documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
+                <Route path="/whats-new" element={<Suspense fallback={<PageLoader />}><WhatsNew /></Suspense>} />
                 <Route path="/support" element={<Suspense fallback={<PageLoader />}><Support /></Suspense>} />
                 <Route path="/collaboration" element={<Suspense fallback={<PageLoader />}><Collaboration /></Suspense>} />
                 <Route path="/ai-chat" element={<Suspense fallback={<PageLoader />}><AIChat /></Suspense>} />
