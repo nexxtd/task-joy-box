@@ -7,6 +7,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash'),
   avatarUrl: text('avatar_url'),
   googleId: text('google_id').unique(),
+  emailVerified: boolean('email_verified').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
   subscriptionTier: text('subscription_tier').default('free'),
@@ -25,6 +26,15 @@ export const sessions = pgTable('sessions', {
 });
 
 export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  token: text('token').notNull().unique(),
+  expiresAt: text('expires_at').notNull(),
+  used: boolean('used').default(false).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const emailVerificationTokens = pgTable('email_verification_tokens', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
   token: text('token').notNull().unique(),

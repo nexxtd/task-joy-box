@@ -4,11 +4,12 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import { db } from '../db.js';
-import { users, passwordResetTokens, userSettings } from '../../shared/schema.js';
+import { users, passwordResetTokens, emailVerificationTokens, userSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
+import { sendEmail, verificationEmailHtml, resetEmailHtml } from '../lib/email.js';
 
 const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch' };
 function languageNameFromCode(code: string): string {
@@ -74,6 +75,15 @@ router.post('/signup', async (req: Request, res: Response) => {
     const [user] = await db.insert(users).values(insertValues as any).returning();
     await db.insert(userSettings).values({ userId: user.id, language: defaultLanguage }).onConflictDoNothing();
 
+    try {
+      const vToken = crypto.randomBytes(32).toString('hex');
+      const vExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await db.insert(emailVerificationTokens).values({ userId: user.id, token: vToken, expiresAt: vExpiresAt });
+      const frontend = process.env.FRONTEND_URL || process.env.BACKEND_URL || 'http://localhost:5173';
+      const link = `${frontend.replace(/\/$/, '')}/verify-email?token=${vToken}`;
+      await sendEmail({ to: email, subject: 'Verify your email — MyPlanner', html: verificationEmailHtml(name, link), text: `Hi ${name}, verify your email: ${link}` });
+    } catch (e) { console.error('verification email failed', e); }
+
     await issueToken(res, user.id, user.email);
     res.json({
       user: {
@@ -81,10 +91,12 @@ router.post('/signup', async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        emailVerified: (user as any).emailVerified ?? false,
         subscriptionTier: user.subscriptionTier || 'free',
         subscriptionStatus: user.subscriptionStatus || 'inactive',
-        isAdmin: isAdmin(user.email),  // Use the imported function
+        isAdmin: isAdmin(user.email),
       },
+      message: 'Account created. Please check your email to verify your address.',
     });
   } catch (e) {
     console.error(e);
@@ -122,9 +134,10 @@ router.post('/login', async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        emailVerified: (user as any).emailVerified ?? false,
         subscriptionTier: user.subscriptionTier || 'free',
         subscriptionStatus: user.subscriptionStatus || 'inactive',
-        isAdmin: isAdmin(user.email),  // Use the imported function
+        isAdmin: isAdmin(user.email),
       },
     });
   } catch (e: any) {
@@ -167,13 +180,16 @@ router.post('/google', async (req: Request, res: Response) => {
       // Create new user if doesn't exist
       const trialDays = await getSettingNumber('trial_days', 0);
       const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
-      const googleInsert: Record<string, any> = { name, email, googleId, avatarUrl };
+      const googleInsert: Record<string, any> = { name, email, googleId, avatarUrl, emailVerified: true };
       if (trialDays > 0) googleInsert.subscriptionStatus = 'trialing';
       [user] = await db.insert(users).values(googleInsert as any).returning();
       await db.insert(userSettings).values({ userId: user.id, language: defaultLanguage }).onConflictDoNothing();
-    } else if (!user.googleId) {
-      // Update existing user with Google ID if not already set
-      await db.update(users).set({ googleId, avatarUrl }).where(eq(users.id, user.id));
+    } else {
+      const updates: Record<string, any> = {};
+      if (!user.googleId) updates.googleId = googleId;
+      if (avatarUrl && user.avatarUrl !== avatarUrl) updates.avatarUrl = avatarUrl;
+      if (!(user as any).emailVerified) updates.emailVerified = true;
+      if (Object.keys(updates).length) await db.update(users).set(updates).where(eq(users.id, user.id));
     }
 
     await issueToken(res, user.id, user.email);
@@ -183,9 +199,10 @@ router.post('/google', async (req: Request, res: Response) => {
         name: user.name || name,
         email: user.email,
         avatarUrl: avatarUrl || user.avatarUrl,
+        emailVerified: true,
         subscriptionTier: user.subscriptionTier || 'free',
         subscriptionStatus: user.subscriptionStatus || 'inactive',
-        isAdmin: isAdmin(user.email),  // Use the imported function
+        isAdmin: isAdmin(user.email),
       },
     });
   } catch (e: any) {
@@ -214,6 +231,12 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     await db.insert(passwordResetTokens).values({ userId: user.id, token, expiresAt });
+
+    try {
+      const frontend = process.env.FRONTEND_URL || process.env.BACKEND_URL || 'http://localhost:5173';
+      const link = `${frontend.replace(/\/$/, '')}/reset-password?token=${token}`;
+      await sendEmail({ to: email, subject: 'Reset your password — MyPlanner', html: resetEmailHtml(user.name || email, link), text: `Hi ${user.name || email}, reset your password: ${link}` });
+    } catch (e) { console.error('reset email failed', e); }
 
     const shouldExposeResetToken =
       process.env.NODE_ENV !== 'production' && process.env.EXPOSE_RESET_TOKEN === 'true';
@@ -265,15 +288,56 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
         name: user.name,
         email: user.email,
         avatarUrl: user.avatarUrl,
+        emailVerified: (user as any).emailVerified ?? false,
         subscriptionTier: user.subscriptionTier || 'free',
         subscriptionStatus: user.subscriptionStatus || 'inactive',
-        isAdmin: isAdmin(user.email),  // Use the imported function
+        isAdmin: isAdmin(user.email),
       },
     });
   } catch (e) {
     console.error('Error in /api/auth/me:', e);
     res.status(500).json({ error: 'Server error' });
   }
+});
+
+router.post('/verify-email', async (req: Request, res: Response) => {
+  try {
+    const token = sanitize(req.body.token || req.query.token as string || '');
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    const [record] = await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.token, token)).limit(1);
+    if (!record || record.used || new Date(record.expiresAt) < new Date()) return res.status(400).json({ error: 'Invalid or expired token' });
+    await db.update(users).set({ emailVerified: true } as any).where(eq(users.id, record.userId));
+    await db.update(emailVerificationTokens).set({ used: true }).where(eq(emailVerificationTokens.id, record.id));
+    res.json({ message: 'Email verified successfully' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.get('/verify-email', async (req: Request, res: Response) => {
+  const token = sanitize((req.query.token as string) || '');
+  if (!token) return res.status(400).send('Missing token');
+  const [record] = await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.token, token)).limit(1);
+  if (!record || record.used || new Date(record.expiresAt) < new Date()) return res.status(400).send('Invalid or expired token');
+  await db.update(users).set({ emailVerified: true } as any).where(eq(users.id, record.userId));
+  await db.update(emailVerificationTokens).set({ used: true }).where(eq(emailVerificationTokens.id, record.id));
+  const frontend = process.env.FRONTEND_URL || '/';
+  return res.redirect(`${frontend.replace(/\/$/, '')}/verify-email?success=1`);
+});
+
+router.post('/resend-verification', async (req: Request, res: Response) => {
+  try {
+    const email = sanitize(req.body.email || '').toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!user) return res.json({ message: 'If that email exists, a verification link has been sent.' });
+    if ((user as any).emailVerified) return res.json({ message: 'Email already verified' });
+    const vToken = crypto.randomBytes(32).toString('hex');
+    const vExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await db.insert(emailVerificationTokens).values({ userId: user.id, token: vToken, expiresAt: vExpiresAt });
+    const frontend = process.env.FRONTEND_URL || process.env.BACKEND_URL || 'http://localhost:5173';
+    const link = `${frontend.replace(/\/$/, '')}/verify-email?token=${vToken}`;
+    await sendEmail({ to: email, subject: 'Verify your email — MyPlanner', html: verificationEmailHtml(user.name, link), text: `Verify: ${link}` });
+    res.json({ message: 'If that email exists, a verification link has been sent.' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
 router.post('/logout', (_req, res: Response) => {

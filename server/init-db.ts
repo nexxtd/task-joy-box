@@ -738,7 +738,22 @@ export async function initDatabase() {
     // --- USER PROFILE COLUMNS ---
     await addColumnIfNotExists('users', 'location', 'TEXT');
     await addColumnIfNotExists('users', 'last_active_at', 'TIMESTAMP');
+    await addColumnIfNotExists('users', 'email_verified', 'BOOLEAN DEFAULT FALSE');
     console.log('User profile columns verified');
+
+    // --- EMAIL VERIFICATION TOKENS ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS email_verification_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        used BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens(user_id);`);
+    console.log('Email verification tokens table verified');
 
     // --- DASHBOARD WIDGET USAGE TABLE ---
     await pool.query(`

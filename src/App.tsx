@@ -33,6 +33,7 @@ import NotFound from "@/pages/NotFound";
 import WhiteboardPage from "@/pages/WhiteboardPage";
 import Documents from "@/pages/Documents";
 import WhatsNew from "@/pages/WhatsNew";
+import VerifyEmail from "@/pages/VerifyEmail";
 import WhatsNewModal from "@/components/WhatsNewModal";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
@@ -241,7 +242,10 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <ProtectedRoutes />
+              <Routes>
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/*" element={<ProtectedRoutes />} />
+              </Routes>
             </BrowserRouter>
           </TooltipProvider>
         </QueryClientProvider>

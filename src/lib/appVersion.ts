@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.5.0";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.5.0",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Email verification on signup with confirmation link",
+      "Password reset now sends email via SMTP or Resend",
+      "New /verify-email page to confirm address",
+    ],
+  },
   {
     version: "0.4.0",
     date: "2026-09-09",
