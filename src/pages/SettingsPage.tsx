@@ -108,6 +108,7 @@ const SettingsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
 
@@ -1124,7 +1125,7 @@ const SettingsPage: React.FC = () => {
                   Sign Out
                 </button>
                 <button
-                  onClick={() => { setDeleteStep(1); setDeleteDialogOpen(true); }}
+                  onClick={() => { setDeleteStep(1); setDeleteError(''); setDeleteDialogOpen(true); }}
                   data-testid="button-delete-account"
                   className="px-4 py-2 text-sm text-white bg-destructive border border-destructive rounded-lg hover:bg-destructive/90 transition-colors flex items-center gap-2"
                 >
@@ -1137,7 +1138,8 @@ const SettingsPage: React.FC = () => {
                   <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteDialogOpen(false)} />
                   <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
                     <h3 className="text-base font-bold text-foreground mb-2">{deleteStep === 1 ? 'Delete your account?' : 'Are you absolutely sure?'}</h3>
-                    <p className="text-sm text-muted-foreground mb-6">{deleteStep === 1 ? 'This will permanently delete all your tasks, notes, projects and settings. This cannot be undone.' : 'This is permanent and cannot be recovered. All your data will be erased.'}</p>
+                    <p className="text-sm text-muted-foreground mb-4">{deleteStep === 1 ? 'This will permanently delete all your tasks, notes, projects and settings. This cannot be undone.' : 'This is permanent and cannot be recovered. All your data will be erased.'}</p>
+                    {deleteError && <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"><p className="text-sm text-destructive">{deleteError}</p></div>}
                     <div className="flex gap-3 justify-end">
                       <button onClick={() => setDeleteDialogOpen(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted">Cancel</button>
                       {deleteStep === 1 ? (

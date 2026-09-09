@@ -459,27 +459,20 @@ router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) =
   const userId = req.userId!;
   try {
     await pool.query('BEGIN');
-    const tables = [
-      'email_verification_tokens', 'password_reset_tokens', 'sessions', 'user_settings',
-      'board_snapshots', 'note_snapshots', 'goal_snapshots', 'habit_snapshots',
-      'task_tag_assignments', 'note_tag_assignments', 'goal_tag_assignments', 'habit_tag_assignments',
-      'tags', 'notes', 'goals', 'habits', 'documents', 'deep_focus_sessions',
-      'support_tickets', 'ticket_messages', 'pending_user_changes', 'user_notifications',
-      'activity_logs', 'energy_logs', 'ai_requests', 'google_calendar_tokens',
-      'dashboard_widget_usage', 'project_members', 'workspace_members', 'organization_members',
-      'group_members', 'task_templates', 'note_templates', 'goal_templates', 'habit_templates',
-      'project_chat_messages', 'chat_messages', 'milestones', 'board_snapshots'
-    ];
-    for (const tbl of tables) {
-      try { await pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]); } catch {}
-      try { await pool.query(`DELETE FROM ${tbl} WHERE owner_id = $1`, [userId]); } catch {}
-      try { await pool.query(`DELETE FROM ${tbl} WHERE sender_id = $1`, [userId]); } catch {}
-      try { await pool.query(`DELETE FROM ${tbl} WHERE assigned_to_user_id = $1`, [userId]); } catch {}
-      try { await pool.query(`DELETE FROM ${tbl} WHERE created_by_user_id = $1`, [userId]); } catch {}
-    }
-    try { await pool.query('DELETE FROM projects WHERE owner_id = $1', [userId]); } catch {}
-    try { await pool.query('DELETE FROM workspaces WHERE owner_id = $1', [userId]); } catch {}
-    try { await pool.query('DELETE FROM organizations WHERE owner_id = $1', [userId]); } catch {}
+    const byUserId = ['email_verification_tokens','password_reset_tokens','pending_signups','two_factor_tokens','sessions','user_settings','board_snapshots','note_snapshots','goal_snapshots','habit_snapshots','tags','notes','goals','habits','documents','deep_focus_sessions','support_tickets','pending_user_changes','user_notifications','activity_logs','energy_logs','ai_requests','google_calendar_tokens','dashboard_widget_usage','task_templates','note_templates','goal_templates','habit_templates','project_chat_messages'];
+    const byOwnerId = ['projects','workspaces','organizations'];
+    const byMember = ['project_members','workspace_members','organization_members','group_members'];
+    const bySender = ['ticket_messages','chat_messages'];
+    await Promise.all([
+      ...byUserId.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]).catch(()=>{})),
+      ...byOwnerId.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE owner_id = $1`, [userId]).catch(()=>{})),
+      ...byMember.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]).catch(()=>{})),
+      ...bySender.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE sender_id = $1`, [userId]).catch(()=>{})),
+      pool.query('DELETE FROM task_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
+      pool.query('DELETE FROM note_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
+      pool.query('DELETE FROM goal_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
+      pool.query('DELETE FROM habit_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
+    ]);
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     await pool.query('COMMIT');
     res.clearCookie('token');
@@ -488,7 +481,7 @@ router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) =
     try { await pool.query('ROLLBACK'); } catch {}
     console.error('delete account failed', e);
     try {
-      await db.delete(users).where(eq(users.id, userId));
+      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
       res.clearCookie('token');
       return res.json({ message: 'Account deleted' });
     } catch (e2) {

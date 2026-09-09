@@ -32,7 +32,7 @@ export const useAuth = () => {
   return ctx;
 };
 
-async function apiFetch(path: string, options?: RequestInit, timeoutMs = 3000) {
+async function apiFetch(path: string, options?: RequestInit, timeoutMs = 8000) {
   const controller = new AbortController();
   const tid = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUserData = useCallback(async () => {
     try {
-      const data = await apiFetch('/api/auth/me');
+      const data = await apiFetch('/api/auth/me', undefined, 8000);
       if (data && typeof data.user === 'object' && data.user !== null) {
         setUser(data.user);
         try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
@@ -91,19 +91,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
     } catch (error: any) {
-      if (error?.message === 'Not authenticated') {
-        try {
-          localStorage.removeItem('auth_user_cache');
-          localStorage.removeItem('accentColor');
-          localStorage.removeItem('accentHsl');
-        } catch {}
-        try {
-          document.body.style.fontFamily = '';
-          const r = document.documentElement.style;
-          r.setProperty('--primary', '0 0% 0%');
-          r.setProperty('--ring', '0 0% 0%');
-        } catch {}
-        setUser(null);
+      if (error?.message === 'Not authenticated' || error?.message === 'Request timed out') {
+        if (error?.message === 'Not authenticated') {
+          try {
+            localStorage.removeItem('auth_user_cache');
+            localStorage.removeItem('accentColor');
+            localStorage.removeItem('accentHsl');
+          } catch {}
+          try {
+            document.body.style.fontFamily = '';
+            const r = document.documentElement.style;
+            r.setProperty('--primary', '0 0% 0%');
+            r.setProperty('--ring', '0 0% 0%');
+          } catch {}
+          setUser(null);
+        }
         return null;
       }
       console.error('Error fetching user info:', error);

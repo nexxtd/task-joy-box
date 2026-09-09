@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.7.0";
+export const APP_VERSION = "0.7.1";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.7.1",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: pending signup now correctly creates user on verification with trial handling",
+      "2FA email code now logs to server and falls back when Resend domain not verified",
+      "Settings 2FA toggle now reflects real status from /me",
+    ],
+  },
   {
     version: "0.7.0",
     date: "2026-09-09",
