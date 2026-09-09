@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.5.2";
+export const APP_VERSION = "0.5.3";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.5.3",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: /api/auth/me now returns 200 with null when logged out (no more 401 spam)",
+      "Fix: silence AuthContext error log for expected Not authenticated",
+      "Fix: COOP warning is harmless — Google GSI postMessage blocked is expected",
+    ],
+  },
   {
     version: "0.5.2",
     date: "2026-09-09",

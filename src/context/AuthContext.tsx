@@ -88,7 +88,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try { localStorage.removeItem('auth_user_cache'); } catch {}
         return null;
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === 'Not authenticated') {
+        try { localStorage.removeItem('auth_user_cache'); } catch {}
+        setUser(null);
+        return null;
+      }
       console.error('Error fetching user info:', error);
       return null;
     }

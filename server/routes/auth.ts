@@ -273,13 +273,20 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+router.get('/me', async (req: Request, res: Response) => {
   try {
-    const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+    const token = (req as any).cookies?.token || req.headers.authorization?.replace('Bearer ', '');
+    if (!token) return res.json({ user: null });
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) return res.json({ user: null });
+    let payload: any;
+    try { payload = jwt.verify(token, jwtSecret) as any; } catch { return res.json({ user: null }); }
+    const userId = payload.userId;
+    if (!userId) return res.json({ user: null });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
-      // Clear the invalid token cookie and return unauthorized
       res.clearCookie('token');
-      return res.status(401).json({ user: null });
+      return res.json({ user: null });
     }
     
     res.json({
