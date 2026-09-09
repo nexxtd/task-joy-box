@@ -161,6 +161,27 @@ function ProtectedRoutes() {
 
   if (!user) return <LoginPage />;
 
+  if ((user as any).emailVerified === false) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm text-center">
+          <h1 className="text-lg font-bold text-foreground mb-2">Verify your email</h1>
+          <p className="text-sm text-muted-foreground mb-6">We sent a verification link to <span className="font-medium text-foreground">{user.email}</span>. Please check your inbox and click the link to activate your account. The link expires in 24 hours.</p>
+          <button
+            onClick={async () => {
+              await fetch('/api/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user.email }) });
+              alert('Verification email resent if your address is registered.');
+            }}
+            className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-medium mb-3"
+          >
+            Resend verification email
+          </button>
+          <button onClick={() => { localStorage.removeItem('auth_user_cache'); window.location.href = '/'; }} className="text-xs text-muted-foreground underline">Sign out</button>
+        </div>
+      </div>
+    );
+  }
+
   if (maintenance.maintenance_mode && !user.isAdmin) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">

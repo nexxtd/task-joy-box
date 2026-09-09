@@ -84,19 +84,10 @@ router.post('/signup', async (req: Request, res: Response) => {
       await sendEmail({ to: email, subject: 'Verify your email — MyPlanner', html: verificationEmailHtml(name, link), text: `Hi ${name}, verify your email: ${link}` });
     } catch (e) { console.error('verification email failed', e); }
 
-    await issueToken(res, user.id, user.email);
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        emailVerified: (user as any).emailVerified ?? false,
-        subscriptionTier: user.subscriptionTier || 'free',
-        subscriptionStatus: user.subscriptionStatus || 'inactive',
-        isAdmin: isAdmin(user.email),
-      },
-      message: 'Account created. Please check your email to verify your address.',
+    res.status(201).json({
+      message: 'Account created. Please check your email to verify your address. Click the link in the email to activate your account.',
+      email,
+      requiresVerification: true,
     });
   } catch (e) {
     console.error(e);
@@ -116,6 +107,10 @@ router.post('/login', async (req: Request, res: Response) => {
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+
+    if (!(user as any).emailVerified && !user.googleId) {
+      return res.status(403).json({ error: 'Please verify your email before logging in. Check your inbox for the verification link.', code: 'EMAIL_NOT_VERIFIED', email: user.email });
+    }
 
     // Trial enforcement: once the trial window has passed, fall back to free/inactive.
     const trialDays = await getSettingNumber('trial_days', 0);

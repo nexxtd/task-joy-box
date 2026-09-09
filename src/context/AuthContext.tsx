@@ -90,7 +90,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error: any) {
       if (error?.message === 'Not authenticated') {
-        try { localStorage.removeItem('auth_user_cache'); } catch {}
+        try {
+          localStorage.removeItem('auth_user_cache');
+          localStorage.removeItem('accentColor');
+          localStorage.removeItem('accentHsl');
+        } catch {}
+        try {
+          document.body.style.fontFamily = '';
+          const r = document.documentElement.style;
+          r.setProperty('--primary', '0 0% 0%');
+          r.setProperty('--ring', '0 0% 0%');
+        } catch {}
         setUser(null);
         return null;
       }
@@ -106,7 +116,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const hadSession = !!localStorage.getItem('auth_user_cache');
         if (stored !== null && hadSession) {
           try { localStorage.setItem('whats_new_pending', APP_VERSION); } catch {}
-          try { localStorage.removeItem('auth_user_cache'); } catch {}
+          try {
+            localStorage.removeItem('auth_user_cache');
+            localStorage.removeItem('accentColor');
+            localStorage.removeItem('accentHsl');
+          } catch {}
+          try {
+            document.body.style.fontFamily = '';
+            const r = document.documentElement.style;
+            r.setProperty('--primary', '0 0% 0%');
+            r.setProperty('--ring', '0 0% 0%');
+          } catch {}
           setUser(null);
           fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
         }
@@ -140,8 +160,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
     });
-    setUser(data.user);
-    try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    if (data.requiresVerification) return data;
+    if (data.user) {
+      setUser(data.user);
+      try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    }
     return data;
   }, []);
 
@@ -157,7 +180,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = useCallback(async () => {
-    try { localStorage.removeItem('auth_user_cache'); } catch {}
+    try {
+      localStorage.removeItem('auth_user_cache');
+      localStorage.removeItem('accentColor');
+      localStorage.removeItem('accentHsl');
+      localStorage.removeItem('font');
+      localStorage.removeItem('theme');
+    } catch {}
+    try {
+      document.body.style.fontFamily = '';
+      const r = document.documentElement.style;
+      r.setProperty('--primary', '0 0% 0%');
+      r.setProperty('--ring', '0 0% 0%');
+      r.setProperty('--sidebar-primary', '0 0% 0%');
+      r.setProperty('--sidebar-ring', '0 0% 0%');
+    } catch {}
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch (error) {

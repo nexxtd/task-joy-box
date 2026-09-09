@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.5.3";
+export const APP_VERSION = "0.6.0";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.6.0",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Fix: accent color no longer persists on login page after logout",
+      "Fix: signup now requires email verification before login",
+      "Login now blocks unverified accounts and offers resend link",
+      "Verification wall shown for logged-in unverified users",
+    ],
+  },
   {
     version: "0.5.3",
     date: "2026-09-09",

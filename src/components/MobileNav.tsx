@@ -49,6 +49,7 @@ const MobileNav: React.FC = () => {
       <div className="md:hidden fixed top-4 left-4 z-50">
         <button
           onClick={() => setOpen(true)}
+          aria-label="Open navigation menu"
           className="p-2 bg-card border border-border rounded-lg shadow-lg"
         >
           <Menu className="w-5 h-5" />
@@ -70,6 +71,7 @@ const MobileNav: React.FC = () => {
               </div>
               <button
                 onClick={() => setOpen(false)}
+                aria-label="Close navigation menu"
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-4 h-4" />

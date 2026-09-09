@@ -71,6 +71,7 @@ const AppSidebar: React.FC = () => {
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
           data-testid="button-collapse-sidebar"
         >
@@ -166,6 +167,7 @@ const AppSidebar: React.FC = () => {
                 <button
                   onClick={logout}
                   title={T.sign_out}
+                  aria-label={T.sign_out}
                   data-testid="button-logout"
                   className="text-muted-foreground hover:text-destructive transition-colors"
                 >
@@ -184,7 +186,7 @@ const AppSidebar: React.FC = () => {
           <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">{t('Whiteboard coming soon')}</h3>
-              <button onClick={() => setShowWhiteboardModal(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+              <button onClick={() => setShowWhiteboardModal(false)} aria-label="Close dialog" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

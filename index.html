@@ -22,8 +22,14 @@
   <script>
     (function () {
       try {
+        var hasAuth = !!localStorage.getItem('auth_user_cache');
         var theme = localStorage.getItem('theme');
         if (theme === 'dark') document.documentElement.classList.add('dark');
+        if (!hasAuth) {
+          localStorage.removeItem('accentHsl');
+          localStorage.removeItem('accentColor');
+          return;
+        }
         var hsl = localStorage.getItem('accentHsl');
         if (hsl) {
           var rootStyle = document.documentElement.style;

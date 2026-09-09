@@ -77,6 +77,7 @@ export const NotificationBell: React.FC = () => {
     <>
       <button
         onClick={() => setOpen(true)}
+        aria-label={count ? `${count} pending notifications` : 'No notifications'}
         className="relative p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
         title={count ? `${count} pending approval${count>1?'s':''}` : 'No notifications'}
       >
@@ -95,7 +96,7 @@ export const NotificationBell: React.FC = () => {
               <h4 className="text-sm font-bold">Notifications</h4>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{count} pending</span>
-                <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                <button onClick={() => setOpen(false)} aria-label="Close notifications" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>

@@ -24,6 +24,7 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [loading, setLoading] = useState(false);
   const [resetToken, setResetToken] = useState(initialToken || '');
   const [success, setSuccess] = useState('');
+  const [verificationSent, setVerificationSent] = useState(false);
   const googleWrapRef = useRef<HTMLDivElement>(null);
   const [googleWidth, setGoogleWidth] = useState(360);
 
@@ -42,16 +43,31 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     setSuccess('');
   }, [mode]);
 
+  const handleResendVerification = async () => {
+    setError(''); setSuccess('');
+    try {
+      const res = await fetch('/api/auth/resend-verification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to resend');
+      setSuccess(data.message || 'Verification email resent. Check your inbox.');
+    } catch (err: any) { setError(err.message || 'Failed to resend'); }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(''); setSuccess('');
     setLoading(true);
     try {
       if (mode === 'login') {
         await login(email, password);
       } else if (mode === 'signup') {
         if (password !== confirmPassword) throw new Error('Passwords do not match');
-        await signup(name, email, password);
+        const res: any = await signup(name, email, password);
+        if (res?.requiresVerification) {
+          setVerificationSent(true);
+          setSuccess(res.message || 'Account created. Please check your email to verify your address.');
+          return;
+        }
       } else if (mode === 'forgot') {
         const res = await forgotPassword(email);
         setSuccess(res.message || 'Check your email for a reset link.');
@@ -66,7 +82,9 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
         setTimeout(() => setMode('login'), 2000);
       }
     } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+      const msg = err.message || 'Something went wrong';
+      setError(msg);
+      if (msg.toLowerCase().includes('verify')) setVerificationSent(true);
     } finally {
       setLoading(false);
     }
@@ -140,6 +158,11 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
             {error && (
               <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg mb-5">
                 <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+            {verificationSent && (mode === 'signup' || mode === 'login') && (
+              <div className="mb-4 text-center">
+                <button type="button" onClick={handleResendVerification} className="text-xs text-primary underline">Resend verification email</button>
               </div>
             )}
 
