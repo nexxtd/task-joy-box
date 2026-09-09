@@ -44,8 +44,6 @@ import ListView from '@/components/ListView';
 import { TaskFullView } from '@/pages/Tasks';
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
-import { useHabitsContext } from '@/context/HabitsContext';
-import { useGoalsContext } from '@/context/GoalsContext';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
@@ -97,8 +95,6 @@ const ROLE_OPTIONS = [
 
 const Projects: React.FC = () => {
   const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
-  const habitsCtx = useHabitsContext();
-  const goalsCtx = useGoalsContext();
   const notesCtx = useNotesContext();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -150,27 +146,21 @@ const Projects: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
 
-  // Unified "Add" popup (Task / Habit / Goal / Note)
+  // Unified "Add" popup (Task / Note)
   const [addPopupOpen, setAddPopupOpen] = useState(false);
-  const [addPopupType, setAddPopupType] = useState<'task' | 'habit' | 'goal' | 'note' | null>(null);
+  const [addPopupType, setAddPopupType] = useState<'task' | 'note' | null>(null);
   const [addExistingStep, setAddExistingStep] = useState(false);
   const [addExistingSelected, setAddExistingSelected] = useState<Set<string>>(() => new Set());
 
   const ADD_TYPES = [
     { id: 'task', label: 'Task', description: 'To-dos, projects and checklists', icon: CheckSquare, path: '/tasks' },
-    { id: 'habit', label: 'Habit', description: 'Daily routines and streaks', icon: Flame, path: '/habits' },
-    { id: 'goal', label: 'Goal', description: 'Progress towards targets', icon: Target, path: '/goals' },
     { id: 'note', label: 'Note', description: 'Free-form ideas and docs', icon: StickyNote, path: '/notes' },
   ] as const;
 
-  const existingItemsFor = (type: 'task' | 'habit' | 'goal' | 'note') => {
+  const existingItemsFor = (type: 'task' | 'note') => {
     const all = type === 'task'
       ? board.tasks
-      : type === 'habit'
-        ? habitsCtx.board.tasks
-        : type === 'goal'
-          ? goalsCtx.board.tasks
-          : notesCtx.board.tasks;
+      : notesCtx.board.tasks;
     return all.filter(t => t.projectId !== selectedProject?.id);
   };
 
@@ -185,11 +175,7 @@ const Projects: React.FC = () => {
     if (!selectedProject) return;
     const update = addPopupType === 'task'
       ? updateTask
-      : addPopupType === 'habit'
-        ? habitsCtx.updateTask
-        : addPopupType === 'goal'
-          ? goalsCtx.updateTask
-          : notesCtx.updateTask;
+      : notesCtx.updateTask;
     addExistingSelected.forEach(id => update(id, { projectId: selectedProject.id, projectName: selectedProject.name }));
     const count = addExistingSelected.size;
     toast({ title: count > 1 ? `${count} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });

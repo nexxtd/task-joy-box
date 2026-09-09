@@ -85,7 +85,7 @@ const Pricing: React.FC = () => {
         'Basic calendar view',
         'Cloud sync across devices',
         'Manual progress tracking',
-        'Simple notes section and goals',
+        'Simple notes section',
       ],
     },
     {
@@ -101,7 +101,6 @@ const Pricing: React.FC = () => {
         'Unlimited tasks and projects',
         'Auto-schedule calendar system',
         'Smart reminders and notifications',
-        'Dedicated habit tracker',
         'Cloud-synced notes section',
         'Custom task categories and labels',
         'Full cloud synchronisation',
@@ -124,11 +123,9 @@ const Pricing: React.FC = () => {
         'AI Task Builder',
         'AI Task Prioritisation',
         'Advanced analytics and productivity tracking',
-        'Goal tracking with progress charts',
         'Full team and family collaboration',
         'Personalised themes',
         'Priority 24/7 support',
-        'Energy tracker',
       ],
     },
   ];

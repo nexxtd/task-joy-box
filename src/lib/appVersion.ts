@@ -1,4 +1,4 @@
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.4.0";
 export const APP_BUILD_DATE = "2026-09-09";
 
 export interface ChangelogEntry {
@@ -9,6 +9,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.4.0",
+    date: "2026-09-09",
+    title: "What's New",
+    changes: [
+      "Goals, Habits and Whiteboard removed everywhere including tutorial and help",
+      "Support guides and pricing now reflect Tasks, Notes, Tags and Projects only",
+      "Projects add menu now shows only Tasks and Notes",
+    ],
+  },
   {
     version: "0.3.0",
     date: "2026-09-09",

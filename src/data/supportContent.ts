@@ -10,24 +10,14 @@ export const FAQS = [
     answer: 'Navigate to the Calendar page from the sidebar. Any task that has a due date will automatically appear on the calendar on the correct day. You can click an empty slot to add a new time block, drag existing tasks to reschedule them, and switch between day, week, and month views. Connect Google Calendar from Settings > Calendar to sync your events two-ways.',
   },
   {
-    id: 'set-goal',
-    question: 'How do I set a goal?',
-    answer: 'Go to the Goals page and click "New Goal". Fill in the title, a short description, your numeric target (e.g. 100), the unit (e.g. pages, km, sessions), a category, and a timeframe. Once created, you can add sub-goals to break the objective down, link board tasks to it, and update your progress manually as you work towards it.',
-  },
-  {
     id: 'deep-focus',
     question: 'What is deep focus?',
     answer: 'Deep Focus is a distraction-free work mode tied to a specific task. Open any task card and click "Start Deep Focus" to enter a full-screen timer session. The screen clears of all other distractions and counts your focused time. When you finish or pause, the session is automatically saved to your History under Settings so you can review your focused work over time.',
   },
   {
-    id: 'how-habits-work',
-    question: 'How do habits work?',
-    answer: 'On the Habits page you create daily habits with a title, category, and colour. Each day you mark a habit complete by clicking the day tile — this builds your streak counter. You can set a daily time commitment in minutes and a total duration in days (e.g. a 30-day challenge). Habits that are overdue are highlighted so you never lose track of your progress.',
-  },
-  {
     id: 'free-vs-premium',
     question: 'What is the difference between free and premium?',
-    answer: 'Free users get full access to tasks, calendar, goals, habits, notes, and the Kanban board. Pro users unlock AI-powered features (task builder, insights), custom themes, accent colours, and advanced font options. Premium users get everything in Pro plus priority support, team collaboration workspaces, and full access to all future features. You can compare plans in detail on the Pricing page.',
+    answer: 'Free users get full access to tasks, calendar, notes, tags, projects and the Kanban board. Pro users unlock AI-powered features (task builder, insights), custom themes, accent colours, and advanced font options. Premium users get everything in Pro plus priority support, team collaboration workspaces, and full access to all future features. You can compare plans in detail on the Pricing page.',
   },
   {
     id: 'delete-row',
@@ -35,24 +25,9 @@ export const FAQS = [
     answer: 'On the Kanban board, hover over the column header you want to remove. A three-dot menu icon will appear — click it and select "Delete Column". You will be asked to confirm before anything is removed. Note that all tasks inside that column will also be deleted, so make sure to move any tasks you want to keep to another column first.',
   },
   {
-    id: 'create-whiteboard',
-    question: 'How do I create a whiteboard?',
-    answer: 'From the Projects page, click the Whiteboard option in the top navigation, then click "New Whiteboard". Give it a name and an optional description, then click Create. Inside the whiteboard canvas you can add sticky notes, text blocks, document blocks, images, shapes, task cards, tables, and links. Use the connector tool to draw arrows between any two items.',
-  },
-  {
     id: 'ai-assistant',
     question: 'How do I use the AI assistant?',
     answer: 'Open the AI Chat page from the sidebar (the sparkles icon). Type a message and press Send or hit Enter. My Planner can create new tasks directly on your board, update existing tasks, suggest priorities and schedules, and answer questions about your workload. You can also ask it to generate a daily plan or analyse your productivity patterns.',
-  },
-  {
-    id: 'track-habit',
-    question: 'How do I track a habit?',
-    answer: 'Go to the Habits page and find the habit you want to log. Click the tile for today to mark it as complete — the tile will fill in and your streak counter will increase. If you miss a day your streak resets to zero. You can scroll back to see previous weeks and check your history. The habit card always shows your current streak and total completions.',
-  },
-  {
-    id: 'connect-tasks-goals',
-    question: 'How do I connect tasks to goals?',
-    answer: 'Open the Goals page and click on a goal to expand it. In the goal detail panel, scroll to the "Linked Tasks" section and click "Link a task". A search panel will appear where you can find and attach tasks from any of your boards. Completing a linked task can count towards your goal progress automatically depending on your settings.',
   },
   {
     id: 'deep-focus-mode',
@@ -91,7 +66,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'gs-welcome',
         title: 'Welcome to My Planner',
-        content: 'My Planner is your all-in-one productivity platform. It combines tasks, calendar, goals, habits, notes, and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and goals sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial at any time from the Dashboard.',
+        content: 'My Planner is your all-in-one productivity platform. It combines tasks, calendar, notes, tags, projects and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and notes sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial at any time from the Dashboard.',
       },
       {
         id: 'gs-profile',
@@ -106,7 +81,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'gs-navigate',
         title: 'Navigating the app',
-        content: 'The left sidebar is the main navigation. Each icon represents a section:\n\n• Dashboard — your daily overview and energy summary\n• Tasks — your personal Kanban board\n• Projects — shared project boards for collaboration\n• Calendar — schedule view of all tasks with due dates\n• Goals — long-term objectives with progress tracking\n• Habits — daily habit tracker and streak counter\n• Notes — free-form notes with tags\n• Whiteboard — visual planning canvas\n• AI Chat — your My Planner AI assistant\n• Insights — productivity analytics\n• Support — FAQs, resources, and help tickets\n• Settings — preferences and account management',
+        content: 'The left sidebar is the main navigation. Each icon represents a section:\n\n• Dashboard — your daily overview and energy summary\n• Tasks — your personal Kanban board\n• Projects — shared project boards for collaboration\n• Calendar — schedule view of all tasks with due dates\n• Notes — free-form notes with tags\n• AI Chat — your My Planner AI assistant\n• Insights — productivity analytics\n• Support — FAQs, resources, and help tickets\n• Settings — preferences and account management',
       },
     ],
   },
@@ -189,48 +164,6 @@ export const RESOURCES: ResourceCategory[] = [
     ],
   },
   {
-    id: 'goals',
-    label: 'Goals',
-    guides: [
-      {
-        id: 'goals-create',
-        title: 'Creating and tracking goals',
-        content: 'Go to the Goals page and click "New Goal". Fill in:\n\n• Title — a clear name for your goal\n• Description — what success looks like\n• Target — the numeric target (e.g. 100)\n• Unit — the unit of measurement (pages, sessions, km)\n• Category — Personal, Work, Health, etc.\n• Timeframe — 1 week, 1 month, 3 months, 1 year\n\nOnce created, the goal shows a progress bar. Click "Update Progress" to record your latest number. The progress bar and percentage update automatically.',
-      },
-      {
-        id: 'goals-subgoals',
-        title: 'Adding sub-goals',
-        content: 'Sub-goals let you break a large objective into smaller milestones. Open a goal card and click "Add sub-goal". Give it a title and a numeric target.\n\nEach sub-goal has its own progress bar. Completing sub-goals contributes to the overall goal progress. You can have multiple sub-goals per goal.\n\nSub-goals are great for quarterly goals where each month is a milestone, or for project goals where each phase has its own target.',
-      },
-      {
-        id: 'goals-tasks',
-        title: 'Connecting tasks to goals',
-        content: 'You can link tasks from your boards to a specific goal. Open the goal and click "Link task" in the connected tasks section. Search for the task you want to attach.\n\nLinked tasks show up inside the goal view. When you complete a linked task it can be counted towards your goal progress. This helps you see exactly which daily work is contributing to your bigger objectives.\n\nTo unlink a task, open the goal and click the remove button next to the linked task.',
-      },
-    ],
-  },
-  {
-    id: 'habits',
-    label: 'Habits',
-    guides: [
-      {
-        id: 'habits-create',
-        title: 'Creating a new habit',
-        content: 'Go to the Habits page and click "New Habit". Fill in the habit title, choose a category (Health, Learning, Productivity, etc.), pick a colour, and optionally set:\n\n• Daily time — how many minutes per day this habit requires\n• Duration — total days to build the habit (e.g. 30, 60, 90 days)\n\nClick Save and your habit appears on the board ready for tracking. Habits are sorted by your preferred display order — you can drag them to reorder.',
-      },
-      {
-        id: 'habits-tracking',
-        title: 'Tracking daily habits',
-        content: 'Each habit card shows a grid of the past 7 days. Click the tile for today to mark the habit as complete. The tile fills in with the habit colour and your streak count increases by one.\n\nIf you miss a day, the tile stays empty and your streak resets to zero. You cannot backfill a missed day — habits are designed to build real daily consistency.\n\nTo edit a habit (title, category, colour, time), click the three-dot menu on the habit card and choose Edit.',
-      },
-      {
-        id: 'habits-streaks',
-        title: 'Understanding streaks',
-        content: 'Your streak is the number of consecutive days you have completed a habit without a gap. The streak counter appears prominently on each habit card.\n\nA streak of 7 or more days shows a fire icon. Your longest streak ever is also recorded even if your current streak has reset.\n\nBuilding a long streak creates momentum and shows you how consistent you have been. The habit tracker shows your overall completion rate as a percentage based on the past 30 days.',
-      },
-    ],
-  },
-  {
     id: 'notes',
     label: 'Notes',
     guides: [
@@ -279,7 +212,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'ai-chat',
         title: 'Using the AI assistant',
-        content: 'The My Planner AI assistant is available on the AI Chat page. Type any request in the chat input and press Send.\n\nExamples of what you can ask:\n• "Create a task to review the Q3 report by Friday, high priority"\n• "What are my most urgent tasks this week?"\n• "Move the design review task to In Progress"\n• "Generate a study plan for learning React in 30 days"\n\nThe AI remembers the context of your conversation within the session and can reference your existing tasks and goals.',
+        content: 'The My Planner AI assistant is available on the AI Chat page. Type any request in the chat input and press Send.\n\nExamples of what you can ask:\n• "Create a task to review the Q3 report by Friday, high priority"\n• "What are my most urgent tasks this week?"\n• "Move the design review task to In Progress"\n• "Generate a study plan for learning React in 30 days"\n\nThe AI remembers the context of your conversation within the session and can reference your existing tasks and notes.',
       },
       {
         id: 'ai-task-builder',
@@ -289,7 +222,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'ai-insights',
         title: 'AI insights and analysis',
-        content: 'The Insights page (available to Pro and Premium users) uses AI to analyse your productivity patterns. It looks at your task completion rates, focus session history, energy levels, and habit streaks to surface personalised recommendations.\n\nClick "Run Analysis" to get a fresh report. The AI will highlight what is going well, where you have blockers, and suggest specific changes to improve your workflow.\n\nInsights are generated fresh each time you run them so they always reflect your current situation.',
+        content: 'The Insights page (available to Pro and Premium users) uses AI to analyse your productivity patterns. It looks at your task completion rates, focus session history and project progress to surface personalised recommendations.\n\nClick "Run Analysis" to get a fresh report. The AI will highlight what is going well, where you have blockers, and suggest specific changes to improve your workflow.\n\nInsights are generated fresh each time you run them so they always reflect your current situation.',
       },
       {
         id: 'ai-schedule',
@@ -348,6 +281,4 @@ export const QUICK_LINKS: QuickLink[] = [
   { kind: 'guide', catId: 'projects', guideId: 'projects-columns', label: 'Managing board columns' },
   { kind: 'guide', catId: 'calendar', guideId: 'cal-google', label: 'Connect Google Calendar' },
   { kind: 'guide', catId: 'ai', guideId: 'ai-chat', label: 'Using the AI assistant' },
-  { kind: 'guide', catId: 'goals', guideId: 'goals-create', label: 'Creating and tracking goals' },
-  { kind: 'guide', catId: 'habits', guideId: 'habits-streaks', label: 'Understanding streaks' },
 ];

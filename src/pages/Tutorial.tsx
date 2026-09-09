@@ -32,7 +32,7 @@ const Tutorial: React.FC = () => {
     {
       id: 0,
       title: "Welcome to MyPlanner",
-      description: "Your intelligent productivity companion that helps you organize tasks, track goals, and optimize your workflow with AI-powered insights.",
+      description: "Your intelligent productivity companion that helps you organize tasks, notes and projects, and optimize your workflow with AI-powered insights.",
       icon: Sparkles,
       highlight: "dashboard"
     },
