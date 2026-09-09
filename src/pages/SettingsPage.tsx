@@ -3,7 +3,7 @@ import {
   Palette, Bell, Globe, Calendar, Battery,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2
 } from 'lucide-react';
 import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
@@ -778,7 +778,7 @@ const SettingsPage: React.FC = () => {
                 )}
                 {!isPaid && (
                   <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Premium Feature — upgrade to unlock Smart Alerts
+                    <Sparkles className="w-3 h-3" /> Premium Feature ï¿½ upgrade to unlock Smart Alerts
                   </p>
                 )}
               </div>
@@ -809,7 +809,7 @@ const SettingsPage: React.FC = () => {
                 </div>
                 {!isTopTier && (
                   <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Pro Feature — upgrade to unlock weekly AI emails
+                    <Sparkles className="w-3 h-3" /> Pro Feature ï¿½ upgrade to unlock weekly AI emails
                   </p>
                 )}
               </div>
@@ -880,7 +880,7 @@ const SettingsPage: React.FC = () => {
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
                       <SiGoogle className="w-4 h-4" />
-                      {calendarLoading ? 'Connecting…' : 'Connect Google Calendar'}
+                      {calendarLoading ? 'Connectingï¿½' : 'Connect Google Calendar'}
                     </button>
                   ) : (
                     <>
@@ -891,7 +891,7 @@ const SettingsPage: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                       >
                         <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing to Google…' : `Sync ${tasksWithDates} Task${tasksWithDates !== 1 ? 's' : ''} to GC`}
+                        {calendarLoading ? 'Syncing to Googleï¿½' : `Sync ${tasksWithDates} Task${tasksWithDates !== 1 ? 's' : ''} to GC`}
                       </button>
                       <button
                         onClick={syncFromGoogle}
@@ -900,7 +900,7 @@ const SettingsPage: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
                       >
                         <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing from Google…' : 'Import from Google Calendar'}
+                        {calendarLoading ? 'Syncing from Googleï¿½' : 'Import from Google Calendar'}
                       </button>
                       <button
                         onClick={disconnectCalendar}
@@ -929,7 +929,7 @@ const SettingsPage: React.FC = () => {
               <div className="bg-card border border-border rounded-2xl p-6">
                 <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Log how you're feeling at three daily checks — 8:00am, 12:00pm and 4:00pm.
+                  Log how you're feeling at three daily checks ï¿½ 8:00am, 12:00pm and 4:00pm.
                   Each answer is saved to your energy history, which MyPlanner uses to build your
                   energy profile: your peak hours, how consistent your energy is day to day, and
                   recommendations for scheduling demanding tasks during your high-energy periods
@@ -944,7 +944,7 @@ const SettingsPage: React.FC = () => {
                     Energy Tracker
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Log your energy at 8:00am, 12:00pm and 4:00pm. Disabling pauses the checks — they resume at the next due slot.
+                    Log your energy at 8:00am, 12:00pm and 4:00pm. Disabling pauses the checks ï¿½ they resume at the next due slot.
                   </p>
                 </div>
                 <div className={`p-5 flex items-center justify-between ${!isPaid && 'opacity-70'}`}>
@@ -957,8 +957,8 @@ const SettingsPage: React.FC = () => {
                       <p className="text-xs text-muted-foreground">
                         {isPaid
                           ? energyTrackerEnabled
-                            ? 'Pop-ups are enabled — log your energy at each check'
-                            : 'Pop-ups are paused — they resume at the next due slot'
+                            ? 'Pop-ups are enabled ï¿½ log your energy at each check'
+                            : 'Pop-ups are paused ï¿½ they resume at the next due slot'
                           : 'Upgrade to log your energy and unlock insights'}
                       </p>
                     </div>
@@ -981,7 +981,7 @@ const SettingsPage: React.FC = () => {
                 </div>
                 {!isPaid && (
                   <p className="px-5 pb-5 -mt-2 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Premium Feature — upgrade to enable the Energy Tracker
+                    <Sparkles className="w-3 h-3" /> Premium Feature ï¿½ upgrade to enable the Energy Tracker
                   </p>
                 )}
               </div>
@@ -1030,7 +1030,7 @@ const SettingsPage: React.FC = () => {
               {historyTab === 'deepfocus' && (
                 <div className="space-y-3">
                   {deepFocusLoading ? (
-                    <div className="text-sm text-muted-foreground py-4 text-center">Loading sessions…</div>
+                    <div className="text-sm text-muted-foreground py-4 text-center">Loading sessionsï¿½</div>
                   ) : deepFocusSessions.length === 0 ? (
                     <div className="text-center py-10">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
@@ -1117,6 +1117,23 @@ const SettingsPage: React.FC = () => {
                   <LogOut className="w-4 h-4" />
                   Sign Out
                 </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Delete your account? This will permanently delete all your tasks, notes, projects and settings. This cannot be undone.')) return;
+                    if (!confirm('Are you absolutely sure? Type OK to confirm.')) return;
+                    try {
+                      const res = await fetch('/api/auth/account', { method: 'DELETE', credentials: 'include' });
+                      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to delete');
+                      localStorage.clear();
+                      window.location.href = '/login';
+                    } catch (e: any) { alert(e.message || 'Failed to delete account'); }
+                  }}
+                  data-testid="button-delete-account"
+                  className="px-4 py-2 text-sm text-white bg-destructive border border-destructive rounded-lg hover:bg-destructive/90 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Account
+                </button>
               </div>
             </div>
           )}
@@ -1174,7 +1191,7 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={ticketSearch}
                       onChange={e => setTicketSearch(e.target.value)}
-                      placeholder="Search tickets…"
+                      placeholder="Search ticketsï¿½"
                       className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                     {ticketSearch && (
@@ -1255,7 +1272,7 @@ const SettingsPage: React.FC = () => {
               <div className="space-y-3">
                 {[
                   { label: 'Passwords hashed with bcrypt (cost 12)', desc: 'Your password is never stored in plain text' },
-                  { label: 'Session via httpOnly cookies', desc: 'JWT tokens are invisible to JavaScript — XSS protected' },
+                  { label: 'Session via httpOnly cookies', desc: 'JWT tokens are invisible to JavaScript ï¿½ XSS protected' },
                   { label: 'Google OAuth verified server-side', desc: 'Google sign-in tokens are verified server-side only' },
                   { label: 'Input validation on every route', desc: 'All inputs are validated and sanitized with Zod' },
                   { label: '10kb request body limit', desc: 'Prevents large payload denial-of-service attacks' },

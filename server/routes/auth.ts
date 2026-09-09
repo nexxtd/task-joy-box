@@ -343,9 +343,20 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
 });
 
 router.post('/logout', (_req, res: Response) => {
-  // Clear the JWT token cookie
   res.clearCookie('token');
   res.json({ message: 'Logged out' });
+});
+
+router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    await db.delete(users).where(eq(users.id, userId));
+    res.clearCookie('token');
+    res.json({ message: 'Account deleted' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
 });
 
 export default router;

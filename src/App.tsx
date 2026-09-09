@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -129,8 +129,16 @@ const Notifier = () => {
 
 const queryClient = new QueryClient();
 
+function PublicLogin() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (user) return <Navigate to="/" replace />;
+  return <LoginPage />;
+}
+
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
   useEffect(() => {
@@ -159,7 +167,7 @@ function ProtectedRoutes() {
     );
   }
 
-  if (!user) return <LoginPage />;
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
   if ((user as any).emailVerified === false) {
     return (
@@ -265,6 +273,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/login" element={<PublicLogin />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </BrowserRouter>
