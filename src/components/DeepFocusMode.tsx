@@ -590,6 +590,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const fileToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
 
+  const canUseServerApi = (taskId: string | number) => /^\d+$/.test(String(taskId));
+
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (!selectedTask || files.length === 0) return;
@@ -599,8 +601,25 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     try {
       const newAtts: any[] = [];
       for (const file of files) {
-        const dataUrl = await fileToDataUrl(file);
-        newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+        if (canUseServerApi(selectedTask.id)) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
+            if (res.ok) {
+              newAtts.push(await res.json());
+            } else {
+              const dataUrl = await fileToDataUrl(file);
+              newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+            }
+          } catch {
+            const dataUrl = await fileToDataUrl(file);
+            newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+          }
+        } else {
+          const dataUrl = await fileToDataUrl(file);
+          newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+        }
       }
       if (newAtts.length) appendTaskAttachments(selectedTask.id, newAtts);
     } finally {
@@ -617,8 +636,25 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     try {
       const newImgs: any[] = [];
       for (const file of files) {
-        const dataUrl = await fileToDataUrl(file);
-        newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+        if (canUseServerApi(selectedTask.id)) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
+            if (res.ok) {
+              newImgs.push(await res.json());
+            } else {
+              const dataUrl = await fileToDataUrl(file);
+              newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+            }
+          } catch {
+            const dataUrl = await fileToDataUrl(file);
+            newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+          }
+        } else {
+          const dataUrl = await fileToDataUrl(file);
+          newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+        }
       }
       if (newImgs.length) appendTaskImages(selectedTask.id, newImgs);
     } finally {
@@ -626,18 +662,24 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     }
   }, [selectedTask, appendTaskImages]);
 
-  const deleteAttachment = useCallback((id: string) => {
+  const deleteAttachment = useCallback(async (id: string) => {
     if (!selectedTask) return;
     updateTask(selectedTask.id, {
       attachments: (selectedTask.attachments || []).filter(a => a.id !== id),
     });
+    if (/^\d+$/.test(String(id))) {
+      try { await fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    }
   }, [selectedTask, updateTask]);
 
-  const deleteImage = useCallback((id: string) => {
+  const deleteImage = useCallback(async (id: string) => {
     if (!selectedTask) return;
     updateTask(selectedTask.id, {
       images: (selectedTask.images || []).filter(i => i.id !== id),
     });
+    if (/^\d+$/.test(String(id))) {
+      try { await fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    }
   }, [selectedTask, updateTask]);
 
   const handleDeepFocusReorder = useCallback((result: DropResult) => {
@@ -1644,7 +1686,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       <FreeAttachmentList
                         attachments={selectedTask.attachments || []}
                         onReorder={(newItems) => updateTask(selectedTask.id, { attachments: newItems })}
-                        onDelete={(id) => updateTask(selectedTask.id, { attachments: (selectedTask.attachments || []).filter(x=>x.id!==id) })}
+                        onDelete={(id) => deleteAttachment(id)}
                         taskId={selectedTask.id}
                         taskTitle={selectedTask.title}
                       />
@@ -1683,7 +1725,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       <DraggableImageGrid
                         images={selectedTask.images || []}
                         onReorder={(newItems) => updateTask(selectedTask.id, { images: newItems })}
-                        onRemove={(id) => updateTask(selectedTask.id, { images: (selectedTask.images || []).filter(x=>x.id!==id) })}
+                        onRemove={(id) => deleteImage(id)}
                       />
                     ) : null}
                   </div>

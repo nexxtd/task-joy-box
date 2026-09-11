@@ -222,23 +222,37 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
     }
   };
 
+  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0 || !isPremium) return;
     const input = e.currentTarget;
     setUploading(true);
     try {
-      const base = [...(task.attachments || [])];
+      const uploaded: typeof task.attachments = [];
       for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          const newAttachment = await res.json();
-          base.push(newAttachment);
-          updateTask(task.id, { attachments: [...base] });
+        if (canUseServerAttachmentApi) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+            if (res.ok) {
+              uploaded.push(await res.json());
+            } else {
+              const { fileToDataUrl } = await import('@/lib/fileDataUrl');
+              uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() } as any);
+            }
+          } catch {
+            const { fileToDataUrl } = await import('@/lib/fileDataUrl');
+            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() } as any);
+          }
+        } else {
+          const { fileToDataUrl } = await import('@/lib/fileDataUrl');
+          uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() } as any);
         }
       }
+      if (uploaded.length > 0) updateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
     } catch (error) {
       console.error('Error uploading file:', error);
     } finally {

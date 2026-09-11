@@ -437,38 +437,45 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [persist, logActivity]);
 
   const moveTask = useCallback((taskId: string, toColumnId: string, newOrder: number) => {
+    let moveText: string | null = null;
+    let movedSnapshot: Task | null = null;
     persist(b => {
       const task = b.tasks.find(t => t.id === taskId);
       if (!task) return b;
-      
+
       const toCol = b.columns.find(c => c.id === toColumnId);
       const fromCol = b.columns.find(c => c.id === task.columnId);
-      logActivity(taskId, `Moved from "${fromCol?.title || 'unknown'}" to "${toCol?.title || 'unknown'}"`);
+      moveText = `Moved from "${fromCol?.title || 'unknown'}" to "${toCol?.title || 'unknown'}"`;
       const isCompletedCol = toCol?.title.toLowerCase().trim() === 'completed';
-      
+
       const otherTasks = b.tasks.filter(t => t.id !== taskId);
-      const movedTask = { 
-        ...task, 
+      const movedTask = {
+        ...task,
         columnId: toColumnId,
         completed: isCompletedCol ? true : task.completed,
         completedAt: isCompletedCol && !task.completedAt ? new Date().toISOString() : task.completedAt,
       };
-      const colTasks = otherTasks.filter(t => t.columnId === toColumnId).sort((a, c) => a.order - c.order);
-      colTasks.splice(newOrder, 0, movedTask);
-      const reordered = colTasks.map((t, i) => ({ ...t, order: i }));
-      
-      let nextBoard = { 
-        ...b, 
-        tasks: otherTasks.filter(t => t.columnId !== toColumnId).concat(reordered) 
+      movedSnapshot = movedTask;
+      const destTasks = otherTasks.filter(t => t.columnId === toColumnId).sort((a, c) => a.order - c.order);
+      destTasks.splice(Math.max(0, Math.min(newOrder, destTasks.length)), 0, movedTask);
+      const reorderedDest = destTasks.map((t, i) => ({ ...t, order: i }));
+
+      const sourceTasks = otherTasks.filter(t => t.columnId === task.columnId && t.columnId !== toColumnId).sort((a, c) => a.order - c.order).map((t, i) => ({ ...t, order: i }));
+
+      const untouched = otherTasks.filter(t => t.columnId !== toColumnId && !(t.columnId === task.columnId && t.columnId !== toColumnId));
+      let nextBoard = {
+        ...b,
+        tasks: [...untouched, ...sourceTasks, ...reorderedDest]
       };
-      
-      const updatedTask = reordered.find(t => t.id === taskId);
+
+      const updatedTask = reorderedDest.find(t => t.id === taskId);
       if (updatedTask) {
         nextBoard = handleRecurrence(nextBoard, updatedTask, toColumnId);
       }
-      
+
       return nextBoard;
     });
+    if (moveText) logActivity(taskId, moveText);
   }, [persist, handleRecurrence, logActivity]);
 
   // Auto-delete completed tasks after 5 days

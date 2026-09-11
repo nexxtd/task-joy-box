@@ -4528,9 +4528,28 @@ export const TaskDropdownExpanded: React.FC<{
                       try {
                       const newImages: Attachment[] = [];
                       for (const file of files) {
-                        const fileUrl = await imageToDataUrl(file);
-                        const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                        newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                        if (canUseServerAttachmentApi) {
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+                            if (res.ok) {
+                              newImages.push(await res.json());
+                            } else {
+                              const fileUrl = await imageToDataUrl(file);
+                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                              newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                            }
+                          } catch {
+                            const fileUrl = await imageToDataUrl(file);
+                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          }
+                        } else {
+                          const fileUrl = await imageToDataUrl(file);
+                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                          newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                        }
                       }
                       onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
                       } finally {
@@ -4543,7 +4562,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <DraggableImageGrid
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) })}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                   />
                 )}
               </>
@@ -5524,10 +5543,29 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                       try {
                       const newImages: Attachment[] = [];
                       for (const file of files) {
-                      const fileUrl = await imageToDataUrl(file);
-                      const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                      newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                    }
+                        if (canUseServerAttachmentApi) {
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+                            if (res.ok) {
+                              newImages.push(await res.json());
+                            } else {
+                              const fileUrl = await imageToDataUrl(file);
+                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                              newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                            }
+                          } catch {
+                            const fileUrl = await imageToDataUrl(file);
+                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          }
+                        } else {
+                          const fileUrl = await imageToDataUrl(file);
+                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                          newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                        }
+                      }
                     onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
                       } finally {
                         setUploadingImages(false);
@@ -5539,7 +5577,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) })}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                 />
               )}
                 </>
