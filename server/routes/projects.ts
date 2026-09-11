@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { projectMembers, projects, users } from '../../shared/schema.js';
@@ -58,16 +58,53 @@ async function serializeProject(projectId: number) {
 
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const rows = await db
-      .select({
-        id: projects.id,
-      })
+    const memberships = await db
+      .select({ projectId: projectMembers.projectId })
       .from(projectMembers)
-      .innerJoin(projects, eq(projects.id, projectMembers.projectId))
       .where(eq(projectMembers.userId, req.userId!));
 
-    const serialised = (await Promise.all(rows.map(row => serializeProject(row.id).catch(() => null)))) as any;
-    res.json({ projects: serialised.filter(Boolean) });
+    const projectIds = [...new Set(memberships.map(m => m.projectId))];
+    if (projectIds.length === 0) return res.json({ projects: [] });
+
+    const [projectRows, memberRows] = await Promise.all([
+      db.select().from(projects).where(inArray(projects.id, projectIds)),
+      db.select({
+        projectId: projectMembers.projectId,
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: projectMembers.role,
+      })
+        .from(projectMembers)
+        .innerJoin(users, eq(users.id, projectMembers.userId))
+        .where(inArray(projectMembers.projectId, projectIds)),
+    ]);
+
+    const membersByProject = new Map<number, typeof memberRows>();
+    memberRows.forEach(m => {
+      const list = membersByProject.get(m.projectId) || [];
+      list.push(m);
+      membersByProject.set(m.projectId, list);
+    });
+
+    const projectById = new Map(projectRows.map(p => [p.id, p]));
+    const serialised = projectIds
+      .map(id => projectById.get(id))
+      .filter((p): p is typeof projectRows[number] => !!p)
+      .map(p => {
+        const members = membersByProject.get(p.id) || [];
+        return {
+          ...p,
+          members: members.map(member => ({
+            id: member.id,
+            name: member.name || member.email.split('@')[0],
+            email: member.email,
+            role: member.role as ProjectRole,
+          })),
+          memberCount: members.length,
+        };
+      });
+    res.json({ projects: serialised });
   } catch (error) {
     console.error('Get projects error:', error);
     res.status(500).json({ error: 'Failed to get projects' });
