@@ -6,6 +6,7 @@ import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority,
 import { fetchGoalTemplates as fetchTemplates, createGoalTemplate as createTemplate, updateGoalTemplate as updateTemplate, deleteGoalTemplate as deleteTemplateApi } from '@/services/goalTemplateService';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
+import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import {
@@ -2375,6 +2376,8 @@ const Tasks: React.FC = () => {
           onClose={() => setAddingTask(false)}
           initialValues={aiTaskDraft}
           defaultProjectId={createModalProjectId}
+          columnsOverride={board.columns}
+          onCreateItem={(columnId, title, details) => addTask(columnId, title, details)}
         />
       )}
 
@@ -3903,19 +3906,23 @@ export const TaskDropdownExpanded: React.FC<{
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
 
   // Added checklist states
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(new Set());
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
+  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
 
   // Added attachments/images states
-  const [imagesCollapsed, setImagesCollapsed] = useState(false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
+  useEffect(() => {
+    const prev = readTaskSections(task.id);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, collapsedLists: [...collapsedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, collapsedChecklists]);
   const [uploading, setUploading] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
 
@@ -4631,16 +4638,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
-  const [activityCollapsed, setActivityCollapsed] = useState(false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(false);
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(false);
+  const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(new Set());
+  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
+  useEffect(() => {
+    const prev = readTaskSections(task.id);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, collapsedChecklists]);
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;

@@ -3,6 +3,7 @@ import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import {
   Attachment,
+  Column,
   Label,
   LabelColor,
   LABEL_COLORS,
@@ -56,6 +57,8 @@ export type CreateTaskModalProps = {
   defaultProjectId?: number | null;
   initialValues?: CreateTaskInitialValues | null;
   initialAI?: boolean;
+  columnsOverride?: Column[];
+  onCreateItem?: (columnId: string, title: string, details: Partial<Task>) => void;
 };
 
 type ProjectMeta = {
@@ -139,8 +142,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   defaultProjectId,
   initialValues,
   initialAI,
+  columnsOverride,
+  onCreateItem,
 }) => {
   const { board, addTask, updateTask } = useBoardContext();
+  const availableColumns = columnsOverride ?? board.columns;
+  const createItem = onCreateItem ?? addTask;
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
@@ -488,7 +495,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    const targetColumnId = newTaskColumnId || board.columns[0]?.id;
+    const targetColumnId = newTaskColumnId || availableColumns[0]?.id;
     if (!targetColumnId) return;
 
     const taskId = crypto.randomUUID();
@@ -499,7 +506,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const existingImageIds = newTaskImages.filter(img => !img.fileUrl.startsWith('data:image')).map(img => img.id);
     const newImageFiles = newTaskImages.filter(img => img.fileUrl.startsWith('data:image'));
 
-    addTask(targetColumnId, newTaskTitle.trim(), {
+    createItem(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
       status: 'to_do',
@@ -567,7 +574,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         credentials: 'include',
         body: JSON.stringify({
           input: aiBuilderInput,
-          columns: board.columns.map(c => ({ id: c.id, title: c.title })),
+          columns: availableColumns.map(c => ({ id: c.id, title: c.title })),
           attachedFiles: newFiles.map(f => f.name),
           attachedImages: newTaskImages.map(img => img.fileName),
         }),
@@ -589,7 +596,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       setNewTaskDuration(data.duration || 60);
 
       if (data.group) {
-        const matchedCol = board.columns.find(c =>
+        const matchedCol = availableColumns.find(c =>
           c.title.toLowerCase() === data.group!.toLowerCase()
         );
         if (matchedCol) setNewTaskColumnId(matchedCol.id);
@@ -699,7 +706,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <SelectValue placeholder="Select column" />
                     </SelectTrigger>
                     <SelectContent>
-                      {board.columns
+                      {availableColumns
                         .filter(col => col.projectId === Number(newTaskProjectId))
                         .sort((a, b) => a.order - b.order)
                         .map(col => (
