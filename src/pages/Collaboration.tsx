@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ComingSoon from '@/components/shared/ComingSoon';
+import { ConfirmModal, PromptModal } from '@/components/shared/AppModal';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 
 interface TeamMember {
@@ -62,6 +63,11 @@ const Collaboration: React.FC = () => {
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'paypal'>('paypal');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [seatInfo, setSeatInfo] = useState<{ usedSeats: number; currentSeats: number } | null>(null);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [premiumInfo, setPremiumInfo] = useState<{ currentTier?: string } | null>(null);
+  const [addUserTarget, setAddUserTarget] = useState<{ teamId: string; userId: string } | null>(null);
 
   // Load user's workspace on component mount
   useEffect(() => {
@@ -211,9 +217,36 @@ const Collaboration: React.FC = () => {
     }
   };
 
-  const handleInviteMember = async () => {
-    const email = window.prompt('Enter teammate email');
-    if (!email) return;
+  const handleInviteMember = () => {
+    setInviteOpen(true);
+  };
+
+  const handleSeatUpgrade = async () => {
+    if (!workspace) return;
+    setSeatInfo(null);
+    const upgradeResponse = await fetch(`/api/workspace/workspace/${workspace.id}/billing/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        tier: workspace.seatTier || 'pro',
+        seats: workspace.seatCount + 1
+      }),
+    });
+
+    if (upgradeResponse.ok) {
+      const { url } = await upgradeResponse.json();
+      window.location.href = url;
+    } else {
+      toast({
+        title: 'Checkout failed',
+        description: 'Could not initiate checkout process',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const submitInvite = async (email: string) => {
     const normalized = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
       toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
@@ -249,34 +282,9 @@ const Collaboration: React.FC = () => {
           description: data.note || `${normalized} will be added when they register.`,
         });
       } else if (response.status === 402 && data.error === 'SEAT_LIMIT_REACHED') {
-        // Show seat limit dialog
-        const shouldUpgrade = window.confirm(
-          `You've used all ${data.usedSeats}/${data.currentSeats} seats. Add more seats to invite teammates.`
-        );
-
-        if (shouldUpgrade && workspace) {
-          // Open checkout for one more seat
-          const upgradeResponse = await fetch(`/api/workspace/workspace/${workspace.id}/billing/checkout`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              tier: workspace.seatTier || 'pro',
-              seats: workspace.seatCount + 1
-            }),
-          });
-
-          if (upgradeResponse.ok) {
-            const { url } = await upgradeResponse.json();
-            window.location.href = url;
-          } else {
-            toast({
-              title: 'Checkout failed',
-              description: 'Could not initiate checkout process',
-              variant: 'destructive'
-            });
-          }
-        }
+        // Show in-app seat limit dialog
+        setInviteOpen(false);
+        setSeatInfo({ usedSeats: data.usedSeats, currentSeats: data.currentSeats });
       } else {
         toast({
           title: 'Invite failed',
@@ -293,8 +301,11 @@ const Collaboration: React.FC = () => {
     }
   };
 
-  const handleCreateWorkspace = async () => {
-    const name = window.prompt('Enter workspace name:', 'My Workspace');
+  const handleCreateWorkspace = () => {
+    setWorkspaceOpen(true);
+  };
+
+  const submitWorkspace = async (name: string) => {
     if (!name || name.trim().length < 3) {
       toast({ title: 'Invalid name', description: 'Workspace name must be at least 3 characters.', variant: 'destructive' });
       return;
@@ -323,13 +334,9 @@ const Collaboration: React.FC = () => {
         setJoinedWorkspaceId(data.workspace.id);
         toast({ title: 'Workspace created', description: `You created "${data.workspace.name}"` });
       } else if (response.status === 402 && data.error === 'UPGRADE_REQUIRED') {
-        // Show upgrade prompt
-        const shouldUpgrade = window.confirm(
-          `Workspaces require a Premium subscription.\n\nCurrent tier: ${data.currentTier || 'Free'}\nRequired tier: Premium or higher\n\nClick OK to view pricing plans.`
-        );
-        if (shouldUpgrade) {
-          window.location.href = '/pricing';
-        }
+        // Show in-app upgrade prompt
+        setWorkspaceOpen(false);
+        setPremiumInfo({ currentTier: data.currentTier || 'Free' });
       } else if (response.status === 402 && data.error === 'SUBSCRIPTION_INACTIVE') {
         toast({
           title: 'Subscription inactive',
@@ -431,11 +438,11 @@ const Collaboration: React.FC = () => {
     }
   };
 
+  const requestAddUserToTeam = (teamId: string, userId: string) => {
+    setAddUserTarget({ teamId, userId });
+  };
+
   const handleAddUserToTeam = async (teamId: string, userId: string) => {
-    if (!window.confirm('Are you sure you want to add this user to the team?')) {
-      return;
-    }
-    
     try {
       const response = await fetch(`/api/workspace/workspace/${joinedWorkspaceId}/group/${teamId}/add-member`, { // Keep the API route name as group for now
         method: 'POST',
@@ -699,8 +706,8 @@ const Collaboration: React.FC = () => {
                                   <span className="text-sm">{member.name}</span>
                                 </div>
                                 {String(user?.id) === String(workspace.ownerId) && (
-                                  <button 
-                                    onClick={() => handleAddUserToTeam(team.id, member.id)}
+                                  <button
+                                    onClick={() => requestAddUserToTeam(team.id, member.id)}
                                     className="text-xs text-red-500 hover:underline"
                                   >
                                     Remove
@@ -712,7 +719,7 @@ const Collaboration: React.FC = () => {
                             {String(user?.id) === String(workspace.ownerId) && (
                               <div className="mt-3 pt-3 border-t border-border">
                                 <label className="text-xs text-muted-foreground block mb-1">Add member to team:</label>
-                                <Select onValueChange={(value) => handleAddUserToTeam(team.id, value)}>
+                                <Select onValueChange={(value) => requestAddUserToTeam(team.id, value)}>
                                   <SelectTrigger className="w-full text-xs bg-background border border-border rounded p-1.5 h-9">
                                     <SelectValue placeholder="Select a member" />
                                   </SelectTrigger>
@@ -879,6 +886,56 @@ const Collaboration: React.FC = () => {
           </div>
         )}
       </div>
+
+      <PromptModal
+        open={inviteOpen}
+        title="Invite teammate"
+        description="Enter your teammate's email address."
+        placeholder="teammate@example.com"
+        confirmLabel="Send invite"
+        icon={<div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><UserPlus className="w-5 h-5 text-primary" /></div>}
+        inputType="email"
+        onConfirm={(value) => { setInviteOpen(false); submitInvite(value); }}
+        onCancel={() => setInviteOpen(false)}
+      />
+      <ConfirmModal
+        open={!!seatInfo}
+        title="Seat limit reached"
+        description={seatInfo ? `You've used all ${seatInfo.usedSeats}/${seatInfo.currentSeats} seats. Add more seats to invite teammates?` : undefined}
+        confirmLabel="Add seat"
+        icon={<div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Users className="w-5 h-5 text-primary" /></div>}
+        onConfirm={handleSeatUpgrade}
+        onCancel={() => setSeatInfo(null)}
+      />
+      <PromptModal
+        open={workspaceOpen}
+        title="Create workspace"
+        description="Give your workspace a name (min. 3 characters)."
+        placeholder="My Workspace"
+        defaultValue="My Workspace"
+        confirmLabel="Create"
+        icon={<div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Building2 className="w-5 h-5 text-primary" /></div>}
+        onConfirm={(value) => { setWorkspaceOpen(false); submitWorkspace(value); }}
+        onCancel={() => setWorkspaceOpen(false)}
+      />
+      <ConfirmModal
+        open={!!premiumInfo}
+        title="Premium required"
+        description={`Workspaces require a Premium subscription.\n\nCurrent tier: ${premiumInfo?.currentTier || 'Free'}\nRequired tier: Premium or higher`}
+        confirmLabel="View pricing"
+        icon={<div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Sparkles className="w-5 h-5 text-primary" /></div>}
+        onConfirm={() => { setPremiumInfo(null); window.location.href = '/pricing'; }}
+        onCancel={() => setPremiumInfo(null)}
+      />
+      <ConfirmModal
+        open={!!addUserTarget}
+        title="Add user to team?"
+        description="Are you sure you want to add this user to the team?"
+        confirmLabel="Add user"
+        icon={<div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Users className="w-5 h-5 text-primary" /></div>}
+        onConfirm={() => { const t = addUserTarget; setAddUserTarget(null); if (t) handleAddUserToTeam(t.teamId, t.userId); }}
+        onCancel={() => setAddUserTarget(null)}
+      />
     </div>
   );
 };

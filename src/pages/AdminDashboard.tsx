@@ -1005,7 +1005,7 @@ if (loading && !stats) {
         {expanded && (
           <div className="ml-8 space-y-2 border-l-2 border-border/40 pl-4">
             {gCoupons.length === 0 && (
-              <p className="text-xs text-muted-foreground py-1 px-2">No coupons in this group yet â€” drag one here, or pick the group when creating a coupon.</p>
+              <p className="text-xs text-muted-foreground py-1 px-2">No coupons in this group yet — drag one here, or pick the group when creating a coupon.</p>
             )}
             {gCoupons.map(cup => renderCouponRow(cup))}
           </div>
@@ -1243,7 +1243,7 @@ if (loading && !stats) {
                   </div>
                   <div>
                     <h2 className="text-base font-bold">Promotions & Discounts</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">Create and manage active coupon codes. Drag to reorder â€” coupons stay with their group.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Create and manage active coupon codes. Drag to reorder — coupons stay with their group.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1366,7 +1366,7 @@ if (loading && !stats) {
                         <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                           <td className="px-6 py-3 font-medium">
                             <button onClick={() => handleViewUserData(u.id, true)} className="hover:text-primary transition-colors flex items-center gap-1 text-sm">
-                              {u.name || 'â€”'}
+                              {u.name || '—'}
                               <Eye className="w-3 h-3 opacity-50" />
                             </button>
                             {u.location && <p className="text-xs text-muted-foreground font-normal lg:hidden">{u.location}</p>}
@@ -1389,12 +1389,12 @@ if (loading && !stats) {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
-                            {u.createdAt ? format(new Date(u.createdAt), 'MMM dd, yyyy') : 'â€”'}
+                            {u.createdAt ? format(new Date(u.createdAt), 'MMM dd, yyyy') : '—'}
                           </td>
                           <td className="p-4 text-muted-foreground whitespace-nowrap">
-                            {u.lastActiveAt ? format(new Date(u.lastActiveAt), 'MMM dd, HH:mm') : 'â€”'}
+                            {u.lastActiveAt ? format(new Date(u.lastActiveAt), 'MMM dd, HH:mm') : '—'}
                           </td>
-                          <td className="p-4 text-muted-foreground hidden lg:table-cell">{u.location || 'â€”'}</td>
+                          <td className="p-4 text-muted-foreground hidden lg:table-cell">{u.location || '—'}</td>
                           <td className="p-4 text-right pr-8">
                             <div className="flex items-center justify-end gap-2">
                               <button
@@ -1540,7 +1540,7 @@ if (loading && !stats) {
                 <div className="min-w-0">
                   <h2 className="text-base font-bold">System Settings</h2>
                   <p className="text-sm text-muted-foreground mt-1 leading-relaxed max-w-2xl">
-                    Server-enforced controls â€” pricing, usage limits, signup rules and maintenance mode apply within seconds of saving. Changes are live on the pricing page immediately.
+                    Server-enforced controls — pricing, usage limits, signup rules and maintenance mode apply within seconds of saving. Changes are live on the pricing page immediately.
                   </p>
                   <div className="flex items-center gap-2 mt-3">
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
@@ -1700,7 +1700,7 @@ if (loading && !stats) {
                           {group.id === 'pricing' && (
                             <div className="mt-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/15 flex items-start gap-3">
                               <TrendingUp className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly â€” refresh the pricing page to see the new price.</p>
+                              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed"><span className="font-bold">Pricing is live:</span> the <span className="font-mono font-bold">/api/payment/pricing</span> endpoint reads these values with a 30s cache. Saving here clears the cache instantly — refresh the pricing page to see the new price.</p>
                             </div>
                           )}
                         </div>

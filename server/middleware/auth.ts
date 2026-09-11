@@ -1,9 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { db } from '../db.js';
+import { users } from '../../shared/schema.js';
+import { eq } from 'drizzle-orm';
 
 export interface AuthRequest extends Request {
   userId?: number;
   userEmail?: string;
+}
+
+const lastTouch = new Map<number, number>();
+const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+
+function touchLastActive(userId: number) {
+  const now = Date.now();
+  if (now - (lastTouch.get(userId) || 0) < TOUCH_INTERVAL_MS) return;
+  lastTouch.set(userId, now);
+  void db.update(users).set({ lastActiveAt: new Date() as any }).where(eq(users.id, userId)).catch(() => {});
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -26,6 +39,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     const payload = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { userId: number; email: string };
     req.userId = payload.userId;
     req.userEmail = payload.email;
+    touchLastActive(payload.userId);
     next();
   } catch (err) {
     res.clearCookie('token');

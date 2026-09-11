@@ -404,6 +404,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       status: users.subscriptionStatus,
       location: users.location,
       createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
       lastActiveAt: users.lastActiveAt,
       avatarUrl: users.avatarUrl,
     }).from(users).orderBy(desc(users.createdAt)).limit(200);
@@ -411,7 +412,7 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
     const usersWithLanguage = await Promise.all(allUsers.map(async u => {
       const [settings] = await db.select({ language: userSettings.language })
         .from(userSettings).where(eq(userSettings.userId, u.id)).limit(1);
-      return { ...u, language: settings?.language || 'en' };
+      return { ...u, lastActiveAt: u.lastActiveAt ?? u.updatedAt ?? u.createdAt, language: settings?.language || 'en' };
     }));
 
     res.json(usersWithLanguage);
