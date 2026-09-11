@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
@@ -3923,6 +3923,8 @@ export const TaskDropdownExpanded: React.FC<{
   const [uploadingImages, setUploadingImages] = useState(false);
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const taskRef = useRef(task);
+  taskRef.current = task;
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -4080,7 +4082,7 @@ export const TaskDropdownExpanded: React.FC<{
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
       }
     }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
+    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     setUploading(false);
     e.currentTarget.value = '';
   };
@@ -4551,7 +4553,7 @@ export const TaskDropdownExpanded: React.FC<{
                           newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
                         }
                       }
-                      onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
+                      onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
                       } finally {
                         setUploadingImages(false);
                       }
@@ -4647,6 +4649,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const taskRef = useRef(task);
+  taskRef.current = task;
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -4920,7 +4924,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
       }
     }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
+    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     setUploading(false);
     e.currentTarget.value = '';
   };
@@ -5566,7 +5570,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                           newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
                         }
                       }
-                    onUpdateTask(task.id, { images: [...(task.images || []), ...newImages] });
+                    onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
                       } finally {
                         setUploadingImages(false);
                       }

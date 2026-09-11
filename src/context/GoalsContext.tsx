@@ -233,6 +233,10 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!user) return;
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
+        if (dirtyRef.current) {
+          flushBoardSave();
+          return;
+        }
         try {
           const vc = new AbortController();
           const tid = setTimeout(() => vc.abort(), 4000);

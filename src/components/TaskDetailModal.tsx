@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
 import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical, Loader2 } from 'lucide-react';
@@ -223,6 +223,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   };
 
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const taskRef = useRef(task);
+  taskRef.current = task;
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -252,7 +254,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
           uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() } as any);
         }
       }
-      if (uploaded.length > 0) updateTask(task.id, { attachments: [...(task.attachments || []), ...uploaded] });
+      if (uploaded.length > 0) updateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     } catch (error) {
       console.error('Error uploading file:', error);
     } finally {
