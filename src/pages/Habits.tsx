@@ -2378,6 +2378,8 @@ const Tasks: React.FC = () => {
           defaultProjectId={createModalProjectId}
           columnsOverride={board.columns}
           onCreateItem={(columnId, title, details) => addTask(columnId, title, details)}
+          tasksOverride={board.tasks}
+          onUpdateItem={(taskId, updates) => updateTask(taskId, updates)}
         />
       )}
 
@@ -3930,6 +3932,29 @@ export const TaskDropdownExpanded: React.FC<{
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
+  useEffect(() => {
+    if (String(task.id).startsWith('template-edit-')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        const cur = taskRef.current;
+        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
+        const missing = rows.filter((r: any) => !known.has(String(r.id)));
+        if (missing.length === 0) return;
+        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
+        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
+        const updates: Partial<Task> = {};
+        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
+        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
+        onUpdateTask(task.id, updates);
+      } catch { /* offline - keep local state */ }
+    })();
+    return () => { cancelled = true; };
+  }, [task.id, onUpdateTask]);
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -4070,21 +4095,20 @@ export const TaskDropdownExpanded: React.FC<{
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
-      if (canUseServerAttachmentApi) {
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-          if (res.ok) {
-            uploaded.push(await res.json());
-          } else {
-            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-          }
-        } catch {
-          uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+      let saved = false;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+        if (res.ok) {
+          uploaded.push(await res.json());
+          saved = true;
         }
-      } else {
+      } catch { /* fall through to local copy */ }
+      if (!saved) {
+        try {
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+        } catch { /* skip unreadable file, keep the rest */ }
       }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
@@ -4535,27 +4559,25 @@ export const TaskDropdownExpanded: React.FC<{
                       try {
                         const newImages: Attachment[] = [];
                       for (const file of files) {
-                        if (canUseServerAttachmentApi) {
+                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+                        let saved = false;
+                        if (!isHeic) {
                           try {
                             const formData = new FormData();
                             formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
                             if (res.ok) {
                               newImages.push(await res.json());
-                            } else {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                              saved = true;
                             }
-                          } catch {
+                          } catch { /* fall through to local copy */ }
+                        }
+                        if (!saved) {
+                          try {
                             const fileUrl = await imageToDataUrl(file);
                             const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
                             newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          }
-                        } else {
-                          const fileUrl = await imageToDataUrl(file);
-                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                          newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          } catch { /* skip unreadable file, keep the rest */ }
                         }
                       }
                         onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
@@ -4658,6 +4680,29 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
+  useEffect(() => {
+    if (String(task.id).startsWith('template-edit-')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        const cur = taskRef.current;
+        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
+        const missing = rows.filter((r: any) => !known.has(String(r.id)));
+        if (missing.length === 0) return;
+        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
+        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
+        const updates: Partial<Task> = {};
+        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
+        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
+        onUpdateTask(task.id, updates);
+      } catch { /* offline - keep local state */ }
+    })();
+    return () => { cancelled = true; };
+  }, [task.id, onUpdateTask]);
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -4914,21 +4959,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
-      if (canUseServerAttachmentApi) {
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-          if (res.ok) {
-            uploaded.push(await res.json());
-          } else {
-            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-          }
-        } catch {
-          uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+      let saved = false;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+        if (res.ok) {
+          uploaded.push(await res.json());
+          saved = true;
         }
-      } else {
+      } catch { /* fall through to local copy */ }
+      if (!saved) {
+        try {
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+        } catch { /* skip unreadable file, keep the rest */ }
       }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
@@ -5554,27 +5598,25 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     try {
                       const newImages: Attachment[] = [];
                       for (const file of files) {
-                        if (canUseServerAttachmentApi) {
+                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+                        let saved = false;
+                        if (!isHeic) {
                           try {
                             const formData = new FormData();
                             formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
                             if (res.ok) {
                               newImages.push(await res.json());
-                            } else {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                              saved = true;
                             }
-                          } catch {
+                          } catch { /* fall through to local copy */ }
+                        }
+                        if (!saved) {
+                          try {
                             const fileUrl = await imageToDataUrl(file);
                             const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
                             newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          }
-                        } else {
-                          const fileUrl = await imageToDataUrl(file);
-                          const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                          newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          } catch { /* skip unreadable file, keep the rest */ }
                         }
                       }
                       onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });

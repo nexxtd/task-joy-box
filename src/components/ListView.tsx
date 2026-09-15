@@ -179,7 +179,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   const [isDragging, setIsDragging] = useState(false);
   const [preDragExpanded, setPreDragExpanded] = useState<string[] | null>(null);
 
-  useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
+  useEffect(() => { if (!isDragging) localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds, isDragging]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
 
   useEffect(() => {
@@ -623,7 +623,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                     }}
                   >
                     {(dropProvided) => (
-                      <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
+                      <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5 min-h-[40px]">
                         {columnActive.map((task, taskIndex) => (
                           <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
                             {(taskProvided, taskSnapshot) => (
@@ -634,36 +634,38 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                           </Draggable>
                         ))}
                         {dropProvided.placeholder}
-                        {columnCompleted.length > 0 && (
-                          <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
-                            <button
-                              onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
-                              className="w-full flex items-center justify-between px-4 py-3"
-                            >
-                              <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                                <CheckCircle2 className="w-4 h-4" />
-                                Completed ({columnCompleted.length})
-                              </span>
-                              {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                            </button>
-                            {!isCompletedCollapsed && (
-                              <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
-                                {columnCompleted.map(task => (
-                                  <CompletedTaskRow
-                                    key={task.id}
-                                    task={task}
-                                    onToggleComplete={toggleTaskCompletion}
-                                    onOpenTask={onTaskClick}
-                                    onDeleteTask={(t) => deleteTask(t.id)}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )}
                   </Droppable>
+                )}
+                {!isColumnCollapsed && columnCompleted.length > 0 && (
+                  <div className="pl-3 mt-1.5">
+                    <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
+                      <button
+                        onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
+                        className="w-full flex items-center justify-between px-4 py-3"
+                      >
+                        <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Completed ({columnCompleted.length})
+                        </span>
+                        {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                      </button>
+                      {!isCompletedCollapsed && (
+                        <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
+                          {columnCompleted.map(task => (
+                            <CompletedTaskRow
+                              key={task.id}
+                              task={task}
+                              onToggleComplete={toggleTaskCompletion}
+                              onOpenTask={onTaskClick}
+                              onDeleteTask={(t) => deleteTask(t.id)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             );

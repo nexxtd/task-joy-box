@@ -59,6 +59,8 @@ export type CreateTaskModalProps = {
   initialAI?: boolean;
   columnsOverride?: Column[];
   onCreateItem?: (columnId: string, title: string, details: Partial<Task>) => void;
+  tasksOverride?: Task[];
+  onUpdateItem?: (taskId: string, updates: Partial<Task>) => void;
 };
 
 type ProjectMeta = {
@@ -144,10 +146,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   initialAI,
   columnsOverride,
   onCreateItem,
+  tasksOverride,
+  onUpdateItem,
 }) => {
   const { board, addTask, updateTask } = useBoardContext();
   const availableColumns = columnsOverride ?? board.columns;
   const createItem = onCreateItem ?? addTask;
+  const existingTasks = tasksOverride ?? board.tasks;
+  const updateExisting = onUpdateItem ?? updateTask;
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
@@ -219,7 +225,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const allTags = useMemo<Label[]>(() => {
     const byName = new Map<string, Label>();
-    board.tasks.forEach(task => task.labels.forEach(label => {
+    existingTasks.forEach(task => task.labels.forEach(label => {
       const key = normalizeTagName(label.name).toLowerCase();
       if (!byName.has(key)) byName.set(key, label);
     }));
@@ -229,7 +235,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       byName.set(key, label);
     });
     return Array.from(byName.values());
-  }, [board.tasks, sharedTags]);
+  }, [existingTasks, sharedTags]);
 
   const renameTagEverywhere = async (tagId: string, newName: string) => {
     const name = normalizeTagName(newName);
@@ -248,9 +254,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       }
     }
 
-    board.tasks.forEach(task => {
+    existingTasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
-        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+        updateExisting(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
       }
     });
     setNewTaskLabels(prev => prev.map(label => label.id === tagId ? { ...label, name } : label));
@@ -270,9 +276,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       }
     }
 
-    board.tasks.forEach(task => {
+    existingTasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
-        updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+        updateExisting(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
       }
     });
     setNewTaskLabels(prev => prev.map(label => label.id === tagId ? { ...label, color } : label));
@@ -292,9 +298,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       }
     }
 
-    board.tasks.forEach(task => {
+    existingTasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
-        updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+        updateExisting(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
       }
     });
     setNewTaskLabels(prev => prev.filter(label => label.id !== tagId));

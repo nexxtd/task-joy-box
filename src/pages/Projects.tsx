@@ -788,6 +788,8 @@ const Projects: React.FC = () => {
   };
 
   const handleDragEnd = (result: DropResult) => {
+    document.body.classList.remove('is-dragging');
+    setIsBoardDragging(false);
     if (!result.destination) return;
     if (result.type === 'column') {
       reorderColumns(result.source.index, result.destination.index, selectedProject?.id);
@@ -796,7 +798,8 @@ const Projects: React.FC = () => {
     moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
   };
 
-  const handleBoardDragStart = () => document.body.classList.add('is-dragging');
+  const [isBoardDragging, setIsBoardDragging] = useState(false);
+  const handleBoardDragStart = () => { document.body.classList.add('is-dragging'); setIsBoardDragging(true); };
   const handleBoardDragUpdate = () => undefined;
 
   const updateSelectedProject = async (updates: Partial<ProjectMeta>) => {
@@ -1222,7 +1225,7 @@ const Projects: React.FC = () => {
           }}
         >
           <div
-            style={{ transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
+            style={boardZoom === 1 && boardOffset.x === 0 && boardOffset.y === 0 ? undefined : { transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
             className="min-w-max min-h-max select-none"
           >
             <DragDropContext
@@ -1248,6 +1251,7 @@ const Projects: React.FC = () => {
                           canCreateTasks={canCreateTasks}
                           canEdit={canEdit}
                           boardZoom={boardZoom}
+                          isDragging={isBoardDragging}
                           onAddClick={canCreateTasks ? () => {
                             setCreateModalColumnId(column.id);
                             openAddPopup();
