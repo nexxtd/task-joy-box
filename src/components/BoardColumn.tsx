@@ -115,11 +115,16 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   };
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => readExpandedIds());
   React.useEffect(() => {
+    const sync = () => setExpandedTaskIds(readExpandedIds());
     const onStorage = (e: StorageEvent) => {
-      if (e.key === EXPANDED_KEY) setExpandedTaskIds(readExpandedIds());
+      if (e.key === EXPANDED_KEY) sync();
     };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('tasks-expanded-change', sync);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('tasks-expanded-change', sync);
+    };
   }, []);
   const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
@@ -453,6 +458,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     const next = current.includes(taskId) ? current.filter(id => id !== taskId) : [...current, taskId];
     try { localStorage.setItem(EXPANDED_KEY, JSON.stringify(next)); } catch {}
     setExpandedTaskIds(next);
+    window.dispatchEvent(new Event('tasks-expanded-change'));
   };
 
   const COLUMN_COLORS = [

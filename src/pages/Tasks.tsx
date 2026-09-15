@@ -737,6 +737,7 @@ const Tasks: React.FC = () => {
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isTaskDragging, setIsTaskDragging] = useState(false);
+  const [preDragExpanded, setPreDragExpanded] = useState<string[] | null>(null);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
@@ -1070,8 +1071,27 @@ const Tasks: React.FC = () => {
     return () => { window.removeEventListener('mouseup', onWindowUp); window.removeEventListener('touchend', onWindowUp); };
   }, []);
 
+  const collapseForDrag = () => {
+    if (expandedTaskIds.length > 0) {
+      setPreDragExpanded(expandedTaskIds);
+      setExpandedTaskIds([]);
+    } else {
+      setPreDragExpanded(null);
+    }
+    setIsTaskDragging(true);
+  };
+  const handleDragStart = () => {
+    collapseForDrag();
+  };
+  const handleBeforeCapture = () => {
+    flushSync(() => collapseForDrag());
+  };
   const handleDragEnd = (result: DropResult) => {
     setIsTaskDragging(false);
+    if (preDragExpanded && preDragExpanded.length > 0) {
+      setExpandedTaskIds(preDragExpanded);
+    }
+    setPreDragExpanded(null);
     if (!result.destination || sortByDueDate) return;
 
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
@@ -2215,7 +2235,7 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
-        <DragDropContext onBeforeCapture={() => { flushSync(() => setIsTaskDragging(true)); }} onDragStart={() => setIsTaskDragging(true)} onDragEnd={(result) => { setIsTaskDragging(false); handleDragEnd(result); }}>
+        <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">
