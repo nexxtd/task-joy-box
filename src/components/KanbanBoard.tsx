@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardContext } from '@/context/BoardContext';
 import BoardColumn from './BoardColumn';
@@ -59,7 +60,7 @@ const KanbanBoard: React.FC = () => {
         {/* View content */}
         {currentView === 'board' && (
           <div className="flex-1 overflow-x-auto p-6">
-            <DragDropContext onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
+            <DragDropContext onBeforeCapture={() => { flushSync(() => setIsDragging(true)); }} onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
               <Droppable droppableId="board" type="column" direction="horizontal">
                 {(provided) => (
                   <div

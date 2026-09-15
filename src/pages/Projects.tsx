@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { DragDropContext, Droppable, DropResult, Draggable } from '@hello-pangea/dnd';
 import {
   Calendar,
@@ -1233,6 +1234,7 @@ const Projects: React.FC = () => {
                 document.body.classList.remove('is-dragging');
                 handleDragEnd(result);
               }}
+              onBeforeCapture={() => { flushSync(() => setIsBoardDragging(true)); }}
               onDragStart={handleBoardDragStart}
               onDragUpdate={handleBoardDragUpdate}
             >

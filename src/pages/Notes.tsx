@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
@@ -2213,7 +2213,7 @@ const Tasks: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
-        <DragDropContext onDragStart={() => setIsTaskDragging(true)} onDragEnd={(result) => { setIsTaskDragging(false); handleDragEnd(result); }}>
+        <DragDropContext onBeforeCapture={() => { flushSync(() => setIsTaskDragging(true)); }} onDragStart={() => setIsTaskDragging(true)} onDragEnd={(result) => { setIsTaskDragging(false); handleDragEnd(result); }}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">

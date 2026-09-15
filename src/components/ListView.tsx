@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { DEFAULT_LABELS, Label, LabelColor, Priority, Task, LABEL_COLORS } from '@/types/board';
 import { Brain, Calendar, ChevronDown, ChevronUp, Clock3, GripVertical, Plus, Tag, Trash2, X, CheckCircle2 } from 'lucide-react';
@@ -324,7 +324,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     .filter(c => projectId === undefined ? true : c.projectId === projectId)
     .sort((a, b) => a.order - b.order);
 
-  const handleDragStart = () => {
+  const collapseForDrag = () => {
     if (expandedTaskIds.length > 0) {
       setPreDragExpanded(expandedTaskIds);
       setExpandedTaskIds([]);
@@ -332,6 +332,12 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
       setPreDragExpanded(null);
     }
     setIsDragging(true);
+  };
+  const handleDragStart = () => {
+    collapseForDrag();
+  };
+  const handleBeforeCapture = () => {
+    flushSync(() => collapseForDrag());
   };
   const handleDragEnd = (result: DropResult) => {
     setIsDragging(false);
@@ -573,7 +579,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     <>
     <div className="flex-1 overflow-y-auto p-6 relative">
       <div className="max-w-4xl mx-auto space-y-2 pb-24">
-        <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           {sortedColumns.map(column => {
             const isColumnCollapsed = collapsedColumns.includes(column.id);
             const tasks = board.tasks
