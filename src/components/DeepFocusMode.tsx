@@ -590,8 +590,6 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const fileToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
 
-  const canUseServerApi = (taskId: string | number) => /^\d+$/.test(String(taskId));
-
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     if (!selectedTask || files.length === 0) return;
@@ -601,24 +599,21 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     try {
       const newAtts: any[] = [];
       for (const file of files) {
-        if (canUseServerApi(selectedTask.id)) {
+        let saved = false;
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
+          if (res.ok) {
+            newAtts.push(await res.json());
+            saved = true;
+          }
+        } catch { /* fall through to local copy */ }
+        if (!saved) {
           try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
-            if (res.ok) {
-              newAtts.push(await res.json());
-            } else {
-              const dataUrl = await fileToDataUrl(file);
-              newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
-            }
-          } catch {
             const dataUrl = await fileToDataUrl(file);
             newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
-          }
-        } else {
-          const dataUrl = await fileToDataUrl(file);
-          newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+          } catch { /* skip unreadable file, keep the rest */ }
         }
       }
       if (newAtts.length) appendTaskAttachments(selectedTask.id, newAtts);
@@ -636,25 +631,26 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     try {
       const newImgs: any[] = [];
       for (const file of files) {
-        if (canUseServerApi(selectedTask.id)) {
+        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+        let saved = false;
+        if (!isHeic) {
           try {
             const formData = new FormData();
             formData.append('file', file);
             const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
             if (res.ok) {
               newImgs.push(await res.json());
-            } else {
-              const dataUrl = await fileToDataUrl(file);
-              newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+              saved = true;
             }
-          } catch {
-            const dataUrl = await fileToDataUrl(file);
-            newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
-          }
-        } else {
-          const dataUrl = await fileToDataUrl(file);
-          newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'image/jpeg', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
+          } catch { /* fall through to local copy */ }
         }
+    if (!saved) {
+      try {
+        const fileUrl = await fileToDataUrl(file);
+        const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+        newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+      } catch { /* skip unreadable file, keep the rest */ }
+    }
       }
       if (newImgs.length) appendTaskImages(selectedTask.id, newImgs);
     } finally {

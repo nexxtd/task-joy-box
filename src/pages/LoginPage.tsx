@@ -25,6 +25,7 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [resetToken, setResetToken] = useState(initialToken || '');
   const [success, setSuccess] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
+  const [debugLink, setDebugLink] = useState('');
   const [twoFARequired, setTwoFARequired] = useState(false);
   const [twoFAEmail, setTwoFAEmail] = useState('');
   const [twoFACode, setTwoFACode] = useState('');
@@ -44,6 +45,9 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   useEffect(() => {
     setError('');
     setSuccess('');
+    setDebugLink('');
+    setVerificationSent(false);
+    setTwoFARequired(false);
   }, [mode]);
 
   const handleResendVerification = async () => {
@@ -74,7 +78,8 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
         const res: any = await signup(name, email, password);
         if (res?.requiresVerification) {
           setVerificationSent(true);
-          setSuccess(res.message || 'Account created. Please check your email to verify your address.');
+          setSuccess(res.message || 'Verification email sent. No account has been created yet — check your email.');
+          if (res.debugLink) setDebugLink(res.debugLink);
           return;
         }
       } else if (mode === 'forgot') {
@@ -181,6 +186,12 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
             {verificationSent && (mode === 'signup' || mode === 'login') && (
               <div className="mb-4 text-center">
                 <button type="button" onClick={handleResendVerification} className="text-xs text-primary underline">Resend verification email</button>
+                {debugLink && (
+                  <div className="mt-3 p-2 bg-muted rounded-lg text-left">
+                    <p className="text-[11px] text-muted-foreground">Dev link (email not delivered):</p>
+                    <a href={debugLink} className="text-xs text-primary break-all underline">{debugLink}</a>
+                  </div>
+                )}
               </div>
             )}
 

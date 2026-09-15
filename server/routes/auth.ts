@@ -90,10 +90,12 @@ router.post('/signup', async (req: Request, res: Response) => {
     if (!emailSent) console.log(`[signup] verification link for ${email}: ${link}`);
 
     res.status(201).json({
-      message: emailSent ? 'Account created. Please check your email to verify your address.' : 'Account created. Verification email could not be sent — check server logs for the link.',
+      message: emailSent
+        ? 'Verification email sent. Please check your inbox (and spam) and click the link to create your account. No account has been created yet.'
+        : 'Verification email could not be delivered — check server logs for the link. No account has been created yet.',
       email,
       requiresVerification: true,
-      debugLink: process.env.NODE_ENV !== 'production' || !emailSent ? link : undefined,
+      debugLink: link,
     });
   } catch (e) {
     console.error(e);
