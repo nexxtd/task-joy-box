@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { DEFAULT_LABELS, Label, LabelColor, Priority, Task, LABEL_COLORS } from '@/types/board';
@@ -156,7 +156,10 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>(() => {
     try { const v = localStorage.getItem('tasks-collapsed-columns'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
-  const [collapsedCompletedCols, setCollapsedCompletedCols] = useState<string[]>([]);
+  const [collapsedCompletedCols, setCollapsedCompletedCols] = useState<string[]>(() => {
+    try { const v = localStorage.getItem('tasks-list-collapsed-completed'); return v ? JSON.parse(v) : []; } catch { return []; }
+  });
+  useEffect(() => { try { localStorage.setItem('tasks-list-collapsed-completed', JSON.stringify(collapsedCompletedCols)); } catch {} }, [collapsedCompletedCols]);
   const [editingColumn, setEditingColumn] = useState<{ id: string; name: string; color: string; icon: string } | null>(null);
   const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
@@ -178,6 +181,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
 
   const [isDragging, setIsDragging] = useState(false);
   const [preDragExpanded, setPreDragExpanded] = useState<string[] | null>(null);
+  const preDragExpandedRef = useRef<string[] | null>(null);
 
   useEffect(() => { if (!isDragging) localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds, isDragging]);
   useEffect(() => { localStorage.setItem('tasks-collapsed-columns', JSON.stringify(collapsedColumns)); }, [collapsedColumns]);
@@ -325,10 +329,13 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     .sort((a, b) => a.order - b.order);
 
   const collapseForDrag = () => {
+    if (preDragExpandedRef.current !== null) return; // onDragStart after onBeforeCapture already collapsed
     if (expandedTaskIds.length > 0) {
+      preDragExpandedRef.current = expandedTaskIds;
       setPreDragExpanded(expandedTaskIds);
       setExpandedTaskIds([]);
     } else {
+      preDragExpandedRef.current = null;
       setPreDragExpanded(null);
     }
     setIsDragging(true);
@@ -341,9 +348,11 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
   };
   const handleDragEnd = (result: DropResult) => {
     setIsDragging(false);
-    if (preDragExpanded && preDragExpanded.length > 0) {
-      setExpandedTaskIds(preDragExpanded);
+    const toRestore = preDragExpandedRef.current ?? preDragExpanded;
+    if (toRestore && toRestore.length > 0) {
+      setExpandedTaskIds(toRestore);
     }
+    preDragExpandedRef.current = null;
     setPreDragExpanded(null);
     if (!result.destination) return;
     moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
@@ -552,6 +561,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
         {isExpanded && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
+              key={task.id}
               task={task}
               onUpdateTask={updateTask}
               onToggleChecklistItem={toggleChecklistItem}

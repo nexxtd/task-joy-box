@@ -733,11 +733,15 @@ const Tasks: React.FC = () => {
   useEffect(() => { localStorage.setItem('tasks-expanded-ids', JSON.stringify(expandedTaskIds)); }, [expandedTaskIds]);
   useEffect(() => { if (!pendingDragMove) setDontAsk(false); }, [pendingDragMove]);
 
-  const [collapsedCompletedSections, setCollapsedCompletedSections] = useState<Record<string, boolean>>({});
+  const [collapsedCompletedSections, setCollapsedCompletedSections] = useState<Record<string, boolean>>(() => {
+    try { const v = localStorage.getItem('tasks-collapsed-completed'); return v ? JSON.parse(v) : {}; } catch { return {}; }
+  });
+  useEffect(() => { try { localStorage.setItem('tasks-collapsed-completed', JSON.stringify(collapsedCompletedSections)); } catch {} }, [collapsedCompletedSections]);
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isTaskDragging, setIsTaskDragging] = useState(false);
   const [preDragExpanded, setPreDragExpanded] = useState<string[] | null>(null);
+  const preDragExpandedRef = useRef<string[] | null>(null);
   const [selectedDeleteTaskIds, setSelectedDeleteTaskIds] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [singleDeleteTaskId, setSingleDeleteTaskId] = useState<string | null>(null);
@@ -1072,10 +1076,13 @@ const Tasks: React.FC = () => {
   }, []);
 
   const collapseForDrag = () => {
+    if (preDragExpandedRef.current !== null) return; // onDragStart after onBeforeCapture already collapsed
     if (expandedTaskIds.length > 0) {
+      preDragExpandedRef.current = expandedTaskIds;
       setPreDragExpanded(expandedTaskIds);
       setExpandedTaskIds([]);
     } else {
+      preDragExpandedRef.current = null;
       setPreDragExpanded(null);
     }
     setIsTaskDragging(true);
@@ -1088,9 +1095,11 @@ const Tasks: React.FC = () => {
   };
   const handleDragEnd = (result: DropResult) => {
     setIsTaskDragging(false);
-    if (preDragExpanded && preDragExpanded.length > 0) {
-      setExpandedTaskIds(preDragExpanded);
+    const toRestore = preDragExpandedRef.current ?? preDragExpanded;
+    if (toRestore && toRestore.length > 0) {
+      setExpandedTaskIds(toRestore);
     }
+    preDragExpandedRef.current = null;
     setPreDragExpanded(null);
     if (!result.destination || sortByDueDate) return;
 
@@ -1843,6 +1852,7 @@ const Tasks: React.FC = () => {
         {isExpanded && !isDeleteMode && !isTaskDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
+              key={task.id}
               task={task}
               onUpdateTask={updateTask}
               onToggleChecklistItem={toggleChecklistItem}
@@ -3459,6 +3469,7 @@ const Tasks: React.FC = () => {
 
       {(openTask || templateEditTask) && (
         <TaskFullView
+          key={(templateEditTask || openTask!).id}
           task={templateEditTask || openTask!}
           onClose={() => { setOpenTaskId(null); setEditingTemplateMeta(null); setTemplateEditName(''); }}
           boardColumns={board.columns}

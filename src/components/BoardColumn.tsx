@@ -15,6 +15,7 @@ import { TaskDropdownExpanded, PriorityBadge } from '@/pages/Tasks';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
+import CenteredDragClone from '@/components/CenteredDragClone';
 
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return null;
@@ -107,8 +108,20 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
 
   const { open: openColumnEdit, close: closeColumnEdit, pos: columnEditPos } = useAnchoredPopup();
 
-  const [tasksCollapsed, setTasksCollapsed] = useState(false);
-  const [completedCollapsed, setCompletedCollapsed] = useState(false);
+  const COL_COLLAPSED_KEY = 'tasks-column-collapsed';
+  const readColCollapsed = (): Record<string, { tasks?: boolean; completed?: boolean }> => {
+    try { const v = localStorage.getItem(COL_COLLAPSED_KEY); const o = v ? JSON.parse(v) : {}; return o && typeof o === 'object' ? o : {}; } catch { return {}; }
+  };
+  const [tasksCollapsed, setTasksCollapsed] = useState(() => !!readColCollapsed()[column.id]?.tasks);
+  const [completedCollapsed, setCompletedCollapsed] = useState(() => !!readColCollapsed()[column.id]?.completed);
+  React.useEffect(() => {
+    try {
+      const all = readColCollapsed();
+      all[column.id] = { tasks: tasksCollapsed, completed: completedCollapsed };
+      localStorage.setItem(COL_COLLAPSED_KEY, JSON.stringify(all));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasksCollapsed, completedCollapsed, column.id]);
   const EXPANDED_KEY = 'tasks-expanded-ids';
   const readExpandedIds = (): string[] => {
     try { const v = localStorage.getItem(EXPANDED_KEY); const arr = v ? JSON.parse(v) : []; return Array.isArray(arr) ? arr : []; } catch { return []; }
@@ -439,6 +452,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
         {isExpanded && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
+              key={task.id}
               task={task}
               onUpdateTask={updateTask}
               onToggleChecklistItem={toggleChecklistItem}
@@ -567,7 +581,25 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </button>
           </div>
 
-          <Droppable droppableId={column.id} type="task" isDropDisabled={tasksCollapsed}>
+          <Droppable
+            droppableId={column.id}
+            type="task"
+            isDropDisabled={tasksCollapsed}
+            renderClone={(cloneProvided, cloneSnapshot, rubric) => {
+              const t = tasks.find(x => x.id === rubric.draggableId) ?? board.tasks.find(x => x.id === rubric.draggableId);
+              if (!t) return null;
+              return (
+                <CenteredDragClone
+                  draggableProps={cloneProvided.draggableProps}
+                  dragHandleProps={cloneProvided.dragHandleProps}
+                  innerRef={cloneProvided.innerRef}
+                  style={cloneProvided.draggableProps.style as any}
+                >
+                  {renderTaskRow(t, cloneProvided.dragHandleProps, true)}
+                </CenteredDragClone>
+              );
+            }}
+          >
             {(dropProvided, snapshot) => (
               <div
                 ref={dropProvided.innerRef}

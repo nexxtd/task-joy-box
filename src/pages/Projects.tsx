@@ -41,6 +41,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import BoardColumn from '@/components/BoardColumn';
+import CenteredDragClone from '@/components/CenteredDragClone';
 import ListView from '@/components/ListView';
 import { TaskFullView } from '@/pages/Tasks';
 import CreateTaskModal from '@/components/CreateTaskModal';
@@ -1238,7 +1239,31 @@ const Projects: React.FC = () => {
               onDragStart={handleBoardDragStart}
               onDragUpdate={handleBoardDragUpdate}
             >
-              <Droppable droppableId="board" type="column" direction="horizontal">
+              <Droppable
+                droppableId="board"
+                type="column"
+                direction="horizontal"
+                renderClone={(cloneProvided, _cloneSnapshot, rubric) => {
+                  const col = projectColumns.find(c => c.id === rubric.draggableId);
+                  if (!col) return null;
+                  const count = projectTasks.filter(t => t.columnId === col.id && !t.completed).length;
+                  return (
+                    <CenteredDragClone
+                      draggableProps={cloneProvided.draggableProps}
+                      dragHandleProps={cloneProvided.dragHandleProps}
+                      innerRef={cloneProvided.innerRef}
+                      style={cloneProvided.draggableProps.style as any}
+                    >
+                      <div className="w-80 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-primary/40 bg-card shadow-lg">
+                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
+                        {col.icon && <span className="text-base leading-none">{col.icon}</span>}
+                        <span className="text-sm font-semibold tracking-wide text-muted-foreground/80 truncate">{col.title}</span>
+                        <span className="text-xs text-muted-foreground/50 flex-shrink-0">({count})</span>
+                      </div>
+                    </CenteredDragClone>
+                  );
+                }}
+              >
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start select-none">
                     {projectColumns.map((column, index) => {

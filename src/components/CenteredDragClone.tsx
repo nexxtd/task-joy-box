@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 interface CenteredDragCloneProps {
   draggableProps: any;
   dragHandleProps?: any;
@@ -15,7 +16,7 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   zoom = 1,
   children,
 }) => {
-  if (!style) {
+  if (!style || typeof document === 'undefined') {
     return (
       <div ref={innerRef} {...draggableProps} {...dragHandleProps} style={{ pointerEvents: 'none' }}>
         {children}
@@ -30,10 +31,15 @@ const CenteredDragClone: React.FC<CenteredDragCloneProps> = ({
   }
   s.pointerEvents = 'none';
   s.zIndex = s.zIndex ?? 5000;
-  return (
+  // dnd positions the clone with position:fixed + viewport coordinates, which keeps
+  // the exact grabbed point under the cursor. Portal to body so ancestor transforms
+  // (board zoom/pan) can't offset it. dnd includes explicit width/height in style,
+  // so the clone keeps the grabbed row's dimensions.
+  return createPortal(
     <div ref={innerRef} {...draggableProps} {...dragHandleProps} style={s}>
       {children}
-    </div>
+    </div>,
+    document.body
   );
 };
 export default CenteredDragClone;
