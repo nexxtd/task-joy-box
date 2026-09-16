@@ -1091,6 +1091,21 @@ const Tasks: React.FC = () => {
   const handleBeforeCapture = () => {
     flushSync(() => collapseForDrag());
   };
+  const expandDroppableGroup = (droppableId: string) => {
+    if (droppableId === 'my-goals') { setMyTasksCollapsed(false); return; }
+    if (droppableId.startsWith('col-')) {
+      const colId = droppableId.slice(4);
+      setCollapsedColumns(prev => prev.includes(colId) ? prev.filter(id => id !== colId) : prev);
+      const col = board.columns.find(c => c.id === colId) as any;
+      const pid = col?.projectId;
+      if (typeof pid === 'number') setCollapsedProjects(prev => prev.filter(id => id !== pid));
+      return;
+    }
+    if (droppableId.startsWith('uncat-')) {
+      const pid = Number(droppableId.slice(6));
+      if (!Number.isNaN(pid)) setCollapsedProjects(prev => prev.filter(id => id !== pid));
+    }
+  };
   const handleDragEnd = (result: DropResult) => {
     setIsTaskDragging(false);
     const toRestore = preDragExpandedRef.current ?? preDragExpanded;
@@ -1101,17 +1116,26 @@ const Tasks: React.FC = () => {
     setPreDragExpanded(null);
     if (!result.destination || sortByDueDate) return;
 
+    const srcId = result.source.droppableId;
+    const dstId = result.destination.droppableId;
+    if (dstId.startsWith('completed-')) {
+      const sectionKey = dstId.slice('completed-'.length);
+      const srcTasks = getTasksForDroppable(srcId);
+      const moving = srcTasks?.[result.source.index];
+      if (moving && !isTaskCompleted(moving)) toggleTaskCompletion(moving);
+      setCollapsedCompletedSections(prev => ({ ...prev, [sectionKey]: false }));
+      return;
+    }
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
     const dstProject = getProjectIdForDroppable(result.destination.droppableId);
     if (srcProject === null || dstProject === null) return;
 
-    const srcId = result.source.droppableId;
-    const dstId = result.destination.droppableId;
     const isCrossColumn = srcId !== dstId;
     const isCrossProject = srcProject !== dstProject;
 
     if (isCrossProject || isCrossColumn) {
       applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
+      expandDroppableGroup(dstId);
       return;
     } else {
       const sectionTasks = getTasksForDroppable(srcId);
@@ -1946,26 +1970,50 @@ const Tasks: React.FC = () => {
   );
 
   const renderCompletedSection = (sectionKey: string, tasks: Task[]) => {
-    if (tasks.length === 0) return null;
+    if (tasks.length === 0 && !isTaskDragging) return null;
     const collapsed = collapsedCompletedSections[sectionKey] ?? false;
+    if (tasks.length === 0) {
+      return (
+        <Droppable droppableId={'completed-' + sectionKey} renderClone={renderTaskClone}>
+          {(dropProvided) => (
+            <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="mt-1.5 rounded-xl border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70">
+              Drop here to complete
+              {dropProvided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      );
+    }
     return (
-      <div className="mt-1.5 border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
-        <button
-          onClick={() => setCollapsedCompletedSections(prev => ({ ...prev, [sectionKey]: !collapsed }))}
-          className="w-full flex items-center justify-between px-3 py-2"
-        >
-          <span className="text-[11px] font-semibold text-label-green flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Completed ({tasks.length})
-          </span>
-          {collapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/60" />}
-        </button>
-        {!collapsed && (
-          <div className="border-t border-label-green/15 px-2 py-2 space-y-1.5">
-            {tasks.map(task => renderCompletedTaskRow(task))}
+      <Droppable droppableId={'completed-' + sectionKey} renderClone={renderTaskClone}>
+        {(dropProvided) => (
+          <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="mt-1.5 border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
+            <button
+              onClick={() => setCollapsedCompletedSections(prev => ({ ...prev, [sectionKey]: !collapsed }))}
+              className="w-full flex items-center justify-between px-3 py-2"
+            >
+              <span className="text-[11px] font-semibold text-label-green flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Completed ({tasks.length})
+              </span>
+              {collapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground/60" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground/60" />}
+            </button>
+            {!collapsed && (
+              <div className="border-t border-label-green/15 px-2 py-2 space-y-1.5">
+                {tasks.map(task => renderCompletedTaskRow(task))}
+              </div>
+            )}
+            {isTaskDragging && (
+              <div className="px-2 pb-2">
+                <div className="rounded-lg border-2 border-dashed border-label-green/30 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70">
+                  Drop here to complete
+                </div>
+              </div>
+            )}
+            {dropProvided.placeholder}
           </div>
         )}
-      </div>
+      </Droppable>
     );
   };
 
@@ -2231,6 +2279,9 @@ const Tasks: React.FC = () => {
               )}
               Sort by Due Date
             </button>
+            {sortByDueDate && (
+              <span className="text-[11px] text-muted-foreground">Manual reorder paused while sorted</span>
+            )}
             <button
               onClick={() => { setAnalysisPanelOpen(true); runTaskAnalysis(activeAnalysisTab); }}
               className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
@@ -2265,24 +2316,27 @@ const Tasks: React.FC = () => {
                 <span className="text-xs font-bold tracking-wider text-muted-foreground">My Goals</span>
                 <span className="text-[10px] text-muted-foreground/50 ml-1">({myTasksGroup.length})</span>
               </button>
-              {!myTasksCollapsed && (
-                <Droppable droppableId="my-goals" renderClone={renderTaskClone}>
-                  {(dropProvided, snapshot) => (
-                    <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
-                      {myTasksGroup.map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
-                          {(taskProvided, taskSnapshot) => (
-                            <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                              {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {dropProvided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              )}
+              <Droppable droppableId="my-goals" renderClone={renderTaskClone}>
+                {(dropProvided, snapshot) => (
+                  <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
+                    {!myTasksCollapsed && myTasksGroup.map((task, index) => (
+                      <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={sortByDueDate}>
+                        {(taskProvided, taskSnapshot) => (
+                          <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                            {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {myTasksCollapsed && isTaskDragging && (
+                      <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                        Drop here to move into My Goals
+                      </div>
+                    )}
+                    {dropProvided.placeholder}
+                  </div>
+                )}
+              </Droppable>
               {!myTasksCollapsed && renderCompletedSection('my-goals', filtered.completed.filter(t => !t.projectId))}
             </div>
           )}
@@ -2308,8 +2362,7 @@ const Tasks: React.FC = () => {
                   <span className="text-xs font-bold tracking-wider text-foreground">{project.name}</span>
                   <span className="text-[10px] text-muted-foreground/50 ml-1">({tasks.length})</span>
                 </button>
-                {!isProjectCollapsed && (
-                  <div className="pl-4 space-y-2">
+                <div className="pl-4 space-y-2">
                     {columnGroups.map(({ column, tasks: colTasks }, colIdx) => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
@@ -2335,28 +2388,31 @@ const Tasks: React.FC = () => {
                               <span className="text-[10px] text-muted-foreground/40">({colTasks.length})</span>
                             </button>
                           </div>
-                          {!isColumnCollapsed && (
-                            <>
-                              <Droppable droppableId={"col-" + column.id} renderClone={renderTaskClone}>
-                                {(dropProvided, snapshot) => (
-                                  <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
-                                    {colTasks.map((task, index) => (
-                                      <Draggable key={task.id} draggableId={task.id} index={index}>
-                                        {(taskProvided, taskSnapshot) => (
-                                          <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                                            {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
-                                          </div>
-                                        )}
-                                      </Draggable>
-                                    ))}
-                                    {dropProvided.placeholder}
+                          <Droppable droppableId={"col-" + column.id} renderClone={renderTaskClone}>
+                            {(dropProvided, snapshot) => (
+                              <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
+                                {!isColumnCollapsed && colTasks.map((task, index) => (
+                                  <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={sortByDueDate}>
+                                    {(taskProvided, taskSnapshot) => (
+                                      <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
+                                        {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                                {isColumnCollapsed && isTaskDragging && (
+                                  <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                                    Drop here to move into {column.title}
                                   </div>
                                 )}
-                              </Droppable>
-                              <div className="pl-3">
-                                {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
+                                {dropProvided.placeholder}
                               </div>
-                            </>
+                            )}
+                          </Droppable>
+                          {!isColumnCollapsed && (
+                            <div className="pl-3">
+                              {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
+                            </div>
                           )}
                         </div>
                       );
@@ -2365,8 +2421,8 @@ const Tasks: React.FC = () => {
                       <Droppable droppableId={"uncat-" + project.id} renderClone={renderTaskClone}>
                         {(dropProvided, snapshot) => (
                           <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5">
-                            {uncategorized.map((task, index) => (
-                              <Draggable key={task.id} draggableId={task.id} index={index}>
+                            {!isProjectCollapsed && uncategorized.map((task, index) => (
+                              <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={sortByDueDate}>
                                 {(taskProvided, taskSnapshot) => (
                                   <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
                                     {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
@@ -2374,16 +2430,22 @@ const Tasks: React.FC = () => {
                                 )}
                               </Draggable>
                             ))}
+                            {isProjectCollapsed && isTaskDragging && (
+                              <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                                Drop here to move into {project.name}
+                              </div>
+                            )}
                             {dropProvided.placeholder}
                           </div>
                         )}
                       </Droppable>
                     )}
-                    <div className="pl-3">
-                      {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
-                    </div>
+                    {!isProjectCollapsed && (
+                      <div className="pl-3">
+                        {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
+                      </div>
+                    )}
                   </div>
-                )}
               </div>
             );
           })}
