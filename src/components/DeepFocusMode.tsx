@@ -1717,6 +1717,14 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       </div>
                       <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </label>
+                    {uploadingImages && (
+                      <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm font-medium">Uploading...</span>
+                        </div>
+                      </div>
+                    )}
                     {(selectedTask.images?.length ?? 0) > 0 ? (
                       <DraggableImageGrid
                         images={selectedTask.images || []}
