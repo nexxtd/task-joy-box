@@ -132,8 +132,8 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
             { label: 'Open work', value: openWork > 0 ? `${openWork} item${openWork > 1 ? 's' : ''} open` : 'Nothing open', tone: 'neutral' },
           ],
           reasoning: contradiction
-            ? `"${task.title}" is tagged ${prio} but has no due date at all. Nothing in the data is forcing it forward - a ${prio} label with no deadline has no anchor, so it gets deprioritized piece by piece as dated tasks pile up. This is the most fragile shape in the view: urgent work nobody can actually be late on.`
-            : `"${task.title}" has no due date, and at ${prio} priority there is nothing pulling it into the schedule. Tasks without deadlines only get worked on once everything dated is done, which rarely happens, so this one is at risk of being quietly forgotten. If it matters it needs a date; if it genuinely doesn't matter, that is a sign it may not need to stay active at all.`,
+            ? `"${task.title}" is tagged ${prio} but has no due date at all. Nothing in the data is forcing it forward - a ${prio} label with no deadline has no anchor, so it gets deprioritized piece by piece as dated notes pile up. This is the most fragile shape in the view: urgent work nobody can actually be late on.`
+            : `"${task.title}" has no due date, and at ${prio} priority there is nothing pulling it into the schedule. Notes without deadlines only get worked on once everything dated is done, which rarely happens, so this one is at risk of being quietly forgotten. If it matters it needs a date; if it genuinely doesn't matter, that is a sign it may not need to stay active at all.`,
           suggestion: contradiction
             ? 'Set a concrete due date in the next few days to make the urgency real - or drop the priority.'
             : 'Give it a due date within the next week, or consciously park it until it has one.',
@@ -147,12 +147,12 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       if (days < 0) {
         urgency = `Overdue by ${-days}d`;
         tone = 'bad';
-        reasoning = `"${task.title}" was due ${formatDate(task.dueDate)} - ${-days} day${-days > 1 ? 's' : ''} ago - and still sits ${getTaskStatus(task) === 'to_do' ? 'unstarted' : 'in progress'}. Overdue tasks drop out of any ordered "up next" surface, so nothing pulls them back; each passing day quietly raises the odds this one is never finished. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to close out.` : 'No breakdown work is left open, but the overdue date itself is still unresolved.'}`;
+        reasoning = `"${task.title}" was due ${formatDate(task.dueDate)} - ${-days} day${-days > 1 ? 's' : ''} ago - and still sits ${getTaskStatus(task) === 'to_do' ? 'unstarted' : 'in progress'}. Overdue notes drop out of any ordered "up next" surface, so nothing pulls them back; each passing day quietly raises the odds this one is never finished. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to close out.` : 'No breakdown work is left open, but the overdue date itself is still unresolved.'}`;
         suggestion = 'Re-date it within the next 2-3 days, or downscope it and close it out this week.';
       } else if (days === 0) {
         urgency = 'Due today';
         tone = 'bad';
-        reasoning = `"${task.title}" hits its deadline today with ${openWork > 0 ? `${openWork} open item${openWork > 1 ? 's' : ''} still outstanding` : 'no outstanding breakdown items'}. There is zero slack left, so whatever remains has to be done now or the date will silently pass. The usual trap is pushing a due-today task to tomorrow without formally rescheduling it, which is exactly how tasks turn into overdue ones.`;
+        reasoning = `"${task.title}" hits its deadline today with ${openWork > 0 ? `${openWork} open item${openWork > 1 ? 's' : ''} still outstanding` : 'no outstanding breakdown items'}. There is zero slack left, so whatever remains has to be done now or the date will silently pass. The usual trap is pushing a due-today note to tomorrow without formally rescheduling it, which is exactly how notes turn into overdue ones.`;
         suggestion = 'Finish it today, or explicitly re-date it before the day ends.';
       } else if (days <= 3) {
         urgency = `Due in ${days}d`;
@@ -162,12 +162,12 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       } else if (days <= 7) {
         urgency = `Due in ${days}d`;
         tone = 'warn';
-        reasoning = `"${task.title}" lands ${days} days out (${formatDate(task.dueDate)}), in the 3-7 day band where scheduling usually goes wrong: not urgent yet, so it is easy to keep pushing. ${openWork > 0 ? `It carries ${openWork} open item${openWork > 1 ? 's' : ''} of work, which means the real effort spans more than a day.` : 'No breakdown items are open, but the task itself is still not completed.'} If the next few days fill up, this is the task that quietly drifts into next week.`;
+        reasoning = `"${task.title}" lands ${days} days out (${formatDate(task.dueDate)}), in the 3-7 day band where scheduling usually goes wrong: not urgent yet, so it is easy to keep pushing. ${openWork > 0 ? `It carries ${openWork} open item${openWork > 1 ? 's' : ''} of work, which means the real effort spans more than a day.` : 'No breakdown items are open, but the note itself is still not completed.'} If the next few days fill up, this is the note that quietly drifts into next week.`;
         suggestion = `Slot it into the schedule before ${formatDate(task.dueDate)} rather than waiting for the deadline to arrive.`;
       } else {
         urgency = `Due in ${days}d`;
         tone = 'ok';
-        reasoning = `"${task.title}" is ${days} days out (${formatDate(task.dueDate)}) - a comfortable runway with no immediate pressure. ${openWork > 0 ? `The only watch point is its ${openWork} open item${openWork > 1 ? 's' : ''} of breakdown work: plenty of time, but the longer the runway, the easier it is to defer.` : 'No breakdown items are open, so completing it is straightforward whenever it gets scheduled.'} For a ${prio} task this window is healthy rather than risky.`;
+        reasoning = `"${task.title}" is ${days} days out (${formatDate(task.dueDate)}) - a comfortable runway with no immediate pressure. ${openWork > 0 ? `The only watch point is its ${openWork} open item${openWork > 1 ? 's' : ''} of breakdown work: plenty of time, but the longer the runway, the easier it is to defer.` : 'No breakdown items are open, so completing it is straightforward whenever it gets scheduled.'} For a ${prio} note this window is healthy rather than risky.`;
         suggestion = undefined;
       }
       return {
@@ -191,7 +191,7 @@ const buildAnalysisOverview = (scope: Task[], activeScope: Task[]): AnalysisResu
   const withChecklist = scope.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
   return {
     title: 'Note Overview',
-    summary: `${scope.length} task${scope.length !== 1 ? 's' : ''} in the current view, ${activeScope.length} still open. The tabs below break this down task-by-task: Deadlines reads the due-date pressure and risk on each task, Progress checks whether each task is actually moving, and Priority re-tests whether each priority tag still holds up.`,
+    summary: `${scope.length} note${scope.length !== 1 ? 's' : ''} in the current view, ${activeScope.length} still open. The tabs below break this down note-by-note: Deadlines reads the due-date pressure and risk on each note, Progress checks whether each note is actually moving, and Priority re-tests whether each priority tag still holds up.`,
     lines: [
       { text: `${activeScope.length} active` },
       { text: `${completedCount} completed` },
@@ -231,13 +231,13 @@ const buildProgressItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       let reasoning: string;
       let suggestion: string | undefined;
       if (totalItems === 0) {
-        reasoning = `"${task.title}" has no sub-tasks and no checklist items, so there is no breakdown to measure progress against - only its status (${getStatusLabel(getTaskStatus(task))}) and its last activity ${lastTouched == null ? '(not recorded)' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. A task with no decomposition is hard to verify: "in progress" can mean almost-done or barely-touched. ${est > 0 ? `It is estimated at ${formatDuration(est)}, which at least gives it a concrete size.` : 'Without an estimate or breakdown, nothing here tracks how far along it really is.'}`;
+        reasoning = `"${task.title}" has no sub-notes and no checklist items, so there is no breakdown to measure progress against - only its status (${getStatusLabel(getTaskStatus(task))}) and its last activity ${lastTouched == null ? '(not recorded)' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. A note with no decomposition is hard to verify: "in progress" can mean almost-done or barely-touched. ${est > 0 ? `It is estimated at ${formatDuration(est)}, which at least gives it a concrete size.` : 'Without an estimate or breakdown, nothing here tracks how far along it really is.'}`;
         suggestion = est > 0 || lastTouched == null ? undefined : 'Add checklist items so progress becomes measurable, or finish it.';
       } else if (pct === 100) {
-        reasoning = `"${task.title}" shows ${doneItems}/${totalItems} items done - 100% of its breakdown is complete, yet the task itself still reads as ${getStatusLabel(getTaskStatus(task))}${lastTouched != null && lastTouched > 0 ? ` and has been untouched for ${lastTouched} day${lastTouched > 1 ? 's' : ''}` : ''}. Everything planned is finished; the only remaining step is marking it completed, and the longer that waits, the easier it is to lose the completion entirely.`;
+        reasoning = `"${task.title}" shows ${doneItems}/${totalItems} items done - 100% of its breakdown is complete, yet the note itself still reads as ${getStatusLabel(getTaskStatus(task))}${lastTouched != null && lastTouched > 0 ? ` and has been untouched for ${lastTouched} day${lastTouched > 1 ? 's' : ''}` : ''}. Everything planned is finished; the only remaining step is marking it completed, and the longer that waits, the easier it is to lose the completion entirely.`;
         suggestion = 'Mark it completed - all breakdown work is done.';
       } else if (stalled) {
-        reasoning = `"${task.title}" has ${totalItems} planned item${totalItems > 1 ? 's' : ''} with ${doneItems} done, and nothing has changed in ${lastTouched} day${lastTouched > 1 ? 's' : ''}. On paper it is ${pct}% complete, but in practice it has been idle for over a week - not slow progress, but stalled. The plan exists and execution stopped near the start, which is the most common way tasks quietly die.`;
+        reasoning = `"${task.title}" has ${totalItems} planned item${totalItems > 1 ? 's' : ''} with ${doneItems} done, and nothing has changed in ${lastTouched} day${lastTouched > 1 ? 's' : ''}. On paper it is ${pct}% complete, but in practice it has been idle for over a week - not slow progress, but stalled. The plan exists and execution stopped near the start, which is the most common way notes quietly die.`;
         suggestion = 'Restart it this week, or consciously cut it from the active set.';
       } else if (pct === 0) {
         reasoning = `"${task.title}"'s breakdown is fully untouched (0/${totalItems} items done) but it was worked on ${lastTouched == null ? 'recently' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`} - early motion without execution yet. It has been picked up, but none of the actual work has started, so it still ranks as "about to start" rather than in progress.`;
@@ -245,7 +245,7 @@ const buildProgressItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       } else {
         const recently = lastTouched != null && lastTouched <= 3;
         reasoning = recently
-          ? `"${task.title}" is genuinely moving: ${doneItems}/${totalItems} items done (${pct}%), last touched${lastTouched === 0 ? ' today' : ` ${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. With ${openItems} item${openItems > 1 ? 's' : ''} left, the momentum looks real - this is one of the tasks actually trending toward completion.`
+          ? `"${task.title}" is genuinely moving: ${doneItems}/${totalItems} items done (${pct}%), last touched${lastTouched === 0 ? ' today' : ` ${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. With ${openItems} item${openItems > 1 ? 's' : ''} left, the momentum looks real - this is one of the notes actually trending toward completion.`
           : `"${task.title}" shows partial progress - ${doneItems}/${totalItems} items done (${pct}%) - but the last change was ${lastTouched == null ? 'some time ago' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}, which puts it in a stalled-midway state: work started, then paused. ${openItems > 0 ? `The remaining ${openItems} item${openItems > 1 ? 's' : ''} still represent a real block of effort.` : ''}`;
         suggestion = recently ? undefined : 'Pick it up again within the next few days, or it will slip from half-done to abandoned.';
       }
@@ -277,7 +277,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
           suggestion = 'Start it within the next 48 hours to keep the label honest.';
         } else {
           tone = 'bad';
-          reasoning = `"${task.title}" carries the strongest label available, yet nothing in the data earns it: ${dueText}, with only ${openItems} open item${openItems !== 1 ? 's' : ''}. An urgent tag with no deadline and no heavy workload is how tasks become permanently stressful while still being deferred.`;
+          reasoning = `"${task.title}" carries the strongest label available, yet nothing in the data earns it: ${dueText}, with only ${openItems} open item${openItems !== 1 ? 's' : ''}. An urgent tag with no deadline and no heavy workload is how notes become permanently stressful while still being deferred.`;
           suggestion = 'Demote it to Medium, or give it a real deadline and keep Urgent.';
         }
         break;
@@ -307,7 +307,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
           suggestion = 'Re-date it and raise it to High, or consciously drop it to Low and close it out.';
         } else if (days != null && days <= 3) {
           tone = 'warn';
-          reasoning = `"${task.title}" is ${dueText}, which makes it one of the nearest deadlines in the active set - yet it is only Medium. The closer a deadline gets, the more the Medium tag understates it: in any priority-sorted view this task will sit below work with far fewer time constraints.`;
+          reasoning = `"${task.title}" is ${dueText}, which makes it one of the nearest deadlines in the active set - yet it is only Medium. The closer a deadline gets, the more the Medium tag understates it: in any priority-sorted view this note will sit below work with far fewer time constraints.`;
           suggestion = 'Bump it to High for now - its deadline is inside the 72-hour window.';
         } else {
           tone = 'ok';
@@ -318,7 +318,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       case 'low':
         if (days != null && days <= 5) {
           tone = 'bad';
-          reasoning = `"${task.title}" is Low but carries a deadline that is ${dueText}. That is a contradiction the data cannot square: either it matters enough to hit that date (then Low is wrong) or it does not matter (then the deadline is noise). Low-priority tasks with real deadlines are exactly the ones that quietly slip past the date.`;
+          reasoning = `"${task.title}" is Low but carries a deadline that is ${dueText}. That is a contradiction the data cannot square: either it matters enough to hit that date (then Low is wrong) or it does not matter (then the deadline is noise). Low-priority notes with real deadlines are exactly the ones that quietly slip past the date.`;
           suggestion = 'Raise it to High/Medium, or remove the deadline and accept it stays parked.';
         } else if (openItems >= 3) {
           tone = 'warn';
@@ -333,7 +333,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       default:
         if (due != null && days! <= 3) {
           tone = 'warn';
-          reasoning = `"${task.title}" has no priority tag at all, but it is ${dueText} - the least-important-looking task becomes the most important one when it holds the nearest deadline. Unprioritized tasks are invisible to every priority-based view, which makes this the riskiest configuration in the set.`;
+          reasoning = `"${task.title}" has no priority tag at all, but it is ${dueText} - the least-important-looking note becomes the most important one when it holds the nearest deadline. Unprioritized notes are invisible to every priority-based view, which makes this the riskiest configuration in the set.`;
           suggestion = `Tag it High (or at least Medium) - it has a deadline inside ${days} day${days! > 1 ? 's' : ''}.`;
         } else if (openItems >= 5) {
           tone = 'warn';
@@ -586,7 +586,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({ count, onConf
           <Trash2 className="w-5 h-5 text-destructive" />
         </div>
         <div>
-          <h3 className="text-sm font-bold text-foreground">Delete {count} task{count === 1 ? '' : 's'}?</h3>
+          <h3 className="text-sm font-bold text-foreground">Delete {count} note{count === 1 ? '' : 's'}?</h3>
           <p className="text-xs text-muted-foreground mt-0.5">This action cannot be undone.</p>
         </div>
       </div>
@@ -601,7 +601,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({ count, onConf
           onClick={onConfirm}
           className="px-4 py-2 text-sm font-bold bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-all"
         >
-          Delete {count} task{count === 1 ? '' : 's'}
+          Delete {count} note{count === 1 ? '' : 's'}
         </button>
       </div>
     </div>
@@ -3013,7 +3013,7 @@ const Tasks: React.FC = () => {
                       <div className="border border-dashed border-border rounded-xl">
                         <PremiumGate
                           title="File Attachments"
-                          description="Attach files, images, and documents directly to your tasks."
+                          description="Attach files, images, and documents directly to your notes."
                           icon={<Paperclip className="w-6 h-6 text-primary" />}
                         />
                       </div>
@@ -3087,7 +3087,7 @@ const Tasks: React.FC = () => {
                       <div className="border border-dashed border-border rounded-xl">
                         <PremiumGate
                           title="Image Attachments"
-                          description="Upload images directly to your tasks."
+                          description="Upload images directly to your notes."
                           icon={<Image className="w-6 h-6 text-primary" />}
                         />
                       </div>
@@ -3388,7 +3388,7 @@ const Tasks: React.FC = () => {
               <div className="flex-1 flex items-center">
                 <PremiumGate
                   title="Note Analysis"
-                  description="Get AI-style insights into your tasks with overview, deadline risk, progress tracking, and priority checks."
+                  description="Get AI-style insights into your notes with overview, deadline risk, progress tracking, and priority checks."
                   icon={<BarChart3 className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -3624,7 +3624,7 @@ const Tasks: React.FC = () => {
               </div>
               <span className="text-sm font-bold text-foreground">
                 {selectedDeleteTaskIds.length === 0
-                  ? 'Select tasks to delete'
+                  ? 'Select notes to delete'
                   : `${selectedDeleteTaskIds.length} task${selectedDeleteTaskIds.length === 1 ? '' : 's'} selected`}
               </span>
             </div>
@@ -3897,11 +3897,11 @@ const Tasks: React.FC = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+              <h3 className="text-sm font-bold text-foreground">Move note?</h3>
               <p className="text-xs text-muted-foreground mt-2">
                 {moveType === 'project'
-                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
-                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
+                  ? 'Are you sure you want to move this note? It will change the note\'s project.'
+                  : 'Are you sure you want to move this note? It will change the note\'s column.'}
               </p>
               <label className="flex items-center gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
@@ -4022,33 +4022,9 @@ export const TaskDropdownExpanded: React.FC<{
   const [uploadingImages, setUploadingImages] = useState(false);
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const canUseServerAttachmentApi = false;
   const taskRef = useRef(task);
   taskRef.current = task;
-  useEffect(() => {
-    if (String(task.id).startsWith('template-edit-')) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const rows = await res.json();
-        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
-        const cur = taskRef.current;
-        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
-        const missing = rows.filter((r: any) => !known.has(String(r.id)));
-        if (missing.length === 0) return;
-        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
-        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
-        const updates: Partial<Task> = {};
-        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
-        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
-        onUpdateTask(task.id, updates);
-      } catch { /* offline - keep local state */ }
-    })();
-    return () => { cancelled = true; };
-  }, [task.id, onUpdateTask]);
-
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
   const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
@@ -4188,21 +4164,9 @@ export const TaskDropdownExpanded: React.FC<{
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
-      let saved = false;
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
+      } catch { /* skip unreadable file, keep the rest */ }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     setUploading(false);
@@ -4211,9 +4175,6 @@ export const TaskDropdownExpanded: React.FC<{
 
   const deleteAttachment = async (attachmentId: string) => {
     onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
-      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
-    }
   };
 
   const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
@@ -4567,7 +4528,7 @@ export const TaskDropdownExpanded: React.FC<{
               <div className="border border-dashed border-border rounded-xl">
                 <PremiumGate
                   title="File Attachments"
-                  description="Attach files, images, and documents directly to your tasks."
+                  description="Attach files, images, and documents directly to your notes."
                   icon={<Paperclip className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -4627,7 +4588,7 @@ export const TaskDropdownExpanded: React.FC<{
               <div className="border border-dashed border-border rounded-xl">
                 <PremiumGate
                   title="Image Attachments"
-                  description="Upload images directly to your tasks."
+                  description="Upload images directly to your notes."
                   icon={<Image className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -4654,17 +4615,6 @@ export const TaskDropdownExpanded: React.FC<{
                       for (const file of files) {
                         const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
                         let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
                         if (!saved) {
                           try {
                             const fileUrl = await imageToDataUrl(file);
@@ -4690,7 +4640,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <DraggableImageGrid
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); }}
                   />
                 )}
               </>
@@ -4778,33 +4728,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const canUseServerAttachmentApi = false;
   const taskRef = useRef(task);
   taskRef.current = task;
-  useEffect(() => {
-    if (String(task.id).startsWith('template-edit-')) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const rows = await res.json();
-        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
-        const cur = taskRef.current;
-        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
-        const missing = rows.filter((r: any) => !known.has(String(r.id)));
-        if (missing.length === 0) return;
-        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
-        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
-        const updates: Partial<Task> = {};
-        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
-        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
-        onUpdateTask(task.id, updates);
-      } catch { /* offline - keep local state */ }
-    })();
-    return () => { cancelled = true; };
-  }, [task.id, onUpdateTask]);
-
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
   const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
@@ -5060,21 +4986,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
-      let saved = false;
       try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
+      } catch { /* skip unreadable file, keep the rest */ }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     setUploading(false);
@@ -5083,9 +4997,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
 
   const deleteAttachment = async (attachmentId: string) => {
     onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
-      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
-    }
   };
 
   const createTagForTask = () => {
@@ -5615,7 +5526,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <div className="border border-dashed border-border rounded-xl">
                   <PremiumGate
                     title="File Attachments"
-                    description="Attach files, images, and documents directly to your tasks."
+                    description="Attach files, images, and documents directly to your notes."
                     icon={<Paperclip className="w-6 h-6 text-primary" />}
                   />
                 </div>
@@ -5674,7 +5585,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <div className="border border-dashed border-border rounded-xl">
                   <PremiumGate
                     title="Image Attachments"
-                    description="Upload images directly to your tasks."
+                    description="Upload images directly to your notes."
                     icon={<Image className="w-6 h-6 text-primary" />}
                   />
                 </div>
@@ -5701,17 +5612,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                       for (const file of files) {
                         const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
                         let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
                         if (!saved) {
                           try {
                             const fileUrl = await imageToDataUrl(file);
@@ -5737,7 +5637,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); }}
                 />
               )}
                 </>
@@ -5928,7 +5828,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
-                  placeholder="e.g. Daily Standup Task"
+                  placeholder="e.g. Daily Standup Note"
                   value={fullViewTmplName}
                   onChange={e => setFullViewTmplName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
@@ -6019,7 +5919,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm font-medium text-foreground">No templates yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Save a task as a template first.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a note as a template first.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -6083,8 +5983,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setProjectChangeConfirm(null)}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-foreground">Move task?</h3>
-            <p className="text-xs text-muted-foreground mt-2">Changing the project will move this task. Do you want to continue?</p>
+            <h3 className="text-sm font-bold text-foreground">Move note?</h3>
+            <p className="text-xs text-muted-foreground mt-2">Changing the project will move this note. Do you want to continue?</p>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setProjectChangeConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button onClick={() => {
@@ -6133,7 +6033,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>
-                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
+                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Note description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

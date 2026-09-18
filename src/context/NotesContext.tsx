@@ -334,7 +334,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         comments: details.comments || [],
         projectId: details.projectId,
         projectName: details.projectName,
-        activityLog: [{ id: genId(), text: 'Task created', createdAt: now, actor: user?.name }],
+        activityLog: [{ id: genId(), text: 'Note created', createdAt: now, actor: user?.name }],
       };
       return { ...b, tasks: [...b.tasks, newTask] };
     });
@@ -383,7 +383,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [persist, logActivity]);
 
   const deleteTask = useCallback((taskId: string) => {
-    logActivity(taskId, 'Task deleted');
+    logActivity(taskId, 'Note deleted');
     persist(b => ({ ...b, tasks: b.tasks.filter(t => t.id !== taskId) }));
   }, [persist, logActivity]);
 

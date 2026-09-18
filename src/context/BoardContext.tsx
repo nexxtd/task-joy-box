@@ -26,6 +26,12 @@ interface BoardContextType {
   bulkDeleteTasks: (taskIds: string[]) => void;
   reorderTasks: (orderedIds: string[]) => void;
   reorderTasksInSection: (orderedIds: string[]) => void;
+  moveCrossSection: (
+    movingTaskId: string,
+    updates: Partial<Task>,
+    srcOrderedIds: string[],
+    dstOrderedIds: string[]
+  ) => void;
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';
@@ -650,6 +656,37 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     persist(b => ({ ...b, tasks: b.tasks.filter(t => !taskIds.includes(t.id)) }));
   }, [persist]);
 
+  const moveCrossSection = useCallback((
+    movingTaskId: string,
+    updates: Partial<Task>,
+    srcOrderedIds: string[],
+    dstOrderedIds: string[]
+  ) => {
+    persist(b => {
+      const taskMap = new Map(b.tasks.map(t => [t.id, t]));
+      const srcSet = new Set(srcOrderedIds);
+      const dstSet = new Set(dstOrderedIds);
+      const untouched = b.tasks.filter(t => !srcSet.has(t.id) && !dstSet.has(t.id));
+      const srcTasks = srcOrderedIds
+        .filter(id => id !== movingTaskId)
+        .map((id, idx) => {
+          const t = taskMap.get(id);
+          return t ? { ...t, order: idx } : null;
+        })
+        .filter(Boolean) as Task[];
+      const dstTasks = dstOrderedIds
+        .map((id, idx) => {
+          const t = taskMap.get(id);
+          if (!t) return null;
+          return id === movingTaskId
+            ? { ...t, ...updates, order: idx }
+            : { ...t, order: idx };
+        })
+        .filter(Boolean) as Task[];
+      return { ...b, tasks: [...untouched, ...srcTasks, ...dstTasks] };
+    });
+  }, [persist]);
+
   const reorderTasks = useCallback((orderedIds: string[]) => {
     persist(b => {
       const taskMap = new Map(b.tasks.map(t => [t.id, t]));
@@ -691,6 +728,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addColumn, updateColumn, deleteColumn, reorderColumns,
       addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
       findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
+      moveCrossSection,
       lastSyncTime, syncStatus,
     }}>
       {children}
