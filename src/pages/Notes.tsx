@@ -13,6 +13,7 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
+  Brain,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -36,6 +37,7 @@ import {
   Zap,
   Loader2,
 } from 'lucide-react';
+import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
@@ -131,8 +133,8 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
             { label: 'Open work', value: openWork > 0 ? `${openWork} item${openWork > 1 ? 's' : ''} open` : 'Nothing open', tone: 'neutral' },
           ],
           reasoning: contradiction
-            ? `"${task.title}" is tagged ${prio} but has no due date at all. Nothing in the data is forcing it forward - a ${prio} label with no deadline has no anchor, so it gets deprioritized piece by piece as dated notes pile up. This is the most fragile shape in the view: urgent work nobody can actually be late on.`
-            : `"${task.title}" has no due date, and at ${prio} priority there is nothing pulling it into the schedule. Notes without deadlines only get worked on once everything dated is done, which rarely happens, so this one is at risk of being quietly forgotten. If it matters it needs a date; if it genuinely doesn't matter, that is a sign it may not need to stay active at all.`,
+            ? `"${task.title}" is tagged ${prio} but has no due date at all. Nothing in the data is forcing it forward - a ${prio} label with no deadline has no anchor, so it gets deprioritized piece by piece as dated tasks pile up. This is the most fragile shape in the view: urgent work nobody can actually be late on.`
+            : `"${task.title}" has no due date, and at ${prio} priority there is nothing pulling it into the schedule. Tasks without deadlines only get worked on once everything dated is done, which rarely happens, so this one is at risk of being quietly forgotten. If it matters it needs a date; if it genuinely doesn't matter, that is a sign it may not need to stay active at all.`,
           suggestion: contradiction
             ? 'Set a concrete due date in the next few days to make the urgency real - or drop the priority.'
             : 'Give it a due date within the next week, or consciously park it until it has one.',
@@ -146,12 +148,12 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       if (days < 0) {
         urgency = `Overdue by ${-days}d`;
         tone = 'bad';
-        reasoning = `"${task.title}" was due ${formatDate(task.dueDate)} - ${-days} day${-days > 1 ? 's' : ''} ago - and still sits ${getTaskStatus(task) === 'to_do' ? 'unstarted' : 'in progress'}. Overdue notes drop out of any ordered "up next" surface, so nothing pulls them back; each passing day quietly raises the odds this one is never finished. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to close out.` : 'No breakdown work is left open, but the overdue date itself is still unresolved.'}`;
+        reasoning = `"${task.title}" was due ${formatDate(task.dueDate)} - ${-days} day${-days > 1 ? 's' : ''} ago - and still sits ${getTaskStatus(task) === 'to_do' ? 'unstarted' : 'in progress'}. Overdue tasks drop out of any ordered "up next" surface, so nothing pulls them back; each passing day quietly raises the odds this one is never finished. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} to close out.` : 'No breakdown work is left open, but the overdue date itself is still unresolved.'}`;
         suggestion = 'Re-date it within the next 2-3 days, or downscope it and close it out this week.';
       } else if (days === 0) {
         urgency = 'Due today';
         tone = 'bad';
-        reasoning = `"${task.title}" hits its deadline today with ${openWork > 0 ? `${openWork} open item${openWork > 1 ? 's' : ''} still outstanding` : 'no outstanding breakdown items'}. There is zero slack left, so whatever remains has to be done now or the date will silently pass. The usual trap is pushing a due-today note to tomorrow without formally rescheduling it, which is exactly how notes turn into overdue ones.`;
+        reasoning = `"${task.title}" hits its deadline today with ${openWork > 0 ? `${openWork} open item${openWork > 1 ? 's' : ''} still outstanding` : 'no outstanding breakdown items'}. There is zero slack left, so whatever remains has to be done now or the date will silently pass. The usual trap is pushing a due-today task to tomorrow without formally rescheduling it, which is exactly how tasks turn into overdue ones.`;
         suggestion = 'Finish it today, or explicitly re-date it before the day ends.';
       } else if (days <= 3) {
         urgency = `Due in ${days}d`;
@@ -161,12 +163,12 @@ const buildDeadlineItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       } else if (days <= 7) {
         urgency = `Due in ${days}d`;
         tone = 'warn';
-        reasoning = `"${task.title}" lands ${days} days out (${formatDate(task.dueDate)}), in the 3-7 day band where scheduling usually goes wrong: not urgent yet, so it is easy to keep pushing. ${openWork > 0 ? `It carries ${openWork} open item${openWork > 1 ? 's' : ''} of work, which means the real effort spans more than a day.` : 'No breakdown items are open, but the note itself is still not completed.'} If the next few days fill up, this is the note that quietly drifts into next week.`;
+        reasoning = `"${task.title}" lands ${days} days out (${formatDate(task.dueDate)}), in the 3-7 day band where scheduling usually goes wrong: not urgent yet, so it is easy to keep pushing. ${openWork > 0 ? `It carries ${openWork} open item${openWork > 1 ? 's' : ''} of work, which means the real effort spans more than a day.` : 'No breakdown items are open, but the task itself is still not completed.'} If the next few days fill up, this is the task that quietly drifts into next week.`;
         suggestion = `Slot it into the schedule before ${formatDate(task.dueDate)} rather than waiting for the deadline to arrive.`;
       } else {
         urgency = `Due in ${days}d`;
         tone = 'ok';
-        reasoning = `"${task.title}" is ${days} days out (${formatDate(task.dueDate)}) - a comfortable runway with no immediate pressure. ${openWork > 0 ? `The only watch point is its ${openWork} open item${openWork > 1 ? 's' : ''} of breakdown work: plenty of time, but the longer the runway, the easier it is to defer.` : 'No breakdown items are open, so completing it is straightforward whenever it gets scheduled.'} For a ${prio} note this window is healthy rather than risky.`;
+        reasoning = `"${task.title}" is ${days} days out (${formatDate(task.dueDate)}) - a comfortable runway with no immediate pressure. ${openWork > 0 ? `The only watch point is its ${openWork} open item${openWork > 1 ? 's' : ''} of breakdown work: plenty of time, but the longer the runway, the easier it is to defer.` : 'No breakdown items are open, so completing it is straightforward whenever it gets scheduled.'} For a ${prio} task this window is healthy rather than risky.`;
         suggestion = undefined;
       }
       return {
@@ -190,7 +192,7 @@ const buildAnalysisOverview = (scope: Task[], activeScope: Task[]): AnalysisResu
   const withChecklist = scope.filter(t => t.checklists.some(cl => cl.items.length > 0)).length;
   return {
     title: 'Note Overview',
-    summary: `${scope.length} note${scope.length !== 1 ? 's' : ''} in the current view, ${activeScope.length} still open. The tabs below break this down note-by-note: Deadlines reads the due-date pressure and risk on each note, Progress checks whether each note is actually moving, and Priority re-tests whether each priority tag still holds up.`,
+    summary: `${scope.length} task${scope.length !== 1 ? 's' : ''} in the current view, ${activeScope.length} still open. The tabs below break this down task-by-task: Deadlines reads the due-date pressure and risk on each task, Progress checks whether each task is actually moving, and Priority re-tests whether each priority tag still holds up.`,
     lines: [
       { text: `${activeScope.length} active` },
       { text: `${completedCount} completed` },
@@ -230,13 +232,13 @@ const buildProgressItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       let reasoning: string;
       let suggestion: string | undefined;
       if (totalItems === 0) {
-        reasoning = `"${task.title}" has no sub-notes and no checklist items, so there is no breakdown to measure progress against - only its status (${getStatusLabel(getTaskStatus(task))}) and its last activity ${lastTouched == null ? '(not recorded)' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. A note with no decomposition is hard to verify: "in progress" can mean almost-done or barely-touched. ${est > 0 ? `It is estimated at ${formatDuration(est)}, which at least gives it a concrete size.` : 'Without an estimate or breakdown, nothing here tracks how far along it really is.'}`;
+        reasoning = `"${task.title}" has no sub-tasks and no checklist items, so there is no breakdown to measure progress against - only its status (${getStatusLabel(getTaskStatus(task))}) and its last activity ${lastTouched == null ? '(not recorded)' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. A task with no decomposition is hard to verify: "in progress" can mean almost-done or barely-touched. ${est > 0 ? `It is estimated at ${formatDuration(est)}, which at least gives it a concrete size.` : 'Without an estimate or breakdown, nothing here tracks how far along it really is.'}`;
         suggestion = est > 0 || lastTouched == null ? undefined : 'Add checklist items so progress becomes measurable, or finish it.';
       } else if (pct === 100) {
-        reasoning = `"${task.title}" shows ${doneItems}/${totalItems} items done - 100% of its breakdown is complete, yet the note itself still reads as ${getStatusLabel(getTaskStatus(task))}${lastTouched != null && lastTouched > 0 ? ` and has been untouched for ${lastTouched} day${lastTouched > 1 ? 's' : ''}` : ''}. Everything planned is finished; the only remaining step is marking it completed, and the longer that waits, the easier it is to lose the completion entirely.`;
+        reasoning = `"${task.title}" shows ${doneItems}/${totalItems} items done - 100% of its breakdown is complete, yet the task itself still reads as ${getStatusLabel(getTaskStatus(task))}${lastTouched != null && lastTouched > 0 ? ` and has been untouched for ${lastTouched} day${lastTouched > 1 ? 's' : ''}` : ''}. Everything planned is finished; the only remaining step is marking it completed, and the longer that waits, the easier it is to lose the completion entirely.`;
         suggestion = 'Mark it completed - all breakdown work is done.';
       } else if (stalled) {
-        reasoning = `"${task.title}" has ${totalItems} planned item${totalItems > 1 ? 's' : ''} with ${doneItems} done, and nothing has changed in ${lastTouched} day${lastTouched > 1 ? 's' : ''}. On paper it is ${pct}% complete, but in practice it has been idle for over a week - not slow progress, but stalled. The plan exists and execution stopped near the start, which is the most common way notes quietly die.`;
+        reasoning = `"${task.title}" has ${totalItems} planned item${totalItems > 1 ? 's' : ''} with ${doneItems} done, and nothing has changed in ${lastTouched} day${lastTouched > 1 ? 's' : ''}. On paper it is ${pct}% complete, but in practice it has been idle for over a week - not slow progress, but stalled. The plan exists and execution stopped near the start, which is the most common way tasks quietly die.`;
         suggestion = 'Restart it this week, or consciously cut it from the active set.';
       } else if (pct === 0) {
         reasoning = `"${task.title}"'s breakdown is fully untouched (0/${totalItems} items done) but it was worked on ${lastTouched == null ? 'recently' : lastTouched === 0 ? 'today' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`} - early motion without execution yet. It has been picked up, but none of the actual work has started, so it still ranks as "about to start" rather than in progress.`;
@@ -244,7 +246,7 @@ const buildProgressItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       } else {
         const recently = lastTouched != null && lastTouched <= 3;
         reasoning = recently
-          ? `"${task.title}" is genuinely moving: ${doneItems}/${totalItems} items done (${pct}%), last touched${lastTouched === 0 ? ' today' : ` ${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. With ${openItems} item${openItems > 1 ? 's' : ''} left, the momentum looks real - this is one of the notes actually trending toward completion.`
+          ? `"${task.title}" is genuinely moving: ${doneItems}/${totalItems} items done (${pct}%), last touched${lastTouched === 0 ? ' today' : ` ${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}. With ${openItems} item${openItems > 1 ? 's' : ''} left, the momentum looks real - this is one of the tasks actually trending toward completion.`
           : `"${task.title}" shows partial progress - ${doneItems}/${totalItems} items done (${pct}%) - but the last change was ${lastTouched == null ? 'some time ago' : `${lastTouched} day${lastTouched > 1 ? 's' : ''} ago`}, which puts it in a stalled-midway state: work started, then paused. ${openItems > 0 ? `The remaining ${openItems} item${openItems > 1 ? 's' : ''} still represent a real block of effort.` : ''}`;
         suggestion = recently ? undefined : 'Pick it up again within the next few days, or it will slip from half-done to abandoned.';
       }
@@ -276,7 +278,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
           suggestion = 'Start it within the next 48 hours to keep the label honest.';
         } else {
           tone = 'bad';
-          reasoning = `"${task.title}" carries the strongest label available, yet nothing in the data earns it: ${dueText}, with only ${openItems} open item${openItems !== 1 ? 's' : ''}. An urgent tag with no deadline and no heavy workload is how notes become permanently stressful while still being deferred.`;
+          reasoning = `"${task.title}" carries the strongest label available, yet nothing in the data earns it: ${dueText}, with only ${openItems} open item${openItems !== 1 ? 's' : ''}. An urgent tag with no deadline and no heavy workload is how tasks become permanently stressful while still being deferred.`;
           suggestion = 'Demote it to Medium, or give it a real deadline and keep Urgent.';
         }
         break;
@@ -306,7 +308,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
           suggestion = 'Re-date it and raise it to High, or consciously drop it to Low and close it out.';
         } else if (days != null && days <= 3) {
           tone = 'warn';
-          reasoning = `"${task.title}" is ${dueText}, which makes it one of the nearest deadlines in the active set - yet it is only Medium. The closer a deadline gets, the more the Medium tag understates it: in any priority-sorted view this note will sit below work with far fewer time constraints.`;
+          reasoning = `"${task.title}" is ${dueText}, which makes it one of the nearest deadlines in the active set - yet it is only Medium. The closer a deadline gets, the more the Medium tag understates it: in any priority-sorted view this task will sit below work with far fewer time constraints.`;
           suggestion = 'Bump it to High for now - its deadline is inside the 72-hour window.';
         } else {
           tone = 'ok';
@@ -317,7 +319,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       case 'low':
         if (days != null && days <= 5) {
           tone = 'bad';
-          reasoning = `"${task.title}" is Low but carries a deadline that is ${dueText}. That is a contradiction the data cannot square: either it matters enough to hit that date (then Low is wrong) or it does not matter (then the deadline is noise). Low-priority notes with real deadlines are exactly the ones that quietly slip past the date.`;
+          reasoning = `"${task.title}" is Low but carries a deadline that is ${dueText}. That is a contradiction the data cannot square: either it matters enough to hit that date (then Low is wrong) or it does not matter (then the deadline is noise). Low-priority tasks with real deadlines are exactly the ones that quietly slip past the date.`;
           suggestion = 'Raise it to High/Medium, or remove the deadline and accept it stays parked.';
         } else if (openItems >= 3) {
           tone = 'warn';
@@ -332,7 +334,7 @@ const buildPriorityItems = (activeScope: Task[]): AnalysisTaskItem[] =>
       default:
         if (due != null && days! <= 3) {
           tone = 'warn';
-          reasoning = `"${task.title}" has no priority tag at all, but it is ${dueText} - the least-important-looking note becomes the most important one when it holds the nearest deadline. Unprioritized notes are invisible to every priority-based view, which makes this the riskiest configuration in the set.`;
+          reasoning = `"${task.title}" has no priority tag at all, but it is ${dueText} - the least-important-looking task becomes the most important one when it holds the nearest deadline. Unprioritized tasks are invisible to every priority-based view, which makes this the riskiest configuration in the set.`;
           suggestion = `Tag it High (or at least Medium) - it has a deadline inside ${days} day${days! > 1 ? 's' : ''}.`;
         } else if (openItems >= 5) {
           tone = 'warn';
@@ -585,7 +587,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({ count, onConf
           <Trash2 className="w-5 h-5 text-destructive" />
         </div>
         <div>
-          <h3 className="text-sm font-bold text-foreground">Delete {count} note{count === 1 ? '' : 's'}?</h3>
+          <h3 className="text-sm font-bold text-foreground">Delete {count} task{count === 1 ? '' : 's'}?</h3>
           <p className="text-xs text-muted-foreground mt-0.5">This action cannot be undone.</p>
         </div>
       </div>
@@ -600,7 +602,7 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({ count, onConf
           onClick={onConfirm}
           className="px-4 py-2 text-sm font-bold bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-all"
         >
-          Delete {count} note{count === 1 ? '' : 's'}
+          Delete {count} task{count === 1 ? '' : 's'}
         </button>
       </div>
     </div>
@@ -618,9 +620,9 @@ const Tasks: React.FC = () => {
     deleteTask,
     updateColumn,
     reorderTasksInSection,
-    moveCrossSection,
   } = useNotesContext();
   const { user } = useAuth();
+  const { open: openDeepFocus } = useDeepFocus();
 
   const tier = user?.subscriptionTier || 'free';
   const isPremium = tier === 'premium' || tier === 'pro';
@@ -1035,50 +1037,34 @@ const Tasks: React.FC = () => {
       updateFields.projectId = dstProject;
       if (proj) updateFields.projectName = proj.name;
     }
+    if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
 
     const isSameDroppable = srcDroppableId === dstDroppableId;
-    if (isSameDroppable) {
-      const ids = dstTasks.map(t => t.id);
-      const [removed] = ids.splice(srcIndex, 1);
-      ids.splice(dstIndex, 0, removed);
-      reorderTasksInSection(ids);
-      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-      const sectionIdSet = new Set(ids);
-      const resultIds: string[] = [];
-      let inserted = false;
-      for (const id of base) {
-        if (sectionIdSet.has(id)) {
-          if (!inserted) { resultIds.push(...ids); inserted = true; }
-        } else {
-          resultIds.push(id);
+    if (!isSameDroppable) {
+      const dstIds = dstTasks.map(t => t.id);
+      const srcIds = srcTasks.map(t => t.id);
+      if (srcDroppableId !== dstDroppableId) {
+        const insertIdx = Math.min(dstIndex, dstIds.length);
+        dstIds.splice(insertIdx, 0, movingTaskId);
+        const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
+        filteredSrcIds.forEach((id, idx) => updateTask(id, { order: idx }));
+        dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
+        const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+        const srcSet = new Set(srcTasks.map(t => t.id));
+        const dstSet = new Set(dstTasks.map(t => t.id));
+        const resultIds: string[] = [];
+        let srcInserted = false;
+        let dstInserted = false;
+        for (const id of base) {
+          if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
+          else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+          else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
         }
+        if (!srcInserted) resultIds.push(...filteredSrcIds);
+        if (!dstInserted) resultIds.push(...dstIds);
+        setOrderedActiveIds(resultIds);
       }
-      if (!inserted) resultIds.push(...ids);
-      setOrderedActiveIds(resultIds);
-      if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
-      return;
     }
-
-    const srcIds = srcTasks.map(t => t.id);
-    const dstIds = dstTasks.map(t => t.id);
-    const insertIdx = Math.min(dstIndex, dstIds.length);
-    dstIds.splice(insertIdx, 0, movingTaskId);
-    const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
-    moveCrossSection(movingTaskId, updateFields, filteredSrcIds, dstIds);
-    const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-    const srcSet = new Set(srcTasks.map(t => t.id));
-    const dstSet = new Set(dstTasks.map(t => t.id));
-    const resultIds: string[] = [];
-    let srcInserted = false;
-    let dstInserted = false;
-    for (const id of base) {
-      if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
-      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
-      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
-    }
-    if (!srcInserted) resultIds.push(...filteredSrcIds);
-    if (!dstInserted) resultIds.push(...dstIds);
-    setOrderedActiveIds(resultIds);
   };
 
   useEffect(() => {
@@ -1807,7 +1793,13 @@ const Tasks: React.FC = () => {
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-
+              <button
+                onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
+                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+                title="Open Deep Focus"
+              >
+                <Brain className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </div>
@@ -2708,6 +2700,126 @@ const Tasks: React.FC = () => {
                 </div>
               </div>
 
+              {/* Sub-tasks Card */}
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                    {newTaskSubtasks.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({newTaskSubtasks.length})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {newTaskDuration > 0 && (
+                      <span className={`text-xs font-medium ${
+                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
+                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+                      }`}>
+                        {newSubtaskRemaining > 0
+                          ? `${newSubtaskRemaining} mins left`
+                          : newSubtaskRemaining < 0
+                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
+                          : '0 mins left ✓'}
+                      </span>
+                    )}
+                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </button>
+                {!draftSubtasksCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    <DragDropContext onDragEnd={handleDraftReorder}>
+                      <Droppable droppableId="draft-subtasks">
+                        {(provided) => (
+                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                            {newTaskSubtasks.map((subtask, index) => (
+                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <GripVertical className="w-4 h-4" />
+                                    </div>
+                                    {editingDraftSubtaskId === subtask.id ? (
+                                      <>
+                                        <input
+                                          autoFocus
+                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                          value={editingDraftSubtaskText}
+                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                                          onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
+                                          onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
+                                        />
+                                        <input
+                                          type="number"
+                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                          value={editingDraftSubtaskDuration}
+                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span
+                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
+                                          className="text-sm text-foreground font-medium cursor-text truncate"
+                                        >
+                                          {subtask.text}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                            value={subtask.durationMinutes || 0}
+                                            onChange={e => {
+                                              const val = Math.max(0, Number(e.target.value) || 0);
+                                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                                            }}
+                                          />
+                                          <span className="text-[10px] text-muted-foreground">min</span>
+                                          <button
+                                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                      <input
+                        value={newSubtaskText}
+                        onChange={e => setNewSubtaskText(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
+                        placeholder="New sub-task"
+                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        value={newSubtaskDuration}
+                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="min"
+                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                      />
+                      <button onClick={addSubtaskDraft} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Checklist Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
@@ -2902,7 +3014,7 @@ const Tasks: React.FC = () => {
                       <div className="border border-dashed border-border rounded-xl">
                         <PremiumGate
                           title="File Attachments"
-                          description="Attach files, images, and documents directly to your notes."
+                          description="Attach files, images, and documents directly to your tasks."
                           icon={<Paperclip className="w-6 h-6 text-primary" />}
                         />
                       </div>
@@ -2976,7 +3088,7 @@ const Tasks: React.FC = () => {
                       <div className="border border-dashed border-border rounded-xl">
                         <PremiumGate
                           title="Image Attachments"
-                          description="Upload images directly to your notes."
+                          description="Upload images directly to your tasks."
                           icon={<Image className="w-6 h-6 text-primary" />}
                         />
                       </div>
@@ -3006,14 +3118,6 @@ const Tasks: React.FC = () => {
                             } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                         {newTaskImages.length > 0 && (
                           <DraggableImageGrid
                             images={newTaskImages}
@@ -3285,7 +3389,7 @@ const Tasks: React.FC = () => {
               <div className="flex-1 flex items-center">
                 <PremiumGate
                   title="Note Analysis"
-                  description="Get AI-style insights into your notes with overview, deadline risk, progress tracking, and priority checks."
+                  description="Get AI-style insights into your tasks with overview, deadline risk, progress tracking, and priority checks."
                   icon={<BarChart3 className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -3521,7 +3625,7 @@ const Tasks: React.FC = () => {
               </div>
               <span className="text-sm font-bold text-foreground">
                 {selectedDeleteTaskIds.length === 0
-                  ? 'Select notes to delete'
+                  ? 'Select tasks to delete'
                   : `${selectedDeleteTaskIds.length} task${selectedDeleteTaskIds.length === 1 ? '' : 's'} selected`}
               </span>
             </div>
@@ -3741,14 +3845,6 @@ const Tasks: React.FC = () => {
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
                       )}
@@ -3802,11 +3898,11 @@ const Tasks: React.FC = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-              <h3 className="text-sm font-bold text-foreground">Move note?</h3>
+              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
               <p className="text-xs text-muted-foreground mt-2">
                 {moveType === 'project'
-                  ? 'Are you sure you want to move this note? It will change the note's project.'
-                  : 'Are you sure you want to move this note? It will change the note's column.'}
+                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
+                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
               </p>
               <label className="flex items-center gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
@@ -3927,9 +4023,33 @@ export const TaskDropdownExpanded: React.FC<{
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = false;
+  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
+  useEffect(() => {
+    if (String(task.id).startsWith('template-edit-')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        const cur = taskRef.current;
+        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
+        const missing = rows.filter((r: any) => !known.has(String(r.id)));
+        if (missing.length === 0) return;
+        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
+        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
+        const updates: Partial<Task> = {};
+        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
+        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
+        onUpdateTask(task.id, updates);
+      } catch { /* offline - keep local state */ }
+    })();
+    return () => { cancelled = true; };
+  }, [task.id, onUpdateTask]);
+
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
   const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
@@ -4069,9 +4189,21 @@ export const TaskDropdownExpanded: React.FC<{
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
+      let saved = false;
       try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+        if (res.ok) {
+          uploaded.push(await res.json());
+          saved = true;
+        }
+      } catch { /* fall through to local copy */ }
+      if (!saved) {
+        try {
         uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-      } catch { /* skip unreadable file, keep the rest */ }
+        } catch { /* skip unreadable file, keep the rest */ }
+      }
     }
     if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     setUploading(false);
@@ -4080,6 +4212,9 @@ export const TaskDropdownExpanded: React.FC<{
 
   const deleteAttachment = async (attachmentId: string) => {
     onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
+    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    }
   };
 
   const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
@@ -4124,7 +4259,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -4146,6 +4281,80 @@ export const TaskDropdownExpanded: React.FC<{
           rows={3}
           className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
         />
+      </div>
+
+      {/* Sub-tasks Section */}
+      <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setSubtasksCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+            {effectiveSubtasks.length > 0 && (
+              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {taskDuration > 0 && (
+              <span className={`text-xs font-medium ${
+                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
+                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+              }`}>
+                {subtaskTimeRemaining > 0
+                  ? `${subtaskTimeRemaining} mins left`
+                  : subtaskTimeRemaining < 0
+                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
+                  : '0 mins left ✓'}
+              </span>
+            )}
+            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+          </div>
+        </button>
+        {!subtasksCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
+              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
+            </div>
+            {allSubtasksDone && (
+              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                All sub-tasks are done ✓
+              </div>
+            )}
+
+            <DragDropContext onDragEnd={handleDropdownReorder}>
+              <Droppable droppableId={`dropdown-subtasks-${task.id}`} type="subtask">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+
+            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+              <input
+                value={newSubtaskText}
+                onChange={e => setNewSubtaskText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                placeholder="Add sub-task"
+                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                min={0}
+                value={newSubtaskDuration}
+                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="min"
+                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+              />
+              <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
+                Add
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Checklist Section */}
@@ -4359,7 +4568,7 @@ export const TaskDropdownExpanded: React.FC<{
               <div className="border border-dashed border-border rounded-xl">
                 <PremiumGate
                   title="File Attachments"
-                  description="Attach files, images, and documents directly to your notes."
+                  description="Attach files, images, and documents directly to your tasks."
                   icon={<Paperclip className="w-6 h-6 text-primary" />}
                 />
               </div>
@@ -4400,6 +4609,805 @@ export const TaskDropdownExpanded: React.FC<{
 
       {/* Images Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
+        <button
+          onClick={() => setImagesCollapsed(prev => !prev)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <Image className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Images</h3>
+            {task.images && task.images.length > 0 && (
+              <span className="text-xs text-muted-foreground">({task.images.length})</span>
+            )}
+          </div>
+          {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+        </button>
+        {!imagesCollapsed && (
+          <div className="border-t border-border/60 px-4 py-3 space-y-3">
+            {!isPremium ? (
+              <div className="border border-dashed border-border rounded-xl">
+                <PremiumGate
+                  title="Image Attachments"
+                  description="Upload images directly to your tasks."
+                  icon={<Image className="w-6 h-6 text-primary" />}
+                />
+              </div>
+            ) : (
+              <>
+                {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                    <div className="flex flex-col items-center justify-center py-4">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                      </div>
+                      <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                    </div>
+                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
+                      if (!e.target.files) return;
+                      const files = Array.from(e.target.files);
+                      e.currentTarget.value = '';
+                      setUploadingImages(true);
+                      try {
+                        const newImages: Attachment[] = [];
+                      for (const file of files) {
+                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+                        let saved = false;
+                        if (!isHeic) {
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
+                            if (res.ok) {
+                              newImages.push(await res.json());
+                              saved = true;
+                            }
+                          } catch { /* fall through to local copy */ }
+                        }
+                        if (!saved) {
+                          try {
+                            const fileUrl = await imageToDataUrl(file);
+                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                          } catch { /* skip unreadable file, keep the rest */ }
+                        }
+                      }
+                        onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
+                      } finally { setUploadingImages(false); }
+                    }} className="hidden" />
+                  </label>
+                )}
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
+                {task.images && task.images.length > 0 && (
+                  <DraggableImageGrid
+                    images={task.images}
+                    onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  />
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const TaskFullView: React.FC<TaskFullViewProps> = ({
+  task,
+  boardColumns,
+  projects,
+  allTags,
+  onClose,
+  onUpdateTask,
+  onToggleChecklistItem,
+  onAddChecklistItem,
+  onDeleteChecklistItem,
+  onDeleteTask,
+  onToggleTag,
+  onCreateTag,
+  onDeleteTagEverywhere,
+  onRenameTagEverywhere,
+  onColorChangeTagEverywhere,
+  isPremium,
+  isPro,
+  onJumpToTask,
+  onEditTemplate,
+  onSaveTemplate,
+  editingTemplateMeta,
+  templateEditName,
+  onTemplateEditNameChange,
+}) => {
+  const [newSubtaskText, setNewSubtaskText] = useState('');
+  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [newCommentText, setNewCommentText] = useState('');
+  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
+  const [editingChecklistText, setEditingChecklistText] = useState('');
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagName, setEditingTagName] = useState('');
+
+  const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
+  const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
+  const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
+  const [editingTmplName, setEditingTmplName] = useState('');
+  const [editingTmplTitle, setEditingTmplTitle] = useState('');
+  const [editingTmplDesc, setEditingTmplDesc] = useState('');
+  const [editingTmplPriority, setEditingTmplPriority] = useState<string>('medium');
+  const [editingTmplDuration, setEditingTmplDuration] = useState(0);
+  const [editingTmplStartDate, setEditingTmplStartDate] = useState('');
+  const [editingTmplStartTime, setEditingTmplStartTime] = useState('');
+  const [editingTmplDueDate, setEditingTmplDueDate] = useState('');
+  const [editingTmplDueTime, setEditingTmplDueTime] = useState('');
+  const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
+  const [fullViewTmplName, setFullViewTmplName] = useState('');
+  const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
+  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
+  const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
+  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
+  const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
+  const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
+  const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
+  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
+  useEffect(() => {
+    const prev = readTaskSections(task.id);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, collapsedChecklists]);
+  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
+  const [newChecklistTitle, setNewChecklistTitle] = useState('');
+  const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
+  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
+  const taskRef = useRef(task);
+  taskRef.current = task;
+  useEffect(() => {
+    if (String(task.id).startsWith('template-edit-')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
+        if (!res.ok || cancelled) return;
+        const rows = await res.json();
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        const cur = taskRef.current;
+        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
+        const missing = rows.filter((r: any) => !known.has(String(r.id)));
+        if (missing.length === 0) return;
+        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
+        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
+        const updates: Partial<Task> = {};
+        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
+        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
+        onUpdateTask(task.id, updates);
+      } catch { /* offline - keep local state */ }
+    })();
+    return () => { cancelled = true; };
+  }, [task.id, onUpdateTask]);
+
+  const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
+  const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
+  const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
+    ? task.subtasks
+    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
+  const primaryChecklist = checklistLists[0];
+  const taskDuration = Math.max(0, Number(task.duration) || 0);
+  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
+  const subtaskTimeRemaining = taskDuration - subtaskTotal;
+  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
+  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
+
+  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
+
+  const activityEntries = useMemo(() => {
+    const entries: Array<{ id: string; text: string; createdAt: string; actor?: string }> = [
+      ...(task.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt, actor: entry.actor })),
+      { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
+      ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
+      ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
+      ...(task.comments || []).map(comment => ({
+        id: comment.id,
+        text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
+        createdAt: comment.createdAt,
+      })),
+    ];
+    return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [task.activityLog, task.createdAt, task.projectId, task.updatedAt, taskProject?.name, task.comments]);
+
+  const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
+    const nextChecklists = legacySubtasksChecklist
+      ? task.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
+      : task.checklists;
+    onUpdateTask(task.id, { subtasks: nextSubtasks, checklists: nextChecklists });
+  };
+
+  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
+    const updateRecursive = (list: Subtask[]): Subtask[] =>
+      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
+    persistSubtasks(updateRecursive(effectiveSubtasks));
+  };
+
+  const addSubtask = () => {
+    if (!newSubtaskText.trim()) return;
+    persistSubtasks([
+      ...effectiveSubtasks,
+      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
+    ]);
+    setNewSubtaskText('');
+    setNewSubtaskDuration(10);
+  };
+
+  const removeSubtask = (subtaskId: string) => {
+    const removeRecursive = (list: Subtask[]): Subtask[] =>
+      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
+    persistSubtasks(removeRecursive(effectiveSubtasks));
+  };
+
+  const insertSubtask = (beforeId: string | null) => {
+    const newSub: Subtask = { id: crypto.randomUUID(), text: 'title', completed: false, durationMinutes: 0 };
+    if (beforeId) {
+      const idx = effectiveSubtasks.findIndex(st => st.id === beforeId);
+      if (idx >= 0) {
+        const next = [...effectiveSubtasks];
+        next.splice(idx, 0, newSub);
+        persistSubtasks(next);
+        return;
+      }
+    }
+    persistSubtasks([...effectiveSubtasks, newSub]);
+  };
+
+  const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
+    return (
+      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+        {(provided) => (
+          <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
+            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
+              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                <GripVertical className="w-4 h-4" />
+              </div>
+              <CircleToggle
+                completed={subtask.completed}
+                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                size="sm"
+              />
+              {editingSubtaskId === subtask.id ? (
+                <input
+                  autoFocus
+                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                  value={editingSubtaskText}
+                  onChange={e => setEditingSubtaskText(e.target.value)}
+                  onBlur={() => saveSubtaskEdit(subtask.id)}
+                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                />
+              ) : (
+                <span
+                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                >
+                  {subtask.text}
+                </span>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  value={subtask.durationMinutes || 0}
+                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
+                />
+                <span className="text-[10px] text-muted-foreground">min</span>
+                <button
+                  onClick={() => removeSubtask(subtask.id)}
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Draggable>
+    );
+  };
+
+  const saveSubtaskEdit = (subtaskId: string) => {
+    const next = editingSubtaskText.trim();
+    if (next) updateSubtask(subtaskId, { text: next });
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
+  };
+
+  const addChecklistItemToTask = () => {
+    if (!newChecklistText.trim()) return;
+    if (!primaryChecklist) {
+      onUpdateTask(task.id, {
+        checklists: [...checklistLists, {
+          id: crypto.randomUUID(),
+          title: 'Checklist',
+          items: [{ id: crypto.randomUUID(), text: newChecklistText.trim(), completed: false }],
+        }],
+      });
+      setNewChecklistText('');
+      return;
+    }
+    onAddChecklistItem(task.id, primaryChecklist.id, newChecklistText.trim());
+    setNewChecklistText('');
+  };
+
+  const addChecklistItemToList = (checklistId: string) => {
+    if (!newChecklistText.trim()) return;
+    onAddChecklistItem(task.id, checklistId, newChecklistText.trim());
+    setNewChecklistText('');
+  };
+
+  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
+    const next = editingChecklistText.trim();
+    if (next) {
+      onUpdateTask(task.id, {
+        checklists: task.checklists.map(list =>
+          list.id !== checklistId ? list : {
+            ...list,
+            items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
+          }
+        ),
+      });
+    }
+    setEditingChecklistItemId(null);
+    setEditingChecklistText('');
+  };
+
+  const handleChecklistListReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(task.checklists);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    onUpdateTask(task.id, { checklists: items });
+  }, [task.checklists, onUpdateTask]);
+
+  const handleFullViewReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    if (result.source.droppableId === 'fullview-subtasks') {
+      const items = Array.from(effectiveSubtasks);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      persistSubtasks(items);
+    } else if (result.source.droppableId === 'fullview-checklist-lists') {
+      const items = Array.from(task.checklists);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      onUpdateTask(task.id, { checklists: items });
+    } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
+      const srcChecklistId = result.source.droppableId.replace('fullview-checklist-', '');
+      const dstChecklistId = result.destination.droppableId.replace('fullview-checklist-', '');
+
+      if (srcChecklistId === dstChecklistId) {
+        onUpdateTask(task.id, {
+          checklists: task.checklists.map(cl =>
+            cl.id === srcChecklistId
+              ? { ...cl, items: (() => {
+                  const items = Array.from(cl.items);
+                  const [removed] = items.splice(result.source.index, 1);
+                  items.splice(result.destination.index, 0, removed);
+                  return items;
+                })() }
+              : cl
+          ),
+        });
+      } else {
+        let movedItem: ChecklistItem | null = null;
+        const without = task.checklists.map(cl =>
+          cl.id === srcChecklistId
+            ? (() => { const items = Array.from(cl.items); [movedItem] = items.splice(result.source.index, 1); return { ...cl, items }; })()
+            : cl
+        );
+        if (!movedItem) return;
+        onUpdateTask(task.id, {
+          checklists: without.map(cl =>
+            cl.id === dstChecklistId
+              ? { ...cl, items: [...cl.items.slice(0, result.destination!.index), movedItem!, ...cl.items.slice(result.destination!.index)] }
+              : cl
+          ),
+        });
+      }
+    }
+  }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
+
+  const handleImageReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(task.images || []);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    onUpdateTask(task.id, { images: items });
+  }, [task.images, onUpdateTask]);
+
+  const handleAttachmentReorder = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    const items = Array.from(task.attachments || []);
+    const [removed] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, removed);
+    onUpdateTask(task.id, { attachments: items });
+  }, [task.attachments, onUpdateTask]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+    setUploading(true);
+    const uploaded: Attachment[] = [];
+    for (const file of files) {
+      let saved = false;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+        if (res.ok) {
+          uploaded.push(await res.json());
+          saved = true;
+        }
+      } catch { /* fall through to local copy */ }
+      if (!saved) {
+        try {
+        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
+        } catch { /* skip unreadable file, keep the rest */ }
+      }
+    }
+    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
+    setUploading(false);
+    e.currentTarget.value = '';
+  };
+
+  const deleteAttachment = async (attachmentId: string) => {
+    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
+    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    }
+  };
+
+  const createTagForTask = () => {
+    const name = normalizeTagName(newTagName);
+    if (!name) return;
+    onCreateTag(task.id, name, newTagColor);
+    setNewTagName('');
+    setNewTagColor(randomTagColor());
+    setTagPickerOpen(false);
+  };
+
+  const addComment = () => {
+    if (!newCommentText.trim()) return;
+    onUpdateTask(task.id, {
+      comments: [...(task.comments || []), { id: crypto.randomUUID(), text: newCommentText.trim(), createdAt: new Date().toISOString() }],
+    });
+    setNewCommentText('');
+  };
+
+  const deleteComment = (commentId: string) => {
+    onUpdateTask(task.id, { comments: (task.comments || []).filter(c => c.id !== commentId) });
+  };
+
+  const updateComment = (commentId: string, text: string) => {
+    onUpdateTask(task.id, { comments: (task.comments || []).map(c => c.id === commentId ? { ...c, text } : c) });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      <div
+        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0 pt-1">
+            {editingTemplateMeta && (
+              <div className="mb-2">
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
+                <input
+                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  value={templateEditName || ''}
+                  onChange={e => onTemplateEditNameChange?.(e.target.value)}
+                  placeholder="Template name"
+                />
+              </div>
+            )}
+            <input
+              className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+              value={task.title}
+              onChange={e => onUpdateTask(task.id, { title: e.target.value })}
+            />
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 mt-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
+            <Select value={task.priority} onValueChange={v => onUpdateTask(task.id, { priority: v as Priority })}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder="Select priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
+            <input
+              type="number"
+              min={0}
+              value={task.duration || 0}
+              onChange={e => onUpdateTask(task.id, { duration: Math.max(0, Number(e.target.value) || 0) })}
+              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
+              <Select value={task.projectId ? String(task.projectId) : 'my-notes'} onValueChange={v => {
+                const newId = v === 'my-notes' ? null : Number(v);
+                if (newId !== task.projectId) {
+                  setProjectChangeConfirm({ v, oldProjectId: task.projectId });
+                }
+              }}>
+                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="my-notes">My Notes</SelectItem>
+                  {projects.map(project => (
+                    <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {task.projectId && (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Column</label>
+                <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
+                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                    <SelectValue placeholder="Column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {boardColumns
+                      .filter(col => col.projectId === task.projectId)
+                      .sort((a, b) => a.order - b.order)
+                      .map(col => (
+                        <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> Start
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={task.startDate || ''}
+                  onChange={e => onUpdateTask(task.id, { startDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={task.startTime || ''}
+                  onChange={e => onUpdateTask(task.id, { startTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Calendar className="w-3 h-3" /> End
+            </label>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="relative flex-1">
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="date"
+                  value={task.dueDate || ''}
+                  onChange={e => onUpdateTask(task.id, { dueDate: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+              <div className="relative w-[130px]">
+                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="time"
+                  value={task.dueTime || ''}
+                  onChange={e => onUpdateTask(task.id, { dueTime: e.target.value || undefined })}
+                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
+          <textarea
+            value={task.description}
+            onChange={e => onUpdateTask(task.id, { description: e.target.value })}
+            rows={4}
+            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Tag className="w-4 h-4 text-muted-foreground" />
+            Tags
+          </h3>
+
+          {task.labels.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {task.labels.map(label => (
+                <button
+                  key={label.id}
+                  onClick={() => setTagPickerOpen(true)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                  <X className="w-3 h-3 opacity-80" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setTagPickerOpen(prev => !prev)}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+          >
+            <Tag className="w-3.5 h-3.5" />
+            {task.labels.length > 0 ? `${task.labels.length} tag${task.labels.length > 1 ? 's' : ''} selected` : 'Add tags'}
+          </button>
+
+          {tagPickerOpen && (
+            <TagsModal
+              open={tagPickerOpen}
+              onClose={() => setTagPickerOpen(false)}
+              tags={allTags}
+              selectedIds={task.labels.map(label => label.id)}
+              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(task.id, label); }}
+              onCreate={(name, color) => {
+                onCreateTag(task.id, name, color);
+              }}
+              onDelete={tagId => onDeleteTagEverywhere(tagId)}
+              onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
+              onColorChange={(tagId, color) => onColorChangeTagEverywhere(tagId, color)}
+            />
+          )}
+          {tagDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+              <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-sm font-bold text-foreground">Delete tag everywhere?</h3>
+                <p className="text-xs text-muted-foreground mt-2">This will remove this tag from the whole app. This action cannot be undone.</p>
+                <div className="flex justify-end gap-2 mt-4">
+                  <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+                  <button onClick={() => { onDeleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-muted/20">
+          <button
+            onClick={() => setSubtasksCollapsed(prev => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+              {(task.subtasks ?? []).length > 0 && (
+                <span className="text-xs text-muted-foreground">({(task.subtasks ?? []).length})</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {taskDuration > 0 && (
+                <span className={`text-xs font-medium ${
+                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
+                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
+                }`}>
+                  {subtaskTimeRemaining > 0
+                    ? `${subtaskTimeRemaining} mins left`
+                    : subtaskTimeRemaining < 0
+                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
+                    : '0 mins left ✓'}
+                </span>
+              )}
+              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+            </div>
+          </button>
+          {!subtasksCollapsed && (
+            <div className="border-t border-border/60 px-4 py-3 space-y-3">
+              <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
+              </div>
+              {allSubtasksDone && (
+                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                  All sub-tasks are done ✓
+                </div>
+              )}
+
+              <DragDropContext onDragEnd={handleFullViewReorder}>
+                <Droppable droppableId="fullview-subtasks" type="subtask">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
+                      {(task.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, si))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+
+              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                <input
+                  value={newSubtaskText}
+                  onChange={e => setNewSubtaskText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                  placeholder="Add sub-task"
+                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={newSubtaskDuration}
+                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="min"
+                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                />
+                <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-border bg-muted/20">
           <button
             onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
             className="w-full flex items-center justify-between px-4 py-3"
@@ -4608,7 +5616,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <div className="border border-dashed border-border rounded-xl">
                   <PremiumGate
                     title="File Attachments"
-                    description="Attach files, images, and documents directly to your notes."
+                    description="Attach files, images, and documents directly to your tasks."
                     icon={<Paperclip className="w-6 h-6 text-primary" />}
                   />
                 </div>
@@ -4667,7 +5675,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <div className="border border-dashed border-border rounded-xl">
                   <PremiumGate
                     title="Image Attachments"
-                    description="Upload images directly to your notes."
+                    description="Upload images directly to your tasks."
                     icon={<Image className="w-6 h-6 text-primary" />}
                   />
                 </div>
@@ -4694,6 +5702,17 @@ export const TaskDropdownExpanded: React.FC<{
                       for (const file of files) {
                         const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
                         let saved = false;
+                        if (!isHeic) {
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
+                            if (res.ok) {
+                              newImages.push(await res.json());
+                              saved = true;
+                            }
+                          } catch { /* fall through to local copy */ }
+                        }
                         if (!saved) {
                           try {
                             const fileUrl = await imageToDataUrl(file);
@@ -4707,19 +5726,19 @@ export const TaskDropdownExpanded: React.FC<{
                   }} className="hidden" />
                 </label>
               )}
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
+              {showUploadingImages && (
+                <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-medium">Uploading...</span>
                   </div>
-                )}
-                {task.images && task.images.length > 0 && (
+                </div>
+              )}
+              {task.images && task.images.length > 0 && (
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); }}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                 />
               )}
                 </>
@@ -4910,7 +5929,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
-                  placeholder="e.g. Daily Standup Note"
+                  placeholder="e.g. Daily Standup Task"
                   value={fullViewTmplName}
                   onChange={e => setFullViewTmplName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
@@ -5001,7 +6020,7 @@ export const TaskDropdownExpanded: React.FC<{
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm font-medium text-foreground">No templates yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Save a note as a template first.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a task as a template first.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -5065,8 +6084,8 @@ export const TaskDropdownExpanded: React.FC<{
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setProjectChangeConfirm(null)}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-bold text-foreground">Move note?</h3>
-            <p className="text-xs text-muted-foreground mt-2">Changing the project will move this note. Do you want to continue?</p>
+            <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+            <p className="text-xs text-muted-foreground mt-2">Changing the project will move this task. Do you want to continue?</p>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={() => setProjectChangeConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button onClick={() => {
@@ -5115,7 +6134,7 @@ export const TaskDropdownExpanded: React.FC<{
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>
-                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Note description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
+                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

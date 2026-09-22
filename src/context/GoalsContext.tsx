@@ -590,6 +590,38 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [logActivity],
   );
 
+  const moveCrossSection = useCallback(
+    (
+      movingTaskId: string,
+      updates: Partial<Task>,
+      srcOrderedIds: string[],
+      dstOrderedIds: string[]
+    ) => {
+      setBoard(prev => {
+        const taskMap = new Map(prev.tasks.map(t => [t.id, t]));
+        const srcSet = new Set(srcOrderedIds);
+        const dstSet = new Set(dstOrderedIds);
+        const untouched = prev.tasks.filter(t => !srcSet.has(t.id) && !dstSet.has(t.id));
+        const srcTasks = srcOrderedIds
+          .filter(id => id !== movingTaskId)
+          .map((id, idx) => {
+            const t = taskMap.get(id);
+            return t ? { ...t, order: idx } : null;
+          })
+          .filter(Boolean) as Task[];
+        const dstTasks = dstOrderedIds
+          .map((id, idx) => {
+            const t = taskMap.get(id);
+            if (!t) return null;
+            return id === movingTaskId ? { ...t, ...updates, order: idx } : { ...t, order: idx };
+          })
+          .filter(Boolean) as Task[];
+        return { ...prev, tasks: [...untouched, ...srcTasks, ...dstTasks] };
+      });
+    },
+    []
+  );
+
   const reorderTasks = useCallback(
     (orderedIds: string[]) => {
       setBoard(prev => ({
@@ -636,6 +668,7 @@ export const GoalsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         bulkDeleteTasks,
         reorderTasks,
         reorderTasksInSection,
+        moveCrossSection,
         lastSyncTime,
         syncStatus,
       }}

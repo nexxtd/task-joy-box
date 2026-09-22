@@ -3934,8 +3934,8 @@ const Tasks: React.FC = () => {
               <h3 className="text-sm font-bold text-foreground">Move task?</h3>
               <p className="text-xs text-muted-foreground mt-2">
                 {moveType === 'project'
-                  ? 'Are you sure you want to move this task? It will change the task's project.'
-                  : 'Are you sure you want to move this task? It will change the task's column.'}
+                  ? "Are you sure you want to move this task? It will change the task's project."
+                  : "Are you sure you want to move this task? It will change the task's column."}
               </p>
               <label className="flex items-center gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
