@@ -1289,7 +1289,7 @@ const Projects: React.FC = () => {
                     {provided.placeholder}
 
                     {addingColumn ? (
-                      <div className="flex-shrink-0 w-96 animate-fade-in bg-card border border-border rounded-2xl p-4" data-no-pan="true">
+                      <div className="flex-shrink-0 w-[420px] animate-fade-in bg-card border border-border rounded-2xl p-4" data-no-pan="true">
                         <input
                           autoFocus
                           value={newColTitle}
@@ -1310,7 +1310,7 @@ const Projects: React.FC = () => {
                       <button
                         onClick={() => setAddingColumn(true)}
                         data-no-pan="true"
-                        className="flex-shrink-0 w-96 flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
+                        className="flex-shrink-0 w-[420px] flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
                       >
                         <Plus className="w-4 h-4" />
                         Add Column
