@@ -1931,7 +1931,14 @@ const Projects: React.FC = () => {
                 {!addExistingStep ? (
                   <div className="space-y-2">
                     <button
-                      onClick={() => navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}`)}
+                      onClick={() => {
+                        if (addPopupType === 'task') {
+                          setShowCreateModal(true);
+                          setAddPopupOpen(false);
+                        } else {
+                          navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}`);
+                        }
+                      }}
                       className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted hover:border-primary/50 transition-all text-left"
                     >
                       <Plus className="w-5 h-5 text-primary" />

@@ -498,6 +498,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
   const handleAdd = async () => {
     if (newTitle.trim()) {
       const taskId = crypto.randomUUID();
+      const colProjectId = (column as any).projectId ?? null;
       addTask(column.id, newTitle.trim(), {
         id: taskId,
         description: description.trim(),
@@ -509,6 +510,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
         duration: duration || undefined,
         subtasks: subtasks.length > 0 ? subtasks.map(s => ({ id: crypto.randomUUID(), text: s, completed: false })) : [],
         dueTime: dueTime || undefined,
+        projectId: colProjectId,
       });
 
       // Handle file uploads
