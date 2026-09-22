@@ -259,7 +259,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     const taskDurFmt = formatDuration(task.duration || 0);
-    const taskTags = task.labels.slice(0, 3);
+    const taskTags = task.labels.length > 2 ? task.labels.slice(0, 1) : task.labels.slice(0, 2);
     return (
       <div
         data-no-pan="true"
@@ -286,7 +286,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-hidden">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
