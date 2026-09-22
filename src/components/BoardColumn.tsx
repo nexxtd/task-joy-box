@@ -561,7 +561,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-80 select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-96 select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
