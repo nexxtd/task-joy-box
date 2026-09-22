@@ -11,6 +11,7 @@ import { toast } from '@/hooks/use-toast';
 import ComingSoon from '@/components/shared/ComingSoon';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 interface DocumentItem {
   id: number;
@@ -86,7 +87,7 @@ const DocumentsInternal: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [uploading, setUploading] = useState(false);
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
   const [creatingNew, setCreatingNew] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showIncompatible, setShowIncompatible] = useState(false);

@@ -51,6 +51,7 @@ import {
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -619,6 +620,7 @@ const Tasks: React.FC = () => {
     deleteTask,
     updateColumn,
     reorderTasksInSection,
+    moveCrossSection,
   } = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
@@ -694,8 +696,9 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
-  const [uploadingMainImages, setUploadingMainImages] = useState(false);
+  const { uploading: uploadingMainImages, showUploading: showUploadingMainImages, setUploading: setUploadingMainImages } = useDelayedUploading();
   const uploadingImages = uploadingMainImages;
+  const showUploadingImages = showUploadingMainImages;
   const setUploadingImages = setUploadingMainImages;
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
@@ -1038,34 +1041,56 @@ const Tasks: React.FC = () => {
       updateFields.projectId = dstProject;
       if (proj) updateFields.projectName = proj.name;
     }
-    if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
 
     const isSameDroppable = srcDroppableId === dstDroppableId;
-    if (!isSameDroppable) {
-      const dstIds = dstTasks.map(t => t.id);
-      const srcIds = srcTasks.map(t => t.id);
-      if (srcDroppableId !== dstDroppableId) {
-        const insertIdx = Math.min(dstIndex, dstIds.length);
-        dstIds.splice(insertIdx, 0, movingTaskId);
-        const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
-        filteredSrcIds.forEach((id, idx) => updateTask(id, { order: idx }));
-        dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
-        const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-        const srcSet = new Set(srcTasks.map(t => t.id));
-        const dstSet = new Set(dstTasks.map(t => t.id));
-        const resultIds: string[] = [];
-        let srcInserted = false;
-        let dstInserted = false;
-        for (const id of base) {
-          if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
-          else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
-          else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    if (isSameDroppable) {
+      // Same droppable — simple reorder within section
+      const ids = dstTasks.map(t => t.id);
+      const [removed] = ids.splice(srcIndex, 1);
+      ids.splice(dstIndex, 0, removed);
+      reorderTasksInSection(ids);
+      // keep orderedActiveIds in sync
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const sectionIdSet = new Set(ids);
+      // fallback: just reorder within base
+      const resultIds: string[] = [];
+      let inserted = false;
+      for (const id of base) {
+        if (sectionIdSet.has(id)) {
+          if (!inserted) { resultIds.push(...ids); inserted = true; }
+        } else {
+          resultIds.push(id);
         }
-        if (!srcInserted) resultIds.push(...filteredSrcIds);
-        if (!dstInserted) resultIds.push(...dstIds);
-        setOrderedActiveIds(resultIds);
       }
+      if (!inserted) resultIds.push(...ids);
+      setOrderedActiveIds(resultIds);
+      if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
+      return;
     }
+
+    // Cross-droppable: use single batched moveCrossSection to avoid freezing (many updateTask calls)
+    const srcIds = srcTasks.map(t => t.id);
+    const dstIds = dstTasks.map(t => t.id);
+    const insertIdx = Math.min(dstIndex, dstIds.length);
+    dstIds.splice(insertIdx, 0, movingTaskId);
+    const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
+    // Single efficient persist
+    moveCrossSection(movingTaskId, updateFields, filteredSrcIds, dstIds);
+    // Update orderedActiveIds locally (single setState, no per-task updates)
+    const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+    const srcSet = new Set(srcTasks.map(t => t.id));
+    const dstSet = new Set(dstTasks.map(t => t.id));
+    const resultIds: string[] = [];
+    let srcInserted = false;
+    let dstInserted = false;
+    for (const id of base) {
+      if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
+      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    }
+    if (!srcInserted) resultIds.push(...filteredSrcIds);
+    if (!dstInserted) resultIds.push(...dstIds);
+    setOrderedActiveIds(resultIds);
   };
 
   useEffect(() => {
@@ -1135,7 +1160,27 @@ const Tasks: React.FC = () => {
     const isCrossColumn = srcId !== dstId;
     const isCrossProject = srcProject !== dstProject;
 
-    if (isCrossProject || isCrossColumn) {
+    if (isCrossProject) {
+      // Tasks page only: confirm before moving to a different project (task can't belong to two projects)
+      const taskIdForMove = getTasksForDroppable(srcId)?.[result.source.index]?.id;
+      const shouldSkipConfirm = localStorage.getItem('tasks-drag-confirm-project') === 'true';
+      if (!shouldSkipConfirm) {
+        setPendingDragMove({
+          taskId: taskIdForMove || result.draggableId,
+          srcDroppableId: srcId,
+          dstDroppableId: dstId,
+          srcIndex: result.source.index,
+          dstIndex: result.destination.index,
+          dstProject,
+          moveType: 'project',
+        });
+        return;
+      }
+      applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
+      expandDroppableGroup(dstId);
+      return;
+    }
+    if (isCrossColumn) {
       applyDragMoveDirect(result.source.droppableId, result.destination.droppableId, result.source.index, result.destination.index, dstProject);
       expandDroppableGroup(dstId);
       return;
@@ -2777,7 +2822,7 @@ const Tasks: React.FC = () => {
                                           <span className="text-[10px] text-muted-foreground">min</span>
                                           <button
                                             onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
@@ -3094,9 +3139,9 @@ const Tasks: React.FC = () => {
                         <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                             </div>
-                            <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                            <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                           </div>
                           <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -3115,6 +3160,14 @@ const Tasks: React.FC = () => {
                             } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
                         {newTaskImages.length > 0 && (
                           <DraggableImageGrid
                             images={newTaskImages}
@@ -3835,13 +3888,21 @@ const Tasks: React.FC = () => {
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                            {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
                       )}
@@ -3888,6 +3949,7 @@ const Tasks: React.FC = () => {
             localStorage.setItem(`tasks-drag-confirm-${moveType}`, 'true');
           }
           applyDragMoveDirect(srcDroppableId, dstDroppableId, srcIndex, dstIndex, dstProject);
+          expandDroppableGroup(dstDroppableId);
           setPendingDragMove(null);
         };
 
@@ -3895,19 +3957,19 @@ const Tasks: React.FC = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPendingDragMove(null)}>
             <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
             <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-              <h3 className="text-sm font-bold text-foreground">Move task?</h3>
+              <h3 className="text-sm font-bold text-foreground">Move to different project?</h3>
               <p className="text-xs text-muted-foreground mt-2">
                 {moveType === 'project'
-                  ? 'Are you sure you want to move this task? It will change the task\'s project.'
-                  : 'Are you sure you want to move this task? It will change the task\'s column.'}
+                  ? 'This will remove the task from its current project — a task can't belong to two projects at once. Continue?'
+                  : 'Are you sure you want to move this task? It will change the task's column.'}
               </p>
               <label className="flex items-center gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
-                <span className="text-xs text-muted-foreground">Don't ask me again</span>
+                <span className="text-xs text-muted-foreground">Don't show this again</span>
               </label>
               <div className="flex justify-end gap-2 mt-4">
                 <button onClick={() => setPendingDragMove(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
+                <button onClick={confirmMove} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Continue</button>
               </div>
             </div>
           </div>
@@ -4016,9 +4078,9 @@ export const TaskDropdownExpanded: React.FC<{
     const prev = readTaskSections(task.id);
     writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, collapsedLists: [...collapsedChecklists] });
   }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, collapsedChecklists]);
-  const [uploading, setUploading] = useState(false);
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
 
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
@@ -4256,7 +4318,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -4581,7 +4643,7 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                   <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                 </label>
-                {uploading && (
+                {showUploading && (
                   <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -4637,9 +4699,9 @@ export const TaskDropdownExpanded: React.FC<{
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                        {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                      <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                     </div>
                     <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -4678,7 +4740,7 @@ export const TaskDropdownExpanded: React.FC<{
                     }} className="hidden" />
                   </label>
                 )}
-                {uploadingImages && (
+                {showUploadingImages && (
                   <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -4737,8 +4799,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -4924,7 +4986,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -5631,7 +5693,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                   </label>
-                  {uploading && (
+                  {showUploading && (
                     <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -5686,9 +5748,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                      {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                     </div>
-                    <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                    <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -5727,15 +5789,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     }} className="hidden" />
                 </label>
               )}
-              {uploadingImages && (
-                <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm font-medium">Uploading...</span>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
                   </div>
-                </div>
-              )}
-              {task.images && task.images.length > 0 && (
+                )}
+                {task.images && task.images.length > 0 && (
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}

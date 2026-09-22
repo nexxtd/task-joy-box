@@ -24,6 +24,12 @@ interface GoalsContextType {
   bulkDeleteTasks: (taskIds: string[]) => void;
   reorderTasks: (orderedIds: string[]) => void;
   reorderTasksInSection: (orderedIds: string[]) => void;
+  moveCrossSection: (
+    movingTaskId: string,
+    updates: Partial<Task>,
+    srcOrderedIds: string[],
+    dstOrderedIds: string[]
+  ) => void;
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';

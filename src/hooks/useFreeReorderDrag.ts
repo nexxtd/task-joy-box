@@ -1,16 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 
-type RectSnapshot = {
-  id: string;
-  index: number;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  centerX: number;
-  centerY: number;
-};
-
 type GhostPosition = {
   x: number;
   y: number;
@@ -23,7 +12,8 @@ type UseFreeReorderDragOptions<T extends { id: string }> = {
   onReorder: (items: T[]) => void;
 };
 
-const MOVE_EPSILON = 0.5;
+const MOVE_EPSILON = 3; // Increased to prevent jitter from micro-movements / trackpad tremor
+const DRAG_START_THRESHOLD = 4; // Require 4px movement before reordering starts, prevents accidental jumps on click
 
 export function useFreeReorderDrag<T extends { id: string }>({
   items,
@@ -32,10 +22,11 @@ export function useFreeReorderDrag<T extends { id: string }>({
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
   const dragIdRef = useRef<string | null>(null);
   const previewRef = useRef<T[] | null>(null);
-  const rectsRef = useRef<RectSnapshot[]>([]);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  const startPointerRef = useRef<{ x: number; y: number } | null>(null);
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
   const rafRef = useRef<number | null>(null);
+  const hasMovedRef = useRef(false);
 
   const [dragId, setDragId] = useState<string | null>(null);
   const [previewOrder, setPreviewOrder] = useState<T[] | null>(null);
@@ -48,36 +39,32 @@ export function useFreeReorderDrag<T extends { id: string }>({
     else itemRefs.current.delete(id);
   }, []);
 
-  const snapshotRects = useCallback((draggedId: string) => {
-    rectsRef.current = items
-      .map((item, index) => {
-        const el = itemRefs.current.get(item.id);
-        if (!el) return null;
-        const rect = el.getBoundingClientRect();
-        return {
-          id: item.id,
-          index,
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-          centerX: rect.left + rect.width / 2,
-          centerY: rect.top + rect.height / 2,
-        };
-      })
-      .filter((rect): rect is RectSnapshot => Boolean(rect) && rect.id !== draggedId);
-  }, [items]);
-
-  const getInsertIndex = useCallback((clientX: number, clientY: number, draggedId: string) => {
+  const getInsertIndexLive = useCallback((clientX: number, clientY: number, draggedId: string) => {
     const current = previewRef.current ?? items;
     const ids = current.map((item) => item.id);
     const draggedIdx = ids.indexOf(draggedId);
     if (draggedIdx === -1) return 0;
 
-    let nearest: RectSnapshot | null = null;
+    // Read live rects for all items except dragged - ensures positions reflect current reflow
+    const liveRects: { id: string; centerX: number; centerY: number }[] = [];
+    for (const item of current) {
+      if (item.id === draggedId) continue;
+      const el = itemRefs.current.get(item.id);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      liveRects.push({
+        id: item.id,
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2,
+      });
+    }
+
+    if (liveRects.length === 0) return draggedIdx;
+
+    let nearest: { id: string; centerX: number; centerY: number } | null = null;
     let bestDistance = Infinity;
 
-    for (const rect of rectsRef.current) {
+    for (const rect of liveRects) {
       const dx = clientX - rect.centerX;
       const dy = clientY - rect.centerY;
       const distance = dx * dx + dy * dy;
@@ -108,9 +95,20 @@ export function useFreeReorderDrag<T extends { id: string }>({
     if (!did || !pointer || !previewRef.current) return;
 
     pendingPointerRef.current = null;
+    // Update ghost position via transform-friendly state (will be used with translate)
     setGhostPos((prev) => prev ? { ...prev, x: pointer.x - prev.w / 2, y: pointer.y - prev.h / 2 } : null);
 
-    const idx = getInsertIndex(pointer.x, pointer.y, did);
+    // Only reorder after threshold to prevent jitter on initial hold
+    if (!hasMovedRef.current) {
+      const start = startPointerRef.current;
+      if (start) {
+        const dist = Math.hypot(pointer.x - start.x, pointer.y - start.y);
+        if (dist < DRAG_START_THRESHOLD) return;
+        hasMovedRef.current = true;
+      }
+    }
+
+    const idx = getInsertIndexLive(pointer.x, pointer.y, did);
     const cur = [...previewRef.current];
     const from = cur.findIndex((item) => item.id === did);
     if (from === -1 || from === idx) return;
@@ -119,7 +117,7 @@ export function useFreeReorderDrag<T extends { id: string }>({
     cur.splice(idx, 0, moved);
     previewRef.current = cur;
     setPreviewOrder(cur);
-  }, [getInsertIndex]);
+  }, [getInsertIndexLive]);
 
   const onPointerDown = useCallback((e: React.PointerEvent, id: string) => {
     const el = itemRefs.current.get(id);
@@ -128,16 +126,19 @@ export function useFreeReorderDrag<T extends { id: string }>({
     const rect = el.getBoundingClientRect();
     dragIdRef.current = id;
     previewRef.current = [...items];
-    pointerRef.current = { x: e.clientX, y: e.clientY };
+    const startPos = { x: e.clientX, y: e.clientY };
+    pointerRef.current = startPos;
+    startPointerRef.current = startPos;
     pendingPointerRef.current = null;
-    snapshotRects(id);
+    hasMovedRef.current = false;
 
     setDragId(id);
     setPreviewOrder([...items]);
     setGhostPos({ x: e.clientX - rect.width / 2, y: e.clientY - rect.height / 2, w: rect.width, h: rect.height });
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Use setPointerCapture for reliable drag even outside element
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
-  }, [items, snapshotRects]);
+  }, [items]);
 
   const onPointerMove = useCallback((e: PointerEvent) => {
     if (!dragIdRef.current || !previewRef.current) return;
@@ -174,9 +175,10 @@ export function useFreeReorderDrag<T extends { id: string }>({
 
     dragIdRef.current = null;
     previewRef.current = null;
-    rectsRef.current = [];
     pointerRef.current = null;
+    startPointerRef.current = null;
     pendingPointerRef.current = null;
+    hasMovedRef.current = false;
     setDragId(null);
     setPreviewOrder(null);
     setGhostPos(null);

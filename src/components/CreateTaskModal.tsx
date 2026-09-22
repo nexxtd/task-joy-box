@@ -25,6 +25,7 @@ import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import AttachmentRow from '@/components/AttachmentRow';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 type NewTaskSubtaskDraft = {
   id: string;
@@ -207,7 +208,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
   const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
   const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [aiBuilderInput, setAiBuilderInput] = useState('');
@@ -1275,9 +1276,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                            {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -1298,7 +1299,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           }
                         }} className="hidden" />
                       </label>
-                      {uploadingImages && (
+                      {showUploadingImages && (
                         <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -1306,7 +1307,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           </div>
                         </div>
                       )}
-                      <DraggableImageGrid
+<DraggableImageGrid
                         images={newTaskImages}
                         onReorder={setNewTaskImages}
                         onRemove={(id) => setNewTaskImages(prev => prev.filter(img => img.id !== id))}
@@ -1629,6 +1630,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         <span>Add Image</span>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
                       {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>
                   </button>

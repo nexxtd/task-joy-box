@@ -10,6 +10,7 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -40,7 +41,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   const { user } = useAuth();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
   const isPro = user?.subscriptionTier === 'pro';
-  const [uploading, setUploading] = useState(false);
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
 
   useEffect(() => {
@@ -532,8 +533,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               <div className="group relative mt-1">
                 <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${!isPremium && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
                   <div className="flex flex-col items-center justify-center py-2">
-                    {uploading ? <Loader2 className="w-5 h-5 text-primary mb-1 animate-spin" /> : <FileUp className="w-5 h-5 text-primary mb-1" />}
-                    <p className="text-[10px] font-medium text-foreground">{uploading ? 'Uploading...' : 'Click to upload'}</p>
+                    {showUploading ? <Loader2 className="w-5 h-5 text-primary mb-1 animate-spin" /> : <FileUp className="w-5 h-5 text-primary mb-1" />}
+                    <p className="text-[10px] font-medium text-foreground">{showUploading ? 'Uploading...' : 'Click to upload'}</p>
                   </div>
                   <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium} />
                 </label>

@@ -12,6 +12,7 @@ import {
   Draggable,
   DropResult,
 } from '@hello-pangea/dnd';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 interface TodayStats {
   sessions: number;
@@ -215,8 +216,8 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
-  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
+  const { uploading: uploadingFiles, showUploading: showUploadingFiles, setUploading: setUploadingFiles } = useDelayedUploading();
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [editingSubtaskDuration, setEditingSubtaskDuration] = useState(0);
@@ -1671,9 +1672,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          {uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
+                          {showUploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                        <p className="text-sm font-medium text-foreground">{showUploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
                       <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -1710,14 +1711,14 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                          {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                        <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
                       <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </label>
-                    {uploadingImages && (
+                    {showUploadingImages && (
                       <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                         <div className="flex items-center gap-2">
                           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -1725,7 +1726,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                         </div>
                       </div>
                     )}
-                    {(selectedTask.images?.length ?? 0) > 0 ? (
+{(selectedTask.images?.length ?? 0) > 0 ? (
                       <DraggableImageGrid
                         images={selectedTask.images || []}
                         onReorder={(newItems) => updateTask(selectedTask.id, { images: newItems })}

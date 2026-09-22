@@ -60,7 +60,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
         const dragged = images.find(i => i.id === dragId);
         if (!dragged) return null;
         return (
-          <div className="fixed pointer-events-none z-50 rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: ghostPos.x, top: ghostPos.y, width: ghostPos.w, height: ghostPos.h }}>
+          <div className="fixed pointer-events-none z-50 rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}>
             {dragged.fileUrl ? <img src={dragged.fileUrl} alt={dragged.fileName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2"><p className="text-xs text-white truncate">{dragged.fileName}</p></div>
           </div>

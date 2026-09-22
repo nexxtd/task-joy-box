@@ -35,7 +35,7 @@ export const FreeAttachmentList: React.FC<{
           </div>
         );
       })}
-      {dragId && ghostPos && (() => { const dragged = attachments.find(x => x.id === dragId); if (!dragged) return null; return <div className="fixed pointer-events-none z-50 rounded-xl shadow-2xl ring-2 ring-primary bg-card border opacity-95 scale-105 rotate-1 flex items-center gap-3 p-3 will-change-transform" style={{ left: ghostPos.x, top: ghostPos.y, width: ghostPos.w, height: ghostPos.h }}><div className="p-1"><GripVertical className="w-4 h-4 text-muted-foreground" /></div><span className="text-sm truncate flex-1">{dragged.fileName}</span></div>; })()}
+      {dragId && ghostPos && (() => { const dragged = attachments.find(x => x.id === dragId); if (!dragged) return null; return <div className="fixed pointer-events-none z-50 rounded-xl shadow-2xl ring-2 ring-primary bg-card border opacity-95 scale-105 rotate-1 flex items-center gap-3 p-3 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}><div className="p-1"><GripVertical className="w-4 h-4 text-muted-foreground" /></div><span className="text-sm truncate flex-1">{dragged.fileName}</span></div>; })()}
     </div>
   );
 };

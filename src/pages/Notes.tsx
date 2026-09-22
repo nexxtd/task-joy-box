@@ -13,7 +13,6 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
-  Brain,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -37,7 +36,6 @@ import {
   Zap,
   Loader2,
 } from 'lucide-react';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
@@ -51,6 +49,7 @@ import {
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
+import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -619,9 +618,9 @@ const Tasks: React.FC = () => {
     deleteTask,
     updateColumn,
     reorderTasksInSection,
+    moveCrossSection,
   } = useNotesContext();
   const { user } = useAuth();
-  const { open: openDeepFocus } = useDeepFocus();
 
   const tier = user?.subscriptionTier || 'free';
   const isPremium = tier === 'premium' || tier === 'pro';
@@ -694,7 +693,7 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-notes' | null; moveType: 'column' | 'project' } | null>(null);
@@ -1036,34 +1035,50 @@ const Tasks: React.FC = () => {
       updateFields.projectId = dstProject;
       if (proj) updateFields.projectName = proj.name;
     }
-    if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
 
     const isSameDroppable = srcDroppableId === dstDroppableId;
-    if (!isSameDroppable) {
-      const dstIds = dstTasks.map(t => t.id);
-      const srcIds = srcTasks.map(t => t.id);
-      if (srcDroppableId !== dstDroppableId) {
-        const insertIdx = Math.min(dstIndex, dstIds.length);
-        dstIds.splice(insertIdx, 0, movingTaskId);
-        const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
-        filteredSrcIds.forEach((id, idx) => updateTask(id, { order: idx }));
-        dstIds.forEach((id, idx) => updateTask(id, { order: idx }));
-        const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
-        const srcSet = new Set(srcTasks.map(t => t.id));
-        const dstSet = new Set(dstTasks.map(t => t.id));
-        const resultIds: string[] = [];
-        let srcInserted = false;
-        let dstInserted = false;
-        for (const id of base) {
-          if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
-          else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
-          else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    if (isSameDroppable) {
+      const ids = dstTasks.map(t => t.id);
+      const [removed] = ids.splice(srcIndex, 1);
+      ids.splice(dstIndex, 0, removed);
+      reorderTasksInSection(ids);
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const sectionIdSet = new Set(ids);
+      const resultIds: string[] = [];
+      let inserted = false;
+      for (const id of base) {
+        if (sectionIdSet.has(id)) {
+          if (!inserted) { resultIds.push(...ids); inserted = true; }
+        } else {
+          resultIds.push(id);
         }
-        if (!srcInserted) resultIds.push(...filteredSrcIds);
-        if (!dstInserted) resultIds.push(...dstIds);
-        setOrderedActiveIds(resultIds);
       }
+      if (!inserted) resultIds.push(...ids);
+      setOrderedActiveIds(resultIds);
+      if (Object.keys(updateFields).length > 0) updateTask(movingTaskId, updateFields);
+      return;
     }
+
+    const srcIds = srcTasks.map(t => t.id);
+    const dstIds = dstTasks.map(t => t.id);
+    const insertIdx = Math.min(dstIndex, dstIds.length);
+    dstIds.splice(insertIdx, 0, movingTaskId);
+    const filteredSrcIds = srcIds.filter(id => id !== movingTaskId);
+    moveCrossSection(movingTaskId, updateFields, filteredSrcIds, dstIds);
+    const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+    const srcSet = new Set(srcTasks.map(t => t.id));
+    const dstSet = new Set(dstTasks.map(t => t.id));
+    const resultIds: string[] = [];
+    let srcInserted = false;
+    let dstInserted = false;
+    for (const id of base) {
+      if (srcSet.has(id) && !srcInserted) { resultIds.push(...filteredSrcIds); srcInserted = true; }
+      else if (dstSet.has(id) && !dstInserted) { resultIds.push(...dstIds); dstInserted = true; }
+      else if (!srcSet.has(id) && !dstSet.has(id)) { resultIds.push(id); }
+    }
+    if (!srcInserted) resultIds.push(...filteredSrcIds);
+    if (!dstInserted) resultIds.push(...dstIds);
+    setOrderedActiveIds(resultIds);
   };
 
   useEffect(() => {
@@ -1792,13 +1807,7 @@ const Tasks: React.FC = () => {
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-              <button
-                onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                title="Open Deep Focus"
-              >
-                <Brain className="w-3.5 h-3.5" />
-              </button>
+
             </div>
           )}
         </div>
@@ -2699,126 +2708,6 @@ const Tasks: React.FC = () => {
                 </div>
               </div>
 
-              {/* Sub-tasks Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-                    {newTaskSubtasks.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newTaskSubtasks.length})</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {newTaskDuration > 0 && (
-                      <span className={`text-xs font-medium ${
-                        newSubtaskRemaining > 0 ? 'text-muted-foreground' :
-                        newSubtaskRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                      }`}>
-                        {newSubtaskRemaining > 0
-                          ? `${newSubtaskRemaining} mins left`
-                          : newSubtaskRemaining < 0
-                          ? `Over by ${Math.abs(newSubtaskRemaining)} mins`
-                          : '0 mins left ✓'}
-                      </span>
-                    )}
-                    {draftSubtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </button>
-                {!draftSubtasksCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    <DragDropContext onDragEnd={handleDraftReorder}>
-                      <Droppable droppableId="draft-subtasks">
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                            {newTaskSubtasks.map((subtask, index) => (
-                              <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-                                {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                      <GripVertical className="w-4 h-4" />
-                                    </div>
-                                    {editingDraftSubtaskId === subtask.id ? (
-                                      <>
-                                        <input
-                                          autoFocus
-                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskText}
-                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                          onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                        />
-                                        <input
-                                          type="number"
-                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskDuration}
-                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span
-                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text truncate"
-                                        >
-                                          {subtask.text}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                            value={subtask.durationMinutes || 0}
-                                            onChange={e => {
-                                              const val = Math.max(0, Number(e.target.value) || 0);
-                                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                            }}
-                                          />
-                                          <span className="text-[10px] text-muted-foreground">min</span>
-                                          <button
-                                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    </DragDropContext>
-                    <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                      <input
-                        value={newSubtaskText}
-                        onChange={e => setNewSubtaskText(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
-                        placeholder="New sub-task"
-                        className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={newSubtaskDuration}
-                        onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="min"
-                        className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                      />
-                      <button onClick={addSubtaskDraft} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Checklist Card */}
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
@@ -3096,9 +2985,9 @@ const Tasks: React.FC = () => {
                         <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                             </div>
-                            <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                            <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                           </div>
                           <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -3117,6 +3006,14 @@ const Tasks: React.FC = () => {
                             } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
                         {newTaskImages.length > 0 && (
                           <DraggableImageGrid
                             images={newTaskImages}
@@ -3837,13 +3734,21 @@ const Tasks: React.FC = () => {
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
+                  </div>
+                )}
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
                       )}
@@ -3900,8 +3805,8 @@ const Tasks: React.FC = () => {
               <h3 className="text-sm font-bold text-foreground">Move note?</h3>
               <p className="text-xs text-muted-foreground mt-2">
                 {moveType === 'project'
-                  ? 'Are you sure you want to move this note? It will change the note\'s project.'
-                  : 'Are you sure you want to move this note? It will change the note\'s column.'}
+                  ? 'Are you sure you want to move this note? It will change the note's project.'
+                  : 'Are you sure you want to move this note? It will change the note's column.'}
               </p>
               <label className="flex items-center gap-2 mt-3 cursor-pointer">
                 <input type="checkbox" checked={dontAsk} onChange={e => setDontAsk(e.target.checked)} className="rounded border-border" />
@@ -4018,8 +3923,8 @@ export const TaskDropdownExpanded: React.FC<{
     const prev = readTaskSections(task.id);
     writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, collapsedLists: [...collapsedChecklists] });
   }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, collapsedChecklists]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const { uploading, showUploading, setUploading } = useDelayedUploading();
+  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
   const canUseServerAttachmentApi = false;
@@ -4219,7 +4124,7 @@ export const TaskDropdownExpanded: React.FC<{
                 <span className="text-[10px] text-muted-foreground">min</span>
                 <button
                   onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -4241,80 +4146,6 @@ export const TaskDropdownExpanded: React.FC<{
           rows={3}
           className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
         />
-      </div>
-
-      {/* Sub-tasks Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setSubtasksCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-            {effectiveSubtasks.length > 0 && (
-              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {taskDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </button>
-        {!subtasksCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
-              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
-            </div>
-            {allSubtasksDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All sub-tasks are done ✓
-              </div>
-            )}
-
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-subtasks-${task.id}`} type="subtask">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-
-            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
-                value={newSubtaskText}
-                onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                placeholder="Add sub-task"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newSubtaskDuration}
-                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="min"
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
-                Add
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Checklist Section */}
@@ -4544,7 +4375,7 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                   <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                 </label>
-                {uploading && (
+                {showUploading && (
                   <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -4569,755 +4400,6 @@ export const TaskDropdownExpanded: React.FC<{
 
       {/* Images Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setImagesCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <Image className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Images</h3>
-            {task.images && task.images.length > 0 && (
-              <span className="text-xs text-muted-foreground">({task.images.length})</span>
-            )}
-          </div>
-          {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!imagesCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate
-                  title="Image Attachments"
-                  description="Upload images directly to your notes."
-                  icon={<Image className="w-6 h-6 text-primary" />}
-                />
-              </div>
-            ) : (
-              <>
-                {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
-                ) : (
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                    <div className="flex flex-col items-center justify-center py-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
-                      </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
-                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                    </div>
-                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                      if (!e.target.files) return;
-                      const files = Array.from(e.target.files);
-                      e.currentTarget.value = '';
-                      setUploadingImages(true);
-                      try {
-                        const newImages: Attachment[] = [];
-                      for (const file of files) {
-                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-                        let saved = false;
-                        if (!saved) {
-                          try {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          } catch { /* skip unreadable file, keep the rest */ }
-                        }
-                      }
-                        onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
-                      } finally { setUploadingImages(false); }
-                    }} className="hidden" />
-                  </label>
-                )}
-                {uploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
-                {task.images && task.images.length > 0 && (
-                  <DraggableImageGrid
-                    images={task.images}
-                    onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); }}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export const TaskFullView: React.FC<TaskFullViewProps> = ({
-  task,
-  boardColumns,
-  projects,
-  allTags,
-  onClose,
-  onUpdateTask,
-  onToggleChecklistItem,
-  onAddChecklistItem,
-  onDeleteChecklistItem,
-  onDeleteTask,
-  onToggleTag,
-  onCreateTag,
-  onDeleteTagEverywhere,
-  onRenameTagEverywhere,
-  onColorChangeTagEverywhere,
-  isPremium,
-  isPro,
-  onJumpToTask,
-  onEditTemplate,
-  onSaveTemplate,
-  editingTemplateMeta,
-  templateEditName,
-  onTemplateEditNameChange,
-}) => {
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
-  const [newChecklistText, setNewChecklistText] = useState('');
-  const [newCommentText, setNewCommentText] = useState('');
-  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
-  const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
-  const [editingCommentText, setEditingCommentText] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
-  const [tagPickerOpen, setTagPickerOpen] = useState(false);
-  const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
-  const [editingTagId, setEditingTagId] = useState<string | null>(null);
-  const [editingTagName, setEditingTagName] = useState('');
-
-  const [templatePopupOpen, setTemplatePopupOpen] = useState(false);
-  const [fullViewTemplates, setFullViewTemplates] = useState<TaskTemplate[]>([]);
-  const [editingTmpl, setEditingTmpl] = useState<TaskTemplate | null>(null);
-  const [editingTmplName, setEditingTmplName] = useState('');
-  const [editingTmplTitle, setEditingTmplTitle] = useState('');
-  const [editingTmplDesc, setEditingTmplDesc] = useState('');
-  const [editingTmplPriority, setEditingTmplPriority] = useState<string>('medium');
-  const [editingTmplDuration, setEditingTmplDuration] = useState(0);
-  const [editingTmplStartDate, setEditingTmplStartDate] = useState('');
-  const [editingTmplStartTime, setEditingTmplStartTime] = useState('');
-  const [editingTmplDueDate, setEditingTmplDueDate] = useState('');
-  const [editingTmplDueTime, setEditingTmplDueTime] = useState('');
-  const [fullViewSaveTmplOpen, setFullViewSaveTmplOpen] = useState(false);
-  const [fullViewTmplName, setFullViewTmplName] = useState('');
-  const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
-  const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
-  const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
-  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
-  const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
-  const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
-  const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
-  useEffect(() => {
-    const prev = readTaskSections(task.id);
-    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
-  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, collapsedChecklists]);
-  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
-  const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = false;
-  const taskRef = useRef(task);
-  taskRef.current = task;
-  const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
-  const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
-  const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
-    ? task.subtasks
-    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
-  const primaryChecklist = checklistLists[0];
-  const taskDuration = Math.max(0, Number(task.duration) || 0);
-  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
-  const subtaskTimeRemaining = taskDuration - subtaskTotal;
-  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
-  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
-  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
-  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
-  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
-  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
-
-  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) || null : null;
-
-  const activityEntries = useMemo(() => {
-    const entries: Array<{ id: string; text: string; createdAt: string; actor?: string }> = [
-      ...(task.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt, actor: entry.actor })),
-      { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
-      ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
-      ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
-      ...(task.comments || []).map(comment => ({
-        id: comment.id,
-        text: `Commented: ${comment.text.slice(0, 80)}${comment.text.length > 80 ? '...' : ''}`,
-        createdAt: comment.createdAt,
-      })),
-    ];
-    return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [task.activityLog, task.createdAt, task.projectId, task.updatedAt, taskProject?.name, task.comments]);
-
-  const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
-    const nextChecklists = legacySubtasksChecklist
-      ? task.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
-      : task.checklists;
-    onUpdateTask(task.id, { subtasks: nextSubtasks, checklists: nextChecklists });
-  };
-
-  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
-    const updateRecursive = (list: Subtask[]): Subtask[] =>
-      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
-    persistSubtasks(updateRecursive(effectiveSubtasks));
-  };
-
-  const addSubtask = () => {
-    if (!newSubtaskText.trim()) return;
-    persistSubtasks([
-      ...effectiveSubtasks,
-      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
-    ]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
-  };
-
-  const removeSubtask = (subtaskId: string) => {
-    const removeRecursive = (list: Subtask[]): Subtask[] =>
-      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
-    persistSubtasks(removeRecursive(effectiveSubtasks));
-  };
-
-  const insertSubtask = (beforeId: string | null) => {
-    const newSub: Subtask = { id: crypto.randomUUID(), text: 'title', completed: false, durationMinutes: 0 };
-    if (beforeId) {
-      const idx = effectiveSubtasks.findIndex(st => st.id === beforeId);
-      if (idx >= 0) {
-        const next = [...effectiveSubtasks];
-        next.splice(idx, 0, newSub);
-        persistSubtasks(next);
-        return;
-      }
-    }
-    persistSubtasks([...effectiveSubtasks, newSub]);
-  };
-
-  const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
-    return (
-      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <CircleToggle
-                completed={subtask.completed}
-                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                size="sm"
-              />
-              {editingSubtaskId === subtask.id ? (
-                <input
-                  autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                  value={editingSubtaskText}
-                  onChange={e => setEditingSubtaskText(e.target.value)}
-                  onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                />
-              ) : (
-                <span
-                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                >
-                  {subtask.text}
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={subtask.durationMinutes || 0}
-                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                />
-                <span className="text-[10px] text-muted-foreground">min</span>
-                <button
-                  onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Draggable>
-    );
-  };
-
-  const saveSubtaskEdit = (subtaskId: string) => {
-    const next = editingSubtaskText.trim();
-    if (next) updateSubtask(subtaskId, { text: next });
-    setEditingSubtaskId(null);
-    setEditingSubtaskText('');
-  };
-
-  const addChecklistItemToTask = () => {
-    if (!newChecklistText.trim()) return;
-    if (!primaryChecklist) {
-      onUpdateTask(task.id, {
-        checklists: [...checklistLists, {
-          id: crypto.randomUUID(),
-          title: 'Checklist',
-          items: [{ id: crypto.randomUUID(), text: newChecklistText.trim(), completed: false }],
-        }],
-      });
-      setNewChecklistText('');
-      return;
-    }
-    onAddChecklistItem(task.id, primaryChecklist.id, newChecklistText.trim());
-    setNewChecklistText('');
-  };
-
-  const addChecklistItemToList = (checklistId: string) => {
-    if (!newChecklistText.trim()) return;
-    onAddChecklistItem(task.id, checklistId, newChecklistText.trim());
-    setNewChecklistText('');
-  };
-
-  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
-    const next = editingChecklistText.trim();
-    if (next) {
-      onUpdateTask(task.id, {
-        checklists: task.checklists.map(list =>
-          list.id !== checklistId ? list : {
-            ...list,
-            items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
-          }
-        ),
-      });
-    }
-    setEditingChecklistItemId(null);
-    setEditingChecklistText('');
-  };
-
-  const handleChecklistListReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.checklists);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { checklists: items });
-  }, [task.checklists, onUpdateTask]);
-
-  const handleFullViewReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    if (result.source.droppableId === 'fullview-subtasks') {
-      const items = Array.from(effectiveSubtasks);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      persistSubtasks(items);
-    } else if (result.source.droppableId === 'fullview-checklist-lists') {
-      const items = Array.from(task.checklists);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      onUpdateTask(task.id, { checklists: items });
-    } else if (result.source.droppableId.startsWith('fullview-checklist-')) {
-      const srcChecklistId = result.source.droppableId.replace('fullview-checklist-', '');
-      const dstChecklistId = result.destination.droppableId.replace('fullview-checklist-', '');
-
-      if (srcChecklistId === dstChecklistId) {
-        onUpdateTask(task.id, {
-          checklists: task.checklists.map(cl =>
-            cl.id === srcChecklistId
-              ? { ...cl, items: (() => {
-                  const items = Array.from(cl.items);
-                  const [removed] = items.splice(result.source.index, 1);
-                  items.splice(result.destination.index, 0, removed);
-                  return items;
-                })() }
-              : cl
-          ),
-        });
-      } else {
-        let movedItem: ChecklistItem | null = null;
-        const without = task.checklists.map(cl =>
-          cl.id === srcChecklistId
-            ? (() => { const items = Array.from(cl.items); [movedItem] = items.splice(result.source.index, 1); return { ...cl, items }; })()
-            : cl
-        );
-        if (!movedItem) return;
-        onUpdateTask(task.id, {
-          checklists: without.map(cl =>
-            cl.id === dstChecklistId
-              ? { ...cl, items: [...cl.items.slice(0, result.destination!.index), movedItem!, ...cl.items.slice(result.destination!.index)] }
-              : cl
-          ),
-        });
-      }
-    }
-  }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
-
-  const handleImageReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.images || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { images: items });
-  }, [task.images, onUpdateTask]);
-
-  const handleAttachmentReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.attachments || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { attachments: items });
-  }, [task.attachments, onUpdateTask]);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-    setUploading(true);
-    const uploaded: Attachment[] = [];
-    for (const file of files) {
-      try {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-      } catch { /* skip unreadable file, keep the rest */ }
-    }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
-    setUploading(false);
-    e.currentTarget.value = '';
-  };
-
-  const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-  };
-
-  const createTagForTask = () => {
-    const name = normalizeTagName(newTagName);
-    if (!name) return;
-    onCreateTag(task.id, name, newTagColor);
-    setNewTagName('');
-    setNewTagColor(randomTagColor());
-    setTagPickerOpen(false);
-  };
-
-  const addComment = () => {
-    if (!newCommentText.trim()) return;
-    onUpdateTask(task.id, {
-      comments: [...(task.comments || []), { id: crypto.randomUUID(), text: newCommentText.trim(), createdAt: new Date().toISOString() }],
-    });
-    setNewCommentText('');
-  };
-
-  const deleteComment = (commentId: string) => {
-    onUpdateTask(task.id, { comments: (task.comments || []).filter(c => c.id !== commentId) });
-  };
-
-  const updateComment = (commentId: string, text: string) => {
-    onUpdateTask(task.id, { comments: (task.comments || []).map(c => c.id === commentId ? { ...c, text } : c) });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-      <div
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0 pt-1">
-            {editingTemplateMeta && (
-              <div className="mb-2">
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
-                <input
-                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  value={templateEditName || ''}
-                  onChange={e => onTemplateEditNameChange?.(e.target.value)}
-                  placeholder="Template name"
-                />
-              </div>
-            )}
-            <input
-              className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
-              value={task.title}
-              onChange={e => onUpdateTask(task.id, { title: e.target.value })}
-            />
-          </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 mt-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Priority</label>
-            <Select value={task.priority} onValueChange={v => onUpdateTask(task.id, { priority: v as Priority })}>
-              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="none">None</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-            <input
-              type="number"
-              min={0}
-              value={task.duration || 0}
-              onChange={e => onUpdateTask(task.id, { duration: Math.max(0, Number(e.target.value) || 0) })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
-              <Select value={task.projectId ? String(task.projectId) : 'my-notes'} onValueChange={v => {
-                const newId = v === 'my-notes' ? null : Number(v);
-                if (newId !== task.projectId) {
-                  setProjectChangeConfirm({ v, oldProjectId: task.projectId });
-                }
-              }}>
-                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="my-notes">My Notes</SelectItem>
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {task.projectId && (
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Column</label>
-                <Select value={task.columnId} onValueChange={v => onUpdateTask(task.id, { columnId: v })}>
-                  <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                    <SelectValue placeholder="Column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {boardColumns
-                      .filter(col => col.projectId === task.projectId)
-                      .sort((a, b) => a.order - b.order)
-                      .map(col => (
-                        <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> Start
-            </label>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={task.startDate || ''}
-                  onChange={e => onUpdateTask(task.id, { startDate: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[130px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={task.startTime || ''}
-                  onChange={e => onUpdateTask(task.id, { startTime: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> End
-            </label>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={task.dueDate || ''}
-                  onChange={e => onUpdateTask(task.id, { dueDate: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[130px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={task.dueTime || ''}
-                  onChange={e => onUpdateTask(task.id, { dueTime: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
-          <textarea
-            value={task.description}
-            onChange={e => onUpdateTask(task.id, { description: e.target.value })}
-            rows={4}
-            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Tag className="w-4 h-4 text-muted-foreground" />
-            Tags
-          </h3>
-
-          {task.labels.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {task.labels.map(label => (
-                <button
-                  key={label.id}
-                  onClick={() => setTagPickerOpen(true)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                  <X className="w-3 h-3 opacity-80" />
-                </button>
-              ))}
-            </div>
-          )}
-
-          <button
-            onClick={() => setTagPickerOpen(prev => !prev)}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-          >
-            <Tag className="w-3.5 h-3.5" />
-            {task.labels.length > 0 ? `${task.labels.length} tag${task.labels.length > 1 ? 's' : ''} selected` : 'Add tags'}
-          </button>
-
-          {tagPickerOpen && (
-            <TagsModal
-              open={tagPickerOpen}
-              onClose={() => setTagPickerOpen(false)}
-              tags={allTags}
-              selectedIds={task.labels.map(label => label.id)}
-              onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(task.id, label); }}
-              onCreate={(name, color) => {
-                onCreateTag(task.id, name, color);
-              }}
-              onDelete={tagId => onDeleteTagEverywhere(tagId)}
-              onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
-              onColorChange={(tagId, color) => onColorChangeTagEverywhere(tagId, color)}
-            />
-          )}
-          {tagDeleteConfirm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setTagDeleteConfirm(null)}>
-              <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
-              <div className="relative bg-card border border-border rounded-2xl shadow-2xl p-5 max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                <h3 className="text-sm font-bold text-foreground">Delete tag everywhere?</h3>
-                <p className="text-xs text-muted-foreground mt-2">This will remove this tag from the whole app. This action cannot be undone.</p>
-                <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setTagDeleteConfirm(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
-                  <button onClick={() => { onDeleteTagEverywhere(tagDeleteConfirm); setTagDeleteConfirm(null); }} className="px-4 py-2 text-sm font-semibold bg-destructive text-destructive-foreground rounded-xl hover:opacity-90">Delete</button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setSubtasksCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-              {(task.subtasks ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(task.subtasks ?? []).length})</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {taskDuration > 0 && (
-                <span className={`text-xs font-medium ${
-                  subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                  subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-                }`}>
-                  {subtaskTimeRemaining > 0
-                    ? `${subtaskTimeRemaining} mins left`
-                    : subtaskTimeRemaining < 0
-                    ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                    : '0 mins left ✓'}
-                </span>
-              )}
-              {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-            </div>
-          </button>
-          {!subtasksCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
-              </div>
-              {allSubtasksDone && (
-                <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                  All sub-tasks are done ✓
-                </div>
-              )}
-
-              <DragDropContext onDragEnd={handleFullViewReorder}>
-                <Droppable droppableId="fullview-subtasks" type="subtask">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                      {(task.subtasks || []).map((subtask, si) => renderSubtaskItem(subtask, si))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-
-              <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
-                  value={newSubtaskText}
-                  onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                  placeholder="Add sub-task"
-                  className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  value={newSubtaskDuration}
-                  onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                  placeholder="min"
-                  className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-                />
-                <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
-                  Add
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
           <button
             onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
             className="w-full flex items-center justify-between px-4 py-3"
@@ -5542,7 +4624,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                   </label>
-                  {uploading && (
+                  {showUploading && (
                     <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -5597,9 +4679,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                     </div>
-                    <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                    <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -5625,15 +4707,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   }} className="hidden" />
                 </label>
               )}
-              {uploadingImages && (
-                <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm font-medium">Uploading...</span>
+                {showUploadingImages && (
+                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </div>
                   </div>
-                </div>
-              )}
-              {task.images && task.images.length > 0 && (
+                )}
+                {task.images && task.images.length > 0 && (
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}

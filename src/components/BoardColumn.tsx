@@ -264,13 +264,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
       <div
         data-no-pan="true"
         onClick={() => onTaskClick(task)}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text overflow-hidden max-w-full ${
           isDraggingRow
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1 px-3 py-3 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
@@ -282,11 +282,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               title="Mark complete"
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5">
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0 overflow-hidden">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
