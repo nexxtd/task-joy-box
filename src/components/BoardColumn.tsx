@@ -303,39 +303,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   {taskDurFmt}
                 </button>
               )}
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
-                }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  task.dueDate
-                    ? (() => {
-                        const warning = getDueTimeWarning(task);
-                        return warning === 'overdue'
-                          ? 'bg-destructive/10 text-destructive'
-                          : warning === 'imminent' || warning === 'soon'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            : 'bg-muted text-muted-foreground';
-                      })()
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
-              </button>
               {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
