@@ -170,17 +170,27 @@ export function useFreeReorderDrag<T extends { id: string }>({
       const finalOrder = [...previewRef.current];
       const origIds = items.map((item) => item.id).join(',');
       const newIds = finalOrder.map((item) => item.id).join(',');
-      if (origIds !== newIds) onReorder(finalOrder);
+      if (origIds !== newIds) {
+        onReorder(finalOrder);
+        // Keep previewOrder as finalOrder until parent items prop catches up
+        // to avoid flicker "switch back" to original order before re-render
+        previewRef.current = [...finalOrder];
+        setPreviewOrder([...finalOrder]);
+      } else {
+        previewRef.current = null;
+        setPreviewOrder(null);
+      }
+    } else {
+      previewRef.current = null;
+      setPreviewOrder(null);
     }
 
     dragIdRef.current = null;
-    previewRef.current = null;
     pointerRef.current = null;
     startPointerRef.current = null;
     pendingPointerRef.current = null;
     hasMovedRef.current = false;
     setDragId(null);
-    setPreviewOrder(null);
     setGhostPos(null);
   }, [items, onReorder]);
 
@@ -201,6 +211,19 @@ export function useFreeReorderDrag<T extends { id: string }>({
       }
     };
   }, [dragId, endDrag, onPointerMove]);
+
+  // Clear stale preview once parent state has caught up to the reordered result
+  // Prevents flicker where display would snap back to original order for one frame
+  React.useEffect(() => {
+    if (previewOrder && !dragId) {
+      const previewIds = previewOrder.map(i => i.id).join(',');
+      const currentIds = items.map(i => i.id).join(',');
+      if (previewIds === currentIds) {
+        setPreviewOrder(null);
+        previewRef.current = null;
+      }
+    }
+  }, [items, previewOrder, dragId]);
 
   return useMemo(() => ({
     displayItems,

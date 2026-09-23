@@ -339,7 +339,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return next;
     });
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(flushBoardSave, 800);
+    saveTimerRef.current = setTimeout(flushBoardSave, 400);
   }, [flushBoardSave, user]);
 
   const handleRecurrence = useCallback((b: Board, task: Task, toColumnId: string) => {
