@@ -54,6 +54,7 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const [creating, setCreating] = useState(false);
   const accentColor = typeof window !== 'undefined' ? localStorage.getItem('accentColor') || '#000000' : '#000000';
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   const closeColorPicker = () => {
     setColorPickerId(null);
@@ -85,6 +86,49 @@ const TagsModal: React.FC<TagsModalProps> = ({
     return () => document.removeEventListener('mousedown', onDown);
   }, [colorPickerId]);
 
+  // Keep modal viewport-centered (portal) and auto-close when user moves the board / scrolls the page
+  useEffect(() => {
+    if (!open) return;
+    const isInsideModal = (target: EventTarget | null) => {
+      if (!target || !modalRef.current) return false;
+      return modalRef.current.contains(target as Node);
+    };
+    const onScroll = (e: Event) => {
+      // Ignore scrolls inside the modal content (tags list overflow)
+      if (isInsideModal(e.target)) return;
+      onClose();
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (isInsideModal(e.target)) return;
+      // Any wheel outside modal (board zoom or page scroll) should dismiss it
+      onClose();
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (isInsideModal(e.target)) return;
+      // Pointer moving with button pressed = dragging / panning the board
+      if (e.buttons === 1) onClose();
+    };
+    const onPointerDownOutside = (e: PointerEvent) => {
+      // Panning on board starts with pointerdown on the canvas; dismiss immediately
+      if (isInsideModal(e.target)) return;
+      // If the down target is inside a transformed board canvas, treat as board move
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.('[data-no-pan="true"]')) return;
+      // Delay check: if next move is a pan, the pointermove handler will close.
+      // But also close on pointerdown outside if it's a scroll container
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('wheel', onWheel, { passive: true } as any);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerdown', onPointerDownOutside, true);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('wheel', onWheel as any);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerdown', onPointerDownOutside, true);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const handleCreate = async () => {
@@ -108,10 +152,11 @@ const TagsModal: React.FC<TagsModalProps> = ({
     setPendingDelete(null);
   };
 
-  return (
+  const modalNode = (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div
+        ref={modalRef}
         className="relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-card p-5 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
@@ -305,6 +350,8 @@ const TagsModal: React.FC<TagsModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 };
 
 export default TagsModal;

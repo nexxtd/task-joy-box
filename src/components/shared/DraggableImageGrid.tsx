@@ -11,6 +11,16 @@ interface DraggableImageGridProps {
   droppableId?: string;
 }
 
+const getImageSrc = (img: Attachment) => {
+  // Server-stored attachments have numeric ids and fileUrl like /uploads/...
+  // Use the authenticated API endpoint which is reliably accessible via cookie auth.
+  // Data URLs (fallback / legacy) are used as-is.
+  if (/^\d+$/.test(String(img.id)) && img.fileUrl && !img.fileUrl.startsWith('data:')) {
+    return `/api/attachments/file/${img.id}`;
+  }
+  return img.fileUrl;
+};
+
 export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
   images,
   onReorder,
@@ -42,7 +52,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
               <GripVertical className="w-3.5 h-3.5" />
             </div>
             {img.fileUrl ? (
-              <img src={img.fileUrl} alt={img.fileName} className="w-full h-full object-cover pointer-events-none" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              <img src={getImageSrc(img)} alt={img.fileName} className="w-full h-full object-cover pointer-events-none" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
             )}
@@ -61,7 +71,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
         if (!dragged) return null;
         return (
           <div className="fixed pointer-events-none z-50 rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}>
-            {dragged.fileUrl ? <img src={dragged.fileUrl} alt={dragged.fileName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
+            {dragged.fileUrl ? <img src={getImageSrc(dragged)} alt={dragged.fileName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2"><p className="text-xs text-white truncate">{dragged.fileName}</p></div>
           </div>
         );
