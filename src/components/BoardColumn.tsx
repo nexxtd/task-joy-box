@@ -270,7 +270,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-4 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
@@ -561,7 +561,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[640px] max-w-[90vw] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[680px] max-w-[90vw] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
