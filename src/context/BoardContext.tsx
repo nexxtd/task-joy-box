@@ -58,7 +58,9 @@ async function loadBoard(userId: number): Promise<Board> {
     try {
       const parsed = JSON.parse(cached);
       if (parsed?.columns) {
-        // 2) Revalidate in background (don't block UI)
+        // 2) Revalidate in background (don't block UI) - but NEVER overwrite
+        // localStorage with stale server data before it has been flushed.
+        // The BoardProvider effect will reconcile with dirtyRef awareness.
         void (async () => {
           try {
             const ctrl = new AbortController();
@@ -72,13 +74,11 @@ async function loadBoard(userId: number): Promise<Board> {
             // Fast-path 403/400 (free tier restrictions)
             if (res.status === 403 || res.status === 400) return;
             
-            if (res.ok) {
-              const data = await res.json();
-              const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
-              if (board) {
-                localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-              }
-            }
+            // Do NOT blindly overwrite localStorage here; that would resurrect
+            // images/files just deleted locally but not yet flushed to server
+            // (delete -> 800ms debounce -> refresh before flush).
+            // The main BoardProvider load effect handles reconciliation with
+            // dirtyRef checks.
           } catch {}
         })();
         
@@ -190,9 +190,31 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
           saveBoard(user.id, loaded);
         }
+        // Don't overwrite local pending changes (e.g. just-deleted image) with stale server snapshot.
+        // If we have dirty pending saves, keep local and push it; server will be updated on next flush.
+        if (dirtyRef.current) {
+          // Ensure pending local delete is flushed promptly so refresh doesn't resurrect it
+          flushBoardSave();
+          setLoading(false);
+          return;
+        }
         const cur = JSON.stringify(boardRef.current);
         const nxt = JSON.stringify(loaded);
-        if (cur !== nxt) { setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date()); }
+        // Only adopt server board if local is empty default or server is meaningfully newer.
+        // If local came from cache, prefer it; server is fallback only when local is default empty.
+        const isLocalDefaultEmpty = (() => {
+          try {
+            const b = boardRef.current;
+            return b.tasks.length === 0 && b.columns.length <= 3;
+          } catch { return false; }
+        })();
+        if (cur !== nxt && (isLocalDefaultEmpty || !localStorage.getItem(getBoardKey(user.id)))) {
+          setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date());
+          try { localStorage.setItem(getBoardKey(user.id), JSON.stringify(loaded)); } catch {}
+        } else if (cur !== nxt && !isLocalDefaultEmpty) {
+          // Local is authoritative; push it to server instead of pulling stale server data
+          saveBoard(user.id, boardRef.current);
+        }
         setLoading(false);
       }).catch(() => setLoading(false));
     } else {
@@ -217,17 +239,38 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!user) return;
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushBoardSave();
+    const flushWithBeacon = () => {
+      if (!dirtyRef.current) return;
+      const boardToSave = boardRef.current;
+      // Try beacon for reliability during unload/refresh, fallback to normal fetch
+      try {
+        if (navigator.sendBeacon) {
+          const blob = new Blob([JSON.stringify({ boardData: boardToSave })], { type: 'application/json' });
+          const ok = navigator.sendBeacon('/api/boards/snapshot', blob);
+          if (ok) {
+            dirtyRef.current = false;
+            if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+            return;
+          }
+        }
+      } catch {}
+      flushBoardSave();
     };
-    const handlePageHide = () => flushBoardSave();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushWithBeacon();
+    };
+    const handlePageHide = () => flushWithBeacon();
+    const handleBeforeUnload = () => flushWithBeacon();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       flushBoardSave();
     };
   }, [user?.id, flushBoardSave]);
