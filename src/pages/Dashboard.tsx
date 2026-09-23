@@ -1730,16 +1730,18 @@ style={{ background: 'hsl(var(--primary))' }}>
                           onPointerDown={e => startGesture(e, widget, 'move')}
                           className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
                           title="Move"
+                          aria-label="Move widget"
                         >
-                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
                         </button>
                         {widget.type === 'tags-overview' && (
                           <button
                             onClick={() => setTagsModalOpen(true)}
                             className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"
                             title="Edit tags"
+                            aria-label="Edit tags"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -1754,8 +1756,9 @@ style={{ background: 'hsl(var(--primary))' }}>
                           onClick={() => removeWidget(widget.id)}
                           className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
                           title="Remove"
+                          aria-label="Remove widget"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -1801,8 +1804,8 @@ style={{ background: 'hsl(var(--primary))' }}>
               <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
                 <LayoutDashboard className="w-4 h-4 text-primary" /> Customize Dashboard
               </h2>
-              <button onClick={() => setShowCustomize(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
-                <X className="w-4 h-4" />
+              <button onClick={() => setShowCustomize(false)} aria-label="Close customize panel" title="Close customize panel" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
@@ -1922,8 +1925,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">Pick a task to focus on</p>
               </div>
-              <button onClick={() => setShowTaskPicker(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0">
-                <X className="w-4 h-4" />
+              <button onClick={() => setShowTaskPicker(false)} aria-label="Close task picker" title="Close task picker" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0">
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
             <div className="p-3 border-b border-border shrink-0">
@@ -1935,6 +1938,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                   if (e.key === 'Escape') setShowTaskPicker(false);
                 }}
                 placeholder="Search tasks…"
+                aria-label="Search tasks"
                 className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>

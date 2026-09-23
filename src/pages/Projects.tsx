@@ -1203,41 +1203,41 @@ const Projects: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
             <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-1.5 py-1">
-              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
-                <ZoomOut className="w-4 h-4 text-muted-foreground" />
+              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} aria-label="Zoom out" title="Zoom out" className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
+                <ZoomOut className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
               </button>
-              <button onClick={() => { setBoardZoom(1); setBoardOffset({ x: 0, y: 0 }); }} className="px-2 py-1 text-xs font-bold tabular-nums text-foreground hover:text-primary min-w-[44px] text-center">
+              <button onClick={() => { setBoardZoom(1); setBoardOffset({ x: 0, y: 0 }); }} aria-label="Reset zoom and position" title="Reset zoom and position" className="px-2 py-1 text-xs font-bold tabular-nums text-foreground hover:text-primary min-w-[44px] text-center">
                 {boardZoomPercent}%
               </button>
-              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z + ZOOM_STEP).toFixed(2))))} disabled={boardZoom >= MAX_ZOOM} className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
-                <ZoomIn className="w-4 h-4 text-muted-foreground" />
+              <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z + ZOOM_STEP).toFixed(2))))} disabled={boardZoom >= MAX_ZOOM} aria-label="Zoom in" title="Zoom in" className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
+                <ZoomIn className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
               </button>
             </div>
           </div>
         </div>
-        <div
-          ref={boardCanvasRef}
-          className="flex-1 relative overflow-hidden select-none"
-          onPointerDown={handleBoardPointerDown}
-          style={{
-            backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
-            backgroundSize: `${24 * boardZoom}px ${24 * boardZoom}px`,
-            backgroundPosition: `${boardOffset.x}px ${boardOffset.y}px`,
-            cursor: isBoardPanning ? 'grabbing' : 'grab',
+        <DragDropContext
+          onDragEnd={(result) => {
+            document.body.classList.remove('is-dragging');
+            handleDragEnd(result);
           }}
+          onBeforeCapture={() => { flushSync(() => setIsBoardDragging(true)); }}
+          onDragStart={handleBoardDragStart}
+          onDragUpdate={handleBoardDragUpdate}
         >
           <div
-            style={boardZoom === 1 && boardOffset.x === 0 && boardOffset.y === 0 ? undefined : { transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
-            className="min-w-max min-h-max select-none"
+            ref={boardCanvasRef}
+            className="flex-1 relative overflow-hidden select-none"
+            onPointerDown={handleBoardPointerDown}
+            style={{
+              backgroundImage: 'radial-gradient(circle, hsl(var(--border)) 1px, transparent 1px)',
+              backgroundSize: `${24 * boardZoom}px ${24 * boardZoom}px`,
+              backgroundPosition: `${boardOffset.x}px ${boardOffset.y}px`,
+              cursor: isBoardPanning ? 'grabbing' : 'grab',
+            }}
           >
-            <DragDropContext
-              onDragEnd={(result) => {
-                document.body.classList.remove('is-dragging');
-                handleDragEnd(result);
-              }}
-              onBeforeCapture={() => { flushSync(() => setIsBoardDragging(true)); }}
-              onDragStart={handleBoardDragStart}
-              onDragUpdate={handleBoardDragUpdate}
+            <div
+              style={isBoardDragging ? undefined : boardZoom === 1 && boardOffset.x === 0 && boardOffset.y === 0 ? undefined : { transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
+              className="min-w-max min-h-max select-none"
             >
               <Droppable
                 droppableId="board"
@@ -1319,9 +1319,9 @@ const Projects: React.FC = () => {
                   </div>
                 )}
               </Droppable>
-            </DragDropContext>
+            </div>
           </div>
-        </div>
+        </DragDropContext>
       </div>
     );
   };
@@ -1452,7 +1452,7 @@ const Projects: React.FC = () => {
             <div className="px-4 pt-3 pb-1">
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-muted/20 px-3 py-2">
                 <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                <input type="text" placeholder="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+                <input type="text" placeholder="Search projects" aria-label="Search projects" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{activeCount}/{projectLimit} projects in use</span>

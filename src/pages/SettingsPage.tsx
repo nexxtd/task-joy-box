@@ -1225,12 +1225,13 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={ticketSearch}
                       onChange={e => setTicketSearch(e.target.value)}
-                      placeholder="Search tickets�"
+                      placeholder="Search tickets"
+                      aria-label="Search tickets"
                       className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                     />
                     {ticketSearch && (
-                      <button onClick={() => setTicketSearch('')} className="text-muted-foreground hover:text-foreground">
-                        <XCircle className="w-3.5 h-3.5" />
+                      <button onClick={() => setTicketSearch('')} aria-label="Clear search" title="Clear search" className="text-muted-foreground hover:text-foreground">
+                        <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     )}
                   </div>

@@ -121,9 +121,11 @@ const Tutorial: React.FC = () => {
         <div className="relative bg-gradient-to-r from-primary/10 to-primary/5 p-8 border-b border-border">
           <button
             onClick={skipTutorial}
+            aria-label="Close tutorial"
+            title="Close tutorial"
             className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-all"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
           
           <div className="flex items-center gap-4">

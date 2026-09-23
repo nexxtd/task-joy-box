@@ -1987,8 +1987,8 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-background/50 backdrop-blur-md">
             <div className="bg-card border border-border shadow-2xl rounded-2xl max-w-lg w-full p-8 relative overflow-hidden mx-4">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-400" />
-              <button onClick={dismissTutorial} className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground">
-                <X className="w-5 h-5" />
+              <button onClick={dismissTutorial} aria-label="Close tutorial" title="Close tutorial" className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground">
+                <X className="w-5 h-5" aria-hidden="true" />
               </button>
               <div className="space-y-5">
                 <div>
