@@ -209,7 +209,7 @@ const ProjectBoard = () => {
                   <div
                     key={task.id}
                     onClick={() => handleViewTask(task)}
-                    className="task-card group rounded-lg bg-white p-3 cursor-pointer border border-gray-200 hover:border-gray-300 transition-all duration-150 hover:bg-gray-50"
+                    className="task-card group rounded-lg bg-card p-3 cursor-pointer border border-border hover:bg-muted transition-all duration-150"
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <CircleToggle
@@ -220,13 +220,13 @@ const ProjectBoard = () => {
                       {task.color && (
                         <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
                       )}
-                      <p className={`text-sm font-bold leading-snug truncate ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{task.title}</p>
+                      <p className={`text-sm font-bold leading-snug truncate ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeepFocusClick(task);
                         }}
-                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-100 rounded text-gray-500 hover:text-blue-600"
+                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-100 rounded text-muted-foreground hover:text-blue-600"
                         title="Start Deep Focus"
                       >
                         <BrainIcon className="w-3.5 h-3.5" />
@@ -257,7 +257,7 @@ const ProjectBoard = () => {
                         </span>
                       )}
                       {task.dueDate && (
-                        <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                        <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
                           <CalendarIcon className="w-3 h-3" />
                           {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                         </span>
@@ -266,7 +266,7 @@ const ProjectBoard = () => {
                         const clTotal = task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0;
                         const clDone = task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0;
                         return (
-                          <span className={`flex items-center gap-1 text-[11px] ${clDone === clTotal ? 'text-green-600' : 'text-gray-500'}`}>
+                          <span className={`flex items-center gap-1 text-[11px] ${clDone === clTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
                             <CheckSquareIcon className="w-3 h-3" />
                             {clDone}/{clTotal} checklist
                           </span>
@@ -276,7 +276,7 @@ const ProjectBoard = () => {
                         const stTotal = (task.subtasks || []).length;
                         const stDone = (task.subtasks || []).filter(s => s.completed).length;
                         return (
-                          <span className={`flex items-center gap-1 text-[11px] ${stDone === stTotal ? 'text-green-600' : 'text-gray-500'}`}>
+                          <span className={`flex items-center gap-1 text-[11px] ${stDone === stTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
                             {stDone}/{stTotal} sub task
                           </span>
                         );
@@ -300,7 +300,7 @@ const ProjectBoard = () => {
               ) : (
                 <button
                   onClick={() => handleCreateTask(column.id)}
-                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-2 border-dashed border-gray-300 hover:border-blue-200 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
+                  className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-blue-600 hover:bg-blue-50 border-2 border-dashed border-border hover:border-blue-200 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
                 >
                   <PlusOutlined />
                   Add New Task
@@ -316,32 +316,32 @@ const ProjectBoard = () => {
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={handleCancelAddTask}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-3xl bg-white border border-gray-200 rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            className="relative w-full max-w-3xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92dvh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">Create Task</h2>
-              <button onClick={handleCancelAddTask} className="p-1.5 rounded-lg hover:bg-gray-100">
-                <XIcon className="w-4 h-4 text-gray-500" />
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">Create Task</h2>
+              <button onClick={handleCancelAddTask} className="p-1.5 rounded-lg hover:bg-muted">
+                <XIcon className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
 
             <div className="p-5 space-y-5">
               <div>
-                <label className="text-xs font-semibold uppercase text-gray-500">Task title</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Task title</label>
                 <input
                   autoFocus
                   value={newTaskTitle}
                   onChange={e => setNewTaskTitle(e.target.value)}
-                  className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Status</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Status</label>
                   <RadixSelect value={newTaskStatus} onValueChange={(value) => setNewTaskStatus(value as TaskStatus)}>
-                    <SelectTrigger className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                    <SelectTrigger className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-9">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -354,9 +354,9 @@ const ProjectBoard = () => {
                 </div>
                 
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Priority</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Priority</label>
                   <RadixSelect value={newTaskPriority} onValueChange={(value) => setNewTaskPriority(value as any)}>
-                    <SelectTrigger className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                    <SelectTrigger className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring h-9">
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
@@ -372,40 +372,40 @@ const ProjectBoard = () => {
               
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Due Date</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Due Date</label>
                   <input
                     type="date"
                     value={newTaskDueDate}
                     onChange={e => setNewTaskDueDate(e.target.value)}
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
                 
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Due Time</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Due Time</label>
                   <input
                     type="time"
                     value={newTaskDueTime}
                     onChange={e => setNewTaskDueTime(e.target.value)}
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Subject</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Subject</label>
                   <input
                     type="text"
                     value={newTaskSubject}
                     onChange={e => setNewTaskSubject(e.target.value)}
                     placeholder="e.g. Maths"
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Duration (min)</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Duration (min)</label>
                   <input
                     type="number"
                     min={5}
@@ -413,27 +413,27 @@ const ProjectBoard = () => {
                     step={5}
                     value={newTaskDuration}
                     onChange={e => setNewTaskDuration(Number(e.target.value))}
-                    className="mt-1 w-full bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="mt-1 w-full bg-muted/30 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                 </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold uppercase text-gray-500">Color & Icon</label>
+                  <label className="text-xs font-semibold uppercase text-muted-foreground">Color & Icon</label>
                   <div className="flex gap-1">
                     <input
                       type="color"
                       value={newTaskColor}
                       onChange={e => setNewTaskColor(e.target.value)}
-                      className="w-8 h-8 rounded bg-gray-50 border border-gray-300 p-0.5 cursor-pointer"
+                      className="w-8 h-8 rounded bg-muted/30 border border-border p-0.5 cursor-pointer"
                     />
                     <input
                       type="text"
                       value={newTaskIcon}
                       onChange={e => setNewTaskIcon(e.target.value)}
                       placeholder="Icon name"
-                      className="flex-1 bg-gray-50 border border-gray-300 rounded-xl p-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 bg-muted/30 border border-border rounded-xl p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -441,12 +441,12 @@ const ProjectBoard = () => {
 
               {/* Subtasks Section */}
               <div className="mb-4 space-y-2">
-                <label className="text-xs font-semibold uppercase text-gray-500">Subtasks</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Subtasks</label>
                 <div className="space-y-1 mb-2">
                   {newTaskSubtasks.map((st, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-gray-100 px-2 py-1 rounded-lg border border-gray-200 group">
-                      <span className="flex-1 text-sm text-gray-700">{st}</span>
-                      <button onClick={() => removeSubtask(i)} className="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                    <div key={i} className="flex items-center gap-2 bg-muted px-2 py-1 rounded-lg border border-border group">
+                      <span className="flex-1 min-w-0 truncate text-sm text-foreground">{st}</span>
+                      <button onClick={() => removeSubtask(i)} className="text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
                         <DeleteOutlined />
                       </button>
                     </div>
@@ -458,7 +458,7 @@ const ProjectBoard = () => {
                     onChange={e => setNewSubtaskText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
                     placeholder="Add subtask..."
-                    className="flex-1 bg-gray-50 border border-gray-300 rounded-xl p-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="flex-1 bg-muted/30 border border-border rounded-xl p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                   <button 
                     onClick={handleAddSubtask}
@@ -473,13 +473,13 @@ const ProjectBoard = () => {
                 value={newTaskDescription}
                 onChange={e => setNewTaskDescription(e.target.value)}
                 placeholder="Add more details..."
-                className="w-full bg-gray-50 border border-gray-300 rounded-xl p-3 text-sm text-gray-900 placeholder-gray-500 resize-none mb-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-muted/30 border border-border rounded-xl p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none mb-4 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 rows={3}
               />
 
               {/* Attachments Section */}
               <div className="mb-4 space-y-2">
-                <label className="text-xs font-semibold uppercase text-gray-500">Attachments</label>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Attachments</label>
                 <div className="flex flex-wrap gap-1 mb-2">
                   {newFiles.map((f, i) => (
                     <div key={i} className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 text-xs font-medium text-blue-600 uppercase">
@@ -493,7 +493,7 @@ const ProjectBoard = () => {
                 <label 
                   className={`flex items-center gap-2 w-max px-3 py-1.5 border rounded-lg text-xs font-bold transition-all ${
                     isPremium 
-                      ? 'bg-gray-50 border-gray-300 text-gray-700 hover:text-gray-900 hover:bg-gray-100 cursor-pointer'
+                      ? 'bg-muted/30 border-border text-foreground hover:text-foreground hover:bg-muted cursor-pointer'
                       : 'bg-blue-50 border-blue-200 text-blue-600 opacity-80 cursor-pointer'
                   }`}
                   onClick={() => !isPremium && (navigate('/pricing'))}
@@ -525,7 +525,7 @@ const ProjectBoard = () => {
                 </button>
                 <button 
                   onClick={handleCancelAddTask} 
-                  className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all"
+                  className="px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-all"
                 >
                   Cancel
                 </button>
@@ -539,12 +539,12 @@ const ProjectBoard = () => {
       {isTaskDetailModalVisible && selectedTask && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4" onClick={handleTaskDetailClose}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative bg-white border border-gray-200 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-fade-in" onClick={e => e.stopPropagation()}>
+          <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[80dvh] overflow-y-auto animate-fade-in" onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-start justify-between z-10">
+            <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-start justify-between z-10">
               <div className="flex-1">
                 <input
-                  className="w-full text-lg font-semibold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-0"
+                  className="w-full text-lg font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
                   value={selectedTask.title}
                   onChange={(e) => {
                     const updatedTask = { ...selectedTask, title: e.target.value };
@@ -552,11 +552,11 @@ const ProjectBoard = () => {
                     updateTask(updatedTask.id, { title: e.target.value });
                   }}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  in column: <span className="text-gray-900 font-medium">{allColumns.find(c => c.id === selectedTask.columnId)?.title}</span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  in column: <span className="text-foreground font-medium">{allColumns.find(c => c.id === selectedTask.columnId)?.title}</span>
                 </p>
               </div>
-              <button onClick={handleTaskDetailClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-900 transition-colors">
+              <button onClick={handleTaskDetailClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -565,7 +565,7 @@ const ProjectBoard = () => {
               {/* Labels */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <TagIcon className="w-3.5 h-3.5" /> Labels
                   </h4>
                 </div>
@@ -583,7 +583,7 @@ const ProjectBoard = () => {
               <div className="grid grid-cols-2 gap-6">
                 {/* Status */}
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     Status
                   </h4>
                   <RadixSelect value={selectedTask.status || 'to_do'} onValueChange={(value) => {
@@ -599,7 +599,7 @@ const ProjectBoard = () => {
                       setSelectedTask(updatedTask);
                       updateTask(updatedTask.id, { status: newStatus, columnId: newColumnId });
                     }}>
-                    <SelectTrigger className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
+                    <SelectTrigger className="w-full bg-muted/30 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 h-9">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -613,7 +613,7 @@ const ProjectBoard = () => {
 
                 {/* Priority */}
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     <AlertTriangleIcon className="w-3.5 h-3.5" /> Priority
                   </h4>
                   <div className="flex flex-wrap gap-2">
@@ -623,7 +623,7 @@ const ProjectBoard = () => {
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask.id, { priority: 'none' });
                       }}
-                      className={`text-xs px-3 py-1.5 rounded-md border transition-all ${selectedTask.priority === 'none' ? 'border-blue-600 bg-blue-100 text-blue-600' : 'border-gray-300 text-gray-500 hover:text-gray-900 hover:border-gray-400'}`}
+                      className={`text-xs px-3 py-1.5 rounded-md border transition-all ${selectedTask.priority === 'none' ? 'border-blue-600 bg-blue-100 text-blue-600' : 'border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground'}`}
                     >
                       None
                     </button>
@@ -635,7 +635,7 @@ const ProjectBoard = () => {
                           setSelectedTask(updatedTask);
                           updateTask(updatedTask.id, { priority: key });
                         }}
-                        className={`text-xs px-3 py-1.5 rounded-md border transition-all ${selectedTask.priority === key ? `${cfg.className} text-white border-transparent` : 'border-gray-300 text-gray-500 hover:text-gray-900 hover:border-gray-400'}`}
+                        className={`text-xs px-3 py-1.5 rounded-md border transition-all ${selectedTask.priority === key ? `${cfg.className} text-white border-transparent` : 'border-border text-muted-foreground hover:text-foreground hover:border-muted-foreground'}`}
                       >
                         {cfg.label}
                       </button>
@@ -645,12 +645,12 @@ const ProjectBoard = () => {
               </div>
 
               <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                   <CalendarIcon className="w-3.5 h-3.5" /> Date & Time
                 </h4>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <CalendarIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <CalendarIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                     <input
                       type="date"
                       value={selectedTask.dueDate || ''}
@@ -659,11 +659,11 @@ const ProjectBoard = () => {
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask.id, { dueDate: e.target.value || undefined });
                       }}
-                      className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                      className="w-full bg-muted/30 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
                     />
                   </div>
                   <div className="relative w-[130px]">
-                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <input
@@ -674,16 +674,16 @@ const ProjectBoard = () => {
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask.id, { dueTime: e.target.value || undefined });
                       }}
-                      className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                      className="w-full bg-muted/30 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-border">
                 {/* Subject */}
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     Subject / Category
                   </h4>
                   <input
@@ -695,13 +695,13 @@ const ProjectBoard = () => {
                       updateTask(updatedTask.id, { subject: e.target.value || undefined });
                     }}
                     placeholder="e.g. Maths"
-                    className="w-full bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-muted/30 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
                 {/* Color & Icon */}
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                     Color & Icon
                   </h4>
                   <div className="flex gap-2">
@@ -713,7 +713,7 @@ const ProjectBoard = () => {
                         setSelectedTask(updatedTask);
                         updateTask(updatedTask.id, { color: e.target.value });
                       }}
-                      className="w-10 h-10 rounded-md bg-gray-50 border border-gray-300 p-1 cursor-pointer"
+                      className="w-10 h-10 rounded-md bg-muted/30 border border-border p-1 cursor-pointer"
                     />
                     <input
                       type="text"
@@ -724,7 +724,7 @@ const ProjectBoard = () => {
                         updateTask(updatedTask.id, { icon: e.target.value || undefined });
                       }}
                       placeholder="Icon (e.g. 📚)"
-                      className="flex-1 bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 bg-muted/30 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -732,7 +732,7 @@ const ProjectBoard = () => {
 
               {/* Description */}
               <div>
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2">
                   <AlignLeftIcon className="w-3.5 h-3.5" /> Description
                 </h4>
                 <textarea
@@ -743,7 +743,7 @@ const ProjectBoard = () => {
                     updateTask(updatedTask.id, { description: e.target.value });
                   }}
                   placeholder="Add a description..."
-                  className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-sm text-gray-900 placeholder-gray-500 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[80px]"
+                  className="w-full bg-muted/30 border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[80px]"
                   rows={3}
                 />
               </div>
@@ -751,7 +751,7 @@ const ProjectBoard = () => {
               {/* Checklists */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                     <CheckSquareIcon className="w-3.5 h-3.5" /> Checklists
                   </h4>
                 </div>
@@ -764,8 +764,8 @@ const ProjectBoard = () => {
                     <div key={cl.id} className="mb-4 last:mb-0">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900">{cl.title}</span>
-                          {total > 0 && <span className="text-xs text-gray-500">{done}/{total}</span>}
+                          <span className="text-sm font-medium text-foreground">{cl.title}</span>
+                          {total > 0 && <span className="text-xs text-muted-foreground">{done}/{total}</span>}
                         </div>
                       </div>
                       {total > 0 && (
@@ -788,10 +788,10 @@ const ProjectBoard = () => {
                                 }
                                 setSelectedTask(updatedTask);
                                 toggleChecklistItem(selectedTask.id, cl.id, item.id);
-                              }} className="w-4 h-4 rounded border-gray-300 accent-blue-600" />
+                              }} className="w-4 h-4 rounded border-border accent-blue-600" />
                               
                               <span 
-                                className={`text-sm flex-1 ${item.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}
+                                className={`text-sm flex-1 ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                               >
                                 {item.text}
                               </span>
@@ -805,7 +805,7 @@ const ProjectBoard = () => {
               </div>
 
               {/* Delete */}
-              <div className="pt-4 border-t border-gray-200 flex justify-end">
+              <div className="pt-4 border-t border-border flex justify-end">
                 <button
                   onClick={() => {
                     if (window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
@@ -829,14 +829,14 @@ const ProjectBoard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowRowUpgradePrompt(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-fade-in text-center"
+            className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm p-8 animate-fade-in text-center"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-4">
-              <LockIcon className="w-7 h-7 text-amber-600" />
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center mx-auto mb-4">
+              <LockIcon className="w-7 h-7 text-amber-600 dark:text-amber-400" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Premium Feature</h2>
-            <p className="text-sm text-gray-600 mb-6">
+            <h2 className="text-xl font-bold text-foreground mb-2">Premium Feature</h2>
+            <p className="text-sm text-muted-foreground mb-6">
               Adding tasks (rows) to your board is a <strong>Pro feature</strong>. Upgrade to unlock unlimited tasks across all your projects.
             </p>
             <div className="flex flex-col gap-2">
@@ -848,7 +848,7 @@ const ProjectBoard = () => {
               </button>
               <button
                 onClick={() => setShowRowUpgradePrompt(false)}
-                className="w-full py-2.5 text-gray-500 text-sm hover:text-gray-900 transition-colors"
+                className="w-full py-2.5 text-muted-foreground text-sm hover:text-foreground transition-colors"
               >
                 Stay on Free
               </button>

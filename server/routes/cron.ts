@@ -30,6 +30,14 @@ router.post('/weekly-ai-summary', async (req: any, res) => {
 });
 
 router.get('/weekly-ai-summary/test', async (req: any, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  const headerSecret = req.headers['x-cron-secret'] as string | undefined;
+  if (!cronSecret || headerSecret !== cronSecret) {
+    const userId = req.userId as number | undefined;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized cron' });
+    const [u0] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!u0 || !isAdmin(u0.email)) return res.status(401).json({ error: 'Unauthorized cron' });
+  }
   const email = (req.query.email as string) || '';
   if (!email) return res.status(400).json({ error: 'email query required' });
   const { generateWeeklySummaryForUser } = await import('../lib/weeklyEmail.js');

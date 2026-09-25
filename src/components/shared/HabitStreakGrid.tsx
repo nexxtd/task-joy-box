@@ -35,7 +35,7 @@ export const HabitStreakGrid: React.FC<HabitStreakGridProps> = ({
         <span>{t('Recent Activity')}</span>
         <span>{t('Last {{count}} days', { count: daysToShow })}</span>
       </div>
-      <div className="grid grid-cols-7 sm:grid-cols-14 gap-1.5 p-3 rounded-xl border border-border bg-muted/20">
+      <div className="grid grid-cols-7 gap-1.5 p-3 rounded-xl border border-border bg-muted/20">
         {dates.map(({ dateStr, label, isCompleted, isToday }) => (
           <div
             key={dateStr}

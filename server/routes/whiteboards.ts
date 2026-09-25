@@ -49,11 +49,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const whiteboardId = parseInt(req.params.id, 10);
     const userId = req.userId!;
-    
-    const whiteboard = await db.query.whiteboards.findFirst({
-      where: (wb) => eq(wb.id, whiteboardId),
-      // We'll fetch items and connections separately to avoid complex joins
-    });
+    const [whiteboard] = await db.select().from(whiteboards).where(eq(whiteboards.id, whiteboardId)).limit(1);
     
     if (!whiteboard) {
       return res.status(404).json({ error: 'Whiteboard not found' });
@@ -163,9 +159,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res) => {
     const userId = req.userId!;
     
     // Verify the whiteboard belongs to the user
-    const existingWhiteboard = await db.query.whiteboards.findFirst({
-      where: (wb) => eq(wb.id, whiteboardId)
-    });
+    const [existingWhiteboard] = await db.select().from(whiteboards).where(eq(whiteboards.id, whiteboardId)).limit(1);
     
     if (!existingWhiteboard) {
       return res.status(404).json({ error: 'Whiteboard not found' });
@@ -248,9 +242,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
     const userId = req.userId!;
     
     // Verify the whiteboard belongs to the user
-    const existingWhiteboard = await db.query.whiteboards.findFirst({
-      where: (wb) => eq(wb.id, whiteboardId)
-    });
+    const [existingWhiteboard] = await db.select().from(whiteboards).where(eq(whiteboards.id, whiteboardId)).limit(1);
     
     if (!existingWhiteboard) {
       return res.status(404).json({ error: 'Whiteboard not found' });

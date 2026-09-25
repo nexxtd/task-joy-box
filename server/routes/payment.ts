@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
 import { users, organizations, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
 
@@ -230,7 +230,8 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
     }
 
     if (!paypalConfigured) {
-      return res.status(503).json({ error: 'PayPal is not configured on this server' });
+      console.error('PayPal not configured — missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET env vars');
+      return res.status(503).json({ error: 'PayPal is not configured on this server. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in Vercel Environment Variables and redeploy.' });
     }
 
     const selectedTier = PRICING_TIERS[tier];
@@ -297,7 +298,14 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
     res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session', details: error instanceof Error ? error.message : 'Unknown PayPal error' });
+    const msg = error instanceof Error ? error.message : 'Unknown PayPal error';
+    // Surface PayPal auth / DB table-missing errors with more context so Vercel logs are actionable
+    const hint = msg.includes('relation') && msg.includes('does not exist')
+      ? 'Database table missing — redeploy after api/index.ts fix or run initDatabase.'
+      : msg.includes('PayPal authentication failed')
+        ? 'Check PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET and PAYPAL_MODE (live vs sandbox) in Vercel env.'
+        : undefined;
+    res.status(500).json({ error: 'Failed to create checkout session', details: msg, hint });
   }
 });
 
@@ -385,48 +393,50 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
   }
 
   try {
-    await db.update(users)
-      .set({
-        subscriptionTier: intent.tier,
-        subscriptionStatus: 'active',
-        subscriptionEndsAt: null,
-      } as UpdateUser)
-      .where(eq(users.id, req.userId!));
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({
+          subscriptionTier: intent.tier,
+          subscriptionStatus: 'active',
+          subscriptionEndsAt: null,
+        } as UpdateUser)
+        .where(eq(users.id, req.userId!));
 
-    // Track coupon redemption from the recorded intent
-    if (intent.couponId) {
-      await db.insert(couponRedemptions).values({
-        couponId: intent.couponId,
-        userId: req.userId!,
-      });
+      // Track coupon redemption from the recorded intent
+      if (intent.couponId) {
+        await tx.insert(couponRedemptions).values({
+          couponId: intent.couponId,
+          userId: req.userId!,
+        });
 
-      // Increment used count
-      const [coupon] = await db.select().from(coupons).where(eq(coupons.id, intent.couponId)).limit(1);
-      if (coupon) {
-        const newUsedCount = coupon.usedCount + 1;
-        const updateData: any = { usedCount: newUsedCount };
-
-        // Auto-deactivate if usage limit reached
-        if (coupon.maxUses !== null && newUsedCount >= coupon.maxUses) {
-          updateData.active = false;
+        // Atomic increment guarded by maxUses to prevent oversell under concurrency.
+        const [updated] = await tx.update(coupons)
+          .set({
+            usedCount: sql`${coupons.usedCount} + 1`,
+          })
+          .where(and(
+            eq(coupons.id, intent.couponId),
+            intent.couponId ? sql`(${coupons.maxUses} IS NULL OR ${coupons.usedCount} < ${coupons.maxUses})` : sql`TRUE`,
+          ))
+          .returning({ id: coupons.id, usedCount: coupons.usedCount, maxUses: coupons.maxUses });
+        if (updated && updated.maxUses !== null && updated.usedCount >= updated.maxUses) {
+          await tx.update(coupons).set({ active: false }).where(eq(coupons.id, intent.couponId));
         }
-
-        await db.update(coupons).set(updateData).where(eq(coupons.id, intent.couponId));
       }
-    }
 
-    // Record the completed transaction for revenue tracking
-    await db.insert(transactions).values({
-      userId: req.userId!,
-      amount: intent.amountCents,
-      currency: 'USD',
-      status: 'completed',
-      provider: 'paypal',
-      providerTransactionId: paymentId,
-      couponId: intent.couponId || null,
-    }).onConflictDoNothing({ target: transactions.providerTransactionId });
+      // Record the completed transaction for revenue tracking
+      await tx.insert(transactions).values({
+        userId: req.userId!,
+        amount: intent.amountCents,
+        currency: 'USD',
+        status: 'completed',
+        provider: 'paypal',
+        providerTransactionId: paymentId,
+        couponId: intent.couponId || null,
+      }).onConflictDoNothing({ target: transactions.providerTransactionId });
 
-    await db.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+      await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+    });
 
     res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
   } catch (dbError) {
@@ -457,20 +467,23 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
   }
 
   try {
-    await db.update(organizations)
-      .set({ status: 'active', tier: intent.tier, maxSeats: intent.seats || 1 } as UpdateOrganization)
-      .where(eq(organizations.id, intent.orgId));
+    const orgId = intent.orgId;
+    await db.transaction(async (tx) => {
+      await tx.update(organizations)
+        .set({ status: 'active', tier: intent.tier, maxSeats: intent.seats || 1 } as UpdateOrganization)
+        .where(eq(organizations.id, orgId));
 
-    await db.insert(transactions).values({
-      userId: req.userId!,
-      amount: intent.amountCents,
-      currency: 'USD',
-      status: 'completed',
-      provider: 'paypal',
-      providerTransactionId: paymentId,
-    }).onConflictDoNothing({ target: transactions.providerTransactionId });
+      await tx.insert(transactions).values({
+        userId: req.userId!,
+        amount: intent.amountCents,
+        currency: 'USD',
+        status: 'completed',
+        provider: 'paypal',
+        providerTransactionId: paymentId,
+      }).onConflictDoNothing({ target: transactions.providerTransactionId });
 
-    await db.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+      await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+    });
 
     res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
   } catch {

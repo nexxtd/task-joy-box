@@ -41,6 +41,43 @@ function verifyState(signedState: string): any {
   }
 }
 
+// Persist refreshed Google tokens without leaking an event listener per request.
+// googleapis OAuth2Client is an EventEmitter: calling .on('tokens') inside a
+// request handler accumulates listeners and triggers MaxListenersExceeded.
+// Use a one-time listener and detach it once the request finishes.
+function attachTokenRefresher(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  oauth2Client: any,
+  userId: number,
+) {
+  const handler = async (tokens: any) => {
+    if (!tokens?.access_token) return;
+    try {
+      const { db } = await import('../db.js');
+      const { googleCalendarTokens } = await import('../../shared/schema.js');
+      const { eq } = await import('drizzle-orm');
+      const { encrypt } = await import('../lib/encryption.js');
+      await db
+        .update(googleCalendarTokens)
+        .set({
+          accessToken: encrypt(tokens.access_token) ?? tokens.access_token,
+          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+        })
+        .where(eq(googleCalendarTokens.userId, userId));
+    } catch (e) {
+      console.error('Failed to persist refreshed calendar token:', e);
+    }
+  };
+  (oauth2Client as any).once('tokens', handler);
+  return () => {
+    try {
+      (oauth2Client as any).removeListener('tokens', handler);
+    } catch {
+      /* ignore */
+    }
+  };
+}
+
 router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
   if (!GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ error: 'Google Calendar not configured. GOOGLE_CLIENT_SECRET missing.' });
@@ -119,18 +156,11 @@ router.get('/events', requireAuth, async (req: AuthRequest, res: Response) => {
     const redirectUri = getRedirectUri(req);
     const oauth2Client = createOAuth2Client(redirectUri);
     oauth2Client.setCredentials({
-      access_token: tokenRow.accessToken,
-      refresh_token: tokenRow.refreshToken || undefined,
+      access_token: decrypt(tokenRow.accessToken) ?? tokenRow.accessToken,
+      refresh_token: (tokenRow.refreshToken ? (decrypt(tokenRow.refreshToken) ?? tokenRow.refreshToken) : undefined) as string | undefined,
     });
 
-    oauth2Client.on('tokens', async (tokens) => {
-      if (tokens.access_token) {
-        await db.update(googleCalendarTokens).set({
-          accessToken: tokens.access_token,
-          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-        }).where(eq(googleCalendarTokens.userId, req.userId!));
-      }
-    });
+    const detachRefresher = attachTokenRefresher(oauth2Client, req.userId!);
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     
@@ -147,6 +177,7 @@ router.get('/events', requireAuth, async (req: AuthRequest, res: Response) => {
       singleEvents: true,
       orderBy: 'startTime',
     });
+    detachRefresher();
 
     const events = response.data.items || [];
 
@@ -176,6 +207,7 @@ router.get('/events', requireAuth, async (req: AuthRequest, res: Response) => {
 
 // Route to sync app tasks TO Google Calendar
 router.post('/sync-to-google', requireAuth, async (req: AuthRequest, res: Response) => {
+  const detachRefresherHolder: { fn: (() => void) | null } = { fn: null };
   try {
     const [tokenRow] = await db.select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, req.userId!)).limit(1);
     if (!tokenRow) return res.status(400).json({ error: 'Google Calendar not connected' });
@@ -183,18 +215,11 @@ router.post('/sync-to-google', requireAuth, async (req: AuthRequest, res: Respon
     const redirectUri = getRedirectUri(req);
     const oauth2Client = createOAuth2Client(redirectUri);
     oauth2Client.setCredentials({
-      access_token: tokenRow.accessToken,
-      refresh_token: tokenRow.refreshToken || undefined,
+      access_token: decrypt(tokenRow.accessToken) ?? tokenRow.accessToken,
+      refresh_token: (tokenRow.refreshToken ? (decrypt(tokenRow.refreshToken) ?? tokenRow.refreshToken) : undefined) as string | undefined,
     });
 
-    oauth2Client.on('tokens', async (tokens) => {
-      if (tokens.access_token) {
-        await db.update(googleCalendarTokens).set({
-          accessToken: tokens.access_token,
-          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-        }).where(eq(googleCalendarTokens.userId, req.userId!));
-      }
-    });
+    detachRefresherHolder.fn = attachTokenRefresher(oauth2Client, req.userId!);
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     const { tasks } = req.body as { tasks: Array<{ title: string; dueDate?: string; description?: string }> };
@@ -227,11 +252,14 @@ router.post('/sync-to-google', requireAuth, async (req: AuthRequest, res: Respon
   } catch (e) {
     console.error('Sync to Google error:', e);
     res.status(500).json({ error: 'Sync failed' });
+  } finally {
+    detachRefresherHolder.fn?.();
   }
 });
 
 // Route to sync FROM Google Calendar to the app
 router.post('/sync-from-google', requireAuth, async (req: AuthRequest, res: Response) => {
+  let detach: (() => void) | null = null;
   try {
     const [tokenRow] = await db.select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, req.userId!)).limit(1);
     if (!tokenRow) return res.status(400).json({ error: 'Google Calendar not connected' });
@@ -243,14 +271,7 @@ router.post('/sync-from-google', requireAuth, async (req: AuthRequest, res: Resp
       refresh_token: tokenRow.refreshToken ? (decrypt(tokenRow.refreshToken) ?? tokenRow.refreshToken) : undefined,
     });
 
-    oauth2Client.on('tokens', async (tokens) => {
-      if (tokens.access_token) {
-        await db.update(googleCalendarTokens).set({
-          accessToken: encrypt(tokens.access_token) ?? tokens.access_token,
-          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-        }).where(eq(googleCalendarTokens.userId, req.userId!));
-      }
-    });
+    detach = attachTokenRefresher(oauth2Client, req.userId!);
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     
@@ -291,6 +312,8 @@ router.post('/sync-from-google', requireAuth, async (req: AuthRequest, res: Resp
   } catch (e) {
     console.error('Sync from Google error:', e);
     res.status(500).json({ error: 'Failed to sync from Google' });
+  } finally {
+    detach?.();
   }
 });
 
@@ -325,45 +348,41 @@ export async function getCalendarEventsForAI(userId: number): Promise<{
       refresh_token: tokenRow.refreshToken ? (decrypt(tokenRow.refreshToken) ?? tokenRow.refreshToken) : undefined,
     });
 
-    oauth2Client.on('tokens', async (tokens) => {
-      if (tokens.access_token) {
-        await db.update(googleCalendarTokens).set({
-          accessToken: encrypt(tokens.access_token) ?? tokens.access_token,
-          expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-        }).where(eq(googleCalendarTokens.userId, userId));
-      }
-    });
+    const detach = attachTokenRefresher(oauth2Client, userId);
+    try {
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+      const timeMin = new Date();
+      timeMin.setDate(timeMin.getDate() - 1);
+      const timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + 14);
 
-    const timeMin = new Date();
-    timeMin.setDate(timeMin.getDate() - 1);
-    const timeMax = new Date();
-    timeMax.setDate(timeMax.getDate() + 14);
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
 
-    const response = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: timeMin.toISOString(),
-      timeMax: timeMax.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
+      const events = response.data.items || [];
+      const formatted = events.map(event => {
+        const startDate = event.start?.date || event.start?.dateTime?.split('T')[0] || null;
+        const endDate = event.end?.date || event.end?.dateTime?.split('T')[0] || null;
+        return {
+          title: event.summary || 'Untitled Event',
+          startDate,
+          endDate,
+          startTime: event.start?.dateTime ? new Date(event.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+          endTime: event.end?.dateTime ? new Date(event.end.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
+          allDay: !!event.start?.date,
+        };
+      });
 
-    const events = response.data.items || [];
-    const formatted = events.map(event => {
-      const startDate = event.start?.date || event.start?.dateTime?.split('T')[0] || null;
-      const endDate = event.end?.date || event.end?.dateTime?.split('T')[0] || null;
-      return {
-        title: event.summary || 'Untitled Event',
-        startDate,
-        endDate,
-        startTime: event.start?.dateTime ? new Date(event.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-        endTime: event.end?.dateTime ? new Date(event.end.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
-        allDay: !!event.start?.date,
-      };
-    });
-
-    return { connected: true, events: formatted };
+      return { connected: true, events: formatted };
+    } finally {
+      detach();
+    }
   } catch (e) {
     console.error('AI calendar events fetch failed:', e);
     return { connected: false, events: [] };

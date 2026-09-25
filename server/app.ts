@@ -103,7 +103,7 @@ const globalLimiter = rateLimit({
   max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/api/health',
+  skip: (req) => req.path === '/api/health' || req.method === 'OPTIONS',
 });
 
 const authLimiter = rateLimit({
@@ -114,7 +114,13 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please try again later.' },
 });
 
-app.use(globalLimiter);
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many AI requests. Please try again later.' },
+});
 
 function normalizeOrigin(url: string) {
   return url.replace(/\/+$/, '');
@@ -158,6 +164,11 @@ if (!isProduction) {
   allowedOrigins.add('http://127.0.0.1:3000');
 }
 
+// Vercel preview/production domains must always be allowed even when NODE_ENV=production
+// (FRONTEND_URL may still point to onrender.com while the user is on aiplanner-iota.vercel.app)
+allowedOrigins.add('https://aiplanner-iota.vercel.app');
+allowedOrigins.add('https://aiplanner-iota.vercel.app/');
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
@@ -184,6 +195,9 @@ app.use(cors({
   credentials: true,
 }));
 
+// Rate-limit after CORS so OPTIONS preflights are never counted.
+app.use(globalLimiter);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 
@@ -208,7 +222,14 @@ app.use('/uploads', (req, res, next) => {
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
-}, express.static(uploadsDir));
+}, express.static(uploadsDir, {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'private, max-age=604800');
+  },
+}));
 
 app.use(session({
   store: sessionStore,
@@ -224,19 +245,18 @@ app.use(session({
   name: 'sessionId',
 }));
 
+// Log 5xx responses without allocating a closure per request.
 app.use((req, res, next) => {
-  const originalSend = res.send;
-  res.send = function(body: any) {
+  res.on('finish', () => {
     if (res.statusCode >= 500) {
       console.error(`${new Date().toISOString()} - ${req.method} ${req.path} - Status: ${res.statusCode}`);
     }
-    return originalSend.call(this, body);
-  };
+  });
   next();
 });
 
 app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/collaboration', collaborationRoutes);
 app.use('/api/organizations', organizationsRoutes);
 app.use('/api/workspace', workspaceRoutes);
@@ -294,6 +314,11 @@ app.get('/api/status', async (_req, res) => {
   } catch (error) {
     res.status(500).json({ maintenance_mode: false, message: null });
   }
+});
+
+// Unknown API routes (dev + prod without dist) — avoids hanging / HTML fallback.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'API route not found' });
 });
 
 // Serve static files in production

@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db.js';
 import { habits, tags, habitTagAssignments, activityLogs, users, type InsertHabit } from '../../shared/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { getSettingNumber } from '../lib/settings.js';
 
 const router = Router();
@@ -39,14 +39,15 @@ async function loadHabitsWithTags(userId: number) {
   const userHabits = await db.select().from(habits).where(eq(habits.userId, userId)).orderBy(desc(habits.updatedAt));
   const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
   const allAssignments = allTags.length > 0
-    ? await db.select().from(habitTagAssignments).where(sql`${habitTagAssignments.tagId} IN ${sql.raw(`(${allTags.map(t => t.id).join(',')})`)}`)
+    ? await db.select().from(habitTagAssignments).where(inArray(habitTagAssignments.tagId, allTags.map(t => t.id)))
     : [];
 
   const tagMap = new Map(allAssignments.map(a => [a.habitId, a.tagId]));
+  const tagById = new Map(allTags.map(t => [t.id, t]));
   const tagsByHabit = new Map<number, typeof allTags>();
   for (const a of allAssignments) {
     if (!tagsByHabit.has(a.habitId)) tagsByHabit.set(a.habitId, []);
-    const tag = allTags.find(t => t.id === a.tagId);
+    const tag = tagById.get(a.tagId);
     if (tag) tagsByHabit.get(a.habitId)!.push(tag);
   }
 
@@ -205,6 +206,12 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
   try {
     const habitId = parseInt(req.params.id);
     const tagId = parseInt(req.params.tagId);
+    const userId = req.userId!;
+
+    const [habit] = await db.select({ id: habits.id }).from(habits).where(and(eq(habits.id, habitId), eq(habits.userId, userId))).limit(1);
+    if (!habit) return res.status(404).json({ error: 'Habit not found' });
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1);
+    if (!tag) return res.status(404).json({ error: 'Tag not found' });
 
     const existing = await db.select().from(habitTagAssignments)
       .where(and(eq(habitTagAssignments.habitId, habitId), eq(habitTagAssignments.tagId, tagId)));
@@ -218,7 +225,9 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 
     const allAssignments = await db.select().from(habitTagAssignments).where(eq(habitTagAssignments.habitId, habitId));
     const tagIds = allAssignments.map(a => a.tagId);
-    const assignedTags = tagIds.length > 0 ? await db.select().from(tags).where(sql`${tags.id} = ANY(${tagIds})`) : [];
+    const assignedTags = tagIds.length > 0
+      ? await db.select().from(tags).where(and(inArray(tags.id, tagIds), eq(tags.userId, userId)))
+      : [];
 
     res.json({ tags: assignedTags });
   } catch (error) {
@@ -230,8 +239,14 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const tagId = parseInt(req.params.tagId);
-    await db.delete(habitTagAssignments).where(eq(habitTagAssignments.tagId, tagId));
-    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
+    const userId = req.userId!;
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1);
+    if (!tag) return res.status(404).json({ error: 'Tag not found' });
+    const userHabitIds = await db.select({ id: habits.id }).from(habits).where(eq(habits.userId, userId));
+    if (userHabitIds.length > 0) {
+      await db.delete(habitTagAssignments).where(and(eq(habitTagAssignments.tagId, tagId), inArray(habitTagAssignments.habitId, userHabitIds.map(h => h.id))));
+    }
+    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId)));
     res.json({ message: 'Tag deleted' });
   } catch (error) {
     console.error('Error deleting habit tag:', error);

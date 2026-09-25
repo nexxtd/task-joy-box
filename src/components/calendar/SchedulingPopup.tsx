@@ -59,9 +59,9 @@ const SchedulingPopup: React.FC<SchedulingPopupProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 p-4">
       <div
-        className="bg-gradient-to-b from-card to-background rounded-2xl shadow-2xl shadow-black/10 border border-border/60 w-full max-w-md mx-4 overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-gradient-to-b from-card to-background rounded-2xl shadow-2xl shadow-black/10 border border-border/60 w-full max-w-md max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.02] to-transparent">

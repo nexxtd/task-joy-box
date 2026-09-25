@@ -52,7 +52,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
               <GripVertical className="w-3.5 h-3.5" />
             </div>
             {img.fileUrl ? (
-              <img src={getImageSrc(img)} alt={img.fileName} className="w-full h-full object-cover pointer-events-none" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              <img src={getImageSrc(img)} alt={img.fileName} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-cover pointer-events-none" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
             )}

@@ -428,7 +428,8 @@ router.post('/suggest-schedule', requireAuth, async (req: AuthRequest, res: Resp
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -500,7 +501,8 @@ router.post('/analyze-tasks', requireAuth, async (req: AuthRequest, res: Respons
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -586,7 +588,8 @@ router.post('/generate-subtasks', requireAuth, async (req: AuthRequest, res: Res
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -657,7 +660,8 @@ router.post('/daily-plan', requireAuth, async (req: AuthRequest, res: Response) 
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -878,7 +882,8 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -918,10 +923,10 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
   let extraData: { goals: any[]; habits: any[]; notes: any[]; projects: any[] } = { goals: [], habits: [], notes: [], projects: [] };
   try {
     const [goalRows, habitRows, noteRows, projectRows] = await Promise.all([
-      db.select().from(goals).where(eq(goals.userId, req.userId!)),
-      db.select().from(habits).where(eq(habits.userId, req.userId!)),
-      db.select().from(notes).where(eq(notes.userId, req.userId!)),
-      db.select().from(projects).where(eq(projects.ownerId, req.userId!)),
+      db.select().from(goals).where(eq(goals.userId, req.userId!)).limit(200),
+      db.select().from(habits).where(eq(habits.userId, req.userId!)).limit(200),
+      db.select().from(notes).where(eq(notes.userId, req.userId!)).limit(200),
+      db.select().from(projects).where(eq(projects.ownerId, req.userId!)).limit(100),
     ]);
     extraData = { goals: goalRows, habits: habitRows, notes: noteRows, projects: projectRows };
   } catch (extraErr) {
@@ -1120,8 +1125,8 @@ Rules:
 // Get conversation history
 router.get('/chat-history', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
     const history = await db
       .select({
@@ -1177,7 +1182,8 @@ router.post('/pro/weekly-schedule', requireAuth, async (req: AuthRequest, res: R
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -1282,7 +1288,8 @@ router.post('/pro/dynamic-reschedule', requireAuth, async (req: AuthRequest, res
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({
@@ -1371,7 +1378,8 @@ router.post('/pro/insights-analysis', requireAuth, async (req: AuthRequest, res:
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const allTasks = userDataResponse.map((row: any) => ({
       id: row.tasks.id,
@@ -1511,7 +1519,8 @@ router.post('/pro/task-bundling', requireAuth, async (req: AuthRequest, res: Res
       .leftJoin(boards, eq(tasks.boardId, boards.id))
       .leftJoin(columns, eq(tasks.columnId, columns.id))
       .where(eq(boards.userId, req.userId!))
-      .orderBy(desc(tasks.createdAt));
+      .orderBy(desc(tasks.createdAt))
+      .limit(200);
 
     const userData = {
       tasks: userDataResponse.map((row: any) => ({

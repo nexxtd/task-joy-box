@@ -107,7 +107,7 @@ router.put('/workspace/:workspaceId/task/:taskId', requireAuth, async (req: Auth
 
     const [updatedTask] = await db.update(sharedTasks)
       .set(updatedValues)
-      .where(eq(sharedTasks.id, parseInt(taskId)))
+      .where(and(eq(sharedTasks.id, parseInt(taskId)), eq(sharedTasks.workspaceId, parseInt(workspaceId))))
       .returning();
 
     res.json({
@@ -146,7 +146,7 @@ router.delete('/workspace/:workspaceId/task/:taskId', requireAuth, async (req: A
       return res.status(403).json({ error: 'Only workspace owner or task creator can delete this task' });
     }
 
-    await db.delete(sharedTasks).where(eq(sharedTasks.id, parseInt(taskId)));
+    await db.delete(sharedTasks).where(and(eq(sharedTasks.id, parseInt(taskId)), eq(sharedTasks.workspaceId, parseInt(workspaceId))));
     res.json({ message: 'Task deleted successfully' });
   } catch (error) {
     console.error('Delete shared task error:', error);

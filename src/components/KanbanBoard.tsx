@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { flushSync } from 'react-dom';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { useBoardContext } from '@/context/BoardContext';
@@ -18,7 +18,7 @@ const KanbanBoard: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('board');
   const [isDragging, setIsDragging] = useState(false);
 
-  const sortedColumns = [...board.columns].sort((a, b) => a.order - b.order);
+  const sortedColumns = useMemo(() => [...board.columns].sort((a, b) => a.order - b.order), [board.columns]);
 
   const handleDragEnd = (result: DropResult) => {
     setIsDragging(false);
@@ -41,14 +41,13 @@ const KanbanBoard: React.FC = () => {
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
 
   return (
-    <div className="h-screen flex bg-background">
+    <div className="h-dvh flex bg-background">
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
-
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="flex items-center justify-between px-6 py-3 border-b border-border">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-foreground truncate">{board.title}</h1>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <h1 className="text-base font-bold text-foreground truncate min-w-0 flex-1">{board.title}</h1>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>{board.tasks.length} tasks</span>
@@ -133,4 +132,4 @@ const KanbanBoard: React.FC = () => {
   );
 };
 
-export default KanbanBoard;
+export default memo(KanbanBoard);

@@ -53,7 +53,7 @@ const AppSidebar: React.FC = () => {
 
   return (
     <div
-      className={`h-screen bg-card border-r border-border flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${
+      className={`h-dvh bg-card border-r border-border flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${
         collapsed ? 'w-[68px]' : 'w-[220px]'
       }`}
     >
@@ -155,7 +155,7 @@ const AppSidebar: React.FC = () => {
         {user && (
           <div className={`flex items-center gap-2 px-3 py-2 mt-1 ${collapsed ? 'justify-center' : ''}`}>
             {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt={user.name} className="w-6 h-6 rounded-full flex-shrink-0" />
+              <img src={user.avatarUrl} alt={user.name} loading="lazy" decoding="async" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
             ) : (
               <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
                 <span className="text-[10px] font-bold text-primary-foreground">{initials}</span>

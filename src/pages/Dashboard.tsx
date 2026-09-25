@@ -1162,7 +1162,7 @@ const Dashboard: React.FC = () => {
                           <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground`}>
                             {cfg?.label || 'Open'}
                           </span>
-                          <span className="flex-1 text-xs font-medium text-foreground truncate">{t.title}</span>
+                          <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
                           {col && (
                             <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
                               {col.title}

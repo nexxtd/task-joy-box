@@ -261,7 +261,7 @@ function ActiveVsOverdueBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
               subtitle={`Due ${formatDate(o.dueDate)} · ${o.projectName || 'No project'}`}
               tone={o.daysOverdue >= 7 ? 'bad' : 'warn'}
               badge={
-                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: o.daysOverdue >= 7 ? '#ef4444' : '#f97316' }}>
+                <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full text-white ${o.daysOverdue >= 7 ? 'bg-destructive' : 'bg-label-orange'}`}>
                   {o.daysOverdue}d overdue
                 </span>
               }

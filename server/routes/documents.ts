@@ -272,9 +272,7 @@ router.post('/adopt', requireAuth, async (req: AuthRequest, res: Response) => {
 router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, id),
-    });
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
 
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
@@ -309,9 +307,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, id),
-    });
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
 
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });
@@ -345,9 +341,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, id),
-    });
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
 
     if (!doc) {
       return res.status(404).json({ error: 'Document not found' });

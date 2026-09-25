@@ -167,7 +167,7 @@ export const TicketConversation: React.FC<Props> = ({
                     {isImageAttachment(msg) ? (
                       <div className="block">
                         <button onClick={() => setLightbox({ url: msg.attachmentUrl!, name: msg.attachmentName || 'image' })} className="block text-left">
-                          <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} className="max-w-[260px] max-h-[300px] rounded-lg border border-white/20 object-contain bg-black/5 cursor-zoom-in hover:opacity-90 transition-opacity" />
+                          <img src={msg.attachmentUrl} alt={msg.attachmentName || 'image'} loading="lazy" decoding="async" className="max-w-[260px] max-h-[300px] rounded-lg border border-white/20 object-contain bg-black/5 cursor-zoom-in hover:opacity-90 transition-opacity" />
                         </button>
                         <span className="text-[11px] opacity-80 flex items-center gap-1 mt-1"><ImageIcon className="w-3 h-3" />{msg.attachmentName} {msg.attachmentSize ? `(${(msg.attachmentSize / 1024).toFixed(1)}KB)` : ''}</span>
                       </div>
@@ -192,7 +192,7 @@ export const TicketConversation: React.FC<Props> = ({
           <div className="space-y-2">
             {selectedFile && (
               <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-xl px-3 py-2">
-                {previewUrl ? <img src={previewUrl} alt="preview" className="w-10 h-10 rounded-lg object-cover border border-border" /> : <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center"><FileText className="w-5 h-5 text-muted-foreground" /></div>}
+                {previewUrl ? <img src={previewUrl} alt="preview" loading="lazy" decoding="async" className="w-10 h-10 rounded-lg object-cover border border-border" /> : <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center"><FileText className="w-5 h-5 text-muted-foreground" /></div>}
                 <div className="min-w-0 flex-1"><p className="text-xs font-medium truncate">{selectedFile.name}</p><p className="text-[11px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)}KB</p></div>
                 <button onClick={() => { setSelectedFile(null); setPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value=''; }} className="p-1 hover:bg-muted rounded-lg"><X className="w-4 h-4 text-muted-foreground" /></button>
               </div>
@@ -215,7 +215,7 @@ export const TicketConversation: React.FC<Props> = ({
         <button onClick={() => setLightbox(null)} className="absolute -top-2 -right-2 p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-colors">
           <X className="w-5 h-5 text-white" />
         </button>
-        <img src={lightbox.url} alt={lightbox.name} className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl" />
+        <img src={lightbox.url} alt={lightbox.name} decoding="async" className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl" />
         <span className="text-sm text-white/80 mt-3">{lightbox.name}</span>
       </div>
     </div>

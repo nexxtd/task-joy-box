@@ -447,7 +447,7 @@ const AIInsights = () => {
 
       {!isLoading && (
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 gap-1 h-auto">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="schedule">Weekly Schedule</TabsTrigger>
             <TabsTrigger value="insights">Productivity Insights</TabsTrigger>
@@ -813,7 +813,7 @@ const AIInsights = () => {
                     Get detailed time tracking, goal progression charts, and predictive analytics to optimize your productivity.
                   </p>
                   
-                  <div className="bg-gray-100 border-2 border-dashed rounded-xl w-full h-64 flex items-center justify-center">
+                  <div className="bg-muted border-2 border-dashed border-border rounded-xl w-full h-64 flex items-center justify-center">
                     <span className="text-muted-foreground">Interactive Charts Would Appear Here</span>
                   </div>
                   

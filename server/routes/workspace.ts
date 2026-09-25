@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
 import { users, workspaces, workspaceMembers, groups, groupMembers, type InsertWorkspace, type InsertWorkspaceMember, type UpdateWorkspace } from '../../shared/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import paypalSdk from 'paypal-rest-sdk';
 import crypto from 'crypto';
@@ -63,25 +63,29 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
       .from(groups)
       .where(eq(groups.workspaceId, wsData.id));
 
-    // For each group, get the members
-    const groupsWithMembers = await Promise.all(
-      workspaceGroups.map(async (group) => {
-        const groupUsers = await db
+    // Single join for all group members instead of one query per group (N+1).
+    const groupIds = workspaceGroups.map(g => g.id);
+    const allGroupUsers = groupIds.length
+      ? await db
           .select({
+            groupId: groupMembers.groupId,
             id: users.id,
             name: users.name,
             email: users.email,
           })
           .from(groupMembers)
           .innerJoin(users, eq(users.id, groupMembers.userId))
-          .where(eq(groupMembers.groupId, group.id));
-
-        return {
-          ...group,
-          members: groupUsers,
-        };
-      })
-    );
+          .where(inArray(groupMembers.groupId, groupIds))
+      : [];
+    const membersByGroup = new Map<number, typeof allGroupUsers>();
+    for (const gu of allGroupUsers) {
+      if (!membersByGroup.has(gu.groupId)) membersByGroup.set(gu.groupId, []);
+      membersByGroup.get(gu.groupId)!.push(gu);
+    }
+    const groupsWithMembers = workspaceGroups.map((group) => ({
+      ...group,
+      members: (membersByGroup.get(group.id) ?? []).map(({ groupId: _omit, ...m }) => m),
+    }));
 
     res.json({
       workspace: {

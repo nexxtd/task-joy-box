@@ -18,6 +18,7 @@ import { notificationsSupported, notificationPermission, requestNotificationPerm
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
+import { applyFontFamily, ensureFontLoaded } from '@/lib/fonts';
 import { ColorPicker, ConfigProvider, theme as antdTheme } from 'antd';
 
 const THEMES = [
@@ -213,7 +214,7 @@ const SettingsPage: React.FC = () => {
         }
         if (data.fontFamily) {
           setFont(data.fontFamily);
-          document.body.style.fontFamily = `'${data.fontFamily}', system-ui, -apple-system, sans-serif`;
+          applyFontFamily(data.fontFamily);
         }
         if (data.accentColor || data.accentHsl) {
           const { hex, hsl } = normalizeAccent(data.accentColor, data.accentHsl);
@@ -231,7 +232,7 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     const savedFont = localStorage.getItem('font');
-    if (savedFont) document.body.style.fontFamily = `'${savedFont}', system-ui, -apple-system, sans-serif`;
+    if (savedFont) applyFontFamily(savedFont);
   }, []);
 
   useEffect(() => {
@@ -377,9 +378,8 @@ const SettingsPage: React.FC = () => {
   };
 
   const applyFont = async (f: string) => {
-    document.body.style.fontFamily = `'${f}', system-ui, -apple-system, sans-serif`;
+    applyFontFamily(f);
     setFont(f);
-    localStorage.setItem('font', f);
     
     // Auto-save to backend
     if (isPaid) {
@@ -503,7 +503,7 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('accentHsl', '0 0% 0%');
     
     // Apply the settings to the DOM
-    document.body.style.fontFamily = `'Inter', system-ui, -apple-system, sans-serif`;
+    applyFontFamily('Inter');
     document.documentElement.style.setProperty('--primary', '0 0% 0%');
     document.documentElement.style.setProperty('--ring', '0 0% 0%');
     document.documentElement.style.setProperty('--sidebar-primary', '0 0% 0%');
@@ -1091,7 +1091,7 @@ const SettingsPage: React.FC = () => {
               <div className="bg-card border border-border rounded-xl p-5">
                 <div className="flex items-center gap-4">
                   {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt={user.name} className="w-14 h-14 rounded-full" />
+                    <img src={user.avatarUrl} alt={user.name} loading="lazy" decoding="async" className="w-14 h-14 rounded-full object-cover" />
                   ) : (
                     <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xl font-bold">
                       {initials}

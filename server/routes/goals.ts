@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db.js';
 import { goals, tags, goalTagAssignments, activityLogs, users, type InsertGoal } from '../../shared/schema.js';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { getSettingNumber } from '../lib/settings.js';
 
@@ -14,13 +14,14 @@ async function loadGoalsWithTags(userId: number) {
   const userGoals = await db.select().from(goals).where(eq(goals.userId, userId)).orderBy(desc(goals.updatedAt));
   const allTags = await db.select().from(tags).where(eq(tags.userId, userId));
   const allAssignments = allTags.length > 0
-    ? await db.select().from(goalTagAssignments).where(sql`${goalTagAssignments.tagId} IN ${sql.raw(`(${allTags.map(t => t.id).join(',')})`)}`)
+    ? await db.select().from(goalTagAssignments).where(inArray(goalTagAssignments.tagId, allTags.map(t => t.id)))
     : [];
 
   const tagsByGoal = new Map<number, typeof allTags>();
+  const tagById = new Map(allTags.map(t => [t.id, t]));
   for (const a of allAssignments) {
     if (!tagsByGoal.has(a.goalId)) tagsByGoal.set(a.goalId, []);
-    const tag = allTags.find(t => t.id === a.tagId);
+    const tag = tagById.get(a.tagId);
     if (tag) tagsByGoal.get(a.goalId)!.push(tag);
   }
 
@@ -180,6 +181,12 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
   try {
     const goalId = parseInt(req.params.id);
     const tagId = parseInt(req.params.tagId);
+    const userId = req.userId!;
+
+    const [goal] = await db.select({ id: goals.id }).from(goals).where(and(eq(goals.id, goalId), eq(goals.userId, userId))).limit(1);
+    if (!goal) return res.status(404).json({ error: 'Goal not found' });
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1);
+    if (!tag) return res.status(404).json({ error: 'Tag not found' });
 
     const existing = await db.select().from(goalTagAssignments)
       .where(and(eq(goalTagAssignments.goalId, goalId), eq(goalTagAssignments.tagId, tagId)));
@@ -193,7 +200,9 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 
     const allAssignments = await db.select().from(goalTagAssignments).where(eq(goalTagAssignments.goalId, goalId));
     const tagIds = allAssignments.map(a => a.tagId);
-    const assignedTags = tagIds.length > 0 ? await db.select().from(tags).where(sql`${tags.id} = ANY(${tagIds})`) : [];
+    const assignedTags = tagIds.length > 0
+      ? await db.select().from(tags).where(and(inArray(tags.id, tagIds), eq(tags.userId, userId)))
+      : [];
 
     res.json({ tags: assignedTags });
   } catch (error) {
@@ -205,8 +214,14 @@ router.post('/:id/tags/:tagId/toggle', requireAuth, async (req: AuthRequest, res
 router.delete('/tags/:tagId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const tagId = parseInt(req.params.tagId);
-    await db.delete(goalTagAssignments).where(eq(goalTagAssignments.tagId, tagId));
-    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
+    const userId = req.userId!;
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId))).limit(1);
+    if (!tag) return res.status(404).json({ error: 'Tag not found' });
+    const userGoalIds = await db.select({ id: goals.id }).from(goals).where(eq(goals.userId, userId));
+    if (userGoalIds.length > 0) {
+      await db.delete(goalTagAssignments).where(and(eq(goalTagAssignments.tagId, tagId), inArray(goalTagAssignments.goalId, userGoalIds.map(g => g.id))));
+    }
+    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, userId)));
     res.json({ message: 'Tag deleted' });
   } catch (error) {
     console.error('Error deleting goal tag:', error);

@@ -577,7 +577,7 @@ const AIChat: React.FC = () => {
                       >
                         <ChevronRight className={`w-3.5 h-3.5 text-primary transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                       </button>
-                      <p className={`flex-1 text-sm text-foreground leading-relaxed ${!isExpanded && isLong ? 'line-clamp-1' : ''}`}>
+                      <p className={`flex-1 min-w-0 break-words text-sm text-foreground leading-relaxed ${!isExpanded && isLong ? 'line-clamp-1' : ''}`}>
                         {entry.title}
                       </p>
                       <span className="text-[11px] text-muted-foreground shrink-0 mt-0.5">{timeStr}</span>

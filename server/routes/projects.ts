@@ -402,7 +402,8 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
        FROM project_chat_messages pcm
        INNER JOIN users u ON u.id = pcm.user_id
        WHERE pcm.project_id = $1
-       ORDER BY pcm.created_at ASC`,
+       ORDER BY pcm.created_at ASC
+       LIMIT 200`,
       [projectId]
     );
     res.json({ messages: result.rows });

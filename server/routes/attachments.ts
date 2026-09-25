@@ -53,8 +53,21 @@ const upload = multer({
   },
 });
 
-// Ownership verification omitted since tasks are now stored in boardSnapshots.
-// We rely on route authentication and unguessable file URLs.
+// Attachments are scoped to the owning user. task_attachments.user_id is set
+// on upload; legacy rows with NULL fall back to a task -> board ownership check.
+async function taskBelongsToUser(taskIdText: string, userId: number): Promise<boolean> {
+  const numericId = parseInt(taskIdText, 10);
+  if (!Number.isFinite(numericId)) return true; // snapshot-based task id, no DB row to check
+  const [task] = await db.select({ boardId: tasks.boardId }).from(tasks).where(eq(tasks.id, numericId)).limit(1);
+  if (!task) return true; // snapshot task, ownership enforced via attachment.user_id
+  const [board] = await db.select({ userId: boards.userId }).from(boards).where(eq(boards.id, task.boardId)).limit(1);
+  return board?.userId === userId;
+}
+
+async function canAccessAttachment(attachment: typeof taskAttachments.$inferSelect, userId: number): Promise<boolean> {
+  if ((attachment as any).userId != null) return (attachment as any).userId === userId;
+  return taskBelongsToUser(attachment.taskId, userId);
+}
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
@@ -62,9 +75,14 @@ function sanitizeFilename(name: string): string {
 
 router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res: any) => {
   try {
-    const taskId = req.params.taskId;
+    const taskId = String(req.params.taskId);
+    const userId = (req as any).userId as number;
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!(await taskBelongsToUser(taskId, userId))) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     const maxMb = await getSettingNumber('max_attachment_mb', 25);
@@ -78,6 +96,7 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
     }
 
     const [attachment] = await db.insert(taskAttachments).values({
+      userId,
       taskId,
       fileName: sanitizeFilename(req.file.originalname),
       fileType: req.file.mimetype,
@@ -94,12 +113,13 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
 
 router.get('/:taskId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const taskId = req.params.taskId;
-
-    const attachments = await db.query.taskAttachments.findMany({
-      where: eq(taskAttachments.taskId, taskId),
-    });
-    res.json(attachments);
+    const taskId = String(req.params.taskId);
+    const userId = req.userId!;
+    if (!(await taskBelongsToUser(taskId, userId))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const rows = await db.select().from(taskAttachments).where(eq(taskAttachments.taskId, taskId));
+    res.json(rows.filter((a) => (a as any).userId == null || (a as any).userId === userId));
   } catch (error) {
     console.error('Error fetching attachments');
     res.status(500).json({ error: 'Failed to fetch attachments' });
@@ -114,12 +134,13 @@ function resolveAttachmentPath(fileUrl: string): string {
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const attachment = await db.query.taskAttachments.findFirst({
-      where: eq(taskAttachments.id, id),
-    });
+    const [attachment] = await db.select().from(taskAttachments).where(eq(taskAttachments.id, id)).limit(1);
 
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
+    }
+    if (!(await canAccessAttachment(attachment, req.userId!))) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     const filePath = resolveAttachmentPath(attachment.fileUrl);
@@ -138,12 +159,13 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const attachment = await db.query.taskAttachments.findFirst({
-      where: eq(taskAttachments.id, id),
-    });
+    const [attachment] = await db.select().from(taskAttachments).where(eq(taskAttachments.id, id)).limit(1);
 
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
+    }
+    if (!(await canAccessAttachment(attachment, req.userId!))) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     const filePath = resolveAttachmentPath(attachment.fileUrl);

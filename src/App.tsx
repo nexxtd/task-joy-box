@@ -12,33 +12,36 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, lazy, useEffect, useState, useRef } from "react";
 
-import Dashboard from "@/pages/Dashboard";
-import Projects from "@/pages/Projects";
-import Tasks from "@/pages/Tasks";
-import CalendarPage from "@/pages/CalendarPage";
-import Insights from "@/pages/Insights";
-import Notes from "@/pages/Notes";
-import Goals from "@/pages/Goals";
-import Collaboration from "@/pages/Collaboration";
-import Pricing from "@/pages/Pricing";
-import SettingsPage from "@/pages/SettingsPage";
-import AIChat from "@/pages/AIChat";
-import Habits from "@/pages/Habits";
-import Support from "@/pages/Support";
-import AdminDashboard from "@/pages/AdminDashboard";
-import Tutorial from "@/pages/Tutorial";
-import NotFound from "@/pages/NotFound";
-import WhiteboardPage from "@/pages/WhiteboardPage";
-import Documents from "@/pages/Documents";
-import WhatsNew from "@/pages/WhatsNew";
-import VerifyEmail from "@/pages/VerifyEmail";
+// Route-level code splitting: each page becomes its own chunk so the
+// initial bundle only contains the login shell + layout.
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Projects = lazy(() => import("@/pages/Projects"));
+const Tasks = lazy(() => import("@/pages/Tasks"));
+const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
+const Insights = lazy(() => import("@/pages/Insights"));
+const Notes = lazy(() => import("@/pages/Notes"));
+const Goals = lazy(() => import("@/pages/Goals"));
+const Collaboration = lazy(() => import("@/pages/Collaboration"));
+const Pricing = lazy(() => import("@/pages/Pricing"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const AIChat = lazy(() => import("@/pages/AIChat"));
+const Habits = lazy(() => import("@/pages/Habits"));
+const Support = lazy(() => import("@/pages/Support"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const Tutorial = lazy(() => import("@/pages/Tutorial"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const WhiteboardPage = lazy(() => import("@/pages/WhiteboardPage"));
+const Documents = lazy(() => import("@/pages/Documents"));
+const WhatsNew = lazy(() => import("@/pages/WhatsNew"));
+const VerifyEmail = lazy(() => import("@/pages/VerifyEmail"));
 import WhatsNewModal from "@/components/WhatsNewModal";
+import { applyFontFamily } from "@/lib/fonts";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
 import EnergyPopup from "@/components/EnergyPopup";
-import DeepFocusMode from "@/components/DeepFocusMode";
+const DeepFocusMode = lazy(() => import("@/components/DeepFocusMode"));
 import { useDeepFocus } from "@/hooks/useDeepFocus";
 import { applyAccentHsl, normalizeAccent } from "@/lib/accent";
 import { deviceNotify, formatOverdueDelta, markAlertSent, wasAlertSent } from "@/lib/notifications";
@@ -62,8 +65,7 @@ const AppearanceSync = () => {
         localStorage.setItem("accentColor", hex);
         localStorage.setItem("accentHsl", hsl);
         if (data.fontFamily) {
-          document.body.style.fontFamily = `'${data.fontFamily}', system-ui, -apple-system, sans-serif`;
-          localStorage.setItem("font", data.fontFamily);
+          applyFontFamily(data.fontFamily);
         }
       } catch {
         clearTimeout(tid);
@@ -85,6 +87,8 @@ const Notifier = () => {
     if (!isPaid) return;
     const smartAlertsEnabled = () => localStorage.getItem('smartAlerts') !== 'false';
     const check = () => {
+      // Skip work when tab is hidden — saves CPU/battery and avoids toast pile-ups.
+      if (document.hidden) return;
       if (!smartAlertsEnabled()) return;
       const tasks = tasksRef.current;
       if (!tasks.length) return;
@@ -127,7 +131,20 @@ const Notifier = () => {
   return null;
 };
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 function PublicLogin() {
   const { user, loading } = useAuth();
@@ -161,7 +178,7 @@ function ProtectedRoutes() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="min-h-dvh flex items-center justify-center bg-background">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -171,7 +188,7 @@ function ProtectedRoutes() {
 
   if ((user as any).emailVerified === false) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-dvh bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-card border border-border rounded-2xl p-8 shadow-sm text-center">
           <h1 className="text-lg font-bold text-foreground mb-2">Verify your email</h1>
           <p className="text-sm text-muted-foreground mb-6">We sent a verification link to <span className="font-medium text-foreground">{user.email}</span>. Please check your inbox and click the link to activate your account. The link expires in 24 hours.</p>
@@ -192,7 +209,7 @@ function ProtectedRoutes() {
 
   if (maintenance.maintenance_mode && !user.isAdmin) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
         <h1 className="text-2xl font-semibold">Under Maintenance</h1>
         <p className="text-muted-foreground max-w-md">{maintenance.message || "We are currently performing scheduled maintenance. Please check back shortly."}</p>
@@ -213,7 +230,7 @@ function ProtectedRoutes() {
             <EnergyPopup />
             <WhatsNewModal />
             {shouldShowTutorial && <Suspense fallback={null}><Tutorial /></Suspense>}
-            {isDeepFocusOpen && <DeepFocusMode task={deepFocusTask} />}
+            {isDeepFocusOpen && <Suspense fallback={null}><DeepFocusMode task={deepFocusTask} /></Suspense>}
             <Routes>
               <Route element={<AppLayout />}>
                 <Route path="/" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
@@ -272,7 +289,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmail /></Suspense>} />
                 <Route path="/login" element={<PublicLogin />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>

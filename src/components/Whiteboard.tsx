@@ -929,7 +929,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
     const isShapeBlock = item.type === 'shape';
     
     return (
-      <div className="absolute -top-12 left-0 bg-white rounded-lg shadow-lg border border-gray-200 px-2 py-1 flex items-center gap-1 z-40">
+      <div className="absolute -top-12 left-0 bg-popover rounded-lg shadow-lg border border-border px-2 py-1 flex items-center gap-1 z-40">
         {/* Move handle */}
         <div className="p-1.5 cursor-grab text-gray-500 hover:text-gray-700">
           <Move className="w-4 h-4" />
@@ -939,12 +939,12 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         <div className="relative">
           <button 
             onClick={() => setShowColorPicker(!showColorPicker)}
-            className="p-1.5 text-gray-500 hover:text-gray-700"
+            className="p-1.5 text-muted-foreground hover:text-foreground"
           >
             <Palette className="w-4 h-4" />
           </button>
           {showColorPicker && (
-            <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-5 gap-1 z-50">
+            <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border p-2 grid grid-cols-5 gap-1 z-50">
               {colors.map(color => (
                 <button
                   key={color}
@@ -963,13 +963,13 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           <div className="relative">
             <button 
               onClick={() => setShowTextFormatPopup(!showTextFormatPopup)}
-              className="p-1.5 text-gray-500 hover:text-gray-700"
+              className="p-1.5 text-muted-foreground hover:text-foreground"
               title="Text formatting"
             >
               <Type className="w-4 h-4" />
             </button>
             {showTextFormatPopup && (
-              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+              <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border p-2 z-50">
                 <div className="flex gap-1">
                   <button
                     onClick={() => {/* Apply bold to selected text */}}
@@ -1002,7 +1002,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         {isShapeBlock && (
           <button
             onClick={() => setShowShapeEditPopup(!showShapeEditPopup)}
-            className="p-1.5 text-gray-500 hover:text-gray-700"
+            className="p-1.5 text-muted-foreground hover:text-foreground"
             title="Edit shape"
           >
             <Settings2 className="w-4 h-4" />
@@ -1014,13 +1014,13 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           <div className="relative">
             <button
               onClick={() => setShowShapeSelector(!showShapeSelector)}
-              className="p-1.5 text-gray-500 hover:text-gray-700"
+              className="p-1.5 text-muted-foreground hover:text-foreground"
               title="Change shape"
             >
               <Shapes className="w-4 h-4" />
             </button>
             {showShapeSelector && (
-              <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+              <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border p-2 z-50">
                 <div className="flex gap-1">
                   <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'square' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Square"><Square className="w-4 h-4" /></button>
                   <button onClick={() => { setItems(prev => prev.map(i => i.id === item.id ? { ...i, shapeType: 'circle' } : i)); setShowShapeSelector(false); }} className="p-2 hover:bg-gray-100 rounded" title="Circle"><div className="w-4 h-4 rounded-full border-2 border-gray-600" /></button>
@@ -1046,23 +1046,23 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         <div className="relative">
           <button 
             onClick={() => setShowBlockMenu(!showBlockMenu)}
-            className="p-1.5 text-gray-500 hover:text-gray-700"
+            className="p-1.5 text-muted-foreground hover:text-foreground"
           >
             <MoreVertical className="w-4 h-4" />
           </button>
           {showBlockMenu && (
-            <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 min-w-[150px]">
-              <button onClick={() => { lockItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+            <div className="absolute top-full right-0 mt-1 bg-popover rounded-lg shadow-xl border border-border py-1 z-50 min-w-[150px]">
+              <button onClick={() => { lockItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2">
                 {item.locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                 {item.locked ? 'Unlock' : 'Lock'}
               </button>
-              <button onClick={() => { duplicateItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <button onClick={() => { duplicateItem(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2">
                 <Copy className="w-4 h-4" /> Duplicate
               </button>
-              <button onClick={() => { bringForward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <button onClick={() => { bringForward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2">
                 <ArrowUp className="w-4 h-4" /> Bring Forward
               </button>
-              <button onClick={() => { sendBackward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2">
+              <button onClick={() => { sendBackward(item.id); setShowBlockMenu(false); }} className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2">
                 <ArrowDown className="w-4 h-4" /> Send Backward
               </button>
             </div>
@@ -1071,7 +1071,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         
         {/* Shape edit popup */}
         {isShapeBlock && showShapeEditPopup && (
-          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 w-64">
+          <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border p-4 z-50 w-64">
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Fill colour</label>
@@ -1236,7 +1236,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         content = (
           <div
             {...sharedHandlers}
-            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            className={cn(wrapperCls, 'bg-card rounded-lg shadow-sm border border-border overflow-hidden flex flex-col')}
             style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
           >
             <div className="p-4 flex-1 flex flex-col">
@@ -1275,14 +1275,14 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
           >
             {item.fileUrl ? (
               <>
-                <div className="relative flex-1 p-3 flex items-center justify-center bg-gray-50">
+                <div className="relative flex-1 p-3 flex items-center justify-center bg-muted">
                   {item.fileUrl.endsWith('.pdf') || item.fileUrl.endsWith('.doc') || item.fileUrl.endsWith('.docx') ? (
                     <div className="text-center">
-                      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                      <span className="text-xs text-gray-500">File uploaded</span>
+                      <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+                      <span className="text-xs text-muted-foreground">File uploaded</span>
                     </div>
                   ) : (
-                    <img src={item.fileUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+                    <img src={item.fileUrl} alt="Preview" loading="lazy" decoding="async" className="max-w-full max-h-full object-contain" />
                   )}
                   {/* File controls in top right */}
                   <div className="absolute top-2 right-2 flex gap-1">
@@ -1331,7 +1331,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         content = (
           <div
             {...sharedHandlers}
-            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            className={cn(wrapperCls, 'bg-card rounded-lg shadow-sm border border-border overflow-hidden flex flex-col')}
             style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
           >
             {imageCount === 0 ? (
@@ -1348,12 +1348,12 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
               }}>
                 {images.map((img, idx) => (
                   <div key={img.id} className="relative group">
-                    <img src={img.url} alt={`Image ${idx + 1}`} className="w-full h-full object-cover rounded-lg" />
+                    <img src={img.url} alt={`Image ${idx + 1}`} loading="lazy" decoding="async" className="w-full h-full object-cover rounded-lg" />
                     <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={e => { stopEdit(e); /* Replace image */ }} className="p-1 bg-white rounded shadow hover:bg-gray-100">
+                      <button onClick={e => { stopEdit(e); /* Replace image */ }} className="p-1 bg-card rounded shadow hover:bg-muted">
                         <Edit3 className="w-3 h-3" />
                       </button>
-                      <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, images: i.images?.filter(im => im.id !== img.id) } : i)); }} className="p-1 bg-white rounded shadow hover:bg-red-100 text-red-500">
+                      <button onClick={e => { stopEdit(e); setItems(prev => prev.map(i => i.id === item.id ? { ...i, images: i.images?.filter(im => im.id !== img.id) } : i)); }} className="p-1 bg-card rounded shadow hover:bg-destructive/10 text-destructive">
                         <X className="w-3 h-3" />
                       </button>
                     </div>
@@ -1504,7 +1504,7 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         content = (
           <div
             {...sharedHandlers}
-            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            className={cn(wrapperCls, 'bg-card rounded-lg shadow-sm border border-border overflow-hidden flex flex-col')}
             style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
           >
             <div className="flex-1 overflow-auto">
@@ -1543,19 +1543,19 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         content = (
           <div
             {...sharedHandlers}
-            className={cn(wrapperCls, 'bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col')}
+            className={cn(wrapperCls, 'bg-card rounded-lg shadow-sm border border-border overflow-hidden flex flex-col')}
             style={{ left: item.x, top: item.y, width: w, height: h, backgroundColor: item.backgroundColor }}
           >
             {item.url ? (
               <>
                 {item.imageUrl && (
                   <div className="flex-1 overflow-hidden">
-                    <img src={item.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <img src={item.imageUrl} alt="Preview" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   </div>
                 )}
                 <div className="p-3">
-                  <h3 className="font-semibold text-sm text-gray-800 mb-1">{item.title || 'Link'}</h3>
-                  <p className="text-xs text-gray-600 mb-2 line-clamp-2">{item.description || ''}</p>
+                  <h3 className="font-semibold text-sm text-foreground mb-1">{item.title || 'Link'}</h3>
+                  <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{item.description || ''}</p>
                   <input
                     type="text"
                     className="w-full bg-transparent text-xs text-primary outline-none"
@@ -1725,10 +1725,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
       >
         {/* Color picker */}
         <div className="relative group">
-          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+          <button className="p-1.5 text-muted-foreground hover:text-foreground">
             <Palette className="w-4 h-4" />
           </button>
-          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 p-2 grid grid-cols-4 gap-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
+          <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border p-2 grid grid-cols-4 gap-1 z-50 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto transition-opacity">
             {colors.map(color => (
               <button
                 key={color}
@@ -1742,10 +1742,10 @@ const Whiteboard: React.FC<WhiteboardProps> = ({ whiteboardId }) => {
         
         {/* Thickness */}
         <div className="relative group">
-          <button className="p-1.5 text-gray-500 hover:text-gray-700">
+          <button className="p-1.5 text-muted-foreground hover:text-foreground">
             <Layers className="w-4 h-4" />
           </button>
-          <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity min-w-[100px]">
+          <div className="absolute top-full left-0 mt-1 bg-popover rounded-lg shadow-xl border border-border py-1 z-50 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto transition-opacity min-w-[100px]">
             {['thin', 'medium', 'thick'].map(thick => (
               <button
                 key={thick}

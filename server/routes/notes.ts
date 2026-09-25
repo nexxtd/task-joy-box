@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db.js';
 import { notes, tags, noteTagAssignments, activityLogs } from '../../shared/schema.js';
-import { eq, and, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
@@ -30,7 +30,7 @@ async function loadNotesPayload(userId: number) {
     db.select().from(tags).where(eq(tags.userId, userId)).orderBy(asc(tags.name)),
   ]);
   const assignments = userTags.length > 0
-    ? await db.select({ noteId: noteTagAssignments.noteId, tagId: noteTagAssignments.tagId }).from(noteTagAssignments).where(sql`${noteTagAssignments.tagId} IN ${sql.raw(`(${userTags.map(t => t.id).join(',')})`)}`)
+    ? await db.select({ noteId: noteTagAssignments.noteId, tagId: noteTagAssignments.tagId }).from(noteTagAssignments).where(inArray(noteTagAssignments.tagId, userTags.map(t => t.id)))
     : [];
 
   const tagsById = new Map(userTags.map(tag => [tag.id, tag]));

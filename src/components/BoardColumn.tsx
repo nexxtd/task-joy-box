@@ -528,7 +528,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[680px] max-w-[90vw] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[680px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
@@ -897,7 +897,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     {columnEditOpen && columnEditPos && createPortal(
       <div className="fixed inset-0 z-50" onClick={() => { setColumnEditOpen(false); closeColumnEdit(); }}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-        <div className="relative w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-2xl animate-fade-in z-[60]" style={{ position: 'fixed', top: columnEditPos.top, left: columnEditPos.left }} onClick={e => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-5">
             <span className="text-base font-bold text-foreground">Edit Column</span>
             <button onClick={() => { setColumnEditOpen(false); closeColumnEdit(); }} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">

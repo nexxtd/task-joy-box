@@ -424,7 +424,7 @@ const CalendarPage: React.FC = () => {
 
       {/* AI Side Panel */}
       {aiPanelOpen && (
-        <div className="w-[28rem] border-l border-border/60 bg-gradient-to-b from-card to-background flex flex-col overflow-hidden shadow-[-8px_0_40px_rgba(0,0,0,0.06)] z-40 animate-in slide-in-from-right duration-300">
+        <div className="w-[28rem] max-w-[calc(100vw-2rem)] shrink-0 border-l border-border/60 bg-gradient-to-b from-card to-background flex flex-col overflow-hidden shadow-[-8px_0_40px_rgba(0,0,0,0.06)] z-40 animate-in slide-in-from-right duration-300">
           <header className="flex items-center justify-between px-5 py-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.02] to-transparent">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
@@ -590,7 +590,7 @@ function AIActionCard({
       className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-br from-card via-card to-muted/50 border border-border/60 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 transition-all duration-200 text-left group"
     >
       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center flex-shrink-0 group-hover:scale-110 group-hover:from-primary/25 group-hover:to-primary/10 transition-all duration-200 ring-1 ring-primary/10">
-        <Icon className="w-4.5 h-4.5 text-primary" />
+        <Icon className="w-[18px] h-[18px] text-primary" />
       </div>
       <div className="flex-1">
         <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">{title}</p>

@@ -216,8 +216,11 @@ const Pricing: React.FC = () => {
           seats: selectedPlan.planType !== 'personal' ? seats : undefined,
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to start checkout');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = (data as any).details ? ` — ${(data as any).details}` : (data as any).hint ? ` — ${(data as any).hint}` : '';
+        throw new Error(((data as any).error || 'Failed to start checkout') + detail);
+      }
       if (data.approvalUrl) {
         window.location.href = data.approvalUrl;
         return;

@@ -1,5 +1,3 @@
-import heic2any from 'heic2any';
-
 const MAX_DIMENSION = 1600;
 const JPEG_QUALITY = 0.82;
 const SMALL_IMAGE_BYTES = 300 * 1024;
@@ -44,6 +42,9 @@ export const fileToDataUrl = async (file: File): Promise<string> => {
   let sourceWasHeic = false;
   if (isHeic(file)) {
     try {
+      // Lazy-load heic2any (~100KB+) only on the HEIC path so it never
+      // lands in the initial bundle.
+      const { default: heic2any } = await import('heic2any');
       const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.8 });
       blob = Array.isArray(converted) ? converted[0] : converted;
       sourceWasHeic = true;

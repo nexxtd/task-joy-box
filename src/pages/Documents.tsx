@@ -672,8 +672,8 @@ const DocumentsInternal: React.FC = () => {
                   suppressContentEditableWarning
                   onInput={handleContentInput}
                   onPaste={handlePaste}
-                  className="max-w-3xl mx-auto min-h-[90%] bg-card border border-border rounded-xl shadow-sm p-10 text-foreground focus:outline-none outline-none leading-relaxed prose dark:prose-invert max-w-none"
-                  style={{ fontSize: '12pt', minHeight: '600px' }}
+                  className="w-full max-w-3xl mx-auto min-h-[90%] bg-card border border-border rounded-xl shadow-sm p-6 sm:p-10 text-foreground focus:outline-none outline-none leading-relaxed prose dark:prose-invert"
+                  style={{ fontSize: '12pt', minHeight: '400px' }}
                 />
               </div>
             </>

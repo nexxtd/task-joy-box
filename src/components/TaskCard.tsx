@@ -11,13 +11,16 @@ interface TaskCardProps {
   canEdit?: boolean;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggleComplete, canEdit = true }) => {
+const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick, isDragging, onToggleComplete, canEdit = true }) => {
   const { open: openDeepFocus } = useDeepFocus();
-  const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
-  const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
-  const subtaskTotal = (task.subtasks || []).length;
-  const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+  const { totalItems, doneItems, subtaskTotal, subtaskDone, isOverdue } = React.useMemo(() => {
+    const totalItems = task.checklists.reduce((s, c) => s + c.items.length, 0);
+    const doneItems = task.checklists.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0);
+    const subtaskTotal = (task.subtasks || []).length;
+    const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
+    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !task.completed;
+    return { totalItems, doneItems, subtaskTotal, subtaskDone, isOverdue };
+  }, [task.checklists, task.subtasks, task.dueDate, task.completed]);
 
   const handleDeepFocusClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -101,6 +104,8 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, isDragging, onToggle
       </div>
     </div>
   );
-};
+});
+
+TaskCard.displayName = 'TaskCard';
 
 export default TaskCard;

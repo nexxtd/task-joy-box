@@ -10,9 +10,7 @@ const router = Router();
 router.get('/', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    let settings = await db.query.userSettings.findFirst({
-      where: eq(userSettings.userId, userId),
-    });
+    let [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
 
     if (!settings) {
       // Create default settings if they don't exist
@@ -50,22 +48,26 @@ router.patch('/', requireAuth, async (req, res) => {
 
     const [updatedSettings] = await db.update(userSettings)
       .set({
-        theme,
-        fontFamily,
-        accentColor,
-        accentHsl,
-        language,
-        smartAlerts,
-        emailNotifs,
-        energyMorning,
-        energyAfternoon,
-        energyEvening,
-        energyTrackerEnabled,
+        ...(theme !== undefined ? { theme } : {}),
+        ...(fontFamily !== undefined ? { fontFamily } : {}),
+        ...(accentColor !== undefined ? { accentColor } : {}),
+        ...(accentHsl !== undefined ? { accentHsl } : {}),
+        ...(language !== undefined ? { language } : {}),
+        ...(smartAlerts !== undefined ? { smartAlerts } : {}),
+        ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+        ...(energyMorning !== undefined ? { energyMorning } : {}),
+        ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
+        ...(energyEvening !== undefined ? { energyEvening } : {}),
+        ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
         updatedAt: new Date().toISOString(),
       } as UpdateUserSettings as any)
       .where(eq(userSettings.userId, userId))
       .returning();
 
+    if (!updatedSettings) {
+      const [created] = await db.insert(userSettings).values({ userId } as any).returning();
+      return res.json(created);
+    }
     res.json(updatedSettings);
   } catch (error) {
     console.error('Error updating settings:', error);

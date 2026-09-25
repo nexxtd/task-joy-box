@@ -183,7 +183,7 @@ const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, o
               }`}>
                 {link.kind === 'faq' ? <BookOpen className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
               </span>
-              <span className="flex-1 text-xs font-medium text-foreground leading-snug">{link.label}</span>
+              <span className="flex-1 min-w-0 text-xs font-medium text-foreground leading-snug line-clamp-2">{link.label}</span>
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0 transition-transform group-hover:translate-x-0.5" />
             </button>
           ))}

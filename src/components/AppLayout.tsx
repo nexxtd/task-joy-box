@@ -5,7 +5,7 @@ import MobileNav from './MobileNav';
 
 const AppLayout: React.FC = () => {
   return (
-    <div className="h-screen flex bg-background overflow-hidden">
+    <div className="h-dvh flex bg-background overflow-hidden">
       <div className="hidden md:block">
         <AppSidebar />
       </div>

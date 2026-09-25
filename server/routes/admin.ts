@@ -268,17 +268,16 @@ router.patch('/coupons/:id', async (req: AuthRequest, res: Response) => {
     const { code, discountType, discountValue, maxUses, restrictedToEmail, restrictedToPlan, startDate, expiresAt, oneTimePerUser, active, groupId } = req.body;
     const couponId = parseInt(req.params.id);
 
-    const updateData: any = {
-      discountType,
-      discountValue,
-      maxUses: maxUses || null,
-      restrictedToEmail: restrictedToEmail || null,
-      restrictedToPlan: restrictedToPlan || null,
-      startDate: startDate || null,
-      expiresAt: expiresAt || null,
-      oneTimePerUser: oneTimePerUser || false,
-      active: active !== undefined ? active : undefined,
-    };
+    const updateData: any = {};
+    if (discountType !== undefined) updateData.discountType = discountType;
+    if (discountValue !== undefined) updateData.discountValue = discountValue;
+    if (maxUses !== undefined) updateData.maxUses = maxUses || null;
+    if (restrictedToEmail !== undefined) updateData.restrictedToEmail = restrictedToEmail || null;
+    if (restrictedToPlan !== undefined) updateData.restrictedToPlan = restrictedToPlan || null;
+    if (startDate !== undefined) updateData.startDate = startDate || null;
+    if (expiresAt !== undefined) updateData.expiresAt = expiresAt || null;
+    if (oneTimePerUser !== undefined) updateData.oneTimePerUser = oneTimePerUser || false;
+    if (active !== undefined) updateData.active = active;
     if (code) updateData.code = code.toUpperCase();
     if (groupId !== undefined) updateData.groupId = groupId || null;
 
@@ -409,13 +408,24 @@ router.get('/users', async (req: AuthRequest, res: Response) => {
       avatarUrl: users.avatarUrl,
     }).from(users).orderBy(desc(users.createdAt)).limit(200);
 
-    const usersWithLanguage = await Promise.all(allUsers.map(async u => {
-      const [settings] = await db.select({ language: userSettings.language })
-        .from(userSettings).where(eq(userSettings.userId, u.id)).limit(1);
-      return { ...u, lastActiveAt: u.lastActiveAt ?? u.updatedAt ?? u.createdAt, language: settings?.language || 'en' };
-    }));
+    const usersWithLanguage = (() => {
+      // Batch settings lookup in one query instead of N+1 per-user selects.
+      return (async () => {
+        const ids = allUsers.map(u => u.id);
+        const settingsRows = ids.length
+          ? await db.select({ userId: userSettings.userId, language: userSettings.language })
+              .from(userSettings).where(inArray(userSettings.userId, ids))
+          : [];
+        const langByUser = new Map(settingsRows.map(r => [r.userId, r.language]));
+        return allUsers.map(u => ({
+          ...u,
+          lastActiveAt: u.lastActiveAt ?? u.updatedAt ?? u.createdAt,
+          language: langByUser.get(u.id) || 'en',
+        }));
+      })();
+    })();
 
-    res.json(usersWithLanguage);
+    res.json(await usersWithLanguage);
   } catch (error) {
     console.error('Failed to fetch users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
@@ -607,12 +617,20 @@ router.get('/tickets', async (req: AuthRequest, res: Response) => {
       .leftJoin(users, eq(supportTickets.userId, users.id))
       .orderBy(desc(supportTickets.updatedAt));
 
-    const ticketsWithUnread = await Promise.all(allTickets.map(async t => {
-      const [unread] = await db.select({ count: sql<number>`count(*)` })
-        .from(ticketMessages)
-        .where(and(eq(ticketMessages.ticketId, t.id), eq(ticketMessages.senderType, 'user'), eq(ticketMessages.readByStaff, false)));
-      return { ...t, unreadCount: Number(unread.count) };
-    }));
+    // Single aggregate query instead of one COUNT per ticket (N+1).
+    const ticketIds = allTickets.map(t => t.id);
+    const unreadRows = ticketIds.length
+      ? await db.select({ ticketId: ticketMessages.ticketId, count: sql<number>`count(*)` })
+          .from(ticketMessages)
+          .where(and(
+            inArray(ticketMessages.ticketId, ticketIds),
+            eq(ticketMessages.senderType, 'user'),
+            eq(ticketMessages.readByStaff, false),
+          ))
+          .groupBy(ticketMessages.ticketId)
+      : [];
+    const unreadByTicket = new Map(unreadRows.map(r => [r.ticketId, Number(r.count)]));
+    const ticketsWithUnread = allTickets.map(t => ({ ...t, unreadCount: unreadByTicket.get(t.id) ?? 0 }));
 
     res.json(ticketsWithUnread);
   } catch (error) {

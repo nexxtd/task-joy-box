@@ -1148,13 +1148,13 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
       )}
 
       <div
-        className="relative z-10 w-[95vw] sm:w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-white border border-gray-200"
+        className="relative z-10 w-[95vw] sm:w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl shadow-2xl bg-card border border-border"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
-              <Brain className="w-4.5 h-4.5 text-primary" />
+              <Brain className="w-[18px] h-[18px] text-primary" />
             </div>
             <div className="min-w-0">
               <h2 className="text-sm font-bold text-foreground truncate">Deep Focus Mode</h2>

@@ -2063,7 +2063,7 @@ const Projects: React.FC = () => {
           <div
             ref={projectMenuRef}
             style={{ top: menuPos.top, left: menuPos.left }}
-            className="fixed z-50 min-w-[220px] overflow-hidden rounded-2xl border border-gray-200 bg-white py-1 shadow-lg shadow-black/10"
+            className="fixed z-50 min-w-[220px] overflow-hidden rounded-2xl border border-border bg-popover py-1 shadow-lg shadow-black/10"
           >
             <MenuItem icon={<SquarePen className="h-4 w-4" />} label="Rename" onClick={() => {
               setEditingProjectId(menuProject.id);
@@ -2081,7 +2081,7 @@ const Projects: React.FC = () => {
               await persistProject(menuProject.id, { completed: !menuProject.completed });
               setShowProjectMenuId(null);
             }} />
-            <div className="my-1 border-t border-gray-200" />
+            <div className="my-1 border-t border-border" />
             {menuProject.ownerId === user?.id ? (
               <MenuItem icon={<Trash2 className="h-4 w-4" />} danger subtleDanger label="Delete Project" onClick={() => {
                 setProjectToDelete(menuProject.id);

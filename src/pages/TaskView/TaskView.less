@@ -4,7 +4,6 @@
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   padding: 20px;
   margin: 20px;
-  
   .task-header {
     text-align: center;
     margin-bottom: 20px;
@@ -100,5 +99,29 @@
   .ai-task-button {
     display: flex;
     gap: 8px;
+  }
+}
+
+.dark .task-view {
+  background-color: hsl(var(--card));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+
+  .task-header h2,
+  .subtasks-section .section-title h3,
+  .subtask-item .subtask-text {
+    color: hsl(var(--card-foreground));
+  }
+
+  .subtasks-section .section-title .completion-status,
+  .subtask-item .subtask-duration {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .subtask-item {
+    border-bottom-color: hsl(var(--border));
+  }
+
+  .subtask-item .remove-button {
+    color: hsl(var(--muted-foreground));
   }
 }

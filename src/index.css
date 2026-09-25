@@ -1,11 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* NOTE: fonts are loaded via <link> in index.html (Inter preloaded, others on-demand via src/lib/fonts.ts).
+   Do not add render-blocking @import rules here. */
 
 @layer base {
   :root {
@@ -77,9 +75,10 @@
     --popover: 220 14% 14%;
     --popover-foreground: 210 18% 92%;
 
-    /* Black with white text (matches light theme default accent) */
-    --primary: 0 0% 0%;
-    --primary-foreground: 0 0% 100%;
+    /* Light neutral in dark mode so primary buttons / focus rings stay visible.
+       Pure black (0 0% 0%) is invisible on dark backgrounds. */
+    --primary: 210 18% 92%;
+    --primary-foreground: 220 16% 10%;
 
     --secondary: 220 12% 18%;
     --secondary-foreground: 210 16% 82%;
@@ -95,7 +94,7 @@
 
     --border: 220 12% 20%;
     --input: 220 12% 20%;
-    --ring: 0 0% 0%;
+    --ring: 210 18% 80%;
 
     --column-bg: 220 14% 11%;
     --task-bg: 220 14% 15%;
@@ -116,12 +115,12 @@
 
     --sidebar-background: 220 16% 10%;
     --sidebar-foreground: 210 16% 80%;
-    --sidebar-primary: 0 0% 0%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 210 18% 92%;
+    --sidebar-primary-foreground: 220 16% 10%;
     --sidebar-accent: 220 12% 18%;
     --sidebar-accent-foreground: 210 18% 92%;
     --sidebar-border: 220 12% 20%;
-    --sidebar-ring: 0 0% 0%;
+    --sidebar-ring: 210 18% 80%;
   }
 }
 
@@ -130,13 +129,29 @@
     @apply border-border;
   }
 
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100dvh;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
-/* Scrollbar */
+/* Scrollbar (WebKit + Firefox) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -198,8 +213,8 @@
   to { transform: translateX(100%); opacity: 0; }
 }
 @keyframes widget-flash {
-  0% { box-shadow: 0 0 0 3px hsl(0 0% 0% / 0.35), 0 12px 30px -30px hsl(0 0% 0% / 0.25); }
-  100% { box-shadow: 0 0 0 3px hsl(0 0% 0% / 0), 0 12px 30px -30px hsl(0 0% 0% / 0.25); }
+  0% { box-shadow: 0 0 0 3px hsl(var(--ring) / 0.35), 0 12px 30px -30px hsl(var(--foreground) / 0.25); }
+  100% { box-shadow: 0 0 0 3px hsl(var(--ring) / 0), 0 12px 30px -30px hsl(var(--foreground) / 0.25); }
 }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -239,22 +254,22 @@
 
 /* Task Assistant specific styles */
 .ta-action-card {
-  @apply rounded-xl border border-gray-200/60 bg-card p-4 transition-all duration-200;
+  @apply rounded-xl border border-border bg-card p-4 transition-all duration-200;
 }
 .ta-action-card:hover {
   @apply border-primary/30 shadow-lg shadow-primary/5;
 }
 .ta-result-success {
-  @apply border-l-4 border-l-gray-400;
+  @apply border-l-4 border-l-green-500;
 }
 .ta-result-error {
-  @apply border-l-4 border-l-gray-400;
+  @apply border-l-4 border-l-destructive;
 }
 .ta-result-info {
-  @apply border-l-4 border-l-gray-400;
+  @apply border-l-4 border-l-blue-500;
 }
 .ta-result-warning {
-  @apply border-l-4 border-l-gray-400;
+  @apply border-l-4 border-l-yellow-500;
 }
 .checklist-card:has(.checklist-item:hover) .checklist-header-delete {
   opacity: 0 !important;

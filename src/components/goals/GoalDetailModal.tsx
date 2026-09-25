@@ -266,7 +266,7 @@ const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {images.map(img => (
                     <div key={img.id} className="relative group/img rounded-xl border border-border bg-muted/40 overflow-hidden">
-                      {img.fileUrl.match(/^data:image/) ? <img src={img.fileUrl} alt={img.fileName} className="w-full h-32 object-cover" />
+                      {img.fileUrl.match(/^data:image/) ? <img src={img.fileUrl} alt={img.fileName} loading="lazy" decoding="async" className="w-full h-32 object-cover" />
                         : <div className="w-full h-32 flex items-center justify-center"><Paperclip className="w-6 h-6 text-muted-foreground" /></div>}
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
                         <p className="text-xs font-medium text-white truncate">{img.fileName}</p>

@@ -104,7 +104,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       .where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
     if (!tag) { res.status(404).json({ error: 'Tag not found' }); return; }
 
-    await db.delete(tags).where(eq(tags.id, tagId));
+    await db.delete(tags).where(and(eq(tags.id, tagId), eq(tags.userId, req.userId!)));
     res.json({ success: true });
   } catch (error) {
     console.error('Delete tag error:', error);

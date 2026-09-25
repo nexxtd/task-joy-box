@@ -29,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange }) => {
   ];
 
   return (
-    <div className="w-[220px] h-screen bg-card border-r border-border flex flex-col flex-shrink-0">
+    <div className="w-[220px] h-dvh bg-card border-r border-border flex flex-col flex-shrink-0">
       {/* Logo */}
       <div className="px-4 py-4 border-b border-border">
         <div className="flex items-center gap-2.5">

@@ -152,9 +152,9 @@ export const checklists = pgTable('checklists', {
 
 export const checklistItems = pgTable('checklist_items', {
   id: serial('id').primaryKey(),
-  checklistId: integer('checklist_id').references(() => checklists.id).notNull(),
+  checklistId: integer('checklist_id').references(() => checklists.id, { onDelete: 'cascade' }).notNull(),
   text: text('text').notNull(),
-  completed: text('completed').default('false'),
+  completed: boolean('completed').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -399,21 +399,41 @@ export const activityLogs = pgTable('activity_logs', {
 
 export const userSettings = pgTable('user_settings', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id).notNull().unique(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
   theme: text('theme').default('system'),
   fontFamily: text('font_family').default('Inter'),
+  fontSize: text('font_size').default('medium'),
+  location: text('location').default('United States'),
   accentColor: text('accent_color').default('#000000'),
   accentHsl: text('accent_hsl').default('0 0% 0%'),
   language: text('language').default('English'),
   smartAlerts: boolean('smart_alerts').default(true),
   emailNotifs: boolean('email_notifs').default(true),
   autoSortTasks: boolean('autoSortTasks').default(false),
+  doNotDisturbEnabled: boolean('do_not_disturb_enabled').default(false),
+  doNotDisturbStart: text('do_not_disturb_start').default('22:00'),
+  doNotDisturbEnd: text('do_not_disturb_end').default('07:00'),
+  upcomingTaskReminders: boolean('upcoming_task_reminders').default(true),
+  dueTimeWarningEnabled: boolean('due_time_warning_enabled').default(true),
+  overdueTaskAlertsEnabled: boolean('overdue_task_alerts_enabled').default(true),
+  dailySummaryEnabled: boolean('daily_summary_enabled').default(true),
+  habitRemindersEnabled: boolean('habit_reminders_enabled').default(true),
+  goalDeadlineAlertsEnabled: boolean('goal_deadline_alerts_enabled').default(true),
+  notificationSoundEnabled: boolean('notification_sound_enabled').default(true),
   energyMorning: text('energy_morning').default('medium'),
   energyAfternoon: text('energy_afternoon').default('high'),
   energyEvening: text('energy_evening').default('low'),
   energyTrackerEnabled: boolean('energy_tracker_enabled').default(true),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const notificationHistory = pgTable('notification_history', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const energyLogs = pgTable('energy_logs', {
@@ -427,11 +447,20 @@ export const energyLogs = pgTable('energy_logs', {
 
 export const taskAttachments = pgTable('task_attachments', {
   id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id),
   taskId: text('task_id').notNull(),
   fileName: text('file_name').notNull(),
   fileType: text('file_type').notNull(),
   fileSize: integer('file_size').notNull(),
   fileUrl: text('file_url').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const projectChatMessages = pgTable('project_chat_messages', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  message: text('message').notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 

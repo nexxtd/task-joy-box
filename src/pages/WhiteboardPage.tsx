@@ -6,7 +6,7 @@ const WhiteboardPage = () => {
   const whiteboardId = id ? parseInt(id) : undefined;
 
   return (
-    <div className="h-screen w-screen overflow-hidden">
+    <div className="h-dvh w-screen overflow-hidden">
       <Whiteboard whiteboardId={whiteboardId} />
     </div>
   );

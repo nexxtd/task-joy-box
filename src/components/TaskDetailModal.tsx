@@ -594,7 +594,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                   <div className="flex-1 flex items-center gap-2 min-w-0">
-                                    <span className="flex-1 text-sm font-semibold text-foreground truncate">{cl.title}</span>
+                                    <span className="flex-1 min-w-0 text-sm font-semibold text-foreground truncate">{cl.title}</span>
                                     {total > 0 && <span className="text-xs text-muted-foreground shrink-0">({total})</span>}
                                   </div>
                                   <button

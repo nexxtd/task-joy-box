@@ -765,7 +765,7 @@ const Collaboration: React.FC = () => {
         )}
 
         {activeTab === 'chat' && (
-          <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col h-[600px]">
+          <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col h-[min(600px,70vh)] min-h-[400px]">
             <div className="p-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-5 h-5 text-primary" />

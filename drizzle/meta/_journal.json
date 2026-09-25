@@ -1,12 +1,124 @@
 {
-  "version": "7",
+  "version": 7,
   "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
+      "version": 7,
       "when": 1777819560578,
       "tag": "0000_stale_khan",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": 7,
+      "when": 1777819561578,
+      "tag": "0001_add_habits_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": 7,
+      "when": 1777819562578,
+      "tag": "0002_add_energy_levels_to_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": 7,
+      "when": 1777819563578,
+      "tag": "0003_add_energy_logs_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": 7,
+      "when": 1777819564578,
+      "tag": "0004_add_support_tickets_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": 7,
+      "when": 1777819565578,
+      "tag": "0005_add_settings_appearance_and_dnd",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": 7,
+      "when": 1777819566578,
+      "tag": "0006_add_notifications_settings_and_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": 7,
+      "when": 1777819567578,
+      "tag": "0007_add_completed_to_milestones",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": 7,
+      "when": 1777819568578,
+      "tag": "0008_add_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": 7,
+      "when": 1777819569578,
+      "tag": "0009_add_note_templates_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": 7,
+      "when": 1777819570578,
+      "tag": "0010_add_pinned_to_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": 7,
+      "when": 1777819571578,
+      "tag": "0011_add_pinned_to_habits",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": 7,
+      "when": 1777819572578,
+      "tag": "0012_enable_rls_project_chat_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": 7,
+      "when": 1777819573578,
+      "tag": "0013_enable_rls_auth_token_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": 7,
+      "when": 1777819574578,
+      "tag": "0014_fix_permissive_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": 7,
+      "when": 1777819575578,
+      "tag": "0015_orm_drift_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": 7,
+      "when": 1777819576578,
+      "tag": "0016_settings_backfill_and_hot_indexes",
       "breakpoints": true
     }
   ]

@@ -211,6 +211,41 @@ export async function initDatabase() {
 
     // User settings table new columns
     await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'font_size', "TEXT DEFAULT 'medium'");
+    await addColumnIfNotExists('user_settings', 'location', "TEXT DEFAULT 'United States'");
+    await addColumnIfNotExists('user_settings', 'do_not_disturb_enabled', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('user_settings', 'do_not_disturb_start', "TEXT DEFAULT '22:00'");
+    await addColumnIfNotExists('user_settings', 'do_not_disturb_end', "TEXT DEFAULT '07:00'");
+    await addColumnIfNotExists('user_settings', 'upcoming_task_reminders', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'due_time_warning_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'overdue_task_alerts_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'daily_summary_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'habit_reminders_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'goal_deadline_alerts_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'notification_sound_enabled', 'BOOLEAN DEFAULT TRUE');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notification_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS notification_history_user_id_idx ON notification_history(user_id);`).catch(() => {});
+    // Hot-FK indexes missing from the Drizzle-only path.
+    const hotIndexes: Array<[string, string]> = [
+      ['sessions', 'user_id'], ['boards', 'user_id'], ['columns', 'board_id'],
+      ['tasks', 'board_id'], ['tasks', 'column_id'], ['labels', 'task_id'],
+      ['checklists', 'task_id'], ['checklist_items', 'checklist_id'],
+      ['goals', 'user_id'], ['goals', 'project_id'],
+      ['notes', 'user_id'], ['notes', 'project_id'],
+      ['transactions', 'user_id'],
+      ['whiteboard_items', 'whiteboard_id'], ['whiteboard_connections', 'whiteboard_id'],
+    ];
+    for (const [tbl, col] of hotIndexes) {
+      await pool.query(`CREATE INDEX IF NOT EXISTS ${tbl}_${col}_idx ON ${tbl}(${col});`).catch(() => {});
+    }
 
     // --- WHITEBOARD TABLES ---
     console.log('Verifying whiteboard tables...');
@@ -452,6 +487,7 @@ export async function initDatabase() {
         updated_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `);
+    await addColumnIfNotExists('milestones', 'completed', 'BOOLEAN DEFAULT FALSE NOT NULL');
     await pool.query(`
       CREATE INDEX IF NOT EXISTS milestones_project_id_idx ON milestones(project_id);
     `);
@@ -859,6 +895,10 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS user_notifications_read_idx ON user_notifications(read);`);
     console.log('User notifications table verified');
 
+    // --- TASK ATTACHMENT OWNER (cross-user leak fix) ---
+    await addColumnIfNotExists('task_attachments', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
+    await pool.query(`CREATE INDEX IF NOT EXISTS task_attachments_user_id_idx ON task_attachments(user_id);`).catch(() => {});
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are
     // needed. Enabling RLS without permissive policies satisfies the linter
@@ -870,13 +910,29 @@ export async function initDatabase() {
       'task_templates', 'note_templates', 'goal_templates', 'habit_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
       'pending_payments', 'documents',
+      // Server-only auth/secret tables flagged by Supabase linter
+      // (0013 rls_disabled_in_public, 0023 sensitive_columns_exposed).
+      // No permissive policies: app connects as table owner (RLS bypassed),
+      // direct PostgREST/anon access stays denied.
+      'email_verification_tokens', 'pending_signups', 'two_factor_tokens',
+      'password_reset_tokens', 'sessions',
     ];
     for (const tbl of rlsTables) {
       try {
         await pool.query(`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY;`);
         await pool.query(`DROP POLICY IF EXISTS allow_all ON ${tbl};`);
         await pool.query(`DROP POLICY IF EXISTS service_all ON ${tbl};`);
+        // Legacy permissive policies from migrations 0008/0012
+        // (FOR ALL USING (true) / FOR INSERT WITH CHECK (true)).
+        await pool.query(`DROP POLICY IF EXISTS "API server can access ${tbl}" ON ${tbl};`);
+        await pool.query(`DROP POLICY IF EXISTS "API server can insert ${tbl}" ON ${tbl};`);
       } catch { /* table may not exist */ }
+      // Revoke PostgREST roles where they exist (Supabase only).
+      // Wrapped separately so plain Postgres (Render/local) without the
+      // anon/authenticated roles does not fail the init pass.
+      try {
+        await pool.query(`REVOKE ALL ON TABLE ${tbl} FROM anon, authenticated;`);
+      } catch { /* roles may not exist outside Supabase */ }
     }
     console.log('RLS enabled on all public tables');
 
