@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Trash2, GripVertical } from 'lucide-react';
 import { Attachment } from '@/types/board';
 import { useFreeReorderDrag } from '@/hooks/useFreeReorderDrag';
@@ -11,14 +11,49 @@ interface DraggableImageGridProps {
   droppableId?: string;
 }
 
-const getImageSrc = (img: Attachment) => {
+export const getImageSrc = (img: Attachment) => {
   // Server-stored attachments have numeric ids and fileUrl like /uploads/...
-  // Use the authenticated API endpoint which is reliably accessible via cookie auth.
-  // Data URLs (fallback / legacy) are used as-is.
+  // Use the authenticated API endpoint which serves bytes from Postgres
+  // (survives restarts; disk uploads/ is ephemeral). Data URLs
+  // (fallback / legacy) are used as-is.
   if (/^\d+$/.test(String(img.id)) && img.fileUrl && !img.fileUrl.startsWith('data:')) {
     return `/api/attachments/file/${img.id}`;
   }
   return img.fileUrl;
+};
+
+const ImageWithFallback: React.FC<{ img: Attachment; className?: string; draggable?: boolean }> = ({
+  img,
+  className,
+  draggable,
+}) => {
+  const primary = getImageSrc(img);
+  // If the API endpoint 404s (legacy row whose bytes predate the DB
+  // migration and whose disk copy was wiped), fall back to the raw
+  // fileUrl before giving up — never leave a blank white box.
+  const fallback = primary !== img.fileUrl ? img.fileUrl : null;
+  const [stage, setStage] = useState(0);
+  const src = stage === 0 ? primary : fallback;
+
+  if (!img.fileUrl || !src || stage === 2) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-muted/60 text-muted-foreground">
+        <Image className="w-8 h-8" />
+        <span className="text-[10px] px-2 text-center">Preview unavailable — file may need re-upload</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={img.fileName}
+      loading="lazy"
+      decoding="async"
+      draggable={draggable}
+      className={className}
+      onError={() => setStage(s => (s === 0 && fallback ? 1 : 2))}
+    />
+  );
 };
 
 export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
@@ -52,7 +87,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
               <GripVertical className="w-3.5 h-3.5" />
             </div>
             {img.fileUrl ? (
-              <img src={getImageSrc(img)} alt={img.fileName} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-cover pointer-events-none" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              <ImageWithFallback img={img} className="w-full h-full object-cover pointer-events-none" draggable={false} />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>
             )}
@@ -71,7 +106,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
         if (!dragged) return null;
         return (
           <div className="fixed pointer-events-none z-50 rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}>
-            {dragged.fileUrl ? <img src={getImageSrc(dragged)} alt={dragged.fileName} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
+            {dragged.fileUrl ? <ImageWithFallback img={dragged} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2"><p className="text-xs text-white truncate">{dragged.fileName}</p></div>
           </div>
         );

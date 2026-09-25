@@ -153,6 +153,21 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     fetchTags().then(setSharedTags).catch(() => setSharedTags([]));
   }, []);
 
+  // Close transient popups/editors when a drag starts so an open dropdown
+  // doesn't float above the drag preview. Expanded rows intentionally stay
+  // expanded (only the dragged row/clone renders compact) so the list doesn't
+  // jump under the cursor mid-drag.
+  React.useEffect(() => {
+    if (isDragging) {
+      setPriorityEditTaskId(null);
+      setQuickEditTaskId(null);
+      setQuickEditField(null);
+      setDateEditTaskId(null);
+      setDateEditField(null);
+      setTagPopupTaskId(null);
+    }
+  }, [isDragging]);
+
   const allTags = useMemo<Label[]>(() => {
     const map = new Map<string, Label>();
     const add = (label: Label) => {
@@ -360,7 +375,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </button>
           </div>
         </div>
-        {quickEditTaskId === task.id && quickEditField === 'duration' && (
+        {quickEditTaskId === task.id && quickEditField === 'duration' && !isDraggingRow && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-2">
@@ -372,7 +387,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </div>
           </div>
         )}
-        {dateEditTaskId === task.id && dateEditField && (
+        {dateEditTaskId === task.id && dateEditField && !isDraggingRow && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[200px]">
@@ -416,7 +431,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </div>
           </div>
         )}
-        {isExpanded && !isDragging && (
+        {isExpanded && !isDraggingRow && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               key={task.id}

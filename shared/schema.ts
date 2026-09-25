@@ -453,6 +453,10 @@ export const taskAttachments = pgTable('task_attachments', {
   fileType: text('file_type').notNull(),
   fileSize: integer('file_size').notNull(),
   fileUrl: text('file_url').notNull(),
+  // Persistent copy of the file bytes (base64). Disk storage in uploads/ is
+  // ephemeral on Render/Vercel (wiped on restart), which made images turn
+  // white after refresh. file_data in Postgres survives restarts.
+  fileData: text('file_data'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 

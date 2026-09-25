@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Tag, Image, Target, BarChart3, Trash2, ChevronUp, ChevronDown, Paperclip, Loader2 } from 'lucide-react';
+import { getImageSrc } from '@/components/shared/DraggableImageGrid';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusSelector } from '@/components/ChecklistSubtaskEditor';
 import ChecklistSubtaskEditor from '@/components/ChecklistSubtaskEditor';
@@ -264,9 +265,18 @@ const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
               </label>
               {images && images.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {images.map(img => (
+                  {images.map(img => {
+                    const src = getImageSrc(img as any);
+                    return (
                     <div key={img.id} className="relative group/img rounded-xl border border-border bg-muted/40 overflow-hidden">
-                      {img.fileUrl.match(/^data:image/) ? <img src={img.fileUrl} alt={img.fileName} loading="lazy" decoding="async" className="w-full h-32 object-cover" />
+                      {img.fileUrl ? <img src={src} alt={img.fileName} loading="lazy" decoding="async" className="w-full h-32 object-cover"
+                        onError={e => {
+                          const el = e.currentTarget as HTMLImageElement;
+                          // Fall back to the raw stored URL once before hiding;
+                          // server rows predate the DB-bytes migration otherwise.
+                          if (el.src !== img.fileUrl && img.fileUrl && !img.fileUrl.startsWith('data:')) { el.src = img.fileUrl; return; }
+                          el.style.display = 'none';
+                        }} />
                         : <div className="w-full h-32 flex items-center justify-center"><Paperclip className="w-6 h-6 text-muted-foreground" /></div>}
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
                         <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
@@ -274,7 +284,8 @@ const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                       </div>
                       <button onClick={() => onImageDelete(img.id)} className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/img:opacity-100 transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

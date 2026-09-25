@@ -502,8 +502,24 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    const targetColumnId = newTaskColumnId || availableColumns[0]?.id;
+    // When a project is selected the task must live in one of that project's
+    // columns, otherwise project boards (which filter by both projectId and
+    // column.projectId) will never show it.
+    let targetColumnId = newTaskColumnId;
+    if (!targetColumnId && newTaskProjectId !== '') {
+      targetColumnId = availableColumns
+        .filter(col => col.projectId === Number(newTaskProjectId))
+        .sort((a, b) => a.order - b.order)[0]?.id
+        ?? '';
+    }
+    if (!targetColumnId) targetColumnId = availableColumns[0]?.id;
     if (!targetColumnId) return;
+    // Guard against mismatched column/project (e.g. stale defaultColumnId):
+    // if a project is set, the column must belong to that project.
+    if (newTaskProjectId !== '') {
+      const col = availableColumns.find(c => c.id === targetColumnId);
+      if (!col || col.projectId !== Number(newTaskProjectId)) return;
+    }
 
     const taskId = crypto.randomUUID();
 

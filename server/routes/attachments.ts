@@ -22,22 +22,7 @@ const ALLOWED_MIMES = [
 
 const SUPPORTED_ATTACHMENT_EXT = /\.(jpe?g|png|gif|webp|svg|pdf|csv|txt|md|html?|docx?|odt|rtf|epub|xlsx?|zip)$/i;
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = process.env.VERCEL === '1'
-  ? path.join('/tmp', 'uploads')
-  : path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
-    cb(null, uniqueSuffix + ext);
-  },
-});
+const storage = multer.memoryStorage();
 
 // multer needs a static limit at load time; use a generous sandbag here and
 // enforce the configured max_attachment_mb setting inside the route handler.
@@ -81,13 +66,11 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
       return res.status(400).json({ error: 'No file uploaded' });
     }
     if (!(await taskBelongsToUser(taskId, userId))) {
-      fs.unlink(req.file.path, () => {});
       return res.status(403).json({ error: 'Access denied' });
     }
 
     const maxMb = await getSettingNumber('max_attachment_mb', 25);
     if (req.file.size > Math.max(1, maxMb) * 1024 * 1024) {
-      fs.unlink(req.file.path, () => {});
       return res.status(413).json({
         error: 'FILE_TOO_LARGE',
         message: `Attachment exceeds the ${maxMb} MB limit`,
@@ -95,14 +78,48 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
       });
     }
 
-    const [attachment] = await db.insert(taskAttachments).values({
-      userId,
-      taskId,
-      fileName: sanitizeFilename(req.file.originalname),
-      fileType: req.file.mimetype,
-      fileSize: req.file.size,
-      fileUrl: `/uploads/${req.file.filename}`,
-    }).returning();
+    // Persist bytes in Postgres (file_data) so images survive restarts.
+    // Disk in uploads/ is ephemeral on Render/Vercel and caused white
+    // images after refresh. Keep a best-effort disk copy for compat.
+    const fileData = req.file.buffer.toString('base64');
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(req.file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
+    const storedFileName = uniqueSuffix + ext;
+    try {
+      const uploadDir = process.env.VERCEL === '1'
+        ? path.join('/tmp', 'uploads')
+        : path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadDir, storedFileName), req.file.buffer);
+    } catch { /* disk is best-effort only; DB is the source of truth */ }
+
+    let attachment: typeof taskAttachments.$inferSelect;
+    try {
+      [attachment] = await db.insert(taskAttachments).values({
+        userId,
+        taskId,
+        fileName: sanitizeFilename(req.file.originalname),
+        fileType: req.file.mimetype,
+        fileSize: req.file.size,
+        fileUrl: `/uploads/${storedFileName}`,
+        fileData,
+      } as any).returning();
+    } catch (e: any) {
+      // Column file_data may not exist yet (migration pending) — retry
+      // without it so uploads keep working; images then fall back to disk.
+      if (e?.message && /file_data|column/i.test(e.message)) {
+        [attachment] = await db.insert(taskAttachments).values({
+          userId,
+          taskId,
+          fileName: sanitizeFilename(req.file.originalname),
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          fileUrl: `/uploads/${storedFileName}`,
+        }).returning();
+      } else {
+        throw e;
+      }
+    }
 
     res.json(attachment);
   } catch (error) {
@@ -169,10 +186,9 @@ router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => 
     }
 
     const filePath = resolveAttachmentPath(attachment.fileUrl);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found on disk' });
-    }
-
+    // DB copy (file_data) is the source of truth — survives restarts and
+    // ephemeral disks. Fall back to disk for legacy rows.
+    const storedData = (attachment as any).fileData as string | null | undefined;
     const mimeType = attachment.fileType || 'application/octet-stream';
     res.setHeader('Content-Type', mimeType);
 
@@ -180,6 +196,19 @@ router.get('/file/:id', requireAuth, async (req: AuthRequest, res: Response) => 
     const inlineTypes = ['image/', 'application/pdf', 'text/'];
     const isInline = inlineTypes.some(t => mimeType.startsWith(t));
     res.setHeader('Content-Disposition', `${isInline ? 'inline' : 'attachment'}; filename="${safeFileName}"`);
+
+    if (storedData) {
+      try {
+        const buf = Buffer.from(storedData, 'base64');
+        res.setHeader('Content-Length', buf.length);
+        res.setHeader('Cache-Control', 'private, max-age=604800');
+        return res.end(buf);
+      } catch { /* fall through to disk */ }
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
 
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);

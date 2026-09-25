@@ -898,6 +898,10 @@ export async function initDatabase() {
     // --- TASK ATTACHMENT OWNER (cross-user leak fix) ---
     await addColumnIfNotExists('task_attachments', 'user_id', 'INTEGER REFERENCES users(id) ON DELETE CASCADE');
     await pool.query(`CREATE INDEX IF NOT EXISTS task_attachments_user_id_idx ON task_attachments(user_id);`).catch(() => {});
+    // --- TASK ATTACHMENT BYTES (white images after refresh fix) ---
+    // Disk uploads/ is ephemeral on Render/Vercel; file_data in Postgres
+    // is the persistent source of truth served by GET /api/attachments/file/:id.
+    await addColumnIfNotExists('task_attachments', 'file_data', 'TEXT');
 
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are

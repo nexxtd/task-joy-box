@@ -175,10 +175,52 @@ const Projects: React.FC = () => {
 
   const handleAddExisting = () => {
     if (!selectedProject) return;
-    const update = addPopupType === 'task'
+    if (addExistingSelected.size === 0) return;
+    const isTask = addPopupType === 'task';
+    const sourceBoard = isTask ? board : notesCtx.board;
+    const update = isTask
       ? updateTask
       : notesCtx.updateTask;
-    addExistingSelected.forEach(id => update(id, { projectId: selectedProject.id, projectName: selectedProject.name }));
+    // Tasks must live in a column that belongs to the target project,
+    // otherwise the project board (which filters by both projectId AND
+    // column.projectId) will never show them — the old code only set
+    // projectId, so the toast said "Item added" but nothing appeared.
+    const projectColumns = [...sourceBoard.columns]
+      .filter(c => c.projectId === selectedProject.id)
+      .sort((a, b) => a.order - b.order);
+    let targetColumnId: string | undefined;
+    if (isTask) {
+      const preferred = createModalColumnId
+        ? projectColumns.find(c => c.id === createModalColumnId)
+        : undefined;
+      targetColumnId = preferred?.id ?? projectColumns[0]?.id;
+      if (!targetColumnId) {
+        toast({ title: 'No columns yet', description: `Add a column to "${selectedProject.name}" first, then add tasks.` });
+        return;
+      }
+    } else {
+      const preferred = createModalColumnId
+        ? projectColumns.find(c => c.id === createModalColumnId)
+        : undefined;
+      targetColumnId = preferred?.id ?? projectColumns[0]?.id;
+    }
+    const baseOrder = targetColumnId
+      ? sourceBoard.tasks.filter(t => t.columnId === targetColumnId).length
+      : 0;
+    let idx = 0;
+    addExistingSelected.forEach(id => {
+      const task = sourceBoard.tasks.find(t => t.id === id);
+      if (!task) return;
+      // Skip tasks already correctly placed
+      if (task.projectId === selectedProject.id && (!targetColumnId || task.columnId === targetColumnId)) return;
+      const updates: Partial<Task> = { projectId: selectedProject.id, projectName: selectedProject.name };
+      if (targetColumnId && task.columnId !== targetColumnId) {
+        updates.columnId = targetColumnId;
+        updates.order = baseOrder + idx;
+        idx += 1;
+      }
+      update(id, updates);
+    });
     const count = addExistingSelected.size;
     toast({ title: count > 1 ? `${count} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });
     setAddPopupOpen(false);
@@ -1331,6 +1373,7 @@ const Projects: React.FC = () => {
       onTaskClick={setSelectedTask}
       projectId={selectedProject?.id}
       onAddTask={canCreateTasks ? () => {
+        setCreateModalColumnId(undefined);
         openAddPopup();
       } : undefined}
     />

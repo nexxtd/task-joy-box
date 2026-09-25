@@ -171,14 +171,14 @@ const SchedulingPopup: React.FC<SchedulingPopupProps> = ({
                   {d < 60 ? `${d}m` : `${d / 60}h`}
                 </button>
               ))}
-              <div className="relative">
+              <div className="relative w-20 shrink-0">
                 <input
                   type="number"
                   value={duration}
                   onChange={(e) => setDuration(Math.max(5, parseInt(e.target.value) || 5))}
-                  className="w-16 h-full px-2 py-2 bg-background border border-border/60 rounded-xl text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
+                  className="w-full px-2 pr-7 py-2 bg-background border border-border/60 rounded-xl text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all"
                 />
-                <span className="absolute -right-3 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/50">min</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/50 pointer-events-none">min</span>
               </div>
             </div>
           </div>

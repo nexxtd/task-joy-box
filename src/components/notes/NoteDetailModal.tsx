@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Pin, Save, Tag, Image, Star, Trash2, ChevronUp, ChevronDown, Paperclip, FolderKanban, Plus } from 'lucide-react';
+import { getImageSrc } from '@/components/shared/DraggableImageGrid';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusSelector } from '@/components/ChecklistSubtaskEditor';
 import ChecklistSubtaskEditor from '@/components/ChecklistSubtaskEditor';
@@ -162,7 +163,12 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {note.images.map(img => (
                     <div key={img.id} className="relative group/img rounded-xl border border-border bg-muted/40 overflow-hidden">
-                      <img src={img.fileUrl} alt={img.fileName} loading="lazy" decoding="async" className="w-full h-32 object-cover" />
+                      <img src={getImageSrc(img as any)} alt={img.fileName} loading="lazy" decoding="async" className="w-full h-32 object-cover"
+                        onError={e => {
+                          const el = e.currentTarget as HTMLImageElement;
+                          if (el.src !== img.fileUrl && img.fileUrl && !img.fileUrl.startsWith('data:')) { el.src = img.fileUrl; return; }
+                          el.style.display = 'none';
+                        }} />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 pt-6">
                         <p className="text-xs font-medium text-white truncate">{img.fileName}</p>
                       </div>

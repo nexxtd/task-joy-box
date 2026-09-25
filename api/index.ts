@@ -36,6 +36,7 @@ function ensureDatabase(): Promise<void> {
         await pool.query(`CREATE TABLE IF NOT EXISTS organizations (id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, max_seats INTEGER DEFAULT 1 NOT NULL, current_seats INTEGER DEFAULT 1 NOT NULL, tier TEXT DEFAULT 'premium' NOT NULL, status TEXT DEFAULT 'pending' NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
         await pool.query(`ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE`);
         await pool.query(`CREATE INDEX IF NOT EXISTS task_attachments_user_id_idx ON task_attachments(user_id)`);
+        await pool.query(`ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS file_data TEXT`);
         await pool.query(`ALTER TABLE milestones ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE NOT NULL`);
       } catch (e) {
         console.error('ensureDatabase (Vercel) migration error:', e);

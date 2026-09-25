@@ -105,9 +105,12 @@ async function loadBoard(userId: number): Promise<Board> {
 }
 
 async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<boolean> {
+  // localStorage is best-effort only (5MB quota; boards with image data URLs
+  // can exceed it). A quota failure must never block the server save below.
   try {
-    // Always save to localStorage first for immediate persistence
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+  } catch { /* server snapshot remains the source of truth */ }
+  try {
 
     const ac = new AbortController();
     const at = setTimeout(() => ac.abort(), 5000);

@@ -55,6 +55,9 @@ async function loadBoard(userId: number): Promise<Board> {
     try {
       const parsed = JSON.parse(cached);
       if (parsed?.columns) {
+        // 2) Revalidate in background (don't block UI) - but NEVER overwrite
+        // localStorage with stale server data before it has been flushed.
+        // The provider effect reconciles with dirtyRef awareness.
         void (async () => {
           try {
             const ctrl = new AbortController();
@@ -62,11 +65,8 @@ async function loadBoard(userId: number): Promise<Board> {
             const res = await fetch('/api/goal-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
             clearTimeout(tid);
             if (res.status === 403 || res.status === 400) return;
-            if (res.ok) {
-              const data = await res.json();
-              const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
-              if (board) localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-            }
+            // Do NOT blindly overwrite localStorage here; that would resurrect
+            // images/files just deleted locally but not yet flushed to server.
           } catch {}
         })();
         return parsed as Board;
@@ -97,9 +97,9 @@ async function loadBoard(userId: number): Promise<Board> {
 
 async function saveBoard(userId: number, board: Board, retryCount = 0): Promise<boolean> {
   try {
-    // Always save to localStorage first for immediate persistence
     localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
-
+  } catch { /* quota — server snapshot remains the source of truth */ }
+  try {
     // Sync to server with retry logic
     const ac = new AbortController();
     const at = setTimeout(() => ac.abort(), 5000);
