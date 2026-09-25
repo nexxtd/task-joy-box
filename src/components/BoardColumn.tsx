@@ -588,7 +588,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               <div
                 ref={dropProvided.innerRef}
                 {...dropProvided.droppableProps}
-                className={`${tasksCollapsed ? 'min-h-0 p-0 overflow-hidden' : 'min-h-[100px] p-2'} space-y-3 rounded-xl transition-all duration-300 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
+                className={`${tasksCollapsed ? 'min-h-0 p-0 overflow-hidden' : 'min-h-[100px] p-2'} space-y-3 rounded-xl transition-colors duration-150 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
               >
                 {/* Uncompleted tasks — only Draggables + placeholder may live inside a Droppable */}
                 {!tasksCollapsed && uncompletedTasks.map((task, taskIndex) => (

@@ -864,6 +864,7 @@ const Projects: React.FC = () => {
         </div>
         {isDraggableList ? (
           <DragDropContext
+            onDragStart={() => setShowProjectMenuId(null)}
             onDragEnd={(result) => {
               if (!result.destination) return;
               const reorderedItems = [...items];
@@ -881,22 +882,23 @@ const Projects: React.FC = () => {
               {(provided) => (
                 <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                   {items.map((project, idx) => (
-                    <Draggable key={project.id} draggableId={`project-${project.id}`} index={idx}>
+                    <Draggable key={project.id} draggableId={`project-${project.id}`} index={idx} isDragDisabled={editingProjectId === project.id}>
                       {(dragProvided, dragSnapshot) => (
                         <div
                           ref={dragProvided.innerRef}
                           {...dragProvided.draggableProps}
+                          {...dragProvided.dragHandleProps}
                           data-project-row
-                          onClick={() => setSelectedProjectId(project.id)}
+                          onClick={() => { if (editingProjectId !== project.id) setSelectedProjectId(project.id); }}
                           className={cn(
-                            'group relative cursor-pointer rounded-2xl border px-3 py-3 transition-all',
+                            'group relative cursor-grab active:cursor-grabbing rounded-2xl border px-3 py-3 transition-[background-color,border-color,box-shadow] duration-150',
                             selectedProject?.id === project.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background hover:border-primary/30 hover:bg-muted/40',
-                            dragSnapshot.isDragging ? 'shadow-lg border-primary/40 bg-card/95' : ''
+                            dragSnapshot.isDragging ? 'shadow-lg border-primary/40 bg-card' : ''
                           )}
                         >
                           <div className="flex items-center gap-3">
-                            <div {...dragProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-muted flex items-center justify-center">
-                              <GripVertical className="h-4 w-4 text-muted-foreground/60" />
+                            <div className="p-1 -ml-1 rounded flex items-center justify-center text-muted-foreground/50">
+                              <GripVertical className="h-4 w-4" />
                             </div>
                             <div className="h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: project.color }} />
                             <div className="min-w-0 flex-1">
@@ -1278,7 +1280,7 @@ const Projects: React.FC = () => {
             }}
           >
             <div
-              style={isBoardDragging ? undefined : boardZoom === 1 && boardOffset.x === 0 && boardOffset.y === 0 ? undefined : { transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
+              style={boardZoom === 1 && boardOffset.x === 0 && boardOffset.y === 0 ? undefined : { transform: `translate(${boardOffset.x}px, ${boardOffset.y}px) scale(${boardZoom})`, transformOrigin: '0 0' }}
               className="min-w-max min-h-max select-none"
             >
               <Droppable
