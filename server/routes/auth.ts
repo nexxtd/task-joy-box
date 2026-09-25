@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { db } from '../db.js';
 import { pool } from '../db.js';
 import { users, passwordResetTokens, emailVerificationTokens, pendingSignups, twoFactorTokens, userSettings } from '../../shared/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
@@ -123,14 +123,30 @@ router.post('/login', async (req: Request, res: Response) => {
     if ((user as any).twoFactorEnabled) {
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+      // Invalidate older unused codes so only the newest one works.
+      try {
+        await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
+      } catch {}
       await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+      let emailSent = false;
       try {
         const { twoFactorEmailHtml } = await import('../lib/email.js');
         const { sendEmail: send2FA } = await import('../lib/email.js');
-        await send2FA({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(user.name, code), text: `Your code is ${code} (expires in 10 min)` });
-      } catch (e) { console.error('2fa email failed', e); }
-      console.log(`[2FA] code for ${user.email}: ${code}`);
-      return res.json({ requires2FA: true, email: user.email, message: 'Two-factor code sent to your email. Please enter it to continue.' });
+        emailSent = await send2FA({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(user.name, code), text: `Your code is ${code} (expires in 10 min)` });
+      } catch (e) { console.error('2fa email failed', e); emailSent = false; }
+      console.log(`[2FA] code for ${user.email}: ${code} emailSent=${emailSent}`);
+      const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+      return res.json({
+        requires2FA: true,
+        email: user.email,
+        emailSent,
+        // Exposed when email delivery failed (or in dev) so the user is never locked out.
+        // Remove in production once a verified EMAIL_FROM domain is configured.
+        debugCode: exposeCode ? code : undefined,
+        message: emailSent
+          ? 'Two-factor code sent to your email. Please enter it to continue.'
+          : 'We could not deliver the email (check server email settings). Use the code shown here or click Resend. If you are the owner, verify a domain in Resend and set EMAIL_FROM.',
+      });
     }
 
     // Trial enforcement: once the trial window has passed, fall back to free/inactive.
@@ -416,18 +432,18 @@ router.post('/resend-verification', async (req: Request, res: Response) => {
 router.post('/two-factor/verify', async (req: Request, res: Response) => {
   try {
     const email = sanitize(req.body.email || '').toLowerCase();
-    const code = sanitize(req.body.code || '');
+    const code = sanitize(req.body.code || '').replace(/\D/g, '').slice(0, 6);
     if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (!user) return res.status(400).json({ error: 'Invalid code' });
-    const [record] = await db.select().from(twoFactorTokens).where(eq(twoFactorTokens.userId, user.id)).limit(1);
-    const valid = record && !record.used && record.code === code && new Date(record.expiresAt) > new Date();
-    if (!valid) {
-      const [latest] = await db.select().from(twoFactorTokens).where(eq(twoFactorTokens.userId, user.id)).limit(1);
-      if (latest && latest.code === code) {
-        if (latest.used) return res.status(400).json({ error: 'Code already used' });
-        if (new Date(latest.expiresAt) < new Date()) return res.status(400).json({ error: 'Code expired' });
-      }
+    // Look up the newest tokens first — the old code fetched an arbitrary (oldest) row,
+    // so re-logins invalidated the code the user just received.
+    const recent = await db.select().from(twoFactorTokens).where(eq(twoFactorTokens.userId, user.id)).orderBy(desc(twoFactorTokens.id)).limit(10);
+    const record = recent.find((r) => r.code === code && !r.used && new Date(r.expiresAt) > new Date());
+    if (!record) {
+      const match = recent.find((r) => r.code === code);
+      if (match && match.used) return res.status(400).json({ error: 'Code already used. Please log in again to get a new code.' });
+      if (match && new Date(match.expiresAt) <= new Date()) return res.status(400).json({ error: 'Code expired. Please log in again to get a new code.' });
       return res.status(400).json({ error: 'Invalid code' });
     }
     await db.update(twoFactorTokens).set({ used: true }).where(eq(twoFactorTokens.id, record.id));
@@ -436,19 +452,55 @@ router.post('/two-factor/verify', async (req: Request, res: Response) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
+router.post('/two-factor/resend', async (req: Request, res: Response) => {
+  try {
+    const email = sanitize(req.body.email || '').toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!user) return res.json({ message: 'If that email exists, a new code has been sent.' });
+    if (!(user as any).twoFactorEnabled) return res.status(400).json({ error: 'Two-factor is not enabled for this account' });
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    try {
+      await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
+    } catch {}
+    await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+    let emailSent = false;
+    try {
+      const { twoFactorEmailHtml } = await import('../lib/email.js');
+      const { sendEmail } = await import('../lib/email.js');
+      emailSent = await sendEmail({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(user.name, code), text: `Your code is ${code} (expires in 10 min)` });
+    } catch (e) { console.error('2fa resend email failed', e); emailSent = false; }
+    console.log(`[2FA resend] code for ${user.email}: ${code} emailSent=${emailSent}`);
+    const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+    return res.json({
+      message: emailSent ? 'New code sent. Check your inbox (and spam).' : 'Email delivery failed — use the code shown here.',
+      emailSent,
+      debugCode: exposeCode ? code : undefined,
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+});
+
 router.post('/two-factor/enable', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const enabled = Boolean(req.body.enabled);
     await db.update(users).set({ twoFactorEnabled: enabled } as any).where(eq(users.id, req.userId!));
+    let emailSent = true;
+    let debugCode: string | undefined;
     if (enabled) {
       const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
       const code = String(Math.floor(100000 + Math.random() * 900000));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       await db.insert(twoFactorTokens).values({ userId: req.userId!, code, expiresAt });
-      try { const { twoFactorEmailHtml: html2 } = await import('../lib/email.js'); await sendEmail({ to: user.email, subject: '2FA enabled — MyPlanner', html: html2(user.name, code), text: `Your 2FA test code is ${code}` }); } catch {}
-      console.log(`[2FA enable] code for ${user.email}: ${code}`);
+      try {
+        const { twoFactorEmailHtml: html2 } = await import('../lib/email.js');
+        const { sendEmail: sendEnable } = await import('../lib/email.js');
+        emailSent = await sendEnable({ to: user.email, subject: '2FA enabled — MyPlanner', html: html2(user.name, code), text: `Your 2FA test code is ${code}` });
+      } catch { emailSent = false; }
+      console.log(`[2FA enable] code for ${user.email}: ${code} emailSent=${emailSent}`);
+      if (!emailSent) debugCode = code;
     }
-    res.json({ enabled });
+    res.json({ enabled, emailSent, debugCode });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -459,37 +511,70 @@ router.post('/logout', (_req, res: Response) => {
 
 router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
+  const client = await pool.connect();
   try {
-    await pool.query('BEGIN');
-    const byUserId = ['email_verification_tokens','password_reset_tokens','pending_signups','two_factor_tokens','sessions','user_settings','board_snapshots','note_snapshots','goal_snapshots','habit_snapshots','tags','notes','goals','habits','documents','deep_focus_sessions','support_tickets','pending_user_changes','user_notifications','activity_logs','energy_logs','ai_requests','google_calendar_tokens','dashboard_widget_usage','task_templates','note_templates','goal_templates','habit_templates','project_chat_messages'];
+    await client.query('BEGIN');
+    // pending_signups has no user_id column (keyed by email) — handle via email.
+    const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+    const byUserId = ['email_verification_tokens','password_reset_tokens','two_factor_tokens','sessions','user_settings','board_snapshots','note_snapshots','goal_snapshots','habit_snapshots','tags','notes','goals','habits','documents','deep_focus_sessions','support_tickets','pending_user_changes','user_notifications','activity_logs','energy_logs','ai_requests','google_calendar_tokens','dashboard_widget_usage','task_templates','note_templates','goal_templates','habit_templates','project_chat_messages'];
     const byOwnerId = ['projects','workspaces','organizations'];
     const byMember = ['project_members','workspace_members','organization_members','group_members'];
-    const bySender = ['ticket_messages','chat_messages'];
-    await Promise.all([
-      ...byUserId.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]).catch(()=>{})),
-      ...byOwnerId.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE owner_id = $1`, [userId]).catch(()=>{})),
-      ...byMember.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]).catch(()=>{})),
-      ...bySender.map(tbl => pool.query(`DELETE FROM ${tbl} WHERE sender_id = $1`, [userId]).catch(()=>{})),
-      pool.query('DELETE FROM task_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
-      pool.query('DELETE FROM note_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
-      pool.query('DELETE FROM goal_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
-      pool.query('DELETE FROM habit_tag_assignments WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)', [userId]).catch(()=>{}),
-    ]);
-    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    await pool.query('COMMIT');
+    // chat_messages uses user_id; ticket_messages uses sender_id.
+    const run = async (sqlText: string, params: any[] = []) => {
+      try { await client.query(sqlText, params); } catch (e) { console.error('cleanup failed:', sqlText, (e as any)?.message); }
+    };
+    // Children before parents to satisfy FKs. Boards hierarchy has no
+    // ON DELETE CASCADE in Drizzle-managed DBs, so delete explicitly.
+    const orderedUserTables = [
+      'task_tag_assignments',
+      'note_tag_assignments',
+      'goal_tag_assignments',
+      'habit_tag_assignments',
+    ];
+    for (const tbl of orderedUserTables) {
+      await run(`DELETE FROM ${tbl} WHERE tag_id IN (SELECT id FROM tags WHERE user_id = $1)`, [userId]);
+    }
+    for (const tbl of byUserId) {
+      await run(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
+    }
+    if (me?.email) {
+      await run(`DELETE FROM pending_signups WHERE email = $1`, [me.email]);
+    }
+    await run(`DELETE FROM ticket_messages WHERE sender_id = $1`, [userId]);
+    await run(`DELETE FROM chat_messages WHERE user_id = $1`, [userId]);
+    for (const tbl of byMember) {
+      await run(`DELETE FROM ${tbl} WHERE user_id = $1`, [userId]);
+    }
+    // Owned parents: members cascade, but delete explicitly first for safety.
+    await run(`DELETE FROM project_members WHERE project_id IN (SELECT id FROM projects WHERE owner_id = $1)`, [userId]);
+    await run(`DELETE FROM milestones WHERE project_id IN (SELECT id FROM projects WHERE owner_id = $1)`, [userId]);
+    for (const tbl of byOwnerId) {
+      await run(`DELETE FROM ${tbl} WHERE owner_id = $1`, [userId]);
+    }
+    // Legacy task hierarchy (may not exist on all installs).
+    await run(`DELETE FROM task_attachments WHERE task_id IN (SELECT id::text FROM tasks WHERE board_id IN (SELECT id FROM boards WHERE user_id = $1))`, [userId]);
+    await run(`DELETE FROM checklist_items WHERE checklist_id IN (SELECT c.id FROM checklists c JOIN tasks t ON t.id = c.task_id JOIN boards b ON b.id = t.board_id WHERE b.user_id = $1)`, [userId]);
+    await run(`DELETE FROM checklists WHERE task_id IN (SELECT t.id FROM tasks t JOIN boards b ON b.id = t.board_id WHERE b.user_id = $1)`, [userId]);
+    await run(`DELETE FROM labels WHERE task_id IN (SELECT t.id FROM tasks t JOIN boards b ON b.id = t.board_id WHERE b.user_id = $1)`, [userId]);
+    await run(`DELETE FROM tasks WHERE board_id IN (SELECT id FROM boards WHERE user_id = $1)`, [userId]);
+    await run(`DELETE FROM columns WHERE board_id IN (SELECT id FROM boards WHERE user_id = $1)`, [userId]);
+    await run(`DELETE FROM boards WHERE user_id = $1`, [userId]);
+    await run(`DELETE FROM whiteboard_connections WHERE whiteboard_id IN (SELECT id FROM whiteboards WHERE user_id = $1)`, [userId]);
+    await run(`DELETE FROM whiteboard_items WHERE whiteboard_id IN (SELECT id FROM whiteboards WHERE user_id = $1)`, [userId]);
+    await run(`DELETE FROM whiteboards WHERE user_id = $1`, [userId]);
+    await run(`DELETE FROM shared_tasks WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_id = $1)`, [userId]);
+    await run(`DELETE FROM group_members WHERE group_id IN (SELECT g.id FROM groups g JOIN workspaces w ON w.id = g.workspace_id WHERE w.owner_id = $1)`, [userId]);
+    await run(`DELETE FROM groups WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_id = $1)`, [userId]);
+    await run(`DELETE FROM users WHERE id = $1`, [userId]);
+    await client.query('COMMIT');
     res.clearCookie('token');
     res.json({ message: 'Account deleted' });
   } catch (e) {
-    try { await pool.query('ROLLBACK'); } catch {}
+    try { await client.query('ROLLBACK'); } catch {}
     console.error('delete account failed', e);
-    try {
-      await pool.query('DELETE FROM users WHERE id = $1', [userId]);
-      res.clearCookie('token');
-      return res.json({ message: 'Account deleted' });
-    } catch (e2) {
-      console.error(e2);
-      res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
-    }
+    res.status(500).json({ error: 'Failed to delete account. Please contact support.' });
+  } finally {
+    client.release();
   }
 });
 

@@ -21,6 +21,7 @@ interface AuthContextType {
   forgotPassword: (email: string) => Promise<{ message: string; resetToken?: string }>;
   resetPassword: (token: string, password: string) => Promise<void>;
   verify2FA: (email: string, code: string) => Promise<void>;
+  resend2FA: (email: string) => Promise<{ message: string; emailSent?: boolean; debugCode?: string }>;
   toggle2FA: (enabled: boolean) => Promise<void>;
 }
 
@@ -248,8 +249,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data;
   }, []);
 
+  const resend2FA = useCallback(async (email: string) => {
+    return apiFetch('/api/auth/two-factor/resend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword, verify2FA, toggle2FA }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword, verify2FA, resend2FA, toggle2FA }}>
       {children}
     </AuthContext.Provider>
   );

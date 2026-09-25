@@ -38,9 +38,10 @@ function getTransporter(): nodemailer.Transporter | null {
 }
 
 export async function sendEmail(opts: SendEmailOpts): Promise<boolean> {
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
+  const configuredFrom = process.env.EMAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
   const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) {
+
+  async function sendViaResend(from: string): Promise<{ ok: boolean; error?: string }> {
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -49,22 +50,45 @@ export async function sendEmail(opts: SendEmailOpts): Promise<boolean> {
       });
       if (!res.ok) {
         const err = await res.text();
-        console.error('[email:resend] failed', err);
-        if (err.includes('verify a domain') || err.includes('testing emails')) {
-          console.log(`[email:resend] Domain not verified — falling back to mock. Verification link for ${opts.to}: ${opts.text || opts.html.slice(0, 800)}`);
-        }
-      } else {
-        console.log(`[email:resend] sent to ${opts.to} subject="${opts.subject}"`);
-        return true;
+        return { ok: false, error: err };
       }
-    } catch (e) {
-      console.error('[email:resend] error', e);
+      console.log(`[email:resend] sent to ${opts.to} subject="${opts.subject}" from="${from}"`);
+      return { ok: true };
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      console.error('[email:resend] error', msg);
+      return { ok: false, error: msg };
     }
+  }
+
+  if (resendKey) {
+    // First attempt with the configured sender.
+    let result = await sendViaResend(configuredFrom);
+    if (result.ok) return true;
+    console.error('[email:resend] failed', result.error);
+
+    // Common cause: EMAIL_FROM uses an unverified domain / gmail address.
+    // Resend testing keys can only send from onboarding@resend.dev.
+    // Retry once with the Resend test sender so 2FA / verification still works.
+    const needsFallback =
+      result.error?.includes('verify a domain') ||
+      result.error?.includes('testing emails') ||
+      result.error?.includes('Domain not verified') ||
+      result.error?.includes('not verified');
+    const fallbackFrom = 'onboarding@resend.dev';
+    if (needsFallback && configuredFrom !== fallbackFrom) {
+      console.log(`[email:resend] retrying with fallback sender ${fallbackFrom} (fix: verify a domain in Resend and set EMAIL_FROM)`);
+      result = await sendViaResend(fallbackFrom);
+      if (result.ok) return true;
+      console.error('[email:resend] fallback also failed', result.error);
+    }
+    // Resend failed — try SMTP next if configured, otherwise report failure.
+    // Do NOT return true here: callers need to know delivery failed.
   }
   const t = getTransporter();
   if (t) {
     try {
-      await t.sendMail({ from, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text });
+      await t.sendMail({ from: configuredFrom, to: opts.to, subject: opts.subject, html: opts.html, text: opts.text });
       console.log(`[email:smtp] sent to ${opts.to}`);
       return true;
     } catch (e) {
@@ -73,12 +97,13 @@ export async function sendEmail(opts: SendEmailOpts): Promise<boolean> {
     }
   }
   if (resendKey) {
-    console.log(`[email:mock-fallback] To: ${opts.to} Subject: ${opts.subject} — Resend failed, link: ${opts.text || ''}`);
-    return true;
+    // Resend is configured but rejected the send and no SMTP is available.
+    console.log(`[email:failed] To: ${opts.to} Subject: ${opts.subject} — delivery failed. Text: ${opts.text || ''}`);
+    return false;
   }
   console.log(`[email:mock] To: ${opts.to} Subject: ${opts.subject}\n${opts.text || opts.html.slice(0, 500)}`);
   console.log('[email:mock] No SMTP/RESEND configured — set RESEND_API_KEY or SMTP_HOST/SMTP_USER/SMTP_PASS to actually deliver');
-  return true;
+  return false;
 }
 
 export function verificationEmailHtml(name: string, link: string): string {

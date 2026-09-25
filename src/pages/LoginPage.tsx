@@ -13,7 +13,7 @@ interface Props {
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
 
 const LoginPage: React.FC<Props> = ({ initialToken }) => {
-  const { login, signup, loginWithGoogle, forgotPassword, resetPassword, verify2FA } = useAuth();
+  const { login, signup, loginWithGoogle, forgotPassword, resetPassword, verify2FA, resend2FA } = useAuth();
   const [mode, setMode] = useState<Mode>(initialToken ? 'reset' : 'login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -29,6 +29,9 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [twoFARequired, setTwoFARequired] = useState(false);
   const [twoFAEmail, setTwoFAEmail] = useState('');
   const [twoFACode, setTwoFACode] = useState('');
+  const [twoFAEmailSent, setTwoFAEmailSent] = useState(true);
+  const [twoFADebugCode, setTwoFADebugCode] = useState('');
+  const [resending, setResending] = useState(false);
   const googleWrapRef = useRef<HTMLDivElement>(null);
   const [googleWidth, setGoogleWidth] = useState(360);
 
@@ -48,6 +51,8 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     setDebugLink('');
     setVerificationSent(false);
     setTwoFARequired(false);
+    setTwoFADebugCode('');
+    setTwoFAEmailSent(true);
   }, [mode]);
 
   const handleResendVerification = async () => {
@@ -70,6 +75,8 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
         if (res?.requires2FA) {
           setTwoFARequired(true);
           setTwoFAEmail(res.email || email);
+          setTwoFAEmailSent(res.emailSent !== false);
+          setTwoFADebugCode(res.debugCode || '');
           setSuccess(res.message || 'Code sent to your email.');
           return;
         }
@@ -111,6 +118,16 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     try {
       await verify2FA(twoFAEmail, twoFACode);
     } catch (err: any) { setError(err.message || 'Invalid code'); } finally { setLoading(false); }
+  };
+
+  const handleResend2FA = async () => {
+    setError(''); setSuccess(''); setResending(true);
+    try {
+      const res: any = await resend2FA(twoFAEmail);
+      setTwoFAEmailSent(res.emailSent !== false);
+      setTwoFADebugCode(res.debugCode || '');
+      setSuccess(res.message || 'New code sent.');
+    } catch (err: any) { setError(err.message || 'Failed to resend code'); } finally { setResending(false); }
   };
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
@@ -201,9 +218,21 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
                   <label className="block text-xs font-medium text-foreground mb-1.5">Two-factor code</label>
                   <input type="text" inputMode="numeric" value={twoFACode} onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" required className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-primary/30" />
                   <p className="text-[11px] text-muted-foreground mt-1">Code sent to {twoFAEmail}</p>
+                  {!twoFAEmailSent && (
+                    <p className="text-[11px] text-amber-600 mt-1">Email delivery failed — check spam, or use the code shown below / click Resend.</p>
+                  )}
+                  {twoFADebugCode && (
+                    <div className="mt-2 p-2 bg-muted rounded-lg text-center">
+                      <p className="text-[11px] text-muted-foreground">Your code (email unavailable):</p>
+                      <p className="text-lg font-bold tracking-[0.3em]">{twoFADebugCode}</p>
+                    </div>
+                  )}
                 </div>
                 <button type="submit" disabled={loading} className="w-full py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg disabled:opacity-50">{loading ? 'Verifying...' : 'Verify code'}</button>
-                <button type="button" onClick={() => setTwoFARequired(false)} className="w-full text-xs text-muted-foreground underline">Back to login</button>
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={handleResend2FA} disabled={resending} className="text-xs text-primary underline disabled:opacity-50">{resending ? 'Sending...' : 'Resend code'}</button>
+                  <button type="button" onClick={() => setTwoFARequired(false)} className="text-xs text-muted-foreground underline">Back to login</button>
+                </div>
               </form>
             )}
 
