@@ -9,8 +9,8 @@ import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const GOOGLE_CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const OAUTH_STATE_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 
@@ -136,7 +136,7 @@ router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
     prompt: 'consent',
   });
 
-  console.log(`[calendar] OAuth start redirect_uri=${redirectUri}`);
+  console.log(`[calendar] OAuth start client_id=${GOOGLE_CLIENT_ID} redirect_uri=${redirectUri}`);
   res.json({ authUrl, redirectUri });
 });
 

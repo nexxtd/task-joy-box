@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { sendWeeklyEmails } from '../lib/weeklyEmail.js';
+import { sendWeeklyEmails, generateWeeklySummaryForUser } from '../lib/weeklyEmail.js';
 import { isAdmin } from '../lib/adminUtils.js';
+import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { sendEmail } from '../lib/email.js';
 import { db } from '../db.js';
 import { users } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
@@ -50,6 +52,23 @@ router.get('/weekly-ai-summary/test', async (req: any, res) => {
   const { sendEmail } = await import('../lib/email.js');
   const ok = await sendEmail({ to: email, subject: content.subject, html: content.html, text: content.text });
   res.json({ ok, subject: content.subject });
+});
+
+// Admin-only: send the weekly AI summary to yourself instantly,
+// without waiting for the weekly cron run.
+router.post('/weekly-ai-summary/send-now', requireAuth, async (req: AuthRequest, res) => {
+  const [u] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+  if (!u || !isAdmin(u.email)) return res.status(403).json({ error: 'Admin only' });
+  try {
+    const content = await generateWeeklySummaryForUser(u.id);
+    if (!content) return res.status(500).json({ error: 'Failed to generate summary' });
+    const ok = await sendEmail({ to: u.email, subject: content.subject, html: content.html, text: content.text });
+    if (!ok) return res.status(500).json({ error: 'Failed to send email' });
+    res.json({ ok: true, subject: content.subject });
+  } catch (e: any) {
+    console.error('send-now summary failed', e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
 });
 
 export default router;
