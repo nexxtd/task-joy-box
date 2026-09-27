@@ -15,7 +15,7 @@ services:
       - key: GOOGLE_CLIENT_ID
         value: 920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
-        value: 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
+        sync: false
       - key: NODE_ENV
         value: production
       - key: FRONTEND_URL

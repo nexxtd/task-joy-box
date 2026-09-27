@@ -9,8 +9,11 @@ interface Props {
   initialToken?: string;
 }
 
-// Get Google Client ID from environment or use a placeholder
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
+// Build-time fallback only. Preferred source is GET /api/auth/google-config,
+// so the frontend does NOT require a VITE_ (public-prefix) env var.
+// Client IDs are public by design — they ship in the JS bundle — but fetching
+// from the backend avoids the public-prefix warning and any frontend/backend drift.
+const BUILD_TIME_GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined || '').trim();
 
 const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const { login, signup, loginWithGoogle, forgotPassword, resetPassword, verify2FA, resend2FA } = useAuth();
@@ -34,6 +37,29 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [resending, setResending] = useState(false);
   const googleWrapRef = useRef<HTMLDivElement>(null);
   const [googleWidth, setGoogleWidth] = useState(360);
+  // null = still loading from backend; '' = configured as missing.
+  const [googleClientId, setGoogleClientId] = useState<string | null>(BUILD_TIME_GOOGLE_CLIENT_ID || null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Prefer the backend's configured ID so no VITE_ var (and no frontend
+    // rebuild) is needed after rotating the Google OAuth client.
+    fetch('/api/auth/google-config')
+      .then((r) => r.json().catch(() => ({})))
+      .then((data) => {
+        if (cancelled) return;
+        const aud = Array.isArray(data?.audiences) ? data.audiences[0] : null;
+        if (typeof aud === 'string' && aud.includes('.apps.googleusercontent.com')) {
+          setGoogleClientId(aud.trim());
+        } else if (!BUILD_TIME_GOOGLE_CLIENT_ID) {
+          setGoogleClientId('');
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !BUILD_TIME_GOOGLE_CLIENT_ID) setGoogleClientId('');
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const el = googleWrapRef.current;
@@ -142,13 +168,29 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     }
   };
 
-  // Show a warning if Google Client ID is not configured
-  if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) {
-    console.warn('Google Client ID is not configured. Please set VITE_GOOGLE_CLIENT_ID in your .env file.');
-  }
+  // Client IDs are public (they ship in the JS bundle) — only the secret must stay private.
+  // googleClientId === null means still loading from /api/auth/google-config.
+  const googleButton = googleClientId === null ? (
+    <p className="text-xs text-muted-foreground text-center">Loading Google sign-in…</p>
+  ) : !googleClientId ? (
+    <p className="text-xs text-destructive text-center">
+      Google sign-in is not configured (backend GOOGLE_CLIENT_ID missing). Set it on the server and retry — no frontend rebuild needed.
+    </p>
+  ) : (
+    <div ref={googleWrapRef} className="flex justify-center w-full">
+      <GoogleLogin
+        onSuccess={handleGoogleSuccess}
+        onError={() => setError('Google sign-in failed')}
+        useOneTap={false}
+        theme="outline"
+        size="large"
+        width={String(googleWidth)}
+      />
+    </div>
+  );
 
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <GoogleOAuthProvider clientId={googleClientId || BUILD_TIME_GOOGLE_CLIENT_ID || 'missing-client-id'}>
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           {/* Logo */}
@@ -357,16 +399,7 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
                     <span className="px-3 bg-card text-xs text-muted-foreground">or continue with</span>
                   </div>
                 </div>
-                <div ref={googleWrapRef} className="flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError('Google sign-in failed')}
-                    useOneTap={false}
-                    theme="outline"
-                    size="large"
-                    width={String(googleWidth)}
-                  />
-                </div>
+                {googleButton}
               </>
             )}
 

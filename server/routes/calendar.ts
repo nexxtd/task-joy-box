@@ -9,8 +9,13 @@ import { encrypt, decrypt } from '../lib/encryption.js';
 
 const router = Router();
 
-const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
-const GOOGLE_CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+function getGoogleClientId(): string {
+  return (process.env.GOOGLE_CLIENT_ID || '').trim();
+}
+
+function getGoogleClientSecret(): string {
+  return (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+}
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const OAUTH_STATE_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 
@@ -19,17 +24,22 @@ function stripTrailingSlash(url: string): string {
 }
 
 function getCanonicalBaseUrl(): string | null {
-  // Priority: explicit override > backend > render external > frontend.
+  // Priority: explicit override > backend > vercel > render external > frontend.
   // GOOGLE_REDIRECT_URI may be either the full callback URL or just the base URL.
   const fullOverride = (process.env.GOOGLE_REDIRECT_URI || '').trim();
   if (fullOverride) {
     if (fullOverride.endsWith('/api/calendar/callback')) return stripTrailingSlash(fullOverride.replace(/\/api\/calendar\/callback$/, ''));
     return stripTrailingSlash(fullOverride);
   }
-  for (const key of ['BACKEND_URL', 'RENDER_EXTERNAL_URL', 'FRONTEND_URL', 'CF_TUNNEL_URL'] as const) {
+  for (const key of ['BACKEND_URL', 'FRONTEND_URL', 'RENDER_EXTERNAL_URL', 'CF_TUNNEL_URL'] as const) {
     const v = (process.env[key] || '').trim();
     if (v) return stripTrailingSlash(v);
   }
+  // Vercel provides these automatically (host without protocol).
+  const vercelProd = (process.env.VERCEL_PROJECT_PRODUCTION_URL || '').trim();
+  if (vercelProd) return stripTrailingSlash(vercelProd.startsWith('http') ? vercelProd : `https://${vercelProd}`);
+  const vercelUrl = (process.env.VERCEL_URL || '').trim();
+  if (vercelUrl) return stripTrailingSlash(vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`);
   return null;
 }
 
@@ -55,7 +65,7 @@ function getRedirectUri(req: AuthRequest): string {
 }
 
 function createOAuth2Client(redirectUri: string) {
-  return new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, redirectUri);
+  return new google.auth.OAuth2(getGoogleClientId(), getGoogleClientSecret(), redirectUri);
 }
 
 function signState(data: object): string {
@@ -113,10 +123,12 @@ function attachTokenRefresher(
 }
 
 router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
-  if (!GOOGLE_CLIENT_SECRET) {
+  const googleClientId = getGoogleClientId();
+  const googleClientSecret = getGoogleClientSecret();
+  if (!googleClientSecret) {
     return res.status(503).json({ error: 'Google Calendar not configured. GOOGLE_CLIENT_SECRET missing.' });
   }
-  if (!GOOGLE_CLIENT_ID) {
+  if (!googleClientId) {
     return res.status(503).json({ error: 'Google Calendar not configured. GOOGLE_CLIENT_ID missing.' });
   }
 
@@ -136,7 +148,7 @@ router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
     prompt: 'consent',
   });
 
-  console.log(`[calendar] OAuth start client_id=${GOOGLE_CLIENT_ID} redirect_uri=${redirectUri}`);
+  console.log(`[calendar] OAuth start client_id=${googleClientId} redirect_uri=${redirectUri}`);
   res.json({ authUrl, redirectUri });
 });
 
@@ -188,9 +200,9 @@ router.get('/callback', async (req: AuthRequest, res: Response) => {
 router.get('/status', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const [token] = await db.select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, req.userId!)).limit(1);
-    res.json({ connected: !!token, configured: !!GOOGLE_CLIENT_SECRET, redirectUri: getRedirectUri(req) });
+    res.json({ connected: !!token, configured: !!getGoogleClientSecret(), redirectUri: getRedirectUri(req) });
   } catch {
-    res.json({ connected: false, configured: !!GOOGLE_CLIENT_SECRET, redirectUri: getCanonicalRedirectUri() });
+    res.json({ connected: false, configured: !!getGoogleClientSecret(), redirectUri: getCanonicalRedirectUri() });
   }
 });
 
@@ -205,8 +217,8 @@ router.get('/debug', requireAuth, (req: AuthRequest, res: Response) => {
     frontendUrl: process.env.FRONTEND_URL || null,
     renderExternalUrl: process.env.RENDER_EXTERNAL_URL || null,
     googleRedirectUriEnv: process.env.GOOGLE_REDIRECT_URI || null,
-    clientIdConfigured: !!GOOGLE_CLIENT_ID,
-    clientSecretConfigured: !!GOOGLE_CLIENT_SECRET,
+    clientIdConfigured: !!getGoogleClientId(),
+    clientSecretConfigured: !!getGoogleClientSecret(),
   });
 });
 
