@@ -162,20 +162,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     fetchTags().then(setSharedTags).catch(() => setSharedTags([]));
   }, []);
 
-  // Close transient popups/editors when a drag starts so an open dropdown
-  // doesn't float above the drag preview. Expanded rows intentionally stay
-  // expanded (only the dragged row/clone renders compact) so the list doesn't
-  // jump under the cursor mid-drag.
-  React.useEffect(() => {
-    if (isDragging) {
-      setPriorityEditTaskId(null);
-      setQuickEditTaskId(null);
-      setQuickEditField(null);
-      setDateEditTaskId(null);
-      setDateEditField(null);
-      setTagPopupTaskId(null);
-    }
-  }, [isDragging]);
+  // Same as the Tasks page: expanded rows collapse BEFORE the lift is measured
+  // (driven from the board's onBeforeCapture), so nothing here may mutate
+  // layout mid-drag — that invalidates the drop measurement and leaves the
+  // card frozen in its lift animation.
 
   const allTags = useMemo<Label[]>(() => {
     const map = new Map<string, Label>();

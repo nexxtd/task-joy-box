@@ -923,6 +923,58 @@ const Projects: React.FC = () => {
     setProjectToLeave(null);
   };
 
+  const [isBoardDragging, setIsBoardDragging] = useState(false);
+  const [isTaskDragging, setIsTaskDragging] = useState(false);
+
+  // Same collapse-before-lift pattern as the Tasks page: expanded task rows
+  // change card heights, so they must collapse BEFORE the drag is measured
+  // (onBeforeCapture) and restore after the drop. BoardColumn rows read the
+  // shared 'tasks-expanded-ids' key, so writing it + dispatching the event
+  // collapses every column synchronously pre-lift.
+  const preDragExpandedRef = useRef<string[] | null>(null);
+  const collapseForDrag = (isTask: boolean) => {
+    if (preDragExpandedRef.current !== null) return; // onDragStart after onBeforeCapture already collapsed
+    let current: string[] = [];
+    try {
+      const raw = localStorage.getItem('tasks-expanded-ids');
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) current = parsed;
+    } catch {}
+    if (current.length > 0) {
+      preDragExpandedRef.current = current;
+      try { localStorage.setItem('tasks-expanded-ids', JSON.stringify([])); } catch {}
+      window.dispatchEvent(new Event('tasks-expanded-change'));
+    } else {
+      preDragExpandedRef.current = null;
+    }
+    // Mount all drag-dependent DOM (drop hints, complete-target droppables)
+    // pre-lift as well, so the lift is measured with them present.
+    setIsBoardDragging(true);
+    setIsTaskDragging(isTask);
+  };
+  const restoreAfterDrag = () => {
+    const toRestore = preDragExpandedRef.current;
+    preDragExpandedRef.current = null;
+    if (toRestore && toRestore.length > 0) {
+      try { localStorage.setItem('tasks-expanded-ids', JSON.stringify(toRestore)); } catch {}
+      window.dispatchEvent(new Event('tasks-expanded-change'));
+    }
+  };
+
+  // Safety net copied from the Tasks page: if a drag sensor never fires its
+  // end event, a plain pointer release still clears the drag flags so drop
+  // hints can't stick around and the next lift measures cleanly.
+  useEffect(() => {
+    const onWindowUp = () => {
+      setIsBoardDragging(false);
+      setIsTaskDragging(false);
+      document.body.classList.remove('is-dragging');
+    };
+    window.addEventListener('mouseup', onWindowUp);
+    window.addEventListener('touchend', onWindowUp);
+    return () => { window.removeEventListener('mouseup', onWindowUp); window.removeEventListener('touchend', onWindowUp); };
+  }, []);
+
   // Un-collapse a board column after a task is dropped into it (same as the
   // Tasks page expanding the destination group on drop).
   const expandBoardColumn = (columnId: string) => {
@@ -942,20 +994,22 @@ const Projects: React.FC = () => {
     document.body.classList.remove('is-dragging');
     setIsBoardDragging(false);
     setIsTaskDragging(false);
+    restoreAfterDrag();
     if (!result.destination) return;
     if (result.type === 'column') {
       reorderColumns(result.source.index, result.destination.index, selectedProject?.id);
       return;
     }
     const dstId = result.destination.droppableId;
-    // Drag-to-complete, same pattern as the Tasks page completed sections.
+    // Drag-to-complete, same single-update pattern as the Tasks page
+    // (toggleTaskCompletion): just mark the task complete, no separate move.
     if (dstId.startsWith('completed-')) {
       const colId = dstId.slice('completed-'.length);
       const taskId = result.draggableId;
-      const activeCount = projectTasks.filter(t => t.columnId === colId && !t.completed && t.id !== taskId).length;
-      moveTask(taskId, colId, activeCount);
       const existing = board.tasks.find(t => t.id === taskId);
-      updateTask(taskId, { columnId: colId, completed: true, completedAt: existing?.completedAt ?? new Date().toISOString() });
+      if (existing && !existing.completed) {
+        updateTask(taskId, { completed: true, completedAt: existing.completedAt ?? new Date().toISOString(), status: 'completed' });
+      }
       expandBoardColumn(colId);
       return;
     }
@@ -963,18 +1017,15 @@ const Projects: React.FC = () => {
     expandBoardColumn(dstId);
   };
 
-  const [isBoardDragging, setIsBoardDragging] = useState(false);
-  const [isTaskDragging, setIsTaskDragging] = useState(false);
   const handleBoardDragStart = (start: DragStart) => {
     document.body.classList.add('is-dragging');
     // A drag and a board pan must never run together — kill any in-flight pan
     // so the board can't slide out from under the dragged card.
     setIsBoardPanning(false);
-    // Idempotent safety net: the same flags are already set synchronously in
-    // onBeforeCapture (pre-lift). Re-setting identical values here changes no
-    // DOM, so it can't disturb the in-flight drag measurement.
-    setIsBoardDragging(true);
-    setIsTaskDragging(start?.type !== 'column');
+    // Same as the Tasks page onDragStart: collapse expanded rows (guarded, so
+    // the onBeforeCapture pass already did it) and raise the drag flags with
+    // identical values, which changes no DOM mid-lift.
+    collapseForDrag(start?.type !== 'column');
   };
   const handleBoardDragUpdate = () => undefined;
 
@@ -1429,15 +1480,15 @@ const Projects: React.FC = () => {
             handleDragEnd(result);
           }}
           onBeforeCapture={(before: BeforeCapture) => {
-            // Mount all drag-dependent DOM (drop hints, complete-target
-            // droppables) BEFORE the lift is measured. flushSync forces the
-            // re-render to commit synchronously, so the drag starts with
-            // consistent dimensions. Setting this state later (onDragStart)
-            // mutates Droppable children mid-lift, which invalidates the
-            // measurement and leaves the card frozen in its lift animation.
+            // Same as the Tasks page handleBeforeCapture: collapse expanded
+            // rows and mount all drag-dependent DOM (drop hints,
+            // complete-target droppables) BEFORE the lift is measured.
+            // flushSync forces the re-render to commit synchronously, so the
+            // drag starts with consistent dimensions. Changing Droppable
+            // children later (onDragStart) would invalidate the measurement
+            // and leave the card frozen in its lift animation.
             flushSync(() => {
-              setIsBoardDragging(true);
-              setIsTaskDragging(!projectColumns.some(c => c.id === before.draggableId));
+              collapseForDrag(!projectColumns.some(c => c.id === before.draggableId));
             });
           }}
           onDragStart={handleBoardDragStart}
