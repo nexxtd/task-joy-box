@@ -37,6 +37,7 @@ interface ChecklistSubtaskEditorProps {
   subtasks: Subtask[];
   onChecklistsChange: (checklists: Checklist[]) => void;
   onSubtasksChange: (subtasks: Subtask[]) => void;
+  hideSubtasks?: boolean;
 }
 
 /**
@@ -49,6 +50,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
   subtasks,
   onChecklistsChange,
   onSubtasksChange,
+  hideSubtasks,
 }) => {
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   const [checklistsCollapsed, setChecklistsCollapsed] = useState(false);
@@ -197,7 +199,8 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Sub-tasks Section */}
+      {!hideSubtasks && (
+      /* Sub-tasks Section */
       <div className="rounded-2xl border border-border bg-muted/20">
         <button onClick={() => setSubtasksCollapsed(prev => !prev)} className="w-full flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
@@ -272,6 +275,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Checklist Section */}
       <div className="rounded-2xl border border-border bg-muted/20">
@@ -321,6 +325,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                       className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                       value={editingChecklistTitle}
                                       onChange={e => setEditingChecklistTitle(e.target.value)}
+                                      onClick={e => e.stopPropagation()}
                                       onBlur={() => {
                                         if (editingChecklistTitle.trim()) {
                                           onChecklistsChange(checklists.map(cl => (cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl)));
@@ -339,7 +344,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                       }}
                                     />
                                   ) : (
-                                    <span onClick={() => { setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                    <span onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
                                       {list.title}
                                     </span>
                                   )}

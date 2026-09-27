@@ -5,7 +5,6 @@ import {
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
   History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2
 } from 'lucide-react';
-import { SiGoogle } from 'react-icons/si';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -26,6 +25,17 @@ const THEMES = [
   { id: 'dark', label: 'Dark', icon: Moon },
   { id: 'system', label: 'System', icon: Monitor },
 ];
+
+// Inline Google "G" mark (replaces react-icons so the icon library stays out
+// of the bundle — this was its only usage).
+const GoogleGIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true" focusable="false">
+    <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.3H12v4.5h6.5c-.1 1.1-.8 2.7-2.4 3.8l-.1.1 3.5 2.7.2.1c2.2-2 3.8-5 3.8-8.9z" />
+    <path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.8-5l-.1.1-3.6 2.8v.1C3.5 21.3 7.4 24 12 24z" />
+    <path fill="#FBBC05" d="M5.2 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.7.4-2.4l-.1-.1-3.6-2.8-.1.1C.5 8.7 0 10.2 0 12s.5 3.3 1.4 4.7l3.8-2.3z" />
+    <path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17.9 1.1 15.2 0 12 0 7.4 0 3.5 2.7 1.4 6.8l3.8 2.9c1-2.9 3.7-5 6.8-5z" />
+  </svg>
+);
 
 const FONTS = ['Inter', 'Nunito', 'Outfit', 'Roboto'];
 
@@ -852,7 +862,7 @@ const SettingsPage: React.FC = () => {
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${calendarConnected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'}`}>
                     {calendarConnected
                       ? <Link2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      : <SiGoogle className="w-5 h-5 text-muted-foreground" />
+                      : <GoogleGIcon className="w-5 h-5 text-muted-foreground" />
                     }
                   </div>
                   <div className="flex-1">
@@ -886,7 +896,7 @@ const SettingsPage: React.FC = () => {
                       data-testid="button-connect-google-calendar"
                       className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                      <SiGoogle className="w-4 h-4" />
+                      <GoogleGIcon className="w-4 h-4" />
                       {calendarLoading ? 'Connecting�' : 'Connect Google Calendar'}
                     </button>
                   ) : (

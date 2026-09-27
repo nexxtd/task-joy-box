@@ -103,6 +103,7 @@ const Projects: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
@@ -312,12 +313,15 @@ const Projects: React.FC = () => {
 
   useEffect(() => {
     if (!selectedProjectId) { setMilestones([]); return; }
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
     setMilestonesLoading(true);
-    fetch(`/api/milestones/${selectedProjectId}`, { credentials: 'include' })
+    fetch(`/api/milestones/${selectedProjectId}`, { credentials: 'include', signal: ctrl.signal })
       .then(r => r.ok ? r.json() : { milestones: [] })
       .then(d => setMilestones(d.milestones || []))
       .catch(() => setMilestones([]))
-      .finally(() => setMilestonesLoading(false));
+      .finally(() => { clearTimeout(tid); setMilestonesLoading(false); });
+    return () => { ctrl.abort(); clearTimeout(tid); };
   }, [selectedProjectId]);
   const mainScrollRef = useRef<HTMLElement>(null);
   const scrollMemoryRef = useRef<Record<string, number>>({});
@@ -578,22 +582,28 @@ const Projects: React.FC = () => {
     [board.tasks, selectedProject?.id]
   );
 
-  // Load/save chat messages per project
+  // Load chat messages per project — only while the chat tab is open.
+  // Previously this polled every 5s even with the tab closed, adding
+  // constant background requests that competed with page loads.
   useEffect(() => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || currentTab !== 'chat') return;
+    let cancelled = false;
     const fetchMessages = async () => {
       try {
-        const res = await fetch(`/api/projects/${selectedProjectId}/chat`, { credentials: 'include' });
-        if (res.ok) {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(`/api/projects/${selectedProjectId}/chat`, { credentials: 'include', signal: ctrl.signal });
+        clearTimeout(tid);
+        if (res.ok && !cancelled) {
           const data = await res.json();
           setChatMessages((data.messages || []).map((m: any) => ({ id: String(m.id), text: m.message, authorName: m.authorName, authorId: m.userId, createdAt: m.createdAt })));
         }
       } catch {}
     };
     fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
-  }, [selectedProjectId]);
+    const interval = setInterval(() => { if (!document.hidden) fetchMessages(); }, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [selectedProjectId, currentTab]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -642,28 +652,75 @@ const Projects: React.FC = () => {
   );
 
   useEffect(() => {
-    const load = async () => {
-      let lastError: unknown = null;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          const response = await fetch('/api/projects', { credentials: 'include' });
-          if (!response.ok) throw new Error(String(response.status));
-          const data = await response.json();
-          const loaded: ProjectMeta[] = data.projects || [];
-          setProjects(loaded);
-          if (!selectedProjectId && loaded[0]) setSelectedProjectId(loaded[0].id);
-          if (loaded.length === 0) setSelectedProjectId(null);
-          return;
-        } catch (error) {
-          lastError = error;
-          if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1500));
+    if (!user?.id) { setProjectsLoading(false); return; }
+    const cacheKey = `projects_cache_${user.id}`;
+    let cancelled = false;
+    let hadCache = false;
+
+    const applyLoaded = (loaded: ProjectMeta[]) => {
+      setProjects(loaded);
+      // Keep the current selection when still valid, else pick the first.
+      setSelectedProjectId(prev => {
+        if (prev !== null && loaded.some(p => p.id === prev)) return prev;
+        return loaded[0]?.id ?? null;
+      });
+    };
+
+    // Instant paint from cache (stale-while-revalidate, same pattern as boards).
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && cached.length > 0) {
+          hadCache = true;
+          applyLoaded(cached);
+          setProjectsLoading(false);
         }
       }
-      console.error('Failed to load projects:', lastError);
-      toast({ title: 'Projects unavailable', description: 'Could not load your projects.' });
+    } catch {}
+
+    const fetchWithTimeout = async (): Promise<ProjectMeta[]> => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const response = await fetch('/api/projects', { credentials: 'include', signal: ctrl.signal });
+        if (!response.ok) throw new Error(String(response.status));
+        const data = await response.json();
+        return data.projects || [];
+      } finally {
+        clearTimeout(tid);
+      }
+    };
+
+    const load = async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const loaded = await fetchWithTimeout();
+          if (cancelled) return;
+          applyLoaded(loaded);
+          try { localStorage.setItem(cacheKey, JSON.stringify(loaded)); } catch {}
+          setProjectsLoading(false);
+          return;
+        } catch (error) {
+          if (cancelled) return;
+          if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+      if (cancelled) return;
+      console.error('Failed to load projects');
+      setProjectsLoading(false);
+      // Only complain when there is nothing to show (no cache).
+      if (!hadCache) toast({ title: 'Projects unavailable', description: 'Could not load your projects.' });
     };
     load();
-  }, []);
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Keep the cache fresh after local mutations (create/rename/delete/...).
+  useEffect(() => {
+    if (!user?.id || projectsLoading || projects.length === 0) return;
+    try { localStorage.setItem(`projects_cache_${user.id}`, JSON.stringify(projects)); } catch {}
+  }, [projects, projectsLoading, user?.id]);
 
   useEffect(() => {
     const joinCode = searchParams.get('join');
@@ -1511,11 +1568,27 @@ const Projects: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-5">
-                {sidebarBlock('Active Projects', activeProjects)}
-                {sidebarBlock('Completed Projects', completedProjects)}
-                {sidebarBlock('Archived', archivedProjects)}
-              </div>
+              {projectsLoading && projects.length === 0 ? (
+                <div className="space-y-2" aria-label="Loading projects">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="rounded-2xl border border-border bg-muted/20 px-3 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-3 w-3 rounded-full bg-muted animate-pulse" />
+                        <div className="flex-1 space-y-1.5">
+                          <div className="h-3.5 w-2/3 rounded bg-muted animate-pulse" />
+                          <div className="h-2.5 w-1/2 rounded bg-muted/70 animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {sidebarBlock('Active Projects', activeProjects)}
+                  {sidebarBlock('Completed Projects', completedProjects)}
+                  {sidebarBlock('Archived', archivedProjects)}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-border/70 p-4">
@@ -1587,11 +1660,24 @@ const Projects: React.FC = () => {
         {!selectedProject ? (
           <div className="flex flex-1 flex-col bg-background">
             <div className="h-16 border-b border-border shrink-0" />
-            <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-              <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
-              <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm">Collaboration boards, tasks, and notes are available once you enter or create a project.</p>
-            </div>
+            {projectsLoading ? (
+              <div className="flex flex-1 flex-col gap-4 p-8" aria-label="Loading project">
+                <div className="h-8 w-1/3 rounded-xl bg-muted animate-pulse" />
+                <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+                  <div className="h-48 rounded-3xl border border-border bg-card/60 animate-pulse" />
+                  <div className="grid gap-4">
+                    <div className="h-[86px] rounded-3xl border border-border bg-card/60 animate-pulse" />
+                    <div className="h-[86px] rounded-3xl border border-border bg-card/60 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+                <FolderKanban className="h-12 w-12 text-muted-foreground/40 mb-3" />
+                <h3 className="text-base font-semibold text-foreground">Join or create a project to get started.</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm">Collaboration boards, tasks, and notes are available once you enter or create a project.</p>
+              </div>
+            )}
           </div>
         ) : (
           <>

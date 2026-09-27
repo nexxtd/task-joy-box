@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import t, { LangCode, Translations, LANGUAGE_MAP, RTL_LANGUAGES, canonicalLanguageName, setCurrentLanguage, interpolate, tt, getTranslations, getCurrentLang } from '@/i18n/translations';
+import t, { LangCode, Translations, LANGUAGE_MAP, RTL_LANGUAGES, canonicalLanguageName, setCurrentLanguage, interpolate, tt, getTranslations, getCurrentLang, loadLanguage } from '@/i18n/translations';
 import { detectCurrency, detectLanguageFromBrowser, detectTimezone } from '@/lib/location';
 
 type TranslateFn = (phrase: string, vars?: Record<string, string | number>) => string;
@@ -39,6 +39,23 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getLangCode = (lang: string): LangCode => LANGUAGE_MAP[lang] || 'en';
 
   const lang = getLangCode(language);
+  // Non-English dictionaries are code-split chunks: render immediately with
+  // the English fallback, then swap in the real strings when the chunk lands.
+  const [dictVersion, setDictVersion] = useState(0);
+  useEffect(() => {
+    if (lang === 'en') {
+      setCurrentLanguage('en');
+      return;
+    }
+    let cancelled = false;
+    setCurrentLanguage(lang);
+    loadLanguage(lang).then(() => {
+      if (cancelled) return;
+      setCurrentLanguage(lang);
+      setDictVersion(v => v + 1);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [lang]);
   if (getCurrentLang() !== lang) setCurrentLanguage(lang);
   const isRTL = RTL_LANGUAGES.includes(lang);
 
@@ -53,7 +70,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('language', newLang);
   }, []);
 
-  const translate: TranslateFn = useCallback((phrase, vars) => tt(phrase, vars), [language]);
+  const translate: TranslateFn = useCallback((phrase, vars) => tt(phrase, vars), [language, dictVersion]);
 
   useEffect(() => {
     const orig = window.fetch.bind(window);

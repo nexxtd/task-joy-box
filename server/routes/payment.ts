@@ -4,6 +4,14 @@ import { users, organizations, coupons, couponRedemptions, pendingPayments, tran
 import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
+import {
+  capturePayPalOrder,
+  createPayPalOrder,
+  getPayPalCredentials,
+  getPayPalMode,
+  getPayPalAccessToken,
+  isPayPalConfigured,
+} from '../lib/paypal.js';
 
 const router = Router();
 const frontendUrl = process.env.FRONTEND_URL || '';
@@ -21,94 +29,8 @@ function safeParseInt(value: unknown): number | null {
 }
 
 // ── PayPal Orders v2 integration (the legacy REST v1 /v1/payments API used by
-// paypal-rest-sdk is deprecated by PayPal and fails for newer app integrations).
-const paypalConfigured = Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
-const paypalApiBase = (process.env.PAYPAL_MODE || 'sandbox') === 'live'
-  ? 'https://api-m.paypal.com'
-  : 'https://api-m.sandbox.paypal.com';
-
-let paypalTokenCache: { token: string; expiresAt: number } | null = null;
-
-async function getPayPalAccessToken(): Promise<string> {
-  if (paypalTokenCache && paypalTokenCache.expiresAt > Date.now() + 60_000) {
-    return paypalTokenCache.token;
-  }
-  const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
-  const res = await fetch(`${paypalApiBase}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: 'grant_type=client_credentials',
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`PayPal authentication failed (${res.status}): ${body.slice(0, 300)}`);
-  }
-  const data = await res.json() as { access_token?: string; expires_in?: number };
-  if (!data.access_token) throw new Error('PayPal authentication returned no access token');
-  paypalTokenCache = { token: data.access_token, expiresAt: Date.now() + (Number(data.expires_in) || 3600) * 1000 };
-  return data.access_token;
-}
-
-const newRequestId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-
-async function createPayPalOrder(options: {
-  amount: string;
-  returnUrl: string;
-  cancelUrl: string;
-  description: string;
-}): Promise<{ approvalUrl: string; paymentId: string }> {
-  const token = await getPayPalAccessToken();
-  const res = await fetch(`${paypalApiBase}/v2/checkout/orders`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'PayPal-Request-Id': newRequestId(),
-    },
-    body: JSON.stringify({
-      intent: 'CAPTURE',
-      purchase_units: [{
-        description: options.description.slice(0, 127),
-        amount: { currency_code: 'USD', value: options.amount },
-      }],
-      application_context: {
-        brand_name: 'Task Joy Box',
-        return_url: options.returnUrl,
-        cancel_url: options.cancelUrl,
-        user_action: 'PAY_NOW',
-      },
-    }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`PayPal order creation failed (${res.status}): ${body.slice(0, 300)}`);
-  }
-  const data = await res.json() as { id?: string; links?: Array<{ rel: string; href: string }> };
-  const approvalUrl = data.links?.find((l: any) => l.rel === 'approve')?.href;
-  if (!data.id || !approvalUrl) {
-    throw new Error('No approval URL in PayPal response');
-  }
-  return { approvalUrl, paymentId: data.id };
-}
-
-async function capturePayPalOrder(orderId: string): Promise<void> {
-  const token = await getPayPalAccessToken();
-  const res = await fetch(`${paypalApiBase}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'PayPal-Request-Id': newRequestId(),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`PayPal capture failed (${res.status}): ${body.slice(0, 300)}`);
-  }
-}
+// paypal-rest-sdk is deprecated by PayPal and fails for newer app integrations
+// with `invalid_client`). Shared helpers live in server/lib/paypal.ts.
 
 // Plan definitions matching the new tier structure
 const PRICING_TIERS = {
@@ -229,9 +151,9 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
       });
     }
 
-    if (!paypalConfigured) {
+    if (!isPayPalConfigured()) {
       console.error('PayPal not configured — missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET env vars');
-      return res.status(503).json({ error: 'PayPal is not configured on this server. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in Vercel Environment Variables and redeploy.' });
+      return res.status(503).json({ error: 'PayPal is not configured on this server. Set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_MODE in Render/Vercel Environment Variables and redeploy.' });
     }
 
     const selectedTier = PRICING_TIERS[tier];
@@ -299,11 +221,11 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
   } catch (error) {
     console.error('Error creating checkout session:', error);
     const msg = error instanceof Error ? error.message : 'Unknown PayPal error';
-    // Surface PayPal auth / DB table-missing errors with more context so Vercel logs are actionable
+    // Surface PayPal auth / DB table-missing errors with more context so server logs are actionable
     const hint = msg.includes('relation') && msg.includes('does not exist')
       ? 'Database table missing — redeploy after api/index.ts fix or run initDatabase.'
       : msg.includes('PayPal authentication failed')
-        ? 'Check PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET and PAYPAL_MODE (live vs sandbox) in Vercel env.'
+        ? `invalid_client means the credentials were rejected for PAYPAL_MODE=${getPayPalMode()}. Use SANDBOX credentials with PAYPAL_MODE=sandbox, or LIVE credentials with PAYPAL_MODE=live (developer.paypal.com > your App > Client ID/Secret). Also set the same 3 vars on Render/Vercel and redeploy.`
         : undefined;
     res.status(500).json({ error: 'Failed to create checkout session', details: msg, hint });
   }
@@ -325,7 +247,7 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
       return res.status(400).json({ error: 'Invalid organization or seat count' });
     }
 
-    if (!paypalConfigured) return res.status(503).json({ error: 'PayPal is not configured' });
+    if (!isPayPalConfigured()) return res.status(503).json({ error: 'PayPal is not configured' });
 
     const orgs = await db.select().from(organizations).where(eq(organizations.id, parsedOrgId)).limit(1);
     if (!orgs.length || orgs[0].ownerId !== req.userId) {
@@ -367,7 +289,7 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 
 // Execute PayPal payment after approval
 router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (!paypalConfigured) return res.status(503).json({ error: 'PayPal is not configured' });
+  if (!isPayPalConfigured()) return res.status(503).json({ error: 'PayPal is not configured' });
 
   // Orders v2 appends `token` (the order id) to the return URL; older links use `paymentId`.
   const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
@@ -488,6 +410,33 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
     res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
   } catch {
     res.status(500).json({ error: 'Failed to activate organization' });
+  }
+});
+
+// Diagnose PayPal credentials without creating an order.
+// Returns configured/mode/client prefix only (never the secret).
+router.get('/paypal-status', requireAuth, async (_req: AuthRequest, res: Response) => {
+  const { clientId, clientSecret } = getPayPalCredentials();
+  const mode = getPayPalMode();
+  if (!clientId || !clientSecret) {
+    return res.status(503).json({
+      configured: false,
+      mode,
+      error: 'Missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET on this server',
+    });
+  }
+  try {
+    await getPayPalAccessToken();
+    res.json({ configured: true, mode, clientPrefix: `${clientId.slice(0, 6)}...`, ok: true });
+  } catch (error) {
+    res.status(502).json({
+      configured: true,
+      mode,
+      clientPrefix: `${clientId.slice(0, 6)}...`,
+      ok: false,
+      error: error instanceof Error ? error.message : 'PayPal auth failed',
+      hint: `invalid_client = credentials rejected for PAYPAL_MODE=${mode}. Match sandbox creds <-> sandbox mode, live creds <-> live mode.`,
+    });
   }
 });
 

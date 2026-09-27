@@ -197,6 +197,7 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
             subtasks={note.subtasks}
             onChecklistsChange={onChecklistsChange}
             onSubtasksChange={onSubtasksChange}
+            hideSubtasks
           />
         )}
 

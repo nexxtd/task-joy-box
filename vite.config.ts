@@ -36,6 +36,9 @@ export default defineConfig({
           'vendor-charts': ['recharts'],
           'vendor-antd': ['antd'],
           'vendor-forms': ['react-hook-form', 'date-fns'],
+          // Google OAuth only ships with the lazy /login chunk, never the
+          // authenticated initial bundle.
+          'vendor-google': ['@react-oauth/google'],
         },
       },
     },

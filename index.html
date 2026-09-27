@@ -12,6 +12,10 @@
     <!-- Non-blocking fonts: preconnect + display=swap (was 4 render-blocking @imports in CSS) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Google Identity Services is only used on /login; warm up the
+         connection early so the sign-in button renders faster there. -->
+    <link rel="preconnect" href="https://accounts.google.com" />
+    <link rel="dns-prefetch" href="https://accounts.google.com" />
     <link
       rel="preload"
       as="style"

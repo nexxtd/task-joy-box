@@ -1033,10 +1033,22 @@ const Tasks: React.FC = () => {
     if (dstProject === 'my-goals') {
       updateFields.projectId = null;
       updateFields.projectName = undefined;
+      if (!newColumnId) {
+        const myCol = board.columns
+          .filter(c => !(c as any).projectId)
+          .sort((a, b) => a.order - b.order)[0] ?? board.columns[0];
+        if (myCol) updateFields.columnId = myCol.id;
+      }
     } else if (typeof dstProject === 'number') {
       const proj = projects.find(p => p.id === dstProject);
       updateFields.projectId = dstProject;
       if (proj) updateFields.projectName = proj.name;
+      if (!newColumnId) {
+        const firstCol = board.columns
+          .filter(c => (c as any).projectId === dstProject)
+          .sort((a, b) => a.order - b.order)[0];
+        if (firstCol) updateFields.columnId = firstCol.id;
+      }
     }
 
     const isSameDroppable = srcDroppableId === dstDroppableId;
@@ -1356,8 +1368,24 @@ const Tasks: React.FC = () => {
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    const targetColumnId = newTaskColumnId || board.columns[0]?.id;
+    // A task assigned to a project MUST live in one of that project's columns,
+    // otherwise the project board (which filters by both projectId AND column.projectId)
+    // will never show it.
+    let targetColumnId = newTaskColumnId;
+    if (newTaskProjectId !== '') {
+      const projCols = board.columns
+        .filter(col => (col as any).projectId === Number(newTaskProjectId))
+        .sort((a, b) => a.order - b.order);
+      if (!targetColumnId || !projCols.some(c => c.id === targetColumnId)) {
+        targetColumnId = projCols[0]?.id ?? '';
+      }
+    }
+    if (!targetColumnId) targetColumnId = board.columns[0]?.id;
     if (!targetColumnId) return;
+    if (newTaskProjectId !== '') {
+      const col = board.columns.find(c => c.id === targetColumnId);
+      if (!col || (col as any).projectId !== Number(newTaskProjectId)) return;
+    }
 
     const taskId = crypto.randomUUID();
     const checklistItems = newChecklistItems.map(item => ({
@@ -1534,10 +1562,26 @@ const Tasks: React.FC = () => {
       updates.duration = Math.max(0, Number(quickEditDuration) || 0);
     }
     if (quickEditField === 'project') {
-      updates.projectId = quickEditProjectId === '' ? null : Number(quickEditProjectId);
+      const newPid = quickEditProjectId === '' ? null : Number(quickEditProjectId);
+      updates.projectId = newPid;
       updates.projectName = quickEditProjectId === ''
         ? undefined
         : (projects.find(project => project.id === Number(quickEditProjectId))?.name || undefined);
+      // Assigning to a project MUST also assign a column of that project,
+      // otherwise the item is invisible on the project board.
+      if (newPid !== task.projectId) {
+        if (newPid === null) {
+          const myCol = board.columns
+            .filter(c => !(c as any).projectId)
+            .sort((a, b) => a.order - b.order)[0] ?? board.columns[0];
+          if (myCol) updates.columnId = myCol.id;
+        } else {
+          const firstCol = board.columns
+            .filter(c => (c as any).projectId === newPid)
+            .sort((a, b) => a.order - b.order)[0];
+          if (firstCol) updates.columnId = firstCol.id;
+        }
+      }
     }
     updateTask(task.id, updates);
     closeQuickEdit();
@@ -2322,7 +2366,7 @@ const Tasks: React.FC = () => {
           )}
 
           {/* MY TASKS section */}
-          {(myTasksGroup.length > 0 || filtered.completed.some(t => !t.projectId)) && (
+          {(myTasksGroup.length > 0 || filtered.completed.some(t => !t.projectId) || isTaskDragging) && (
             <div className="mb-3">
               <button
                 onClick={() => setMyTasksCollapsed(prev => !prev)}
@@ -2346,7 +2390,7 @@ const Tasks: React.FC = () => {
                         )}
                       </Draggable>
                     ))}
-                    {myTasksCollapsed && isTaskDragging && (
+                    {(myTasksCollapsed || myTasksGroup.length === 0) && isTaskDragging && (
                       <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
                         Drop here to move into My Goals
                       </div>
@@ -2920,6 +2964,7 @@ const Tasks: React.FC = () => {
                                           className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                           value={editingDraftChecklistTitle}
                                           onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                          onClick={e => e.stopPropagation()}
                                           onBlur={() => {
                                             if (editingDraftChecklistTitle.trim()) {
                                               setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
@@ -2936,7 +2981,7 @@ const Tasks: React.FC = () => {
                                           }}
                                         />
                                       ) : (
-                                        <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
+                                        <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
                                           {list.title}
                                         </span>
                                       )}
@@ -4444,6 +4489,7 @@ export const TaskDropdownExpanded: React.FC<{
                                       className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                       value={editingChecklistTitle}
                                       onChange={e => setEditingChecklistTitle(e.target.value)}
+                                      onClick={e => e.stopPropagation()}
                                       onBlur={() => {
                                         if (editingChecklistTitle.trim()) {
                                           onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
@@ -5493,6 +5539,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                         value={editingChecklistTitle}
                                         onChange={e => setEditingChecklistTitle(e.target.value)}
+                                        onClick={e => e.stopPropagation()}
                                         onBlur={() => {
                                           if (editingChecklistTitle.trim()) {
                                             onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
@@ -6124,16 +6171,17 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               <button onClick={() => {
                 const { v } = projectChangeConfirm;
                 const newProjectId = v === 'my-goals' ? null : Number(v);
-                onUpdateTask(task.id, {
+                const singleUpdate: Partial<Task> = {
                   projectId: newProjectId,
                   projectName: v === 'my-goals' ? undefined : (projects.find(p => p.id === Number(v))?.name || undefined),
-                });
+                };
                 if (v === 'my-goals') {
-                  onUpdateTask(task.id, { columnId: boardColumns[0]?.id || task.columnId });
+                  singleUpdate.columnId = boardColumns[0]?.id || task.columnId;
                 } else if (newProjectId && (!task.projectId || task.projectId !== newProjectId)) {
                   const firstCol = boardColumns.filter(c => c.projectId === newProjectId).sort((a, b) => a.order - b.order)[0];
-                  if (firstCol) onUpdateTask(task.id, { columnId: firstCol.id });
+                  if (firstCol) singleUpdate.columnId = firstCol.id;
                 }
+                onUpdateTask(task.id, singleUpdate);
                 setProjectChangeConfirm(null);
               }} className="px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-xl hover:opacity-90">Move</button>
             </div>

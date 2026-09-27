@@ -215,7 +215,7 @@ export const TicketConversation: React.FC<Props> = ({
         <button onClick={() => setLightbox(null)} className="absolute -top-2 -right-2 p-2 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md transition-colors">
           <X className="w-5 h-5 text-white" />
         </button>
-        <img src={lightbox.url} alt={lightbox.name} decoding="async" className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl" />
+        <img src={lightbox.url} alt={lightbox.name} loading="lazy" decoding="async" className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain shadow-2xl" />
         <span className="text-sm text-white/80 mt-3">{lightbox.name}</span>
       </div>
     </div>

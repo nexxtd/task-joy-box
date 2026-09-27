@@ -87,7 +87,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-app.use(compression());
+app.use(compression({ threshold: 1024 }));
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -231,6 +231,27 @@ app.use('/uploads', (req, res, next) => {
   },
 }));
 
+// Serve hashed production assets BEFORE session/JSON middleware so every
+// /assets/* request skips the Postgres session-store lookup. express.static
+// only responds when a file exists on disk and falls through to the API
+// routes otherwise, so this cannot swallow API traffic.
+if (isProduction) {
+  const distPath = path.join(process.cwd(), 'dist');
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        const normalized = filePath.replace(/\\/g, '/');
+        if (normalized.includes('/assets/')) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }));
+  }
+}
+
 app.use(session({
   store: sessionStore,
   secret: sessionSecret || 'dev-only-fallback',
@@ -310,6 +331,9 @@ app.get('/api/status', async (_req, res) => {
     const maintenanceMode = await getSettingBoolean('maintenance_mode', false);
     const message = maintenanceMode ? await getSetting('maintenance_message', 'We are currently performing scheduled maintenance. Please check back shortly.') : null;
     const supportEmail = await getSetting('support_contact_email', 'support@myplanner.app');
+    // Short private cache: the boot check runs on every protected mount, and
+    // maintenance flips rarely. 30s cuts repeated DB reads on back-nav.
+    res.set('Cache-Control', 'private, max-age=30, must-revalidate');
     res.json({ maintenance_mode: maintenanceMode, message, support_email: supportEmail });
   } catch (error) {
     res.status(500).json({ maintenance_mode: false, message: null });
@@ -321,22 +345,14 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API route not found' });
 });
 
-// Serve static files in production
+// Serve static files in production (assets are served earlier, before the
+// session middleware — here only the SPA fallback remains).
 if (isProduction) {
   const distPath = path.join(process.cwd(), 'dist');
   if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath, {
-      setHeaders: (res, filePath) => {
-        const normalized = filePath.replace(/\\/g, '/');
-        if (normalized.includes('/assets/')) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        } else {
-          res.setHeader('Cache-Control', 'no-cache');
-        }
-      },
-    }));
     app.get('*', (req, res) => {
       if (!req.path.startsWith('/api/')) {
+        res.set('Cache-Control', 'no-cache');
         res.sendFile(path.join(distPath, 'index.html'));
       } else {
         res.status(404).json({ error: 'API route not found' });

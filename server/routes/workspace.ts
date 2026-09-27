@@ -1,25 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, workspaceMembers, groups, groupMembers, type InsertWorkspace, type InsertWorkspaceMember, type UpdateWorkspace } from '../../shared/schema.js';
+import { users, workspaces, workspaceMembers, groups, groupMembers, pendingPayments, type InsertWorkspace, type InsertWorkspaceMember, type UpdateWorkspace } from '../../shared/schema.js';
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import paypalSdk from 'paypal-rest-sdk';
 import crypto from 'crypto';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { getSetting } from '../lib/settings.js';
 import { tierRank } from '../lib/tier.js';
+import { capturePayPalOrder, createPayPalOrder, isPayPalConfigured } from '../lib/paypal.js';
 
 const router = Router();
 
-// Configure PayPal
-const paypalConfigured = Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
-if (paypalConfigured) {
-  (paypalSdk as any).default ?? (paypalSdk as any).configure({
-    mode: process.env.PAYPAL_MODE || 'sandbox', // Sandbox for testing, live for production
-    client_id: process.env.PAYPAL_CLIENT_ID || '',
-    client_secret: process.env.PAYPAL_CLIENT_SECRET || '',
-  });
-}
+// NOTE: workspace billing uses the shared PayPal Orders v2 helper
+// (server/lib/paypal.ts). The deprecated paypal-rest-sdk was removed because
+// PayPal rejects newer apps on /v1/payments with `invalid_client`.
 
 // Get user's workspace
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -552,7 +546,7 @@ router.delete('/workspace/:workspaceId/group/:groupId/remove-member/:userId', re
   }
 });
 
-// Create a PayPal checkout session for workspace seats
+// Create a PayPal checkout session for workspace seats (Orders v2)
 router.post('/workspace/:workspaceId/billing/checkout', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { workspaceId } = req.params;
@@ -580,104 +574,89 @@ router.post('/workspace/:workspaceId/billing/checkout', requireAuth, async (req:
     const pricePerSeat = tier === 'premium' ? 3 : 8; // $3/user/mo for premium, $8/user/mo for pro
     const totalPrice = pricePerSeat * seats;
 
-    if (!paypalConfigured) {
+    if (!isPayPalConfigured()) {
       return res.status(503).json({ error: 'PayPal is not configured on this server' });
     }
 
-    const paypal = (paypalSdk as any).default ?? (paypalSdk as any);
-    
-    const paymentData = {
-      intent: 'sale',
-      payer: { payment_method: 'paypal' },
-      redirect_urls: {
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/api/workspace/execute-payment`,
-        cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5000'}/collaboration?workspace_payment=cancelled`,
-      },
-      transactions: [{
-        item_list: {
-          items: [{
-            name: `${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan Seats`,
-            sku: `workspace_${tier}_seats`,
-            price: pricePerSeat.toFixed(2),
-            currency: 'USD',
-            quantity: seats,
-          }]
-        },
-        amount: { currency: 'USD', total: totalPrice.toFixed(2) },
-        description: `${seats} seats for ${workspace.name}`,
-      }]
-    };
-
-    paypal.payment.create(paymentData, (error: any, payment: any) => {
-      if (error) {
-        console.error('PayPal payment creation error:', error);
-        return res.status(500).json({ error: 'Failed to create PayPal payment' });
-      }
-      const approvalUrl = payment.links.find((l: any) => l.rel === 'approval_url')?.href;
-      res.json({ approvalUrl, paymentId: payment.id });
+    const appBaseUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const { approvalUrl, paymentId } = await createPayPalOrder({
+      amount: totalPrice.toFixed(2),
+      returnUrl: `${appBaseUrl}/api/workspace/execute-payment`,
+      cancelUrl: `${appBaseUrl}/collaboration?workspace_payment=cancelled`,
+      description: `${seats} seats for ${workspace.name} (${tier})`,
     });
+
+    // Tamper-proof intent: tier/seats/workspace are read back from this row on capture.
+    // orgId column is reused to hold the workspace id for planType='workspace'.
+    const totalCents = Math.round(totalPrice * 100);
+    await db.insert(pendingPayments).values({
+      userId: req.userId!,
+      orderId: paymentId,
+      tier,
+      planType: 'workspace',
+      seats,
+      orgId: workspace.id,
+      amountCents: totalCents,
+    }).onConflictDoUpdate({
+      target: pendingPayments.orderId,
+      set: { userId: req.userId!, tier, planType: 'workspace', seats, orgId: workspace.id, amountCents: totalCents, status: 'pending' },
+    });
+
+    res.json({ approvalUrl, paymentId });
   } catch (error) {
     console.error('Error creating workspace checkout session:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    const msg = error instanceof Error ? error.message : 'Unknown PayPal error';
+    res.status(500).json({ error: 'Failed to create checkout session', details: msg });
   }
 });
 
-// Execute PayPal payment for workspace
+// Execute PayPal payment for workspace (Orders v2 capture)
 router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Response) => {
-  if (!paypalConfigured) {
+  if (!isPayPalConfigured()) {
     return res.status(503).json({ error: 'PayPal is not configured' });
   }
 
-  const { paymentId, PayerID } = req.query;
+  // Orders v2 appends `token` (the order id) to the return URL.
+  const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
 
-  if (!paymentId || !PayerID) {
+  if (!paymentId) {
     return res.status(400).json({ error: 'Missing payment parameters' });
   }
 
-  const paypal = (paypalSdk as any).default ?? (paypalSdk as any);
-  
-  paypal.payment.execute(paymentId as string, { payer_id: PayerID as string }, async (error: any, payment: any) => {
-    if (error) {
-      console.error('PayPal workspace payment execution error:', error);
-      res.status(500).json({ error: 'Failed to execute PayPal payment' });
-    } else {
-      try {
-        // Extract tier and seats from the payment object
-        const sku = payment.transactions[0].item_list?.items[0]?.sku;
-        const tierMatch = sku?.match(/workspace_(.*)_seats/);
-        const tier = tierMatch ? tierMatch[1] : 'pro';
-        const seats = payment.transactions[0].item_list?.items[0]?.quantity || 1;
-        
-        // Extract workspace details from payment
-        const workspaceName = payment.transactions[0].description?.match(/(.*) seats for (.*)/)?.[2] || 'Unknown';
-        
-        // Find the workspace by name and owner
-        const [workspace] = await db
-          .select()
-          .from(workspaces)
-          .where(and(
-            eq(workspaces.name, workspaceName),
-            eq(workspaces.ownerId, req.userId!)
-          ));
+  const [intent] = await db.select().from(pendingPayments).where(eq(pendingPayments.orderId, paymentId)).limit(1);
+  if (!intent || intent.userId !== req.userId! || intent.planType !== 'workspace' || !intent.orgId) {
+    return res.status(403).json({ error: 'Payment session not found for this account. Please contact support.' });
+  }
+  if (intent.status !== 'pending') {
+    return res.status(409).json({ error: 'This payment has already been processed' });
+  }
 
-        if (workspace) {
-          // Update workspace status in the database
-          await db.update(workspaces)
-            .set({ 
-              seatTier: tier,
-              seatCount: seats,
-              billingStatus: 'active' 
-            } as UpdateWorkspace)
-            .where(eq(workspaces.id, workspace.id));
-        }
+  try {
+    await capturePayPalOrder(paymentId);
+  } catch (error) {
+    console.error('PayPal workspace payment capture error:', error);
+    return res.status(500).json({
+      error: 'Failed to execute PayPal payment',
+      details: error instanceof Error ? error.message : 'Unknown PayPal error',
+    });
+  }
 
-        res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/collaboration?workspace_payment=success`);
-      } catch (dbError) {
-        console.error('Database update error:', dbError);
-        res.status(500).json({ error: 'Failed to update workspace status' });
-      }
-    }
-  });
+  try {
+    await db.update(workspaces)
+      .set({
+        seatTier: intent.tier,
+        seatCount: intent.seats || 1,
+        billingStatus: 'active'
+      } as UpdateWorkspace)
+      .where(and(eq(workspaces.id, intent.orgId!), eq(workspaces.ownerId, req.userId!)));
+
+    await db.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
+
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/collaboration?workspace_payment=success`);
+  } catch (dbError) {
+    console.error('Database update error:', dbError);
+    res.status(500).json({ error: 'Failed to update workspace status' });
+  }
 });
 
 

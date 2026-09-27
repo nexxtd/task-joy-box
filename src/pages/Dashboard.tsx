@@ -261,6 +261,8 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
+  const [viewProjectsMenuOpen, setViewProjectsMenuOpen] = useState(false);
+  const viewProjectsMenuRef = useRef<HTMLDivElement | null>(null);
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
@@ -1671,12 +1673,40 @@ style={{ background: 'hsl(var(--primary))' }}>
               >
                 <LayoutDashboard className="w-4 h-4" /> Customize Dashboard
               </button>
-              <button
-                onClick={() => navigate('/projects')}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-              >
-                <Calendar className="w-4 h-4" /> View Schedule
-              </button>
+              <div className="relative" ref={viewProjectsMenuRef}>
+                <button
+                  onClick={() => navigate('/projects')}
+                  onContextMenu={(e) => { e.preventDefault(); setViewProjectsMenuOpen(prev => !prev); }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  title="Left-click for Projects, right-click to jump to any page"
+                >
+                  <FolderOpen className="w-4 h-4" /> View Projects
+                </button>
+                {viewProjectsMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setViewProjectsMenuOpen(false)} onContextMenu={(e) => { e.preventDefault(); setViewProjectsMenuOpen(false); }} />
+                    <div className="absolute right-0 mt-1.5 w-48 bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
+                      {[
+                        { label: 'Dashboard', path: '/' },
+                        { label: 'Projects', path: '/projects' },
+                        { label: 'Tasks', path: '/tasks' },
+                        { label: 'Notes', path: '/notes' },
+                        { label: 'Calendar', path: '/calendar' },
+                        { label: 'Goals', path: '/goals' },
+                        { label: 'Habits', path: '/habits' },
+                      ].map(item => (
+                        <button
+                          key={item.path}
+                          onClick={() => { setViewProjectsMenuOpen(false); navigate(item.path); }}
+                          className="w-full text-left px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={() => setShowAddTask(true)}
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"

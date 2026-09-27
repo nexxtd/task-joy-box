@@ -62,6 +62,9 @@ export type CreateTaskModalProps = {
   onCreateItem?: (columnId: string, title: string, details: Partial<Task>) => void;
   tasksOverride?: Task[];
   onUpdateItem?: (taskId: string, updates: Partial<Task>) => void;
+  templateMode?: boolean;
+  onCreateTemplate?: (details: { name: string; title: string; description: string; priority: Priority; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: Label[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: Attachment[]; attachments: any[] }) => Promise<void> | void;
+  hideSubtasks?: boolean;
 };
 
 type ProjectMeta = {
@@ -149,6 +152,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   onCreateItem,
   tasksOverride,
   onUpdateItem,
+  templateMode,
+  onCreateTemplate,
+  hideSubtasks,
 }) => {
   const { board, addTask, updateTask } = useBoardContext();
   const availableColumns = columnsOverride ?? board.columns;
@@ -502,6 +508,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
+    if (templateMode && !templateName.trim()) return;
     // When a project is selected the task must live in one of that project's
     // columns, otherwise project boards (which filter by both projectId and
     // column.projectId) will never show it.
@@ -519,6 +526,38 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     if (newTaskProjectId !== '') {
       const col = availableColumns.find(c => c.id === targetColumnId);
       if (!col || col.projectId !== Number(newTaskProjectId)) return;
+    }
+
+    if (templateMode && onCreateTemplate) {
+      await onCreateTemplate({
+        name: templateName.trim(),
+        title: newTaskTitle.trim(),
+        description: newTaskDescription,
+        priority: newTaskPriority,
+        duration: Math.max(0, Number(newTaskDuration) || 0),
+        startDate: newTaskStartDate || undefined,
+        startTime: newTaskStartTime || undefined,
+        dueDate: newTaskDueDate || undefined,
+        dueTime: newTaskDueTime || undefined,
+        projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
+        columnId: targetColumnId || undefined,
+        labels: newTaskLabels,
+        subtasks: newTaskSubtasks.map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
+        checklists: [
+          ...(newChecklistItems.length
+            ? [{ id: crypto.randomUUID(), title: 'Checklist', items: newChecklistItems.map(it => ({ id: it.id, text: it.text, completed: false })) }]
+            : []),
+          ...newChecklistLists.map(l => ({
+            id: l.id,
+            title: l.title,
+            items: l.items.map(it => ({ id: it.id, text: it.text, completed: it.completed })),
+          })),
+        ],
+        images: newTaskImages,
+        attachments: [],
+      });
+      onClose();
+      return;
     }
 
     const taskId = crypto.randomUUID();
@@ -654,21 +693,36 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           onClick={e => e.stopPropagation()}
         >
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground">Create Task</h2>
+            <h2 className="text-base font-semibold text-foreground">{templateMode ? 'Create Template' : 'Create Task'}</h2>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setAiBuilderOpen(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-                title="AI Task Builder"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                AI Builder
-              </button>
+              {!templateMode && (
+                <button
+                  onClick={() => setAiBuilderOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+                  title="AI Task Builder"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI Builder
+                </button>
+              )}
               <button onClick={() => onClose()} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Close">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
           </div>
+
+          {templateMode && (
+            <div className="px-5 pt-5">
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
+              <input
+                autoFocus
+                placeholder="e.g. Daily Standup Template"
+                value={templateName}
+                onChange={e => setTemplateName(e.target.value)}
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+            </div>
+          )}
 
           <div className="p-5 space-y-5">
             <div>
@@ -845,6 +899,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       />
 
             {/* Sub-tasks */}
+            {!hideSubtasks && (
             <div className="rounded-2xl border border-border bg-muted/20">
               <button
                 onClick={() => setDraftSubtasksCollapsed(prev => !prev)}
@@ -963,6 +1018,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </div>
               )}
             </div>
+            )}
 
             {/* Checklist */}
             <div className="rounded-2xl border border-border bg-muted/20">
@@ -1074,6 +1130,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                             value={editingDraftChecklistTitle}
                                             onChange={e => setEditingDraftChecklistTitle(e.target.value)}
+                                            onClick={e => e.stopPropagation()}
                                             onBlur={() => {
                                               if (editingDraftChecklistTitle.trim()) {
                                                 setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
@@ -1090,7 +1147,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             }}
                                           />
                                         ) : (
-                                          <span onClick={() => { setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
+                                          <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
                                             {list.title}
                                           </span>
                                         )}
@@ -1338,14 +1395,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
           <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
             <div className="relative">
-              <button
-                onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-              >
-                <Star className="w-3.5 h-3.5" />
-                Templates
-              </button>
-              {templateMenuOpen && (
+              {!templateMode && (
+                <button
+                  onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
+                >
+                  <Star className="w-3.5 h-3.5" />
+                  Templates
+                </button>
+              )}
+              {templateMenuOpen && !templateMode && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setTemplateMenuOpen(false)} />
                   <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
@@ -1387,10 +1446,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               <button onClick={() => { resetTaskDraft(); onClose(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={!newTaskTitle.trim() || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                disabled={!newTaskTitle.trim() || (templateMode && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
-                Save
+                {templateMode ? 'Template' : 'Save'}
               </button>
             </div>
           </div>
@@ -1544,7 +1603,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         </div>
       )}
 
-      {aiBuilderOpen && (
+      {aiBuilderOpen && !templateMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setAiBuilderOpen(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div

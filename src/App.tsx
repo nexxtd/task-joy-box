@@ -11,8 +11,11 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
-import LoginPage from "@/pages/LoginPage";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
+
+// LoginPage (incl. Google OAuth SDK) is only needed on /login, so it stays
+// out of the authenticated initial bundle.
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
 
 // Route-level code splitting: each page becomes its own chunk so the
 // initial bundle only contains the login shell + layout.
@@ -36,11 +39,12 @@ const WhiteboardPage = lazy(() => import("@/pages/WhiteboardPage"));
 const Documents = lazy(() => import("@/pages/Documents"));
 const WhatsNew = lazy(() => import("@/pages/WhatsNew"));
 const VerifyEmail = lazy(() => import("@/pages/VerifyEmail"));
-import WhatsNewModal from "@/components/WhatsNewModal";
 import { applyFontFamily } from "@/lib/fonts";
 import { useBoardContext } from "@/context/BoardContext";
 import { toast } from "@/hooks/use-toast";
-import EnergyPopup from "@/components/EnergyPopup";
+// Rarely-shown overlays: parsed only when actually opened.
+const WhatsNewModal = lazy(() => import("@/components/WhatsNewModal"));
+const EnergyPopup = lazy(() => import("@/components/EnergyPopup"));
 const DeepFocusMode = lazy(() => import("@/components/DeepFocusMode"));
 import { useDeepFocus } from "@/hooks/useDeepFocus";
 import { applyAccentHsl, normalizeAccent } from "@/lib/accent";
@@ -150,7 +154,7 @@ function PublicLogin() {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (user) return <Navigate to="/" replace />;
-  return <LoginPage />;
+  return <Suspense fallback={<PageLoader />}><LoginPage /></Suspense>;
 }
 
 function ProtectedRoutes() {
@@ -227,8 +231,8 @@ function ProtectedRoutes() {
           <HabitsProvider>
             <Notifier />
             <AppearanceSync />
-            <EnergyPopup />
-            <WhatsNewModal />
+            <Suspense fallback={null}><EnergyPopup /></Suspense>
+            <Suspense fallback={null}><WhatsNewModal /></Suspense>
             {shouldShowTutorial && <Suspense fallback={null}><Tutorial /></Suspense>}
             {isDeepFocusOpen && <Suspense fallback={null}><DeepFocusMode task={deepFocusTask} /></Suspense>}
             <Routes>

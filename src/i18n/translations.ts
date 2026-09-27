@@ -1,24 +1,9 @@
 import en from './locales/en';
-import es from './locales/es';
-import fr from './locales/fr';
-import de from './locales/de';
-import pt from './locales/pt';
-import it from './locales/it';
-import zh from './locales/zh';
-import ja from './locales/ja';
-import ko from './locales/ko';
-import ar from './locales/ar';
-import hi from './locales/hi';
-import ru from './locales/ru';
-import nl from './locales/nl';
-import tr from './locales/tr';
-import vi from './locales/vi';
-import he from './locales/he';
-import { PHRASES } from './phrases';
+import type { Translations } from './locales/types';
 
 export const LANG_CODES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'zh', 'ja', 'ko', 'ar', 'hi', 'ru', 'nl', 'tr', 'vi', 'he'] as const;
 export type LangCode = (typeof LANG_CODES)[number];
-export type Translations = Record<string, string>;
+export type { Translations };
 
 export interface LanguageDef {
   code: LangCode;
@@ -85,7 +70,80 @@ export const canonicalLanguageName = (value: string | null | undefined): string 
   return def?.native ?? 'English';
 };
 
-const t: Record<LangCode, Translations> = { en, es, fr, de, pt, it, zh, ja, ko, ar, hi, ru, nl, tr, vi, he };
+// ---------------------------------------------------------------------------
+// Lazy locales: only English ships in the initial bundle. Every other language
+// is code-split into its own chunk and fetched on demand via loadLanguage().
+// Until a chunk arrives, all synchronous getters fall back to English, so
+// rendering never blocks and never crashes.
+// ---------------------------------------------------------------------------
+
+type LocaleModule = { default: Translations };
+
+const localeCache: Record<LangCode, Translations | null> = {
+  en,
+  es: null, fr: null, de: null, pt: null, it: null, zh: null, ja: null,
+  ko: null, ar: null, hi: null, ru: null, nl: null, tr: null, vi: null, he: null,
+};
+
+const localeLoaders: Record<Exclude<LangCode, 'en'>, () => Promise<LocaleModule>> = {
+  es: () => import('./locales/es'),
+  fr: () => import('./locales/fr'),
+  de: () => import('./locales/de'),
+  pt: () => import('./locales/pt'),
+  it: () => import('./locales/it'),
+  zh: () => import('./locales/zh'),
+  ja: () => import('./locales/ja'),
+  ko: () => import('./locales/ko'),
+  ar: () => import('./locales/ar'),
+  hi: () => import('./locales/hi'),
+  ru: () => import('./locales/ru'),
+  nl: () => import('./locales/nl'),
+  tr: () => import('./locales/tr'),
+  vi: () => import('./locales/vi'),
+  he: () => import('./locales/he'),
+};
+
+const phrasesCache: Partial<Record<LangCode, Translations>> = { en: {} };
+const pendingPhrases = new Map<LangCode, Promise<Translations>>();
+const phraseLoaders: Record<Exclude<LangCode, 'en'>, () => Promise<LocaleModule>> = {
+  es: () => import('./phrases/es.json'),
+  fr: () => import('./phrases/fr.json'),
+  de: () => import('./phrases/de.json'),
+  pt: () => import('./phrases/pt.json'),
+  it: () => import('./phrases/it.json'),
+  zh: () => import('./phrases/zh.json'),
+  ja: () => import('./phrases/ja.json'),
+  ko: () => import('./phrases/ko.json'),
+  ar: () => import('./phrases/ar.json'),
+  hi: () => import('./phrases/hi.json'),
+  ru: () => import('./phrases/ru.json'),
+  nl: () => import('./phrases/nl.json'),
+  tr: () => import('./phrases/tr.json'),
+  vi: () => import('./phrases/vi.json'),
+  he: () => import('./phrases/he.json'),
+};
+
+const loadPhrases = (lang: LangCode): Promise<Translations> => {
+  if (lang === 'en') return Promise.resolve({});
+  const cached = phrasesCache[lang];
+  if (cached) return Promise.resolve(cached);
+  const pending = pendingPhrases.get(lang);
+  if (pending) return pending;
+  const p = phraseLoaders[lang]()
+    .then(m => (phrasesCache[lang] = ((m.default || {}) as Translations)))
+    .catch(() => ({} as Translations));
+  pendingPhrases.set(lang, p);
+  return p;
+};
+
+// Kept for backwards compatibility: same keys as before, but non-English
+// entries start empty and are filled in by loadLanguage(). Prefer
+// getTranslations(lang) / loadLanguage(lang).
+const t: Record<LangCode, Translations> = {
+  en,
+  es: {}, fr: {}, de: {}, pt: {}, it: {}, zh: {}, ja: {}, ko: {}, ar: {},
+  hi: {}, ru: {}, nl: {}, tr: {}, vi: {}, he: {},
+};
 
 const NEVER_TRANSLATE = new Set<string>([
   'MyPlanner', 'My Planner', 'Planora', 'Google', 'Inter', 'Nunito', 'Outfit', 'Roboto',
@@ -99,8 +157,8 @@ for (const [key, value] of Object.entries(en)) {
 }
 
 const mergeDict = (lang: LangCode): Translations => ({
-  ...t[lang],
-  ...(PHRASES[lang] || {}),
+  ...(localeCache[lang] ?? en),
+  ...(phrasesCache[lang] || {}),
 });
 
 /** Interpolation helper shared by all languages: "{{name}} wins" -> "Sam wins" */
@@ -177,4 +235,39 @@ export const getCurrentLang = (): LangCode => currentLang;
 
 export const getTranslations = (lang: LangCode): Translations => mergeDict(lang);
 
+const pendingLocales = new Map<LangCode, Promise<Translations>>();
+
+/**
+ * Fetch (once) a non-English locale chunk + its phrases, cache them, and
+ * resolve with the merged dictionary. English resolves immediately without
+ * any network request. Failures fall back to English — never rejects with
+ * a render-blocking error (the raw chunk error is swallowed by design).
+ */
+export const loadLanguage = (lang: LangCode): Promise<Translations> => {
+  if (lang === 'en') return Promise.resolve(mergeDict('en'));
+  const pending = pendingLocales.get(lang);
+  if (pending) return pending;
+  const p = Promise.all([localeLoaders[lang]().then(m => m.default), loadPhrases(lang)])
+    .then(([locale, phrases]) => {
+      localeCache[lang] = locale;
+      t[lang] = locale;
+      phrasesCache[lang] = phrases;
+      if (getCurrentLang() === lang) currentDict = mergeDict(lang);
+      return mergeDict(lang);
+    })
+    .catch(() => mergeDict('en'));
+  pendingLocales.set(lang, p);
+  return p;
+};
+
 export default t;
+
+// Start fetching the user's stored language immediately (before first render)
+// so non-English users get their translations with minimal fallback flash.
+try {
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('language') : null;
+  const code = stored ? LANGUAGE_MAP[stored] : undefined;
+  if (code && code !== 'en') void loadLanguage(code);
+} catch {
+  // Storage unavailable — English fallback stays in place.
+}
