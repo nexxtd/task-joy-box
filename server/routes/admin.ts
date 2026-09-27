@@ -1,10 +1,11 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications } from '../../shared/schema.js';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts } from '../../shared/schema.js';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { invalidateSettingCache, getSettingNumber } from '../lib/settings.js';
+import { sendEmail } from '../lib/email.js';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
@@ -941,6 +942,224 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
   } catch (error) {
     console.error('Failed to fetch full user details:', error);
     res.status(500).json({ error: 'Failed to fetch user details' });
+  }
+});
+
+// ---- BULK EMAIL / BROADCAST (admin only) ----
+// Audience variables: tier (free/pro/premium), status (active/inactive/trialing),
+// verified (verified/unverified), activeWithin (7d/30d/inactive_30d), search (name/email).
+// Message supports {{name}}, {{first_name}}, {{email}}, {{tier}}, {{status}}.
+
+const BROADCAST_CAP = 2000;
+
+function normalizeAudience(input: any) {
+  const tier = typeof input?.tier === 'string' ? input.tier.toLowerCase() : 'all';
+  const status = typeof input?.status === 'string' ? input.status.toLowerCase() : 'all';
+  const verified = typeof input?.verified === 'string' ? input.verified.toLowerCase() : 'all';
+  const activeWithin = typeof input?.activeWithin === 'string' ? input.activeWithin.toLowerCase() : 'all';
+  const search = typeof input?.search === 'string' ? input.search.trim().slice(0, 100) : '';
+  return {
+    tier: ['all', 'free', 'pro', 'premium'].includes(tier) ? tier : 'all',
+    status: ['all', 'active', 'inactive', 'trialing'].includes(status) ? status : 'all',
+    verified: ['all', 'verified', 'unverified'].includes(verified) ? verified : 'all',
+    activeWithin: ['all', '7d', '30d', 'inactive_30d'].includes(activeWithin) ? activeWithin : 'all',
+    search,
+  };
+}
+
+function audienceConditions(f: ReturnType<typeof normalizeAudience>) {
+  const conds: any[] = [];
+  if (f.tier !== 'all') conds.push(eq(users.subscriptionTier, f.tier));
+  if (f.status !== 'all') conds.push(eq(users.subscriptionStatus, f.status));
+  if (f.verified === 'verified') conds.push(eq(users.emailVerified, true));
+  if (f.verified === 'unverified') conds.push(eq(users.emailVerified, false));
+  if (f.activeWithin === '7d') conds.push(sql`last_active_at >= NOW() - INTERVAL '7 days'`);
+  if (f.activeWithin === '30d') conds.push(sql`last_active_at >= NOW() - INTERVAL '30 days'`);
+  if (f.activeWithin === 'inactive_30d') conds.push(sql`(last_active_at IS NULL OR last_active_at < NOW() - INTERVAL '30 days')`);
+  if (f.search) {
+    const like = `%${f.search.replace(/[%_\\]/g, '')}%`;
+    conds.push(sql`(users.name ILIKE ${like} OR users.email ILIKE ${like})`);
+  }
+  return conds;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderTemplate(tpl: string, u: { name: string; email: string; tier: string; status: string }): string {
+  const firstName = (u.name || '').trim().split(/\s+/)[0] || u.name || 'there';
+  return tpl.replace(/\{\{\s*(name|first_name|firstname|email|tier|plan|status)\s*\}\}/gi, (m, key) => {
+    const k = String(key).toLowerCase();
+    if (k === 'name') return u.name || 'there';
+    if (k === 'first_name' || k === 'firstname') return firstName;
+    if (k === 'email') return u.email || '';
+    if (k === 'tier' || k === 'plan') return u.tier || 'free';
+    if (k === 'status') return u.status || '';
+    return m;
+  });
+}
+
+function broadcastHtml(recipientName: string, messageText: string): string {
+  const safeName = escapeHtml(recipientName || 'there');
+  const body = escapeHtml(messageText).replace(/\n/g, '<br>');
+  return `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#111">`
+    + `<p style="font-size:15px;margin:0 0 12px">Hi ${safeName},</p>`
+    + `<div style="font-size:14px;line-height:1.65;white-space:normal">${body}</div>`
+    + `<p style="font-size:11px;color:#999;margin-top:24px;border-top:1px solid #eee;padding-top:12px">You receive this because you have an account with us. Manage email preferences in Settings → Notifications.</p>`
+    + `</div>`;
+}
+
+async function fetchAudience(f: ReturnType<typeof normalizeAudience>, limit = BROADCAST_CAP) {
+  const conds = audienceConditions(f);
+  const rows = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    tier: users.subscriptionTier,
+    status: users.subscriptionStatus,
+  }).from(users).where(conds.length ? and(...conds) : undefined).orderBy(desc(users.createdAt)).limit(limit);
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name || '',
+    email: r.email || '',
+    tier: (r.tier || 'free').toLowerCase(),
+    status: (r.status || 'inactive').toLowerCase(),
+  }));
+}
+
+// Preview counts + sample for the admin UI
+router.get('/email-audience', async (req: AuthRequest, res: Response) => {
+  try {
+    const f = normalizeAudience(req.query);
+    const recipients = await fetchAudience(f, BROADCAST_CAP);
+    const breakdown: Record<string, number> = { free: 0, pro: 0, premium: 0 };
+    for (const r of recipients) {
+      if (r.tier in breakdown) breakdown[r.tier]++;
+      else breakdown[r.tier] = (breakdown[r.tier] || 0) + 1;
+    }
+    res.json({
+      filter: f,
+      total: recipients.length,
+      capped: recipients.length >= BROADCAST_CAP,
+      breakdown,
+      sample: recipients.slice(0, 10),
+    });
+  } catch (error) {
+    console.error('Failed to fetch email audience:', error);
+    res.status(500).json({ error: 'Failed to fetch audience' });
+  }
+});
+
+// Recent broadcasts (history)
+router.get('/broadcasts', async (req: AuthRequest, res: Response) => {
+  try {
+    const rows = await db.select().from(emailBroadcasts).orderBy(desc(emailBroadcasts.createdAt)).limit(20);
+    res.json(rows);
+  } catch (error) {
+    // Table may not exist yet on older DBs — return empty instead of failing the dashboard
+    console.error('Failed to fetch broadcasts:', error);
+    res.json([]);
+  }
+});
+
+// Send a test email to a single address (resolves variables against first matching user)
+router.post('/broadcast-test', async (req: AuthRequest, res: Response) => {
+  try {
+    const f = normalizeAudience(req.body);
+    const { subject, message, testEmail } = req.body || {};
+    if (!testEmail || typeof testEmail !== 'string' || !testEmail.includes('@')) {
+      return res.status(400).json({ error: 'Valid testEmail required' });
+    }
+    if (!subject || typeof subject !== 'string' || !subject.trim()) {
+      return res.status(400).json({ error: 'Subject required' });
+    }
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message required' });
+    }
+    const recipients = await fetchAudience(f, 1);
+    const sample = recipients[0] || { name: 'there', email: testEmail, tier: 'free', status: '' };
+    const resolvedSubject = renderTemplate(subject.slice(0, 200), sample as any);
+    const resolvedMessage = renderTemplate(message.slice(0, 20000), sample as any);
+    const ok = await sendEmail({
+      to: testEmail.trim(),
+      subject: resolvedSubject,
+      html: broadcastHtml(sample.name, resolvedMessage),
+      text: `Hi ${sample.name},\n\n${resolvedMessage}`,
+    });
+    if (!ok) return res.status(500).json({ error: 'Failed to send test email — check email provider settings' });
+    res.json({ success: true, sentTo: testEmail.trim() });
+  } catch (error) {
+    console.error('Failed to send test broadcast:', error);
+    res.status(500).json({ error: 'Failed to send test email' });
+  }
+});
+
+// Send bulk email to the whole filtered audience
+router.post('/broadcast-email', async (req: AuthRequest, res: Response) => {
+  try {
+    const f = normalizeAudience(req.body);
+    const { subject, message } = req.body || {};
+    if (!subject || typeof subject !== 'string' || !subject.trim()) {
+      return res.status(400).json({ error: 'Subject required' });
+    }
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message required' });
+    }
+    if (subject.length > 200) return res.status(400).json({ error: 'Subject too long (max 200 chars)' });
+    if (message.length > 20000) return res.status(400).json({ error: 'Message too long (max 20000 chars)' });
+
+    const recipients = await fetchAudience(f, BROADCAST_CAP);
+    if (recipients.length === 0) return res.status(400).json({ error: 'No users match this audience' });
+
+    let sent = 0;
+    const failures: string[] = [];
+    for (const r of recipients) {
+      if (!r.email || !r.email.includes('@')) { failures.push(`${r.name || r.id}: invalid email`); continue; }
+      try {
+        const resolvedSubject = renderTemplate(subject.trim(), r);
+        const resolvedMessage = renderTemplate(message.trim(), r);
+        const ok = await sendEmail({
+          to: r.email,
+          subject: resolvedSubject,
+          html: broadcastHtml(r.name, resolvedMessage),
+          text: `Hi ${r.name || 'there'},\n\n${resolvedMessage}`,
+        });
+        if (ok) sent++;
+        else failures.push(r.email);
+      } catch (e: any) {
+        failures.push(`${r.email}: ${e?.message || 'send failed'}`);
+      }
+    }
+
+    // Record history (best effort)
+    let broadcastId: number | null = null;
+    try {
+      const [row] = await db.insert(emailBroadcasts).values({
+        subject: subject.trim().slice(0, 200),
+        message: message.trim().slice(0, 20000),
+        audienceFilter: JSON.stringify(f),
+        recipientCount: recipients.length,
+        sentCount: sent,
+        failedCount: recipients.length - sent,
+        createdBy: req.userId || null,
+      } as any).returning({ id: emailBroadcasts.id });
+      broadcastId = (row as any)?.id ?? null;
+    } catch (e) {
+      console.error('Failed to record broadcast history:', e);
+    }
+
+    res.json({
+      success: true,
+      broadcastId,
+      total: recipients.length,
+      sent,
+      failed: recipients.length - sent,
+      failures: failures.slice(0, 20),
+    });
+  } catch (error) {
+    console.error('Failed to send broadcast:', error);
+    res.status(500).json({ error: 'Failed to send broadcast' });
   }
 });
 

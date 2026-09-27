@@ -5,7 +5,7 @@ import {
   Trash2, Plus, Activity, X, Target, CheckSquare, BarChart3,
   MessageSquare, ChevronDown, ChevronUp, ChevronRight, Send, Loader2, BookOpen,
   Zap, User, LayoutDashboard, Sparkles, Tag, Gift, Star, Heart, Rocket, Crown,
-  Trophy, Package, Save, Globe, Eye, Settings,
+  Trophy, Package, Save, Globe, Eye, Settings, Mail,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -332,7 +332,7 @@ const AUTO_MSG_TEMPLATES: Record<string, (v: { userName: string; ticketType: str
 };
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'users' | 'tickets' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'users' | 'tickets' | 'settings' | 'emails'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponGroups, setCouponGroups] = useState<CouponGroup[]>([]);
@@ -731,6 +731,129 @@ const AdminDashboard = () => {
   // Users tab full page view
   const [activeUserView, setActiveUserView] = useState<any | null>(null);
 
+  // Bulk email / broadcast state (admin only)
+  const [bTier, setBTier] = useState<string>('all');
+  const [bStatus, setBStatus] = useState<string>('all');
+  const [bVerified, setBVerified] = useState<string>('all');
+  const [bActiveWithin, setBActiveWithin] = useState<string>('all');
+  const [bSearch, setBSearch] = useState<string>('');
+  const [bAudience, setBAudience] = useState<{ total: number; breakdown: Record<string, number>; sample: any[]; capped?: boolean } | null>(null);
+  const [bAudienceLoading, setBAudienceLoading] = useState(false);
+  const [bSubject, setBSubject] = useState('');
+  const [bMessage, setBMessage] = useState('Hi {{name}},\n\n');
+  const [bTestEmail, setBTestEmail] = useState('');
+  const [bSending, setBSending] = useState(false);
+  const [bTesting, setBTesting] = useState(false);
+  const [bResult, setBResult] = useState<any | null>(null);
+  const [bHistory, setBHistory] = useState<any[]>([]);
+
+  const fetchAudience = async () => {
+    setBAudienceLoading(true);
+    try {
+      const q = new URLSearchParams({ tier: bTier, status: bStatus, verified: bVerified, activeWithin: bActiveWithin, search: bSearch });
+      const res = await fetch(`/api/admin/email-audience?${q.toString()}`, { credentials: 'include' });
+      if (res.ok) setBAudience(await res.json());
+    } catch {} finally {
+      setBAudienceLoading(false);
+    }
+  };
+
+  const fetchBroadcasts = async () => {
+    try {
+      const res = await fetch('/api/admin/broadcasts', { credentials: 'include' });
+      if (res.ok) setBHistory(await res.json());
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (activeTab === 'emails') { fetchAudience(); fetchBroadcasts(); }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'emails') return;
+    const t = setTimeout(fetchAudience, 400);
+    return () => clearTimeout(t);
+  }, [bTier, bStatus, bVerified, bActiveWithin, bSearch]);
+
+  const insertVariable = (v: string) => {
+    setBMessage(prev => (prev || '') + v);
+  };
+
+  const previewMessage = (tpl: string) => {
+    const s = bAudience?.sample?.[0] || { name: 'Alex', email: 'alex@example.com', tier: bTier === 'all' ? 'pro' : bTier, status: 'active' };
+    return tpl.replace(/\{\{\s*(name|first_name|firstname|email|tier|plan|status)\s*\}\}/gi, (_m, key) => {
+      const k = String(key).toLowerCase();
+      if (k === 'name') return s.name || 'Alex';
+      if (k === 'first_name' || k === 'firstname') return String(s.name || 'Alex').split(/\s+/)[0];
+      if (k === 'email') return s.email || 'alex@example.com';
+      if (k === 'tier' || k === 'plan') return s.tier || 'pro';
+      if (k === 'status') return s.status || 'active';
+      return _m;
+    });
+  };
+
+  const handleSendTest = async () => {
+    if (!bTestEmail.includes('@')) {
+      toast({ title: 'Error', description: 'Enter a valid test email first', variant: 'destructive' });
+      return;
+    }
+    if (!bSubject.trim() || !bMessage.trim()) {
+      toast({ title: 'Error', description: 'Subject and message are required', variant: 'destructive' });
+      return;
+    }
+    setBTesting(true);
+    try {
+      const res = await fetch('/api/admin/broadcast-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tier: bTier, status: bStatus, verified: bVerified, activeWithin: bActiveWithin, search: bSearch, subject: bSubject, message: bMessage, testEmail: bTestEmail.trim() }),
+      });
+      const d = await res.json();
+      if (res.ok) toast({ title: 'Test sent', description: `Preview sent to ${bTestEmail.trim()}` });
+      else toast({ title: 'Error', description: d.error || 'Failed to send test', variant: 'destructive' });
+    } catch {
+      toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
+    } finally {
+      setBTesting(false);
+    }
+  };
+
+  const handleSendBroadcast = async () => {
+    if (!bSubject.trim() || !bMessage.trim()) {
+      toast({ title: 'Error', description: 'Subject and message are required', variant: 'destructive' });
+      return;
+    }
+    const total = bAudience?.total || 0;
+    if (total === 0) {
+      toast({ title: 'Error', description: 'No users match this audience', variant: 'destructive' });
+      return;
+    }
+    if (!confirm(`Send this email to ${total} user${total === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    setBSending(true);
+    setBResult(null);
+    try {
+      const res = await fetch('/api/admin/broadcast-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tier: bTier, status: bStatus, verified: bVerified, activeWithin: bActiveWithin, search: bSearch, subject: bSubject, message: bMessage }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setBResult(d);
+        toast({ title: 'Broadcast sent', description: `Sent to ${d.sent}/${d.total}` });
+        fetchBroadcasts();
+      } else {
+        toast({ title: 'Error', description: d.error || 'Failed to send broadcast', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Server error', variant: 'destructive' });
+    } finally {
+      setBSending(false);
+    }
+  };
+
   const fetchTickets = async () => {
     try {
       const res = await fetch('/api/admin/tickets', { credentials: 'include' });
@@ -1027,7 +1150,7 @@ if (loading && !stats) {
           </div>
         </div>
         <div className="flex items-center gap-1 bg-muted p-1 rounded-xl flex-shrink-0 overflow-x-auto scrollbar-none max-w-[60vw] sm:max-w-none">
-          {(['overview', 'coupons', 'users', 'tickets', 'settings'] as const).map(tab => (
+          {(['overview', 'coupons', 'users', 'tickets', 'emails', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1525,6 +1648,189 @@ if (loading && !stats) {
                     <p className="text-sm">No tickets match the selected filters.</p>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'emails' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="rounded-2xl bg-card border border-border p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-blue) / 0.12)' }}>
+                  <Mail className="w-4 h-4" style={{ color: 'hsl(var(--label-blue))' }} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold">Bulk Email</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Admin only — send an email to everyone matching a variable, e.g. all Pro users. Variables are resolved per recipient.</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-2xl font-bold">{bAudienceLoading ? '…' : (bAudience?.total ?? '—')}</p>
+                  <p className="text-[11px] text-muted-foreground">recipients{bAudience?.capped ? ' (capped at 2000)' : ''}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rounded-2xl bg-card border border-border p-6 space-y-4">
+                <h3 className="text-sm font-bold">1 · Audience</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Plan / Tier</label>
+                    <Select value={bTier} onValueChange={setBTier}>
+                      <SelectTrigger className="w-full mt-1 bg-background border border-border rounded-xl text-sm h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All plans</SelectItem>
+                        <SelectItem value="free">Free</SelectItem>
+                        <SelectItem value="pro">Pro</SelectItem>
+                        <SelectItem value="premium">Premium</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Subscription status</label>
+                    <Select value={bStatus} onValueChange={setBStatus}>
+                      <SelectTrigger className="w-full mt-1 bg-background border border-border rounded-xl text-sm h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any status</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="trialing">Trialing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Email verified</label>
+                    <Select value={bVerified} onValueChange={setBVerified}>
+                      <SelectTrigger className="w-full mt-1 bg-background border border-border rounded-xl text-sm h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Anyone</SelectItem>
+                        <SelectItem value="verified">Verified only</SelectItem>
+                        <SelectItem value="unverified">Unverified only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Activity</label>
+                    <Select value={bActiveWithin} onValueChange={setBActiveWithin}>
+                      <SelectTrigger className="w-full mt-1 bg-background border border-border rounded-xl text-sm h-10"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any activity</SelectItem>
+                        <SelectItem value="7d">Active in last 7 days</SelectItem>
+                        <SelectItem value="30d">Active in last 30 days</SelectItem>
+                        <SelectItem value="inactive_30d">Inactive 30+ days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Search name / email (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. gmail.com or Alex"
+                    value={bSearch}
+                    onChange={e => setBSearch(e.target.value)}
+                    className="w-full mt-1 bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  />
+                </div>
+                {bAudience && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-1 rounded-full bg-muted font-semibold">Free: {bAudience.breakdown.free || 0}</span>
+                    <span className="px-2 py-1 rounded-full bg-primary/10 text-primary font-semibold">Pro: {bAudience.breakdown.pro || 0}</span>
+                    <span className="px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 font-semibold">Premium: {bAudience.breakdown.premium || 0}</span>
+                    <button onClick={fetchAudience} className="ml-auto text-muted-foreground hover:text-foreground">Refresh</button>
+                  </div>
+                )}
+                {bAudience && bAudience.sample.length > 0 && (
+                  <div className="text-xs text-muted-foreground space-y-1 border-t border-border pt-3">
+                    <p className="font-bold text-foreground">Sample recipients</p>
+                    {bAudience.sample.slice(0, 5).map((s: any) => (
+                      <p key={s.id} className="truncate">{s.name || '—'} · {s.email} · <span className="uppercase">{s.tier}</span></p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl bg-card border border-border p-6 space-y-4">
+                <h3 className="text-sm font-bold">2 · Message</h3>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Subject</label>
+                  <input
+                    type="text"
+                    maxLength={200}
+                    placeholder="e.g. New Pro feature is live 🎉"
+                    value={bSubject}
+                    onChange={e => setBSubject(e.target.value)}
+                    className="w-full mt-1 bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Variables — click to insert</label>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {['{{name}}', '{{first_name}}', '{{email}}', '{{tier}}', '{{status}}'].map(v => (
+                      <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-1 rounded-lg bg-muted text-xs font-mono hover:bg-primary/10 hover:text-primary transition-colors">{v}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Message (plain text, line breaks kept)</label>
+                  <textarea
+                    rows={7}
+                    maxLength={20000}
+                    placeholder={'Hi {{name}},\n\nWe just shipped something for {{tier}} users...'}
+                    value={bMessage}
+                    onChange={e => setBMessage(e.target.value)}
+                    className="w-full mt-1 bg-background border border-input rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-y"
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">{bMessage.length}/20000</p>
+                </div>
+                <div className="rounded-xl bg-muted/40 border border-border p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">Preview (first recipient)</p>
+                  <p className="text-sm font-semibold">{previewMessage(bSubject) || <span className="text-muted-foreground font-normal">Subject…</span>}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{previewMessage(bMessage) || 'Message…'}</p>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    placeholder="Test email (you)"
+                    value={bTestEmail}
+                    onChange={e => setBTestEmail(e.target.value)}
+                    className="flex-1 bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  />
+                  <button onClick={handleSendTest} disabled={bTesting} className="px-4 py-2.5 bg-muted rounded-xl text-sm font-semibold hover:bg-muted/80 disabled:opacity-50 flex items-center gap-1.5">
+                    {bTesting ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Test
+                  </button>
+                </div>
+                <button
+                  onClick={handleSendBroadcast}
+                  disabled={bSending || !bAudience || bAudience.total === 0}
+                  className="w-full px-4 py-3 bg-primary text-primary-foreground rounded-xl text-sm font-bold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {bSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {bSending ? 'Sending…' : `Send to ${bAudience?.total || 0} user${(bAudience?.total || 0) === 1 ? '' : 's'}`}
+                </button>
+                {bResult && (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm">
+                    <p className="font-bold text-emerald-600">Sent {bResult.sent}/{bResult.total}</p>
+                    {bResult.failed > 0 && <p className="text-xs text-muted-foreground mt-1">Failed: {bResult.failed}{bResult.failures?.length ? ` (${bResult.failures.slice(0, 3).join(', ')})` : ''}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {bHistory.length > 0 && (
+              <div className="rounded-2xl bg-card border border-border overflow-hidden">
+                <div className="px-6 py-4 border-b border-border"><h3 className="text-sm font-bold">Recent broadcasts</h3></div>
+                <div className="divide-y divide-border">
+                  {bHistory.map((h: any) => (
+                    <div key={h.id} className="px-6 py-3 flex items-center gap-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold truncate">{h.subject}</p>
+                        <p className="text-xs text-muted-foreground">{h.createdAt ? format(new Date(h.createdAt), 'MMM d, HH:mm') : ''} · {h.sentCount}/{h.recipientCount} sent{h.failedCount ? ` · ${h.failedCount} failed` : ''}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

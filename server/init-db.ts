@@ -903,6 +903,23 @@ export async function initDatabase() {
     // is the persistent source of truth served by GET /api/attachments/file/:id.
     await addColumnIfNotExists('task_attachments', 'file_data', 'TEXT');
 
+    // --- EMAIL BROADCASTS (admin bulk email history) ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS email_broadcasts (
+        id SERIAL PRIMARY KEY,
+        subject TEXT NOT NULL,
+        message TEXT NOT NULL,
+        audience_filter TEXT,
+        recipient_count INTEGER DEFAULT 0 NOT NULL,
+        sent_count INTEGER DEFAULT 0 NOT NULL,
+        failed_count INTEGER DEFAULT 0 NOT NULL,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS email_broadcasts_created_at_idx ON email_broadcasts(created_at);`).catch(() => {});
+    console.log('Email broadcasts table verified');
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are
     // needed. Enabling RLS without permissive policies satisfies the linter

@@ -781,3 +781,16 @@ export const documents = pgTable('documents', {
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
+
+// --- EMAIL BROADCASTS (admin bulk email history) ---
+export const emailBroadcasts = pgTable('email_broadcasts', {
+  id: serial('id').primaryKey(),
+  subject: text('subject').notNull(),
+  message: text('message').notNull(),
+  audienceFilter: text('audience_filter'),
+  recipientCount: integer('recipient_count').default(0).notNull(),
+  sentCount: integer('sent_count').default(0).notNull(),
+  failedCount: integer('failed_count').default(0).notNull(),
+  createdBy: integer('created_by').references(() => users.id),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});

@@ -37,8 +37,14 @@ function getTransporter(): nodemailer.Transporter | null {
   return null;
 }
 
+export const DEFAULT_FROM = 'MyPlanner <noreply@myplanner.com>';
+
+export function getEmailFrom(): string {
+  return process.env.EMAIL_FROM || process.env.SMTP_USER || DEFAULT_FROM;
+}
+
 export async function sendEmail(opts: SendEmailOpts): Promise<boolean> {
-  const configuredFrom = process.env.EMAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
+  const configuredFrom = getEmailFrom();
   const resendKey = process.env.RESEND_API_KEY;
 
   async function sendViaResend(from: string): Promise<{ ok: boolean; error?: string }> {
@@ -67,16 +73,27 @@ export async function sendEmail(opts: SendEmailOpts): Promise<boolean> {
     if (result.ok) return true;
     console.error('[email:resend] failed', result.error);
 
-    // Common cause: EMAIL_FROM uses an unverified domain / gmail address.
-    // Resend testing keys can only send from onboarding@resend.dev.
-    // Retry once with the Resend test sender so 2FA / verification still works.
+    // NOTE: We intentionally do NOT silently fall back to onboarding@resend.dev.
+    // That fallback is what caused weekly summaries (and all other mail) to
+    // arrive from "onboarding@resend.dev" even when EMAIL_FROM was set to a
+    // branded address. Resend rejects unverified / gmail senders, so falling
+    // back just masks the misconfiguration.
+    // To send from MyPlanner, verify myplanner.com in Resend (Domains →
+    // Add domain → add the DNS records) and set EMAIL_FROM to an address on
+    // that domain, e.g. EMAIL_FROM="MyPlanner <noreply@myplanner.com>".
+    // Opt-in test fallback (dev only): set ALLOW_RESEND_TEST_FALLBACK=true to
+    // retry once via the Resend test sender.
     const needsFallback =
       result.error?.includes('verify a domain') ||
       result.error?.includes('testing emails') ||
       result.error?.includes('Domain not verified') ||
       result.error?.includes('not verified');
     const fallbackFrom = 'onboarding@resend.dev';
-    if (needsFallback && configuredFrom !== fallbackFrom) {
+    if (
+      needsFallback &&
+      configuredFrom !== fallbackFrom &&
+      process.env.ALLOW_RESEND_TEST_FALLBACK === 'true'
+    ) {
       console.log(`[email:resend] retrying with fallback sender ${fallbackFrom} (fix: verify a domain in Resend and set EMAIL_FROM)`);
       result = await sendViaResend(fallbackFrom);
       if (result.ok) return true;
