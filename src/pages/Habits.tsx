@@ -864,9 +864,11 @@ const Tasks: React.FC = () => {
       activeSorted = [...active].sort(sortByDue);
     } else if (orderedActiveIds.length > 0) {
       const idSet = new Set(active.map(t => t.id));
-      const ordered = orderedActiveIds.filter(id => idSet.has(id));
-      const unordered = active.filter(t => !orderedActiveIds.includes(t.id));
-      const orderedTasks = ordered.map(id => active.find(t => t.id === id)!).filter(Boolean);
+      const orderedIds = orderedActiveIds.filter(id => idSet.has(id));
+      const orderedSet = new Set(orderedIds);
+      const byId = new Map(active.map(t => [t.id, t] as const));
+      const orderedTasks = orderedIds.map(id => byId.get(id)!).filter(Boolean);
+      const unordered = active.filter(t => !orderedSet.has(t.id));
       activeSorted = [...orderedTasks, ...unordered];
     } else {
       activeSorted = [...active].sort(sortByPriorityOrder);
@@ -4101,7 +4103,6 @@ export const TaskDropdownExpanded: React.FC<{
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -4289,8 +4290,8 @@ export const TaskDropdownExpanded: React.FC<{
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -4770,7 +4771,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <DraggableImageGrid
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                   />
                 )}
               </>
@@ -4858,7 +4859,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -5162,8 +5162,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -5818,7 +5818,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                 />
               )}
                 </>

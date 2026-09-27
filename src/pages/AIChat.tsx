@@ -56,7 +56,7 @@ function loadChats(key: string): Chat[] {
 
 const AIChat: React.FC = () => {
   const { user } = useAuth();
-  const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const isPro = user?.subscriptionTier === 'pro';
 
   const {
     board, addTask, updateTask, deleteTask, moveTask,
@@ -80,7 +80,7 @@ const AIChat: React.FC = () => {
   // Load chats once. Reopen the last conversation (or the most recently
   // updated one) so nothing looks lost after switching pages.
   useEffect(() => {
-    if (!isPaid || didLoad.current) return;
+    if (!isPro || didLoad.current) return;
     didLoad.current = true;
     const loaded = loadChats(storageKey);
     setChats(loaded);
@@ -93,7 +93,7 @@ const AIChat: React.FC = () => {
     setActiveChatId(resumeId);
     setEphemeral([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPaid, storageKey, user?.id]);
+  }, [isPro, storageKey, user?.id]);
 
   // Every chat mutation is saved to localStorage synchronously so nothing is
   // ever lost on remount, navigation, or refresh.
@@ -424,7 +424,7 @@ const AIChat: React.FC = () => {
     });
   };
 
-  if (!isPaid) {
+  if (!isPro) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in bg-background/50">
         <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-8 border border-primary/10 shadow-xl">

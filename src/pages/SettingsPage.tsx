@@ -97,6 +97,7 @@ const SettingsPage: React.FC = () => {
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarRedirectUri, setCalendarRedirectUri] = useState('');
   const [syncStatus, setSyncStatus] = useState<{ synced: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState('');
   const [syncSuccess, setSyncSuccess] = useState('');
@@ -104,8 +105,8 @@ const SettingsPage: React.FC = () => {
   const [deepFocusSessions, setDeepFocusSessions] = useState<any[]>([]);
   const [deepFocusLoading, setDeepFocusLoading] = useState(false);
   const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isTopTier = user?.subscriptionTier === 'premium';
-  const isMidTier = user?.subscriptionTier === 'pro';
+  const isTopTier = user?.subscriptionTier === 'pro';
+  const isMidTier = user?.subscriptionTier === 'premium';
 
   const [userTickets, setUserTickets] = useState<TicketData[]>([]);
   const [hasTickets, setHasTickets] = useState(false);
@@ -272,6 +273,7 @@ const SettingsPage: React.FC = () => {
     if (params.get('calendarError')) {
       setSyncError(`Connection error: ${params.get('calendarError')}`);
       setActiveSection('calendar');
+      fetchCalendarStatus();
       window.history.replaceState({}, '', '/settings');
     }
   }, []);
@@ -282,6 +284,7 @@ const SettingsPage: React.FC = () => {
       const data = await res.json();
       setCalendarConnected(data.connected);
       setCalendarConfigured(data.configured);
+      if (data.redirectUri) setCalendarRedirectUri(data.redirectUri);
     } catch {}
   };
 
@@ -291,6 +294,7 @@ const SettingsPage: React.FC = () => {
     try {
       const res = await fetch('/api/calendar/auth', { credentials: 'include' });
       const data = await res.json();
+      if (data.redirectUri) setCalendarRedirectUri(data.redirectUri);
       if (data.authUrl) {
         window.location.href = data.authUrl;
       } else {
@@ -826,7 +830,7 @@ const SettingsPage: React.FC = () => {
                 </div>
                 {!isTopTier && (
                   <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Pro Feature � upgrade to unlock weekly AI emails
+                    <Sparkles className="w-3 h-3" /> Pro Feature upgrade to unlock weekly AI emails
                   </p>
                 )}
               </div>
@@ -845,8 +849,33 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {syncError && (
-                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-xl px-4 py-3">
-                  {syncError}
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-xl px-4 py-3 space-y-2">
+                  <p>
+                    {syncError.includes('redirect_uri_mismatch')
+                      ? 'Google rejected the redirect URI (Error 400: redirect_uri_mismatch). The URI below must be added EXACTLY in Google Cloud Console.'
+                      : syncError}
+                  </p>
+                  {(syncError.includes('redirect_uri_mismatch') || syncError.includes('auth_failed') || syncError.includes('Connection error')) && calendarRedirectUri && (
+                    <div className="pt-1">
+                      <p className="text-xs font-medium mb-1">Add this exact Authorized redirect URI:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-xs font-mono bg-background border border-border rounded-lg px-2 py-1.5 break-all select-all">{calendarRedirectUri}</code>
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard?.writeText(calendarRedirectUri)}
+                          className="text-xs px-2 py-1.5 rounded-lg border border-border hover:bg-muted flex-shrink-0"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <ol className="text-xs mt-2 space-y-1 list-decimal list-inside opacity-90">
+                        <li>Open Google Cloud Console → APIs &amp; Services → Credentials → your OAuth 2.0 Client ID.</li>
+                        <li>Under “Authorized redirect URIs” click Add URI and paste the value above exactly (https, no trailing slash).</li>
+                        <li>Save, wait ~5 minutes, then try Connect again.</li>
+                        <li>If the app is in Testing mode, also add your Gmail under OAuth consent screen → Test users.</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -937,6 +966,22 @@ const SettingsPage: React.FC = () => {
                     To enable Google Calendar sync, add <code className="font-mono">GOOGLE_CLIENT_SECRET</code> to your environment secrets.
                   </div>
                 )}
+
+                {calendarRedirectUri && !calendarConnected && (
+                  <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+                    <p className="font-medium text-foreground mb-1">Google Cloud Console must list this redirect URI exactly:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 font-mono break-all select-all">{calendarRedirectUri}</code>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard?.writeText(calendarRedirectUri)}
+                        className="px-2 py-1 rounded-md border border-border hover:bg-muted flex-shrink-0"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -946,7 +991,7 @@ const SettingsPage: React.FC = () => {
               <div className="bg-card border border-border rounded-2xl p-6">
                 <h2 className="text-lg font-bold text-foreground mb-2">Energy Levels</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Log how you're feeling at three daily checks � 8:00am, 12:00pm and 4:00pm.
+                  Log how you're feeling at three daily checks 8:00am, 12:00pm and 4:00pm.
                   Each answer is saved to your energy history, which MyPlanner uses to build your
                   energy profile: your peak hours, how consistent your energy is day to day, and
                   recommendations for scheduling demanding tasks during your high-energy periods
@@ -974,8 +1019,8 @@ const SettingsPage: React.FC = () => {
                       <p className="text-xs text-muted-foreground">
                         {isPaid
                           ? energyTrackerEnabled
-                            ? 'Pop-ups are enabled � log your energy at each check'
-                            : 'Pop-ups are paused � they resume at the next due slot'
+                            ? 'Pop-ups are enabled log your energy at each check'
+                            : 'Pop-ups are paused they resume at the next due slot'
                           : 'Upgrade to log your energy and unlock insights'}
                       </p>
                     </div>
@@ -1111,7 +1156,7 @@ const SettingsPage: React.FC = () => {
                     <p className="text-sm font-semibold text-foreground">{user?.name}</p>
                     <p className="text-xs text-muted-foreground">{user?.email}</p>
                     <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">
-                      {user?.subscriptionTier === 'free' ? 'Free Plan' : user?.subscriptionTier === 'pro' ? 'Premium Plan' : user?.subscriptionTier === 'premium' ? 'Pro Plan' : 'Free Plan'}
+                      {user?.subscriptionTier === 'free' ? 'Free Plan' : user?.subscriptionTier === 'pro' ? 'Pro Plan' : user?.subscriptionTier === 'premium' ? 'Premium Plan' : 'Free Plan'}
                     </span>
                   </div>
                 </div>

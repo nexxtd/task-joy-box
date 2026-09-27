@@ -863,9 +863,11 @@ const Tasks: React.FC = () => {
       activeSorted = [...active].sort(sortByDue);
     } else if (orderedActiveIds.length > 0) {
       const idSet = new Set(active.map(t => t.id));
-      const ordered = orderedActiveIds.filter(id => idSet.has(id));
-      const unordered = active.filter(t => !orderedActiveIds.includes(t.id));
-      const orderedTasks = ordered.map(id => active.find(t => t.id === id)!).filter(Boolean);
+      const orderedIds = orderedActiveIds.filter(id => idSet.has(id));
+      const orderedSet = new Set(orderedIds);
+      const byId = new Map(active.map(t => [t.id, t] as const));
+      const orderedTasks = orderedIds.map(id => byId.get(id)!).filter(Boolean);
+      const unordered = active.filter(t => !orderedSet.has(t.id));
       activeSorted = [...orderedTasks, ...unordered];
     } else {
       activeSorted = [...active].sort(sortByPriorityOrder);
@@ -1353,24 +1355,21 @@ const Tasks: React.FC = () => {
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    // A task/note assigned to a project MUST live in one of that project's columns,
-    // otherwise the project board (which filters by both projectId AND column.projectId)
-    // will never show it.
+    // Notes assigned to a project are grouped by projectId on the Notes page
+    // (notes without a matching project column show as uncategorized), so fall
+    // back to any available column instead of silently aborting when the notes
+    // board has no column for this project yet.
     let targetColumnId = newTaskColumnId;
     if (newTaskProjectId !== '') {
       const projCols = board.columns
         .filter(col => (col as any).projectId === Number(newTaskProjectId))
         .sort((a, b) => a.order - b.order);
       if (!targetColumnId || !projCols.some(c => c.id === targetColumnId)) {
-        targetColumnId = projCols[0]?.id ?? '';
+        targetColumnId = projCols[0]?.id ?? board.columns[0]?.id ?? '';
       }
     }
     if (!targetColumnId) targetColumnId = board.columns[0]?.id;
     if (!targetColumnId) return;
-    if (newTaskProjectId !== '') {
-      const col = board.columns.find(c => c.id === targetColumnId);
-      if (!col || (col as any).projectId !== Number(newTaskProjectId)) return;
-    }
 
     const taskId = crypto.randomUUID();
     const checklistItems = newChecklistItems.map(item => ({
@@ -4062,7 +4061,6 @@ export const TaskDropdownExpanded: React.FC<{
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -4250,8 +4248,8 @@ export const TaskDropdownExpanded: React.FC<{
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -4732,7 +4730,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <DraggableImageGrid
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                   />
                 )}
               </>
@@ -4820,7 +4818,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -5124,8 +5121,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -5781,7 +5778,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                 />
               )}
                 </>

@@ -786,28 +786,34 @@ const Tasks: React.FC = () => {
   const [templateEditName, setTemplateEditName] = useState('');
 
   useEffect(() => {
-    const loadProjects = async () => {
+    let cancelled = false;
+    try {
+      const raw = localStorage.getItem('projects_cache');
+      if (raw) {
+        const cached = JSON.parse(raw);
+        if (Array.isArray(cached) && !cancelled) setProjects(cached);
+      }
+    } catch { /* ignore corrupt cache */ }
+    const load = async () => {
       try {
-        const response = await fetch('/api/projects', { credentials: 'include' });
-        if (!response.ok) throw new Error(String(response.status));
-        const data = await response.json().catch(() => ({}));
-        setProjects(Array.isArray(data.projects) ? data.projects : []);
+        const [projRes, tags] = await Promise.all([
+          fetch('/api/projects', { credentials: 'include' }),
+          fetchTags().catch(() => [] as any[]),
+        ]);
+        if (cancelled) return;
+        if (projRes.ok) {
+          const data = await projRes.json().catch(() => ({}));
+          const list = Array.isArray(data.projects) ? data.projects : [];
+          setProjects(list);
+          try { localStorage.setItem('projects_cache', JSON.stringify(list)); } catch { /* quota */ }
+        }
+        setSharedTags(tags as any[]);
       } catch {
-        setProjects([]);
+        if (!cancelled) { setProjects([]); setSharedTags([]); }
       }
     };
-    loadProjects();
-  }, []);
-
-  useEffect(() => {
-    const loadSharedTags = async () => {
-      try {
-        setSharedTags(await fetchTags());
-      } catch {
-        setSharedTags([]);
-      }
-    };
-    loadSharedTags();
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const allTags = useMemo<Label[]>(() => {
@@ -867,9 +873,11 @@ const Tasks: React.FC = () => {
       activeSorted = [...active].sort(sortByDue);
     } else if (orderedActiveIds.length > 0) {
       const idSet = new Set(active.map(t => t.id));
-      const ordered = orderedActiveIds.filter(id => idSet.has(id));
-      const unordered = active.filter(t => !orderedActiveIds.includes(t.id));
-      const orderedTasks = ordered.map(id => active.find(t => t.id === id)!).filter(Boolean);
+      const orderedIds = orderedActiveIds.filter(id => idSet.has(id));
+      const orderedSet = new Set(orderedIds);
+      const byId = new Map(active.map(t => [t.id, t] as const));
+      const orderedTasks = orderedIds.map(id => byId.get(id)!).filter(Boolean);
+      const unordered = active.filter(t => !orderedSet.has(t.id));
       activeSorted = [...orderedTasks, ...unordered];
     } else {
       activeSorted = [...active].sort(sortByPriorityOrder);
@@ -4130,7 +4138,6 @@ export const TaskDropdownExpanded: React.FC<{
 
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -4318,8 +4325,8 @@ export const TaskDropdownExpanded: React.FC<{
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -4801,7 +4808,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <DraggableImageGrid
                     images={task.images}
                     onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                   />
                 )}
               </>
@@ -4889,7 +4896,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const canUseServerAttachmentApi = /^\d+$/.test(String(task.id));
   const taskRef = useRef(task);
   taskRef.current = task;
   useEffect(() => {
@@ -5193,8 +5199,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   };
 
   const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (task.attachments || []).filter(item => item.id !== attachmentId) });
-    if (canUseServerAttachmentApi && /^\d+$/.test(String(attachmentId))) {
+    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
+    if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
     }
   };
@@ -5244,11 +5250,22 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 />
               </div>
             )}
-            <input
-              className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
-              value={task.title}
-              onChange={e => onUpdateTask(task.id, { title: e.target.value })}
-            />
+            {editingTemplateMeta ? (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Task title</label>
+                <input
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                  value={task.title}
+                  onChange={e => onUpdateTask(task.id, { title: e.target.value })}
+                />
+              </div>
+            ) : (
+              <input
+                className="w-full px-1 text-2xl font-semibold text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
+                value={task.title}
+                onChange={e => onUpdateTask(task.id, { title: e.target.value })}
+              />
+            )}
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 mt-1">
             <X className="w-4 h-4" />
@@ -5851,7 +5868,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <DraggableImageGrid
                   images={task.images}
                   onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (task.images || []).filter(x => x.id !== id) }); if (canUseServerAttachmentApi && /^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
                 />
               )}
                 </>
@@ -6243,8 +6260,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <input value={editingTmplName} onChange={e => setEditingTmplName(e.target.value)} placeholder="Template name" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Title</label>
-                <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Task title" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                <label className="text-xs font-semibold text-muted-foreground mb-1 block">Task title</label>
+                <input value={editingTmplTitle} onChange={e => setEditingTmplTitle(e.target.value)} placeholder="Task title" className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>

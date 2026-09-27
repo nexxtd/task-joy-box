@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { flushSync } from 'react-dom';
-import { DragDropContext, Droppable, DropResult, Draggable } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, DropResult, Draggable, DragStart } from '@hello-pangea/dnd';
 import {
   Calendar,
   CheckCircle2,
@@ -43,7 +43,7 @@ import { toast } from '@/hooks/use-toast';
 import BoardColumn from '@/components/BoardColumn';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import ListView from '@/components/ListView';
-import { TaskFullView } from '@/pages/Tasks';
+const TaskFullView = lazy(() => import('@/pages/Tasks').then(m => ({ default: m.TaskFullView })));
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
@@ -186,44 +186,70 @@ const Projects: React.FC = () => {
     // otherwise the project board (which filters by both projectId AND
     // column.projectId) will never show them — the old code only set
     // projectId, so the toast said "Item added" but nothing appeared.
-    const projectColumns = [...sourceBoard.columns]
-      .filter(c => c.projectId === selectedProject.id)
-      .sort((a, b) => a.order - b.order);
-    let targetColumnId: string | undefined;
     if (isTask) {
+      const projectColumns = [...sourceBoard.columns]
+        .filter(c => c.projectId === selectedProject.id)
+        .sort((a, b) => a.order - b.order);
       const preferred = createModalColumnId
         ? projectColumns.find(c => c.id === createModalColumnId)
         : undefined;
-      targetColumnId = preferred?.id ?? projectColumns[0]?.id;
+      const targetColumnId = preferred?.id ?? projectColumns[0]?.id;
       if (!targetColumnId) {
         toast({ title: 'No columns yet', description: `Add a column to "${selectedProject.name}" first, then add tasks.` });
         return;
       }
-    } else {
-      const preferred = createModalColumnId
-        ? projectColumns.find(c => c.id === createModalColumnId)
-        : undefined;
-      targetColumnId = preferred?.id ?? projectColumns[0]?.id;
-    }
-    const baseOrder = targetColumnId
-      ? sourceBoard.tasks.filter(t => t.columnId === targetColumnId).length
-      : 0;
-    let idx = 0;
-    addExistingSelected.forEach(id => {
-      const task = sourceBoard.tasks.find(t => t.id === id);
-      if (!task) return;
-      // Skip tasks already correctly placed
-      if (task.projectId === selectedProject.id && (!targetColumnId || task.columnId === targetColumnId)) return;
-      const updates: Partial<Task> = { projectId: selectedProject.id, projectName: selectedProject.name };
-      if (targetColumnId && task.columnId !== targetColumnId) {
-        updates.columnId = targetColumnId;
-        updates.order = baseOrder + idx;
-        idx += 1;
+      const baseOrder = sourceBoard.tasks.filter(t => t.columnId === targetColumnId).length;
+      let applied = 0;
+      addExistingSelected.forEach(id => {
+        const task = sourceBoard.tasks.find(t => t.id === id);
+        if (!task) return;
+        // Skip tasks already correctly placed
+        if (task.projectId === selectedProject.id && task.columnId === targetColumnId) return;
+        const updates: Partial<Task> = { projectId: selectedProject.id, projectName: selectedProject.name };
+        if (task.columnId !== targetColumnId) {
+          updates.columnId = targetColumnId;
+          updates.order = baseOrder + applied;
+        }
+        update(id, updates);
+        applied += 1;
+      });
+      if (applied === 0) {
+        toast({ title: 'Already in project', description: 'Selected items are already in this project.' });
+        return;
       }
-      update(id, updates);
-    });
-    const count = addExistingSelected.size;
-    toast({ title: count > 1 ? `${count} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });
+      toast({ title: applied > 1 ? `${applied} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });
+    } else {
+      // Notes live in a separate notes board (NotesContext) while the project
+      // Board/List tabs only render the tasks board. Project columns are only
+      // created in the tasks board, so the notes board normally has no column
+      // with this projectId — requiring one would leave the note unassigned.
+      // The Notes page groups by projectId and shows notes without a matching
+      // column as uncategorized, so setting projectId is enough there. Ensure
+      // the notes board has at least one column for this project for future
+      // grouping, then assign projectId and report where to find the note.
+      const notesProjectColumns = [...notesCtx.board.columns]
+        .filter(c => (c as any).projectId === selectedProject.id)
+        .sort((a, b) => a.order - b.order);
+      if (notesProjectColumns.length === 0) {
+        const mirror = [...board.columns]
+          .filter(c => c.projectId === selectedProject.id)
+          .sort((a, b) => a.order - b.order)[0];
+        notesCtx.addColumn(mirror?.title ?? 'To Do', selectedProject.id);
+      }
+      let applied = 0;
+      addExistingSelected.forEach(id => {
+        const note = notesCtx.board.tasks.find(t => t.id === id);
+        if (!note) return;
+        if (note.projectId === selectedProject.id) return;
+        notesCtx.updateTask(id, { projectId: selectedProject.id, projectName: selectedProject.name });
+        applied += 1;
+      });
+      if (applied === 0) {
+        toast({ title: 'Already in project', description: 'Selected notes are already in this project.' });
+        return;
+      }
+      toast({ title: applied > 1 ? `${applied} notes added` : 'Note added', description: `Added to "${selectedProject.name}" — view it under Project Notes on Home or in Notes.` });
+    }
     setAddPopupOpen(false);
     setAddPopupType(null);
     setAddExistingStep(false);
@@ -352,6 +378,7 @@ const Projects: React.FC = () => {
 
   const handleBoardPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    if (document.body.classList.contains('is-dragging')) return;
     if ((e.target as HTMLElement).closest('[data-pan-enabled="true"]')) {
       // Allow panning on expanded content
     } else if ((e.target as HTMLElement).closest('[data-no-pan="true"]')) {
@@ -580,6 +607,10 @@ const Projects: React.FC = () => {
   const projectTasks = useMemo(
     () => board.tasks.filter(task => task.projectId === selectedProject?.id),
     [board.tasks, selectedProject?.id]
+  );
+  const projectNotes = useMemo(
+    () => notesCtx.board.tasks.filter(task => task.projectId === selectedProject?.id),
+    [notesCtx.board.tasks, selectedProject?.id]
   );
 
   // Load chat messages per project — only while the chat tab is open.
@@ -888,19 +919,49 @@ const Projects: React.FC = () => {
     setProjectToLeave(null);
   };
 
+  // Un-collapse a board column after a task is dropped into it (same as the
+  // Tasks page expanding the destination group on drop).
+  const expandBoardColumn = (columnId: string) => {
+    try {
+      const key = 'tasks-column-collapsed';
+      const raw = localStorage.getItem(key);
+      const map = raw ? JSON.parse(raw) : {};
+      if (map && map[columnId]?.tasks) {
+        map[columnId] = { ...map[columnId], tasks: false };
+        localStorage.setItem(key, JSON.stringify(map));
+        window.dispatchEvent(new Event('tasks-column-collapsed-change'));
+      }
+    } catch {}
+  };
+
   const handleDragEnd = (result: DropResult) => {
     document.body.classList.remove('is-dragging');
     setIsBoardDragging(false);
+    setIsTaskDragging(false);
     if (!result.destination) return;
     if (result.type === 'column') {
       reorderColumns(result.source.index, result.destination.index, selectedProject?.id);
       return;
     }
-    moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
+    const dstId = result.destination.droppableId;
+    // Drag-to-complete, same pattern as the Tasks page completed sections.
+    if (dstId.startsWith('completed-')) {
+      const colId = dstId.slice('completed-'.length);
+      const taskId = result.draggableId;
+      const activeCount = projectTasks.filter(t => t.columnId === colId && !t.completed && t.id !== taskId).length;
+      moveTask(taskId, colId, activeCount);
+      const existing = board.tasks.find(t => t.id === taskId);
+      updateTask(taskId, { columnId: colId, completed: true, completedAt: existing?.completedAt ?? new Date().toISOString() });
+      expandBoardColumn(colId);
+      return;
+    }
+    moveTask(result.draggableId, dstId, result.destination.index);
+    expandBoardColumn(dstId);
   };
 
   const [isBoardDragging, setIsBoardDragging] = useState(false);
-  const handleBoardDragStart = () => { document.body.classList.add('is-dragging'); setIsBoardDragging(true); };
+  const [isTaskDragging, setIsTaskDragging] = useState(false);
+  const handleBoardDragStart = (start: DragStart) => { document.body.classList.add('is-dragging'); setIsBoardDragging(true); setIsTaskDragging(start?.type !== 'column'); };
   const handleBoardDragUpdate = () => undefined;
 
   const updateSelectedProject = async (updates: Partial<ProjectMeta>) => {
@@ -1285,6 +1346,38 @@ const Projects: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-foreground">Project Notes ({projectNotes.length})</h3>
+          {canCreateTasks && (
+            <button onClick={openAddPopup} className="text-xs font-semibold text-primary hover:underline">
+              Add note
+            </button>
+          )}
+        </div>
+        {projectNotes.length > 0 ? (
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {projectNotes.slice(0, 20).map(note => (
+              <button
+                key={note.id}
+                onClick={() => navigate('/notes')}
+                className="w-full flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 text-left hover:bg-muted/40 transition-colors"
+              >
+                <StickyNote className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground truncate">{note.title}</p>
+                  {note.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{note.description}</p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No notes yet" description="Assign existing notes or create a new one — it will appear here and in Notes." />
+        )}
+      </div>
     </div>
   );
 
@@ -1380,6 +1473,7 @@ const Projects: React.FC = () => {
                           canEdit={canEdit}
                           boardZoom={boardZoom}
                           isDragging={isBoardDragging}
+                          isTaskDragging={isTaskDragging}
                           onAddClick={canCreateTasks ? () => {
                             setCreateModalColumnId(column.id);
                             openAddPopup();
@@ -2137,6 +2231,7 @@ const Projects: React.FC = () => {
       )}
       
       {currentTask && (
+        <Suspense fallback={null}>
         <TaskFullView
           task={currentTask}
           boardColumns={board.columns}
@@ -2160,6 +2255,7 @@ const Projects: React.FC = () => {
           isPremium={isPremium}
           isPro={isPro}
         />
+        </Suspense>
       )}
 
       {showProjectMenuId !== null && menuPos && (() => {

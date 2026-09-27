@@ -77,9 +77,10 @@ interface BoardColumnProps {
   canEdit?: boolean;
   boardZoom?: number;
   isDragging?: boolean;
+  isTaskDragging?: boolean;
 }
 
-const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, isDragging = false }) => {
+const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, isDragging = false, isTaskDragging = false }) => {
   const { board, addTask, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -122,6 +123,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasksCollapsed, completedCollapsed, column.id]);
+  React.useEffect(() => {
+    const syncCollapsed = () => {
+      try { setTasksCollapsed(!!readColCollapsed()[column.id]?.tasks); } catch {}
+    };
+    window.addEventListener('tasks-column-collapsed-change', syncCollapsed);
+    return () => window.removeEventListener('tasks-column-collapsed-change', syncCollapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [column.id]);
   const EXPANDED_KEY = 'tasks-expanded-ids';
   const readExpandedIds = (): string[] => {
     try { const v = localStorage.getItem(EXPANDED_KEY); const arr = v ? JSON.parse(v) : []; return Array.isArray(arr) ? arr : []; } catch { return []; }
@@ -431,7 +440,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
             </div>
           </div>
         )}
-        {isExpanded && !isDraggingRow && (
+        {isExpanded && !isDraggingRow && !isDragging && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
             <TaskDropdownExpanded
               key={task.id}
@@ -539,6 +548,21 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     });
   };
 
+  const renderTaskClone = (cloneProvided: any, cloneSnapshot: any, rubric: any) => {
+    const t = tasks.find(x => x.id === rubric.draggableId) ?? board.tasks.find(x => x.id === rubric.draggableId);
+    if (!t) return null;
+    return (
+      <CenteredDragClone
+        draggableProps={cloneProvided.draggableProps}
+        dragHandleProps={cloneProvided.dragHandleProps}
+        innerRef={cloneProvided.innerRef}
+        style={cloneProvided.draggableProps.style as any}
+      >
+        {renderTaskRow(t, cloneProvided.dragHandleProps, true)}
+      </CenteredDragClone>
+    );
+  };
+
   return (
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
@@ -568,21 +592,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
           <Droppable
             droppableId={column.id}
             type="task"
-            isDropDisabled={tasksCollapsed}
-            renderClone={(cloneProvided, cloneSnapshot, rubric) => {
-              const t = tasks.find(x => x.id === rubric.draggableId) ?? board.tasks.find(x => x.id === rubric.draggableId);
-              if (!t) return null;
-              return (
-                <CenteredDragClone
-                  draggableProps={cloneProvided.draggableProps}
-                  dragHandleProps={cloneProvided.dragHandleProps}
-                  innerRef={cloneProvided.innerRef}
-                  style={cloneProvided.draggableProps.style as any}
-                >
-                  {renderTaskRow(t, cloneProvided.dragHandleProps, true)}
-                </CenteredDragClone>
-              );
-            }}
+            renderClone={renderTaskClone}
           >
             {(dropProvided, snapshot) => (
               <div
@@ -600,41 +610,71 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     )}
                   </Draggable>
                 ))}
+                {/* Same drop hints as the Tasks page: collapsed / empty columns stay
+                    valid drop targets while a task is being dragged. */}
+                {isTaskDragging && (tasksCollapsed || uncompletedTasks.length === 0) && (
+                  <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                    Drop here to move into {column.title}
+                  </div>
+                )}
 
                 {dropProvided.placeholder}
               </div>
             )}
           </Droppable>
 
-          {/* Completed tasks section — kept OUTSIDE the Droppable so it can't corrupt drag measurements */}
-          {!tasksCollapsed && completedTasks.length > 0 && (
-            <div className="pt-2 px-2" data-no-pan="true">
-              <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
-                <button
-                  onClick={() => setCompletedCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
+          {/* Completed tasks — its own task-type Droppable (like the Tasks page) so a
+              dragged card can be dropped here to complete it. Kept OUTSIDE the
+              active-task Droppable so plain rows can't corrupt drag measurements. */}
+          {(completedTasks.length > 0 || isTaskDragging) && !tasksCollapsed && (
+            <Droppable
+              droppableId={'completed-' + column.id}
+              type="task"
+              renderClone={renderTaskClone}
+            >
+              {(completedProvided, completedSnapshot) => (
+                <div
+                  ref={completedProvided.innerRef}
+                  {...completedProvided.droppableProps}
+                  className="pt-2 px-2"
+                  data-no-pan="true"
                 >
-                  <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Completed ({completedTasks.length})
-                  </span>
-                  {completedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!completedCollapsed && (
-                  <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
-                    {completedTasks.map(task => (
-                      <CompletedTaskRow
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={canEdit ? (t) => updateTask(t.id, { completed: false, completedAt: undefined }) : undefined}
-                        onOpenTask={onTaskClick}
-                        onDeleteTask={canEdit ? (t) => deleteTask(t.id) : undefined}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                  {completedTasks.length > 0 && (
+                    <div className={`border rounded-xl overflow-hidden transition-colors duration-150 ${completedSnapshot.isDraggingOver ? 'border-label-green/50 ring-2 ring-label-green/30 bg-label-green/10' : 'border-label-green/20 bg-label-green/5'}`}>
+                      <button
+                        onClick={() => setCompletedCollapsed(prev => !prev)}
+                        className="w-full flex items-center justify-between px-4 py-3"
+                      >
+                        <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Completed ({completedTasks.length})
+                        </span>
+                        {completedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                      </button>
+                      {!completedCollapsed && (
+                        <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
+                          {completedTasks.map(task => (
+                            <CompletedTaskRow
+                              key={task.id}
+                              task={task}
+                              onToggleComplete={canEdit ? (t) => updateTask(t.id, { completed: false, completedAt: undefined }) : undefined}
+                              onOpenTask={onTaskClick}
+                              onDeleteTask={canEdit ? (t) => deleteTask(t.id) : undefined}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {isTaskDragging && (
+                    <div className={`${completedTasks.length > 0 ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
+                      Drop here to complete
+                    </div>
+                  )}
+                  {completedProvided.placeholder}
+                </div>
+              )}
+            </Droppable>
           )}
 
           {isAdding ? (

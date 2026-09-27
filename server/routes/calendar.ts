@@ -14,7 +14,41 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const OAUTH_STATE_SECRET = process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+function getCanonicalBaseUrl(): string | null {
+  // Priority: explicit override > backend > render external > frontend.
+  // GOOGLE_REDIRECT_URI may be either the full callback URL or just the base URL.
+  const fullOverride = (process.env.GOOGLE_REDIRECT_URI || '').trim();
+  if (fullOverride) {
+    if (fullOverride.endsWith('/api/calendar/callback')) return stripTrailingSlash(fullOverride.replace(/\/api\/calendar\/callback$/, ''));
+    return stripTrailingSlash(fullOverride);
+  }
+  for (const key of ['BACKEND_URL', 'RENDER_EXTERNAL_URL', 'FRONTEND_URL', 'CF_TUNNEL_URL'] as const) {
+    const v = (process.env[key] || '').trim();
+    if (v) return stripTrailingSlash(v);
+  }
+  return null;
+}
+
+export function getCanonicalRedirectUri(): string | null {
+  const fullOverride = (process.env.GOOGLE_REDIRECT_URI || '').trim();
+  if (fullOverride && fullOverride.endsWith('/api/calendar/callback')) {
+    return fullOverride;
+  }
+  const base = getCanonicalBaseUrl();
+  return base ? `${base}/api/calendar/callback` : null;
+}
+
 function getRedirectUri(req: AuthRequest): string {
+  // Use a stable, env-configured URI so it exactly matches the Authorized
+  // redirect URI registered in Google Cloud Console. A dynamic host-based URI
+  // changes with tunnels / localhost / proxy hosts and always triggers
+  // Error 400: redirect_uri_mismatch.
+  const canonical = getCanonicalRedirectUri();
+  if (canonical) return canonical;
   const host = req.get('host') || process.env.HOST || 'localhost:3001';
   const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
   return `${proto}://${host}/api/calendar/callback`;
@@ -82,6 +116,9 @@ router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
   if (!GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ error: 'Google Calendar not configured. GOOGLE_CLIENT_SECRET missing.' });
   }
+  if (!GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: 'Google Calendar not configured. GOOGLE_CLIENT_ID missing.' });
+  }
 
   const redirectUri = getRedirectUri(req);
   const oauth2Client = createOAuth2Client(redirectUri);
@@ -99,7 +136,8 @@ router.get('/auth', requireAuth, (req: AuthRequest, res: Response) => {
     prompt: 'consent',
   });
 
-  res.json({ authUrl });
+  console.log(`[calendar] OAuth start redirect_uri=${redirectUri}`);
+  res.json({ authUrl, redirectUri });
 });
 
 router.get('/callback', async (req: AuthRequest, res: Response) => {
@@ -121,17 +159,26 @@ router.get('/callback', async (req: AuthRequest, res: Response) => {
     }
 
     const oauth2Client = createOAuth2Client(redirectUri);
-    const { tokens } = await oauth2Client.getToken(code);
+    try {
+      const { tokens } = await oauth2Client.getToken(code);
 
-    await db.delete(googleCalendarTokens).where(eq(googleCalendarTokens.userId, userId));
-    await db.insert(googleCalendarTokens).values({
-      userId,
-      accessToken: encrypt(tokens.access_token!) ?? tokens.access_token!,
-      refreshToken: tokens.refresh_token ? (encrypt(tokens.refresh_token) ?? tokens.refresh_token) : null,
-      expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
-    });
+      await db.delete(googleCalendarTokens).where(eq(googleCalendarTokens.userId, userId));
+      await db.insert(googleCalendarTokens).values({
+        userId,
+        accessToken: encrypt(tokens.access_token!) ?? tokens.access_token!,
+        refreshToken: tokens.refresh_token ? (encrypt(tokens.refresh_token) ?? tokens.refresh_token) : null,
+        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+      });
 
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/settings?calendarConnected=true`);
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/settings?calendarConnected=true`);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      console.error(`Calendar callback getToken failed (redirect_uri=${redirectUri}):`, e);
+      // redirect_uri_mismatch means the URI above is not in Google Cloud
+      // Console > Credentials > Authorized redirect URIs for this client ID.
+      const code2 = /redirect_uri_mismatch|redirect uri/i.test(msg) ? 'redirect_uri_mismatch' : 'auth_failed';
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/settings?calendarError=${code2}`);
+    }
   } catch (e) {
     console.error('Calendar callback error:', e);
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5000'}/settings?calendarError=auth_failed`);
@@ -141,10 +188,26 @@ router.get('/callback', async (req: AuthRequest, res: Response) => {
 router.get('/status', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const [token] = await db.select().from(googleCalendarTokens).where(eq(googleCalendarTokens.userId, req.userId!)).limit(1);
-    res.json({ connected: !!token, configured: !!GOOGLE_CLIENT_SECRET });
+    res.json({ connected: !!token, configured: !!GOOGLE_CLIENT_SECRET, redirectUri: getRedirectUri(req) });
   } catch {
-    res.json({ connected: false, configured: !!GOOGLE_CLIENT_SECRET });
+    res.json({ connected: false, configured: !!GOOGLE_CLIENT_SECRET, redirectUri: getCanonicalRedirectUri() });
   }
+});
+
+// Debug helper: shows the exact redirect URI Google will validate, so the
+// user can copy-paste it into Google Cloud Console > Credentials >
+// Authorized redirect URIs. Authenticated to avoid leaking deployment URLs.
+router.get('/debug', requireAuth, (req: AuthRequest, res: Response) => {
+  res.json({
+    redirectUri: getRedirectUri(req),
+    canonical: getCanonicalRedirectUri(),
+    backendUrl: process.env.BACKEND_URL || null,
+    frontendUrl: process.env.FRONTEND_URL || null,
+    renderExternalUrl: process.env.RENDER_EXTERNAL_URL || null,
+    googleRedirectUriEnv: process.env.GOOGLE_REDIRECT_URI || null,
+    clientIdConfigured: !!GOOGLE_CLIENT_ID,
+    clientSecretConfigured: !!GOOGLE_CLIENT_SECRET,
+  });
 });
 
 // New route to fetch Google Calendar events

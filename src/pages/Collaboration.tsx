@@ -578,16 +578,16 @@ const Collaboration: React.FC = () => {
           </div>
         </div>
 
-        {/* Paywall for free users - now as a non-blocking notice */}
-        {!user?.subscriptionTier || user.subscriptionTier === 'free' ? (
+        {/* Paywall for free and premium users - Pro only feature */}
+        {user?.subscriptionTier !== 'pro' ? (
           <div className="mb-6 p-4 bg-card border border-border rounded-xl text-center animate-fade-in">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
               <Users2 className="w-6 h-6 text-primary" />
             </div>
             <h2 className="text-lg font-bold text-foreground mb-2">Upgrade for Full Collaboration</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Work together with your team, share workspaces, and chat in real-time. 
-              Premium and Pro plans allow unlimited members and advanced team features.
+              Work together with your team, share workspaces, and chat in real-time.
+              Pro plans allow unlimited members and advanced team features.
             </p>
             <a
               href="/pricing"

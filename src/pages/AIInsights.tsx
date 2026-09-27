@@ -23,7 +23,7 @@ import { toast } from '@/hooks/use-toast';
 const AIInsights = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const hasProAccess = true; // user?.subscriptionTier === 'pro' && user?.subscriptionStatus === 'active';
+  const hasProAccess = user?.subscriptionTier === 'pro';
   const [isLoading, setIsLoading] = useState(false);
   const [insights, setInsights] = useState<any>(null);
   const [schedule, setSchedule] = useState<any>(null);

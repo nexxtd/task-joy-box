@@ -13,7 +13,7 @@ const FREE_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Simple notes section & Goals' },
 ];
 
-const PRO_FEATURES: { text: string; badge?: string }[] = [
+const PREMIUM_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Everything in Free' },
   { text: 'Unlimited tasks and projects', badge: 'No limits' },
   { text: 'Auto-schedule calendar system', badge: 'Smart scheduling' },
@@ -24,9 +24,10 @@ const PRO_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Full cloud synchronization', badge: 'All devices' },
 ];
 
-const PREMIUM_FEATURES: { text: string; badge?: string }[] = [
-  { text: 'Everything in Pro' },
+const PRO_FEATURES: { text: string; badge?: string }[] = [
+  { text: 'Everything in Premium' },
   { text: 'AI Planning Assistant', badge: 'Schedule suggestions' },
+  { text: 'AI Task Builder', badge: 'Auto build' },
   { text: 'AI Task Prioritisation', badge: 'Smart reordering' },
   { text: 'Advanced Analytics & Productivity Tracking', badge: 'Weekly insights' },
   { text: 'Goal tracking with progress charts', badge: 'Visual charts' },
@@ -144,18 +145,13 @@ const PricingPage = () => {
             </button>
           </div>
 
-          {/* PRO — Most Popular */}
-          <div className="rounded-2xl border-2 border-blue-500 bg-card p-8 flex flex-col gap-6 shadow-xl shadow-blue-500/10 scale-[1.03] relative">
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-              <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-[11px] font-bold px-4 py-1.5 rounded-full shadow-lg uppercase tracking-wider">
-                Most Popular
-              </span>
-            </div>
+          {/* PREMIUM */}
+          <div className="rounded-2xl border border-border bg-card p-8 flex flex-col gap-6 shadow-sm hover:shadow-md transition-shadow">
             <div>
               <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4">
                 <Zap className="w-5 h-5 text-blue-500" />
               </div>
-              <h2 className="text-2xl font-bold">Pro</h2>
+              <h2 className="text-2xl font-bold">Premium</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 The standard for advanced productivity.
               </p>
@@ -165,24 +161,29 @@ const PricingPage = () => {
               </div>
             </div>
             <ul className="space-y-1 flex-1">
-              {PRO_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
+              {PREMIUM_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
             </ul>
             <button
               onClick={() => startPayPalCheckout('premium', 'personal')}
               className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <DollarSign className="inline w-4 h-4 mr-1" />
-              Get Pro
+              Get Premium
             </button>
           </div>
 
-          {/* PREMIUM */}
-          <div className="rounded-2xl border border-purple-400/60 bg-card p-8 flex flex-col gap-6 shadow-sm hover:shadow-lg hover:shadow-purple-500/10 transition-shadow">
+          {/* PRO — Most Popular */}
+          <div className="rounded-2xl border-2 border-purple-400/60 bg-card p-8 flex flex-col gap-6 shadow-xl shadow-purple-500/10 scale-[1.03] relative">
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+              <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[11px] font-bold px-4 py-1.5 rounded-full shadow-lg uppercase tracking-wider">
+                Most Popular
+              </span>
+            </div>
             <div>
               <div className="w-11 h-11 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4">
                 <Crown className="w-5 h-5 text-purple-500" />
               </div>
-              <h2 className="text-2xl font-bold">Premium</h2>
+              <h2 className="text-2xl font-bold">Pro</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Peak performance with AI-powered intelligence.
               </p>
@@ -192,14 +193,14 @@ const PricingPage = () => {
               </div>
             </div>
             <ul className="space-y-1 flex-1">
-              {PREMIUM_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
+              {PRO_FEATURES.map((f, i) => <Feature key={i} {...f} />)}
             </ul>
             <button
               onClick={() => startPayPalCheckout('pro', 'personal')}
               className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-purple-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Sparkles className="inline w-4 h-4 mr-1" />
-              Get Premium
+              Get Pro
             </button>
           </div>
         </div>
@@ -224,7 +225,7 @@ const PricingPage = () => {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Zap className="w-4 h-4 text-blue-500" />
-                <h3 className="font-semibold">Pro</h3>
+                <h3 className="font-semibold">Premium</h3>
               </div>
               <p className="text-sm text-muted-foreground">
                 Removes all limits: unlimited projects, smart auto-scheduling, habit tracking, labels, and full cloud sync across all devices.
@@ -233,10 +234,10 @@ const PricingPage = () => {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Crown className="w-4 h-4 text-purple-500" />
-                <h3 className="font-semibold">Premium</h3>
+                <h3 className="font-semibold">Pro</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Everything in Pro plus AI-driven scheduling, analytics dashboards, goal charts, collaboration, custom fonts & themes, and file attachments.
+                Everything in Premium plus AI-driven scheduling, AI task builder, analytics dashboards, goal charts, collaboration, custom fonts & themes, and file attachments.
               </p>
             </div>
           </div>

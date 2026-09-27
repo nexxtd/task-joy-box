@@ -1684,7 +1684,7 @@ Rules:
 
 router.post('/premium/ai-prioritize', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await requirePremiumTier(req, res);
+    const user = await requireProTier(req, res);
     if (!user) return;
 
     const { tasks: inputTasks } = req.body;

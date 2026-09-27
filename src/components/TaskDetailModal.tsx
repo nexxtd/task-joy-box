@@ -261,9 +261,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
   };
 
   const deleteAttachment = async (id: string) => {
-    // Optimistically update
+    // Optimistically update (use ref so rapid consecutive deletes don't resurrect via stale closure)
     updateTask(task.id, {
-      attachments: (task.attachments || []).filter(a => a.id !== id)
+      attachments: (taskRef.current.attachments || []).filter(a => String(a.id) !== String(id))
     });
 
     const isServerAttachment = /^\d+$/.test(id);

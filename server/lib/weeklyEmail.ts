@@ -82,8 +82,8 @@ export async function sendWeeklyEmails(): Promise<{ sent: number; skipped: numbe
     const [u] = await db.select().from(users).where(eq(users.id, s.userId)).limit(1);
     if (!u) { skipped++; continue; }
     const tier = (u.subscriptionTier || 'free').toLowerCase();
-    const isPaid = tier === 'premium' || tier === 'pro';
-    if (!isPaid) { skipped++; continue; }
+    const isTopTier = tier === 'pro';
+    if (!isTopTier) { skipped++; continue; }
     try {
       const content = await generateWeeklySummaryForUser(u.id);
       if (!content) { skipped++; continue; }
