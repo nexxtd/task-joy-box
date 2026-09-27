@@ -5254,7 +5254,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Task title</label>
                 <input
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   value={task.title}
                   onChange={e => onUpdateTask(task.id, { title: e.target.value })}
                 />

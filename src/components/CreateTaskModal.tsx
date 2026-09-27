@@ -731,7 +731,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 autoFocus
                 value={newTaskTitle}
                 onChange={e => setNewTaskTitle(e.target.value)}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
             </div>
 

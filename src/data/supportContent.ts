@@ -17,7 +17,7 @@ export const FAQS = [
   {
     id: 'free-vs-premium',
     question: 'What is the difference between free and premium?',
-    answer: 'Free users get task lists, a daily planner, up to 2 projects, basic calendar view, cloud sync and manual tracking. Premium users get everything in Free plus unlimited tasks and projects, auto-schedule calendar, smart reminders, habit tracker, cloud-synced notes, custom categories and file attachments. Pro users get everything in Premium plus AI planning assistant, AI task builder, AI prioritisation, advanced analytics, goal progress charts, full team and family collaboration, personalised themes and priority 24/7 support. You can compare plans in detail on the Pricing page.',
+    answer: 'Free users get task lists, a daily planner, up to 2 projects, basic calendar view, cloud sync, manual tracking and a simple notes section. Premium users get everything in Free plus unlimited tasks and projects, auto-schedule calendar, smart reminders, cloud-synced notes, custom categories and labels, full cloud synchronisation, attachments on tasks and task analysis. Pro users get everything in Premium plus AI planning assistant, AI task builder, AI prioritisation, advanced analytics and productivity tracking, personalised themes and priority 24/7 support. You can compare plans in detail on the Pricing page.',
   },
   {
     id: 'delete-row',

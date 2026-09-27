@@ -10,7 +10,7 @@ const FREE_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Basic calendar view' },
   { text: 'Cloud sync across devices' },
   { text: 'Manual progress tracking' },
-  { text: 'Simple notes section & Goals' },
+  { text: 'Simple notes section' },
 ];
 
 const PREMIUM_FEATURES: { text: string; badge?: string }[] = [
@@ -18,10 +18,11 @@ const PREMIUM_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Unlimited tasks and projects', badge: 'No limits' },
   { text: 'Auto-schedule calendar system', badge: 'Smart scheduling' },
   { text: 'Smart reminders and notifications', badge: 'Push & email' },
-  { text: 'Dedicated Habit tracker', badge: 'Daily streaks' },
   { text: 'Cloud-synced Notes section', badge: 'Synced everywhere' },
   { text: 'Custom task categories (Labels)', badge: 'Colour labels' },
   { text: 'Full cloud synchronization', badge: 'All devices' },
+  { text: 'Attachments on tasks', badge: 'Files & images' },
+  { text: 'Task Analysis', badge: 'Insights' },
 ];
 
 const PRO_FEATURES: { text: string; badge?: string }[] = [
@@ -30,10 +31,7 @@ const PRO_FEATURES: { text: string; badge?: string }[] = [
   { text: 'AI Task Builder', badge: 'Auto build' },
   { text: 'AI Task Prioritisation', badge: 'Smart reordering' },
   { text: 'Advanced Analytics & Productivity Tracking', badge: 'Weekly insights' },
-  { text: 'Goal tracking with progress charts', badge: 'Visual charts' },
-  { text: 'Full Team/Family Collaboration', badge: 'Share & delegate' },
   { text: 'Personalised Themes (Colors & Fonts)', badge: 'Fonts, colours & layouts' },
-  { text: 'File attachments on tasks', badge: 'Up to 50 MB/file' },
   { text: 'Priority 24/7 Support', badge: 'Fastest response' },
 ];
 
@@ -219,7 +217,7 @@ const PricingPage = () => {
                 <h3 className="font-semibold">Free</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Perfect for light personal use. Get the core task, note, and goal tools — no credit card needed.
+                Perfect for light personal use. Get the core task, note, and project tools — no credit card needed.
               </p>
             </div>
             <div>
@@ -228,7 +226,7 @@ const PricingPage = () => {
                 <h3 className="font-semibold">Premium</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Removes all limits: unlimited projects, smart auto-scheduling, habit tracking, labels, and full cloud sync across all devices.
+                Removes all limits: unlimited tasks and projects, smart auto-scheduling, reminders, labels, attachments, task analysis and full cloud sync across all devices.
               </p>
             </div>
             <div>
@@ -237,7 +235,7 @@ const PricingPage = () => {
                 <h3 className="font-semibold">Pro</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Everything in Premium plus AI-driven scheduling, AI task builder, analytics dashboards, goal charts, collaboration, custom fonts & themes, and file attachments.
+                Everything in Premium plus AI-driven scheduling, AI task builder, analytics dashboards, custom fonts & themes and priority support.
               </p>
             </div>
           </div>
