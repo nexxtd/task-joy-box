@@ -611,7 +611,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                   </Draggable>
                 ))}
                 {/* Same drop hints as the Tasks page: collapsed / empty columns stay
-                    valid drop targets while a task is being dragged. */}
+                    valid drop targets while a task is being dragged. These mount in
+                    onBeforeCapture (pre-lift, see Projects.tsx) so the lift is
+                    measured with them present — mounting them later would freeze
+                    the card mid-animation. */}
                 {isTaskDragging && (tasksCollapsed || uncompletedTasks.length === 0) && (
                   <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
                     Drop here to move into {column.title}
@@ -625,7 +628,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
 
           {/* Completed tasks — its own task-type Droppable (like the Tasks page) so a
               dragged card can be dropped here to complete it. Kept OUTSIDE the
-              active-task Droppable so plain rows can't corrupt drag measurements. */}
+              active-task Droppable so plain rows can't corrupt drag measurements.
+              It mounts (with the hint) in onBeforeCapture — i.e. before the lift
+              is measured — so drops always register. */}
           {(completedTasks.length > 0 || isTaskDragging) && !tasksCollapsed && (
             <Droppable
               droppableId={'completed-' + column.id}

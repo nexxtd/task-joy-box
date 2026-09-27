@@ -1,26 +1,23 @@
 /* App-level styles - layout handled by Tailwind */
 
-/* Fix for react-beautiful-dnd drag offset when using zoom transforms */
-.task-dragging {
-  opacity: 0.9 !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
-  transform: rotate(3deg) !important;
-  cursor: grabbing !important;
-}
-
-/* Ensure drag placeholder has proper sizing */
-[data-rbd-placeholder-context-id] {
-  display: none !important;
-}
-
-/* Smooth drag transitions */
+/* Drag-and-drop (hello-pangea/dnd): the library repositions draggables with
+   inline transforms on every animation frame. Any CSS `transform` transition
+   on a draggable makes the card lag behind the cursor and get stuck
+   mid-animation, so only non-layout properties may transition here. */
 [data-rbd-drag-handle-context-id],
 [data-rbd-draggable-context-id] {
-  transition: transform 0.1s ease, opacity 0.1s ease, box-shadow 0.1s ease;
+  transition: box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
-/* Dragging state */
-[data-rbd-dragging~="true"] {
+/* Never hide the library placeholder: it reserves the dragged card's space.
+   Hiding it collapses the list mid-drag and breaks drop measurement. */
+[data-rbd-placeholder-context-id] {
+  flex-shrink: 0;
+}
+
+/* While a drag is in flight, kill transitions on draggables entirely so the
+   dragged card and placeholder track the cursor 1:1. */
+body.is-dragging [data-rbd-drag-handle-context-id],
+body.is-dragging [data-rbd-draggable-context-id] {
   transition: none !important;
-  z-index: 9999 !important;
 }

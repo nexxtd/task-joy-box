@@ -18,8 +18,18 @@ function languageNameFromCode(code: string): string {
 }
 
 const router = Router();
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID || undefined);
+
+function getGoogleAllowedAudiences(): string[] {
+  // Backend must accept the ID the frontend used to mint the token.
+  // VITE_GOOGLE_CLIENT_ID is baked into the client bundle at build time and
+  // can drift from GOOGLE_CLIENT_ID if the server env was changed without a
+  // frontend rebuild — accept both (plus comma-separated lists for rotation).
+  const raw = [process.env.GOOGLE_CLIENT_ID || '', process.env.VITE_GOOGLE_CLIENT_ID || '']
+    .flatMap((v) => v.split(','))
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set(raw)];
+}
 
 // Cookie options - make sure these are consistent
 const COOKIE_OPTS_BASE = {
@@ -179,27 +189,59 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// Public (Client IDs are public — they ship in the frontend bundle). Lets the
+// client / operator compare the backend's expected audience with the ID the
+// frontend bundle was built with, to diagnose "Wrong recipient" mismatches.
+router.get('/google-config', (_req: Request, res: Response) => {
+  const audiences = getGoogleAllowedAudiences();
+  res.json({ configured: audiences.length > 0, audiences });
+});
+
 router.post('/google', async (req: Request, res: Response) => {
+  const audiences = getGoogleAllowedAudiences();
+  if (audiences.length === 0) {
+    console.error('GOOGLE_CLIENT_ID is not configured');
+    return res.status(503).json({
+      error: 'Google authentication is not configured. Contact the administrator to set up Google authentication.'
+    });
+  }
+
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Missing credential' });
+
+  // Step 1: verify the Google ID token. Failures here are client/token
+  // problems (wrong audience, expired token, network to Google) — report 401
+  // with an actionable message instead of a generic 500.
+  let payload;
   try {
-    if (!GOOGLE_CLIENT_ID) {
-      console.error('GOOGLE_CLIENT_ID is not configured');
-      return res.status(503).json({ 
-        error: 'Google authentication is not configured. Contact the administrator to set up Google authentication.' 
-      });
-    }
-
-    const { credential } = req.body;
-    if (!credential) return res.status(400).json({ error: 'Missing credential' });
-
-    // Verify the Google ID token
+    const googleClient = new OAuth2Client();
     const ticket = await googleClient.verifyIdToken({
       idToken: credential,
-      audience: GOOGLE_CLIENT_ID,
+      audience: audiences.length === 1 ? audiences[0] : audiences,
     });
-    
-    const payload = ticket.getPayload();
-    if (!payload?.email) return res.status(400).json({ error: 'Invalid Google token - no email' });
+    payload = ticket.getPayload();
+  } catch (e: any) {
+    const msg = String(e?.message || e || '');
+    console.error('Google token verification failed:', msg, e?.stack || '');
+    if (msg.includes('Wrong recipient') || msg.includes('audience') || msg.includes('Audience')) {
+      return res.status(401).json({
+        error: 'Google token audience mismatch: the frontend Client ID does not match the backend GOOGLE_CLIENT_ID. Rebuild/redeploy the frontend with the same VITE_GOOGLE_CLIENT_ID, or update GOOGLE_CLIENT_ID on the server.',
+      });
+    }
+    if (msg.includes('Token used too late') || msg.includes('Expired') || msg.includes('expired')) {
+      return res.status(401).json({ error: 'Google sign-in expired. Please try again.' });
+    }
+    if (msg.includes('Invalid token') || msg.includes('invalid')) {
+      return res.status(401).json({ error: 'Invalid Google sign-in. Please try again.' });
+    }
+    return res.status(401).json({ error: 'Google authentication failed: unable to verify token.' });
+  }
 
+  if (!payload?.email) return res.status(400).json({ error: 'Invalid Google token - no email' });
+
+  // Step 2: find/create the local user and issue a session. Failures here
+  // are genuine server problems — log the full error and report 500.
+  try {
     const email = payload.email.toLowerCase();
     const name = payload.name || email.split('@')[0];
     const googleId = payload.sub;
@@ -240,15 +282,11 @@ router.post('/google', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    console.error('Google authentication error');
-    
-    if (e.message?.includes('invalid_grant') || e.message?.includes('idpiframe_initialization_failed')) {
-      return res.status(500).json({ 
-        error: 'Google authentication failed. Check Google Cloud Console for authorized origins.' 
-      });
+    console.error('Google sign-in failed after token verification:', e?.message || e, e?.stack || '');
+    if (String(e?.message || '').includes('JWT_SECRET')) {
+      return res.status(500).json({ error: 'Server configuration error (JWT_SECRET). Contact the administrator.' });
     }
-    
-    res.status(500).json({ error: 'Google authentication failed' });
+    res.status(500).json({ error: 'Google authentication failed (server error). Check server logs.' });
   }
 });
 

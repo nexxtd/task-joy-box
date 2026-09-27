@@ -5,8 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BoardProvider } from "@/context/BoardContext";
 import { NotesProvider } from "@/context/NotesContext";
-import { GoalsProvider } from "@/context/GoalsContext";
-import { HabitsProvider } from "@/context/HabitsContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -25,18 +23,14 @@ const Tasks = lazy(() => import("@/pages/Tasks"));
 const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const Insights = lazy(() => import("@/pages/Insights"));
 const Notes = lazy(() => import("@/pages/Notes"));
-const Goals = lazy(() => import("@/pages/Goals"));
 const Collaboration = lazy(() => import("@/pages/Collaboration"));
 const Pricing = lazy(() => import("@/pages/Pricing"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const AIChat = lazy(() => import("@/pages/AIChat"));
-const Habits = lazy(() => import("@/pages/Habits"));
 const Support = lazy(() => import("@/pages/Support"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const Tutorial = lazy(() => import("@/pages/Tutorial"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
-const WhiteboardPage = lazy(() => import("@/pages/WhiteboardPage"));
-const Documents = lazy(() => import("@/pages/Documents"));
 const WhatsNew = lazy(() => import("@/pages/WhatsNew"));
 const VerifyEmail = lazy(() => import("@/pages/VerifyEmail"));
 import { applyFontFamily } from "@/lib/fonts";
@@ -227,8 +221,6 @@ function ProtectedRoutes() {
   return (
     <BoardProvider>
       <NotesProvider>
-        <GoalsProvider>
-          <HabitsProvider>
             <Notifier />
             <AppearanceSync />
             <Suspense fallback={null}><EnergyPopup /></Suspense>
@@ -243,9 +235,6 @@ function ProtectedRoutes() {
                 <Route path="/calendar" element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
                 <Route path="/insights" element={<Suspense fallback={<PageLoader />}><Insights /></Suspense>} />
                 <Route path="/notes" element={<Suspense fallback={<PageLoader />}><Notes /></Suspense>} />
-                <Route path="/goals" element={<Suspense fallback={<PageLoader />}><Goals /></Suspense>} />
-                <Route path="/habits" element={<Suspense fallback={<PageLoader />}><Habits /></Suspense>} />
-                <Route path="/documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
                 <Route path="/whats-new" element={<Suspense fallback={<PageLoader />}><WhatsNew /></Suspense>} />
                 <Route path="/support" element={<Suspense fallback={<PageLoader />}><Support /></Suspense>} />
                 <Route path="/collaboration" element={<Suspense fallback={<PageLoader />}><Collaboration /></Suspense>} />
@@ -254,11 +243,8 @@ function ProtectedRoutes() {
                 <Route path="/settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
                 <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
               </Route>
-              <Route path="/whiteboard/:id" element={<Suspense fallback={<PageLoader />}><WhiteboardPage /></Suspense>} />
               <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
             </Routes>
-          </HabitsProvider>
-        </GoalsProvider>
       </NotesProvider>
     </BoardProvider>
   );

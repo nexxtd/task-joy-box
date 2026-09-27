@@ -1692,8 +1692,6 @@ style={{ background: 'hsl(var(--primary))' }}>
                         { label: 'Tasks', path: '/tasks' },
                         { label: 'Notes', path: '/notes' },
                         { label: 'Calendar', path: '/calendar' },
-                        { label: 'Goals', path: '/goals' },
-                        { label: 'Habits', path: '/habits' },
                       ].map(item => (
                         <button
                           key={item.path}

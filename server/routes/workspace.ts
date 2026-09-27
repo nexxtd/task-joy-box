@@ -406,6 +406,68 @@ router.post('/workspace/:workspaceId/group', requireAuth, async (req: AuthReques
   }
 });
 
+// Alias for the frontend "teams" terminology (Collaboration.tsx posts to
+// /workspace/:workspaceId/teams and expects { team }). Same rules as groups.
+router.post('/workspace/:workspaceId/teams', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+    const { name } = req.body;
+
+    if (!name || name.length < 2) {
+      return res.status(400).json({ error: 'Team name must be at least 2 characters' });
+    }
+
+    const memberships = await db
+      .select()
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.userId, req.userId!),
+          eq(workspaceMembers.workspaceId, parseInt(workspaceId))
+        )
+      );
+
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this workspace' });
+    }
+
+    if (memberships[0].role !== 'owner') {
+      return res.status(403).json({ error: 'Only workspace owner can create teams' });
+    }
+
+    const wsResult = await db
+      .select({ maxGroups: workspaces.maxGroups })
+      .from(workspaces)
+      .where(eq(workspaces.id, parseInt(workspaceId)));
+
+    if (wsResult.length === 0) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    const currentGroups = await db
+      .select()
+      .from(groups)
+      .where(eq(groups.workspaceId, parseInt(workspaceId)));
+
+    if (currentGroups.length >= wsResult[0].maxGroups) {
+      return res.status(400).json({ error: `Maximum number of teams (${wsResult[0].maxGroups}) reached for this workspace` });
+    }
+
+    const [newGroup] = await db
+      .insert(groups)
+      .values({
+        name,
+        workspaceId: parseInt(workspaceId),
+      })
+      .returning();
+
+    res.json({ team: newGroup, group: newGroup });
+  } catch (error) {
+    console.error('Create team error:', error);
+    res.status(500).json({ error: 'Failed to create team' });
+  }
+});
+
 // Add a member to a group
 router.post('/workspace/:workspaceId/group/:groupId/add-member', requireAuth, async (req: AuthRequest, res: Response) => {
   try {

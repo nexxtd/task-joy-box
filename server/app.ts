@@ -57,8 +57,10 @@ sessionStore.on('error', (error: any) => {
 const app = express();
 app.disable('x-powered-by');
 const isProduction = process.env.NODE_ENV === 'production';
-const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || 'https://task-joy-box.onrender.com';
-const frontendUrl = process.env.FRONTEND_URL || renderExternalUrl || 'http://localhost:5173';
+const vercelHost = (process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || '').trim();
+const vercelOrigin = vercelHost ? (vercelHost.startsWith('http') ? vercelHost.replace(/\/+$/, '') : `https://${vercelHost.replace(/\/+$/, '')}`) : '';
+const renderExternalUrl = process.env.RENDER_EXTERNAL_URL || vercelOrigin || 'https://task-joy-box.onrender.com';
+const frontendUrl = process.env.FRONTEND_URL || vercelOrigin || renderExternalUrl || 'http://localhost:5173';
 const sessionSecret = process.env.SESSION_SECRET;
 const jwtSecret = process.env.JWT_SECRET;
 const crossSiteCookies = process.env.CROSS_SITE_COOKIES === 'true';
@@ -157,15 +159,28 @@ if (additionalOriginsVar) {
   });
 }
 
-if (!isProduction) {
-  allowedOrigins.add('http://localhost:5173');
-  allowedOrigins.add('http://127.0.0.1:5173');
-  allowedOrigins.add('http://localhost:3000');
-  allowedOrigins.add('http://127.0.0.1:3000');
-}
+// Local dev origins must always be allowed — even when NODE_ENV=production is
+// set locally (e.g. a production .env used for local testing). Localhost can
+// never be an external attacker origin, so this is safe in production.
+allowedOrigins.add('http://localhost:5000');
+allowedOrigins.add('http://127.0.0.1:5000');
+allowedOrigins.add('http://localhost:5173');
+allowedOrigins.add('http://127.0.0.1:5173');
+allowedOrigins.add('http://localhost:3000');
+allowedOrigins.add('http://127.0.0.1:3000');
+allowedOrigins.add('http://localhost:3001');
+allowedOrigins.add('http://127.0.0.1:3001');
 
-// Vercel preview/production domains must always be allowed even when NODE_ENV=production
-// (FRONTEND_URL may still point to onrender.com while the user is on aiplanner-iota.vercel.app)
+// Vercel domains must always be allowed even when FRONTEND_URL is stale.
+// VERCEL_URL / VERCEL_PROJECT_PRODUCTION_URL come without protocol.
+for (const v of [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL]) {
+  const host = (v || '').trim();
+  if (host) {
+    const origin = host.startsWith('http') ? host.replace(/\/+$/, '') : `https://${host.replace(/\/+$/, '')}`;
+    allowedOrigins.add(origin);
+    allowedOrigins.add(origin + '/');
+  }
+}
 allowedOrigins.add('https://aiplanner-iota.vercel.app');
 allowedOrigins.add('https://aiplanner-iota.vercel.app/');
 
@@ -175,11 +190,19 @@ app.use(cors({
       return callback(null, true);
     }
 
-    if (!isProduction && /^http:\/\/localhost:\d+$/.test(origin)) {
+    // Localhost is always trusted (local dev), regardless of NODE_ENV.
+    if (/^http:\/\/localhost:\d+$/.test(origin)) {
       return callback(null, true);
     }
 
-    if (!isProduction && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
+    if (/^http:\/\/127\.0\.0\.1:\d+$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Private LAN origins are always trusted for local dev (e.g. opening the
+    // Vite dev server via the machine's 192.168.x.x address). These can never
+    // be an external production origin.
+    if (/^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+$/.test(origin)) {
       return callback(null, true);
     }
 
@@ -365,6 +388,11 @@ if (isProduction) {
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && err.message === 'CORS origin not allowed') {
+    console.error(`CORS blocked origin ${req.headers.origin} for ${req.method} ${req.path}`);
+    res.status(403).json({ error: `CORS origin not allowed: ${req.headers.origin}` });
+    return;
+  }
   console.error('Unhandled error occurred:', err);
   res.status(err.statusCode || err.status || 500).json({ error: 'Internal server error' });
 });

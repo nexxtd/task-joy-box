@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, Brain, LifeBuoy, ShieldCheck, X, FileText
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -17,7 +17,6 @@ const AppSidebar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { T, t } = useLanguage();
-  const [showWhiteboardModal, setShowWhiteboardModal] = useState(false);
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
@@ -29,7 +28,6 @@ const AppSidebar: React.FC = () => {
     { icon: BarChart3, label: T.nav_insights, path: '/insights' },
     { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
-    { icon: FileText, label: t('Documents'), path: '/documents' },
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
@@ -87,11 +85,7 @@ const AppSidebar: React.FC = () => {
             <button
               key={item.path}
               onClick={() => {
-                if (item.path === '/whiteboard') {
-                  setShowWhiteboardModal(true);
-                } else {
-                  navigate(item.path);
-                }
+                navigate(item.path);
               }}
               title={collapsed ? item.label : undefined}
               data-testid={`nav-${item.path === '/' ? 'dashboard' : item.path.slice(1)}`}
@@ -178,35 +172,6 @@ const AppSidebar: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* Whiteboard Coming Soon Modal */}
-      {showWhiteboardModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWhiteboardModal(false)}>
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
-          <div className="relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-md p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">{t('Whiteboard coming soon')}</h3>
-              <button onClick={() => setShowWhiteboardModal(false)} aria-label="Close dialog" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {t('The whiteboard feature is currently under development. Soon you will be able to:')}
-              </p>
-              <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
-                <li>{t('Create visual mind maps and diagrams')}</li>
-                <li>{t('Collaborate with team members in real-time')}</li>
-                <li>{t('Link whiteboards to your tasks and projects')}</li>
-                <li>{t('Use drawing tools and sticky notes')}</li>
-              </ul>
-              <p className="text-sm text-muted-foreground">
-                {t('Stay tuned for updates!')}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

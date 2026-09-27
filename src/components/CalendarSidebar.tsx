@@ -1,28 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Task, PRIORITY_CONFIG } from '@/types/board';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronRight, GripVertical, Clock, Target, Flame, AlertCircle } from 'lucide-react';
-
-interface SidebarGoal {
-  id: number;
-  title: string;
-  progress: number;
-  target: number;
-  unit: string;
-  color: string;
-  subGoals: { id: string; title: string; completed: boolean }[];
-  completed: boolean;
-}
-
-interface SidebarHabit {
-  id: number;
-  title: string;
-  streak: number;
-  color: string;
-  category: string;
-  completedDays: string[];
-}
+import { ChevronDown, GripVertical, Clock, AlertCircle } from 'lucide-react';
 
 interface CalendarSidebarProps {
   onTaskClick: (task: Task) => void;
@@ -30,70 +10,9 @@ interface CalendarSidebarProps {
 
 const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
   const { board } = useBoardContext();
-  const [goals, setGoals] = useState<SidebarGoal[]>([]);
-  const [habits, setHabits] = useState<SidebarHabit[]>([]);
-  const [goalsOpen, setGoalsOpen] = useState(true);
-  const [habitsOpen, setHabitsOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
-  const [loading, setLoading] = useState({ goals: true, habits: true });
-
-  useEffect(() => {
-    fetchGoals();
-    fetchHabits();
-  }, []);
-
-  const fetchGoals = async () => {
-    try {
-      setLoading(g => ({ ...g, goals: true }));
-      const res = await fetch('/api/goals', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const goalsList = data.goals || data;
-        setGoals(goalsList.map((g: any) => ({
-          id: g.id,
-          title: g.title,
-          progress: g.progress || 0,
-          target: g.target || 100,
-          unit: g.unit || 'tasks',
-          color: g.color || 'hsl(var(--primary))',
-          subGoals: g.subGoals ? (typeof g.subGoals === 'string' ? JSON.parse(g.subGoals) : g.subGoals) : [],
-          completed: g.completed || false,
-        })));
-      }
-    } catch (err) {
-      console.error('Error fetching goals:', err);
-    } finally {
-      setLoading(g => ({ ...g, goals: false }));
-    }
-  };
-
-  const fetchHabits = async () => {
-    try {
-      setLoading(g => ({ ...g, habits: true }));
-      const res = await fetch('/api/habits', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const habitsList = data.habits || data;
-        setHabits(habitsList.map((h: any) => ({
-          id: h.id,
-          title: h.title,
-          streak: h.streak || 0,
-          color: h.color || 'primary',
-          category: h.category || 'Personal',
-          completedDays: h.completedDays || [],
-        })));
-      }
-    } catch (err) {
-      console.error('Error fetching habits:', err);
-    } finally {
-      setLoading(g => ({ ...g, habits: false }));
-    }
-  };
 
   const unscheduledTasks = board.tasks.filter(t => !t.dueDate && !t.completed);
-  const activeGoals = goals.filter(g => !g.completed);
-  const today = new Date().toISOString().split('T')[0];
-  const undoneHabits = habits.filter(h => !h.completedDays.includes(today));
 
   const handleDragStart = (e: React.DragEvent, type: string, item: any) => {
     e.dataTransfer.setData('application/x-calendar-item', JSON.stringify({ type, ...item }));
@@ -170,121 +89,6 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
                         </span>
                       )}
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CollapsibleSection>
-
-        {/* Goals */}
-        <CollapsibleSection
-          title="Goals"
-          count={activeGoals.length}
-          icon={<Target className="w-3.5 h-3.5 text-emerald-500" />}
-          open={goalsOpen}
-          onToggle={() => setGoalsOpen(!goalsOpen)}
-        >
-          {loading.goals ? (
-            <div className="text-center py-4 text-xs text-muted-foreground">Loading...</div>
-          ) : activeGoals.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-center mb-2">
-                <Target className="w-4 h-4 text-emerald-500/40" />
-              </div>
-              <p className="text-xs font-medium text-muted-foreground">No active goals</p>
-              <p className="text-[10px] text-muted-foreground/50 mt-0.5">Create a goal to get started</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {activeGoals.map(goal => (
-                <div
-                  key={goal.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, 'goal', {
-                    id: goal.id,
-                    title: goal.title,
-                    duration: 30,
-                    color: goal.color,
-                    subGoals: goal.subGoals,
-                  })}
-                  className="group p-3 bg-gradient-to-br from-card to-muted/20 border border-border/60 rounded-xl hover:border-emerald-500/30 hover:shadow-md hover:shadow-emerald-500/5 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-grab active:cursor-grabbing"
-                >
-                  <div className="flex items-center justify-between mb-2 min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate flex-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{goal.title}</p>
-                    <span className="text-[11px] font-bold ml-2 px-2 py-0.5 rounded-md" style={{ color: goal.color, backgroundColor: goal.color + '15' }}>
-                      {Math.round((goal.progress / goal.target) * 100)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-muted/60 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500 ease-out"
-                      style={{
-                        width: `${Math.min(100, (goal.progress / goal.target) * 100)}%`,
-                        backgroundColor: goal.color,
-                        boxShadow: `0 0 8px ${goal.color}40`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground/60 mt-1.5">
-                    {goal.progress} / {goal.target} {goal.unit}
-                    {goal.subGoals.length > 0 && (
-                      <span className="ml-1.5 px-1.5 py-0.5 rounded bg-muted/50 text-[9px]">
-                        {goal.subGoals.filter(s => !s.completed).length} sub-goals
-                      </span>
-                    )}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CollapsibleSection>
-
-        {/* Habits */}
-        <CollapsibleSection
-          title="Habits"
-          count={undoneHabits.length}
-          icon={<Flame className="w-3.5 h-3.5 text-orange-500" />}
-          open={habitsOpen}
-          onToggle={() => setHabitsOpen(!habitsOpen)}
-        >
-          {loading.habits ? (
-            <div className="text-center py-4 text-xs text-muted-foreground">Loading...</div>
-          ) : undoneHabits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/5 border border-orange-500/10 flex items-center justify-center mb-2">
-                <Flame className="w-4 h-4 text-orange-500/40" />
-              </div>
-              <p className="text-xs font-medium text-muted-foreground">All habits completed today</p>
-              <p className="text-[10px] text-muted-foreground/50 mt-0.5">Keep up the streak!</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              {undoneHabits.map(habit => (
-                <div
-                  key={habit.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, 'habit', {
-                    id: habit.id,
-                    title: habit.title,
-                    duration: 15,
-                    color: habit.color === 'primary' ? '#d97706' : habit.color,
-                  })}
-                  className="group p-3 bg-gradient-to-br from-card to-muted/20 border border-border/60 rounded-xl hover:border-orange-500/30 hover:shadow-md hover:shadow-orange-500/5 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 cursor-grab active:cursor-grabbing"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-1 rounded-md bg-orange-500/10 group-hover:bg-orange-500/20 transition-colors">
-                        <Flame className="w-3.5 h-3.5 text-orange-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-foreground truncate group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">{habit.title}</p>
-                        <p className="text-[9px] text-muted-foreground/60 capitalize">{habit.category}</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-orange-500 ml-2 flex-shrink-0 px-2 py-0.5 rounded-md bg-orange-500/10">
-                      {habit.streak}d
-                    </span>
                   </div>
                 </div>
               ))}

@@ -185,27 +185,6 @@ export const RESOURCES: ResourceCategory[] = [
     ],
   },
   {
-    id: 'whiteboard',
-    label: 'Whiteboard',
-    guides: [
-      {
-        id: 'wb-create',
-        title: 'Creating a whiteboard',
-        content: 'From the Projects page, click Whiteboard in the navigation, then click "New Whiteboard". Give it a name and an optional description.\n\nThe whiteboard opens to a blank infinite canvas. Use the toolbar on the left to select the type of block you want to place. Click anywhere on the canvas to drop a block at that position.\n\nWhiteboards are saved automatically as you work. You can have as many whiteboards as you need — use them for brainstorming, planning, mind maps, or visual project layouts.',
-      },
-      {
-        id: 'wb-tools',
-        title: 'Using the drawing tools',
-        content: 'The whiteboard toolbar gives you these block types:\n\n• Sticky note — a coloured card for quick ideas\n• Text block — larger formatted text\n• Document block — a longer text area for notes and docs\n• Image block — upload or link to an image\n• Shape — rectangles, circles, diamonds, and more\n• Task block — embed a Kanban-style task list\n• Table — a simple data grid\n• Link block — a clickable URL card\n• Comment block — a discussion thread\n\nEach block can be moved, resized, and edited by clicking on it.',
-      },
-      {
-        id: 'wb-connect',
-        title: 'Connecting elements',
-        content: 'You can draw connections (arrows) between any two blocks to show relationships. Select the Connector tool from the toolbar. Hover over the source block until a connection point appears, then click and drag to the target block.\n\nConnections are curved by default. You can change the style (straight, curved, or elbow) by clicking the connection line.\n\nConnections are great for mind maps, flow charts, dependency diagrams, and anywhere you need to show how ideas or tasks relate to each other.',
-      },
-    ],
-  },
-  {
     id: 'ai',
     label: 'AI Features',
     guides: [

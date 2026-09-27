@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { flushSync } from 'react-dom';
-import { DragDropContext, Droppable, DropResult, Draggable, DragStart } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, DropResult, Draggable, DragStart, BeforeCapture } from '@hello-pangea/dnd';
 import {
   Calendar,
   CheckCircle2,
@@ -379,6 +379,10 @@ const Projects: React.FC = () => {
   const handleBoardPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     if (document.body.classList.contains('is-dragging')) return;
+    // Never start a board pan from a draggable card/column: the pointer is
+    // about to start a dnd drag, and panning underneath it shifts every drop
+    // target so the card can never settle (looks "stuck" mid-animation).
+    if ((e.target as HTMLElement).closest('[data-rbd-drag-handle-context-id], [data-rbd-draggable-context-id]')) return;
     if ((e.target as HTMLElement).closest('[data-pan-enabled="true"]')) {
       // Allow panning on expanded content
     } else if ((e.target as HTMLElement).closest('[data-no-pan="true"]')) {
@@ -961,7 +965,17 @@ const Projects: React.FC = () => {
 
   const [isBoardDragging, setIsBoardDragging] = useState(false);
   const [isTaskDragging, setIsTaskDragging] = useState(false);
-  const handleBoardDragStart = (start: DragStart) => { document.body.classList.add('is-dragging'); setIsBoardDragging(true); setIsTaskDragging(start?.type !== 'column'); };
+  const handleBoardDragStart = (start: DragStart) => {
+    document.body.classList.add('is-dragging');
+    // A drag and a board pan must never run together — kill any in-flight pan
+    // so the board can't slide out from under the dragged card.
+    setIsBoardPanning(false);
+    // Idempotent safety net: the same flags are already set synchronously in
+    // onBeforeCapture (pre-lift). Re-setting identical values here changes no
+    // DOM, so it can't disturb the in-flight drag measurement.
+    setIsBoardDragging(true);
+    setIsTaskDragging(start?.type !== 'column');
+  };
   const handleBoardDragUpdate = () => undefined;
 
   const updateSelectedProject = async (updates: Partial<ProjectMeta>) => {
@@ -1414,7 +1428,18 @@ const Projects: React.FC = () => {
             document.body.classList.remove('is-dragging');
             handleDragEnd(result);
           }}
-          onBeforeCapture={() => { flushSync(() => setIsBoardDragging(true)); }}
+          onBeforeCapture={(before: BeforeCapture) => {
+            // Mount all drag-dependent DOM (drop hints, complete-target
+            // droppables) BEFORE the lift is measured. flushSync forces the
+            // re-render to commit synchronously, so the drag starts with
+            // consistent dimensions. Setting this state later (onDragStart)
+            // mutates Droppable children mid-lift, which invalidates the
+            // measurement and leaves the card frozen in its lift animation.
+            flushSync(() => {
+              setIsBoardDragging(true);
+              setIsTaskDragging(!projectColumns.some(c => c.id === before.draggableId));
+            });
+          }}
           onDragStart={handleBoardDragStart}
           onDragUpdate={handleBoardDragUpdate}
         >

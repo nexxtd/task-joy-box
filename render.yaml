@@ -14,6 +14,8 @@ services:
         value: ab9d468a79b438da15fef57b2e38d2fe06adb159683a44c4a1de9bffe42d4224
       - key: GOOGLE_CLIENT_ID
         value: 920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com
+      - key: VITE_GOOGLE_CLIENT_ID
+        value: 920342328322-1so3ocbaio5irpvu81aisab0m2t0ok4o.apps.googleusercontent.com
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: NODE_ENV

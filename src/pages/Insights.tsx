@@ -285,7 +285,8 @@ const Insights: React.FC = () => {
         const info = markDone(parts.join(' · '), false);
         commit({ bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
         toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
-      } catch {
+      } catch (e) {
+        console.error('AI dashboard-widgets fetch failed:', e);
         setBottleneckError('Could not reach the AI service. Check your connection and try again.');
         setBottlenecks(null);
         const fb = buildAiScoreFallback(tasks, ctx);
