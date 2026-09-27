@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
-import { Task } from '@/types/board';
-import { SquareToggle } from '@/components/ToggleComponents';
+import { Subtask, Task } from '@/types/board';
+import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
@@ -210,6 +210,10 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [checklistsCollapsed, setChecklistsCollapsed] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  const [newSubtaskText, setNewSubtaskText] = useState('');
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
   const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
@@ -471,6 +475,45 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const focusChecklists = taskChecklists.filter(cl => cl.id !== legacySubtasksChecklist?.id);
   const focusChecklistItems = focusChecklists.flatMap(cl => cl.items.map(item => ({ ...item, checklistId: cl.id })));
 
+  const effectiveSubtasks: Subtask[] = (selectedTask?.subtasks && selectedTask.subtasks.length > 0)
+    ? selectedTask.subtasks
+    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
+  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
+  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
+  const allSubtasksDone = effectiveSubtasks.length > 0 && subtaskDoneCount === effectiveSubtasks.length;
+
+  const persistSubtasks = useCallback((nextSubtasks: Subtask[]) => {
+    if (!selectedTask) return;
+    const nextChecklists = legacySubtasksChecklist
+      ? selectedTask.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
+      : selectedTask.checklists;
+    updateTask(selectedTask.id, { subtasks: nextSubtasks, checklists: nextChecklists });
+  }, [legacySubtasksChecklist, selectedTask, updateTask]);
+
+  const updateSubtask = useCallback((subtaskId: string, updates: Partial<Subtask>) => {
+    persistSubtasks(effectiveSubtasks.map(st => st.id === subtaskId ? { ...st, ...updates } : st));
+  }, [effectiveSubtasks, persistSubtasks]);
+
+  const addSubtask = useCallback(() => {
+    if (!selectedTask || !newSubtaskText.trim()) return;
+    persistSubtasks([
+      ...effectiveSubtasks,
+      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: 0 },
+    ]);
+    setNewSubtaskText('');
+  }, [effectiveSubtasks, newSubtaskText, persistSubtasks, selectedTask]);
+
+  const removeSubtask = useCallback((subtaskId: string) => {
+    persistSubtasks(effectiveSubtasks.filter(st => st.id !== subtaskId));
+  }, [effectiveSubtasks, persistSubtasks]);
+
+  const saveSubtaskEdit = useCallback((subtaskId: string) => {
+    const next = editingSubtaskText.trim();
+    if (next) updateSubtask(subtaskId, { text: next });
+    setEditingSubtaskId(null);
+    setEditingSubtaskText('');
+  }, [editingSubtaskText, updateSubtask]);
+
   const saveChecklistItemEdit = useCallback((checklistId: string, itemId: string) => {
     if (!selectedTask || !editingChecklistItemText.trim()) return;
     updateTask(selectedTask.id, {
@@ -620,7 +663,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const handleDeepFocusReorder = useCallback((result: DropResult) => {
     if (!result.destination || !selectedTask) return;
-    if (result.source.droppableId === 'deepfocus-attachments') {
+    if (result.source.droppableId === 'deepfocus-subtasks') {
+      const items = Array.from(effectiveSubtasks);
+      const [removed] = items.splice(result.source.index, 1);
+      items.splice(result.destination.index, 0, removed);
+      persistSubtasks(items);
+    } else if (result.source.droppableId === 'deepfocus-attachments') {
       const items = Array.from(selectedTask.attachments ?? []);
       const [removed] = items.splice(result.source.index, 1);
       items.splice(result.destination.index, 0, removed);
@@ -676,7 +724,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
         });
       }
     }
-  }, [selectedTask, updateTask]);
+  }, [selectedTask, updateTask, effectiveSubtasks, focusChecklistItems, persistSubtasks]);
 
   const allChecklistsDone = focusChecklistItems.length > 0 && focusChecklistItems.every(i => i.completed);
   const progress = totalSecs > 0 ? ((totalSecs - timeLeft) / totalSecs) * 100 : 0;
@@ -736,6 +784,37 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
             <div className="rounded-xl bg-muted/30 p-3 mb-4 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Session Duration</span>
               <span className="text-sm font-semibold text-foreground">{Math.round(totalSecs / 60)} min</span>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-muted/20 mb-6">
+              <div className="w-full flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                  {effectiveSubtasks.length > 0 && (
+                    <span className="text-xs text-muted-foreground">({subtaskDoneCount}/{effectiveSubtasks.length})</span>
+                  )}
+                </div>
+              </div>
+              <div className="border-t border-border/60 px-4 py-3 space-y-1.5">
+                {allSubtasksDone && (
+                  <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                    All sub-tasks are done ✓
+                  </div>
+                )}
+                {effectiveSubtasks.length === 0 && <p className="text-xs text-muted-foreground">No sub-tasks.</p>}
+                {effectiveSubtasks.map((subtask) => (
+                  <div key={subtask.id} className="flex items-center gap-2.5 text-sm group min-w-0">
+                    <CircleToggle
+                      completed={subtask.completed}
+                      onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                      size="md"
+                    />
+                    <span className={`flex-1 truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                      {subtask.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-border bg-muted/20 mb-6">
@@ -1146,6 +1225,96 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
               </div>
 
               <hr className="border-t border-border/60" />
+
+              <div className="rounded-2xl border border-border bg-muted/20">
+                <button
+                  onClick={() => setSubtasksCollapsed(prev => !prev)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
+                    {effectiveSubtasks.length > 0 && (
+                      <span className="text-xs text-muted-foreground">({subtaskDoneCount}/{effectiveSubtasks.length})</span>
+                    )}
+                  </div>
+                  {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                </button>
+                {!subtasksCollapsed && (
+                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                    {effectiveSubtasks.length > 0 && (
+                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} />
+                      </div>
+                    )}
+                    {allSubtasksDone && (
+                      <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
+                        All sub-tasks are done ✓
+                      </div>
+                    )}
+                    {effectiveSubtasks.length === 0 && <p className="text-xs text-muted-foreground">No sub-tasks yet. Add one below.</p>}
+                    {effectiveSubtasks.length > 0 && (
+                      <DragDropContext onDragEnd={handleDeepFocusReorder}>
+                        <Droppable droppableId="deepfocus-subtasks">
+                          {(provided) => (
+                            <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                              {effectiveSubtasks.map((subtask, index) => (
+                                <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
+                                  {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                        <GripVertical className="w-4 h-4" />
+                                      </div>
+                                      <CircleToggle
+                                        completed={subtask.completed}
+                                        onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
+                                        size="md"
+                                      />
+                                      {editingSubtaskId === subtask.id ? (
+                                        <input
+                                          autoFocus
+                                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                          value={editingSubtaskText}
+                                          onChange={e => setEditingSubtaskText(e.target.value)}
+                                          onBlur={() => saveSubtaskEdit(subtask.id)}
+                                          onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                                        />
+                                      ) : (
+                                        <span
+                                          onClick={(e) => { e.stopPropagation(); setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
+                                          className={`flex-1 cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                        >
+                                          {subtask.text}
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={() => removeSubtask(subtask.id)}
+                                        className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                    )}
+                    <div className="flex gap-2">
+                      <input
+                        value={newSubtaskText}
+                        onChange={e => setNewSubtaskText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubtask(); } }}
+                        placeholder="Add sub-task"
+                        className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
+                      />
+                      <button onClick={addSubtask} className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-lg shrink-0">Add</button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="rounded-2xl border border-border bg-muted/20">
                 <button
