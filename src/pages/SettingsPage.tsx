@@ -95,6 +95,9 @@ const SettingsPage: React.FC = () => {
     notificationsSupported() ? notificationPermission() : 'denied'
   );
   const [saved, setSaved] = useState(false);
+  const [notifError, setNotifError] = useState('');
+  const [savingSmart, setSavingSmart] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
@@ -479,26 +482,62 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const saveNotificationSettings = async () => {
-    localStorage.setItem('smartAlerts', String(smartAlerts));
-    localStorage.setItem('emailNotifs', String(emailNotifs));
-    // Save to backend
-    if (isPaid) {
+  const persistNotificationPrefs = async (
+    patch: { smartAlerts?: boolean; emailNotifs?: boolean },
+    prev: { smartAlerts: boolean; emailNotifs: boolean },
+  ) => {
+    setNotifError('');
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error(`save failed: ${res.status}`);
+      showSaved();
+    } catch (error) {
+      // Revert the toggle and surface the error.
+      if (patch.smartAlerts !== undefined) setSmartAlerts(prev.smartAlerts);
+      if (patch.emailNotifs !== undefined) setEmailNotifs(prev.emailNotifs);
       try {
-        await fetch('/api/settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            smartAlerts,
-            emailNotifs,
-          }),
-        });
-        showSaved();
-      } catch (error) {
-        console.error('Error saving notifications:', error);
-      }
+        localStorage.setItem('smartAlerts', String(prev.smartAlerts));
+        localStorage.setItem('emailNotifs', String(prev.emailNotifs));
+      } catch {}
+      setNotifError('Could not save. Please try again.');
+    } finally {
+      setSavingSmart(false);
+      setSavingEmail(false);
     }
+  };
+
+  const handleSmartAlertsToggle = async () => {
+    if (!isPaid) {
+      window.location.href = '/pricing';
+      return;
+    }
+    const prev = smartAlerts;
+    const next = !prev;
+    setSmartAlerts(next);
+    try { localStorage.setItem('smartAlerts', String(next)); } catch {}
+    if (next && notificationsSupported() && notificationPermission() !== 'granted') {
+      requestNotificationPermission().then(() => setNotifPermission(notificationPermission()));
+    }
+    setSavingSmart(true);
+    await persistNotificationPrefs({ smartAlerts: next }, { smartAlerts: prev, emailNotifs });
+  };
+
+  const handleEmailNotifsToggle = async () => {
+    if (!isTopTier) {
+      window.location.href = '/pricing';
+      return;
+    }
+    const prev = emailNotifs;
+    const next = !prev;
+    setEmailNotifs(next);
+    try { localStorage.setItem('emailNotifs', String(next)); } catch {}
+    setSavingEmail(true);
+    await persistNotificationPrefs({ emailNotifs: next }, { smartAlerts, emailNotifs: prev });
   };
 
   const resetDefaults = async () => {
@@ -724,7 +763,7 @@ const SettingsPage: React.FC = () => {
                   value={language}
                   onValueChange={async (newLanguage) => {
                     setLanguage(newLanguage);
-                    localStorage.setItem('language', newLanguage);
+                    try { localStorage.setItem('language', newLanguage); } catch {}
                     try {
                       await fetch('/api/settings', {
                         method: 'PATCH',
@@ -743,7 +782,7 @@ const SettingsPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {LANGUAGES.map(l => (
-                      <SelectItem key={l.english} value={l.english}>{l.native}</SelectItem>
+                      <SelectItem key={l.code} value={l.native}>{l.native}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -778,18 +817,10 @@ const SettingsPage: React.FC = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => {
-                      if (!isPaid) {
-                        window.location.href = '/pricing';
-                        return;
-                      }
-                      const next = !smartAlerts;
-                      setSmartAlerts(next);
-                      if (next && notificationsSupported() && notificationPermission() !== 'granted') {
-                        requestNotificationPermission().then(() => setNotifPermission(notificationPermission()));
-                      }
-                    }}
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${smartAlerts ? 'bg-primary' : 'bg-muted'}`}
+                    onClick={handleSmartAlertsToggle}
+                    disabled={savingSmart}
+                    aria-label="Toggle smart alerts"
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${smartAlerts ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
                   >
                     <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${smartAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
@@ -832,14 +863,10 @@ const SettingsPage: React.FC = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => {
-                      if (!isTopTier) {
-                        window.location.href = '/pricing';
-                        return;
-                      }
-                      setEmailNotifs(!emailNotifs);
-                    }}
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${emailNotifs ? 'bg-primary' : 'bg-muted'}`}
+                    onClick={handleEmailNotifsToggle}
+                    disabled={savingEmail}
+                    aria-label="Toggle email notifications"
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${emailNotifs ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
                   >
                     <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${emailNotifs ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
@@ -866,9 +893,12 @@ const SettingsPage: React.FC = () => {
                 )}
               </div>
 
-              <button onClick={saveNotificationSettings} data-testid="button-save-notifications" className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-                Save Preferences
-              </button>
+              {(savingSmart || savingEmail) && (
+                <p className="text-xs text-muted-foreground" role="status">Saving…</p>
+              )}
+              {notifError && (
+                <p className="text-xs text-destructive" role="alert">{notifError}</p>
+              )}
             </div>
           )}
 

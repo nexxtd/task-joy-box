@@ -646,7 +646,12 @@ const Tasks: React.FC = () => {
   const [quickEditStatus, setQuickEditStatus] = useState<TaskStatus>('to_do');
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
 
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('open');
+    } catch { return null; }
+  });
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => {
     try { const v = localStorage.getItem('notes-expanded-ids'); return v ? JSON.parse(v) : []; } catch { return []; }
   });
@@ -660,14 +665,26 @@ const Tasks: React.FC = () => {
   const [addingTask, setAddingTask] = useState(false);
   const [createModalProjectId, setCreateModalProjectId] = useState<number | null | undefined>(undefined);
 
-  // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
-  // with the project pre-selected so the new task is assigned to it.
+  // "Add New" from the Projects page: ?new=1&project=<id>&column=<id> opens the
+  // create modal with the project (and column) pre-selected so the new note is
+  // assigned to that column automatically and lands at the bottom.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('new') === '1') {
       const pid = params.get('project');
+      const col = params.get('column');
       setCreateModalProjectId(pid ? Number(pid) : undefined);
+      if (pid) setNewTaskProjectId(Number(pid));
+      if (col) setNewTaskColumnId(col);
       setAddingTask(true);
+      // Clean the URL so a refresh doesn't reopen the modal.
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('new');
+        url.searchParams.delete('project');
+        url.searchParams.delete('column');
+        window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams.toString()}` : ''));
+      } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

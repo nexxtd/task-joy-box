@@ -52,9 +52,28 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
   onSubtasksChange,
   hideSubtasks,
 }) => {
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
-  const [checklistsCollapsed, setChecklistsCollapsed] = useState(false);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(new Set());
+  const storageKey = `editor-section-collapsed-${entityId}`;
+  const readStored = (): { subtasks?: boolean; checklists?: boolean; collapsedLists?: string[] } => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch { return {}; }
+  };
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => !!readStored().subtasks);
+  const [checklistsCollapsed, setChecklistsCollapsed] = useState(() => !!readStored().checklists);
+  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readStored().collapsedLists || []));
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({
+        subtasks: subtasksCollapsed,
+        checklists: checklistsCollapsed,
+        collapsedLists: Array.from(collapsedChecklists),
+      }));
+    } catch {}
+  }, [storageKey, subtasksCollapsed, checklistsCollapsed, collapsedChecklists]);
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);

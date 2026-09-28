@@ -13,10 +13,13 @@ import TagsModal from '@/components/shared/TagsModal';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { useNotesContext } from '@/context/NotesContext';
 
 interface ListViewProps {
   onTaskClick: (task: Task) => void;
+  onNoteClick?: (note: Task) => void;
   projectId?: number | null;
+  notes?: Task[];
   onAddTask?: () => void;
 }
 
@@ -143,8 +146,9 @@ const PriorityBadge: React.FC<{
   );
 };
 
-const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }) => {
+const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId, notes = [], onAddTask }) => {
   const { board, updateTask, moveTask, updateColumn, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
+  const notesCtx = useNotesContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
@@ -355,7 +359,64 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     preDragExpandedRef.current = null;
     setPreDragExpanded(null);
     if (!result.destination) return;
-    moveTask(result.draggableId, result.destination.droppableId, result.destination.index);
+    const draggedId = result.draggableId;
+    const dstColId = result.destination.droppableId;
+    const isNote = notesCtx.board.tasks.some(t => t.id === draggedId) || notes.some(n => n.id === draggedId);
+    if (isNote) {
+      // Shared ordering: recompute combined orders in destination column.
+      const destTasks = board.tasks
+        .filter(t => t.columnId === dstColId && (projectId === undefined ? true : t.projectId === projectId) && !t.completed)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const destNotesBase = notesCtx.board.tasks
+        .filter(t => (t as any).columnId === dstColId && (projectId === undefined ? true : t.projectId === projectId) && t.id !== draggedId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const combined: Array<{ kind: 'task' | 'note'; id: string; order: number }> = [
+        ...destTasks.map(t => ({ kind: 'task' as const, id: t.id, order: t.order || 0 })),
+        ...destNotesBase.map(n => ({ kind: 'note' as const, id: n.id, order: n.order || 0 })),
+      ].sort((a, b) => a.order - b.order);
+      const insertAt = Math.max(0, Math.min(result.destination.index, combined.length));
+      combined.splice(insertAt, 0, { kind: 'note', id: draggedId, order: -1 });
+      combined.forEach((entry, idx) => {
+        if (entry.kind === 'task') {
+          const cur = board.tasks.find(t => t.id === entry.id);
+          if (cur && cur.order !== idx) updateTask(entry.id, { order: idx });
+        } else {
+          const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+          if (!cur) return;
+          const updates: Partial<Task> = {};
+          if (cur.order !== idx) updates.order = idx;
+          if (entry.id === draggedId && (cur as any).columnId !== dstColId) (updates as any).columnId = dstColId;
+          if (Object.keys(updates).length > 0) notesCtx.updateTask(entry.id, updates);
+        }
+      });
+      return;
+    }
+    // Task drag in shared column: preserve interleaving with notes.
+    const destTasksExcl = board.tasks
+      .filter(t => t.columnId === dstColId && (projectId === undefined ? true : t.projectId === projectId) && !t.completed && t.id !== draggedId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const destNotes = notesCtx.board.tasks
+      .filter(t => (t as any).columnId === dstColId && (projectId === undefined ? true : t.projectId === projectId))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const base: Array<{ kind: 'task' | 'note'; id: string; order: number }> = [
+      ...destTasksExcl.map(t => ({ kind: 'task' as const, id: t.id, order: t.order || 0 })),
+      ...destNotes.map(n => ({ kind: 'note' as const, id: n.id, order: n.order || 0 })),
+    ].sort((a, b) => a.order - b.order);
+    const insertAt = Math.max(0, Math.min(result.destination.index, base.length));
+    base.splice(insertAt, 0, { kind: 'task', id: draggedId, order: -1 });
+    base.forEach((entry, idx) => {
+      if (entry.kind === 'task') {
+        const cur = board.tasks.find(t => t.id === entry.id);
+        if (!cur) return;
+        const updates: Partial<Task> = {};
+        if (cur.order !== idx) updates.order = idx;
+        if (entry.id === draggedId && cur.columnId !== dstColId) updates.columnId = dstColId;
+        if (Object.keys(updates).length > 0) updateTask(entry.id, updates);
+      } else {
+        const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+        if (cur && cur.order !== idx) notesCtx.updateTask(entry.id, { order: idx });
+      }
+    });
   };
 
   const renderTaskRow = (task: Task, dragHandleProps?: any, isDragging?: boolean) => {
@@ -585,6 +646,75 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
     );
   };
 
+  const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
+    const isExpanded = expandedTaskIds.includes(note.id);
+    const attachmentCount = (note.attachments?.length || 0) + ((note as any).images?.length || 0);
+    const noteTags = note.labels.slice(0, 2);
+    return (
+      <div
+        onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note as any); }}
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
+          isDraggingRow
+            ? 'border-primary/40 shadow-lg rotate-[2deg]'
+            : 'border-border hover:border-border/80 hover:shadow-sm'
+        }`}
+      >
+        <div className="flex items-center gap-1 px-3 py-3">
+          {dragHandleProps && (
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-left text-foreground truncate">
+                {note.title || 'Untitled note'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
+              {noteTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {note.labels.length > noteTags.length && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{note.labels.length - noteTags.length}
+                </span>
+              )}
+              {attachmentCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {attachmentCount} file{attachmentCount === 1 ? '' : 's'}
+                </span>
+              )}
+              <button
+                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  tagPopupTaskId === note.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Tag className="w-2.5 h-2.5" />
+                {tagPopupTaskId === note.id ? 'Close' : 'Tags'}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
     <div className="flex-1 overflow-y-auto p-6 relative">
@@ -597,6 +727,15 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
               .sort((a, b) => a.order - b.order);
             const columnActive = tasks.filter(t => !t.completed);
             const columnCompleted = tasks.filter(t => t.completed);
+            const colNotes = (projectId === undefined
+              ? notesCtx.board.tasks
+              : notesCtx.board.tasks.filter(t => t.projectId === projectId)
+            ).filter(t => (t as any).columnId === column.id)
+              .sort((a, b) => (a.order || 0) - (b.order || 0));
+            const combinedActive: Array<{ kind: 'task' | 'note'; item: Task }> = [
+              ...columnActive.map(t => ({ kind: 'task' as const, item: t })),
+              ...colNotes.map(n => ({ kind: 'note' as const, item: n })),
+            ].sort((a, b) => (a.item.order || 0) - (b.item.order || 0));
             const isCompletedCollapsed = collapsedCompletedCols.includes(column.id);
 
             return (
@@ -617,7 +756,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                     className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg hover:bg-muted/30 transition-all text-left"
                   >
                     <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/80">{column.title}</span>
-                    <span className="text-[10px] text-muted-foreground/40">({columnActive.length})</span>
+                    <span className="text-[10px] text-muted-foreground/40">({combinedActive.length})</span>
                   </button>
                 </div>
                 {!isColumnCollapsed && (
@@ -625,26 +764,43 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
                     droppableId={column.id}
                     renderClone={(cloneProvided, cloneSnapshot, rubric) => {
                       const task = board.tasks.find(t => t.id === rubric.draggableId);
-                      if (!task) return null;
-                      return (
-                        <CenteredDragClone
-                          draggableProps={cloneProvided.draggableProps}
-                          dragHandleProps={cloneProvided.dragHandleProps}
-                          innerRef={cloneProvided.innerRef}
-                          style={cloneProvided.draggableProps.style as any}
-                        >
-                          {renderTaskRow(task, cloneProvided.dragHandleProps, cloneSnapshot.isDragging)}
-                        </CenteredDragClone>
-                      );
+                      if (task) {
+                        return (
+                          <CenteredDragClone
+                            draggableProps={cloneProvided.draggableProps}
+                            dragHandleProps={cloneProvided.dragHandleProps}
+                            innerRef={cloneProvided.innerRef}
+                            style={cloneProvided.draggableProps.style as any}
+                          >
+                            {renderTaskRow(task, cloneProvided.dragHandleProps, cloneSnapshot.isDragging)}
+                          </CenteredDragClone>
+                        );
+                      }
+                      const note = notesCtx.board.tasks.find(t => t.id === rubric.draggableId) ?? notes.find(n => n.id === rubric.draggableId);
+                      if (note) {
+                        return (
+                          <CenteredDragClone
+                            draggableProps={cloneProvided.draggableProps}
+                            dragHandleProps={cloneProvided.dragHandleProps}
+                            innerRef={cloneProvided.innerRef}
+                            style={cloneProvided.draggableProps.style as any}
+                          >
+                            {renderNoteRow(note, cloneProvided.dragHandleProps, cloneSnapshot.isDragging)}
+                          </CenteredDragClone>
+                        );
+                      }
+                      return null;
                     }}
                   >
                     {(dropProvided) => (
                       <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5 min-h-[40px]">
-                        {columnActive.map((task, taskIndex) => (
-                          <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                        {combinedActive.map((entry, taskIndex) => (
+                          <Draggable key={entry.item.id} draggableId={entry.item.id} index={taskIndex}>
                             {(taskProvided, taskSnapshot) => (
                               <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                                {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                                {entry.kind === 'task'
+                                  ? renderTaskRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)
+                                  : renderNoteRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
                               </div>
                             )}
                           </Draggable>
@@ -694,7 +850,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, projectId, onAddTask }
               className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              Add Task
+              Add
             </button>
           )}
         </div>

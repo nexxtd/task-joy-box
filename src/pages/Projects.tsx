@@ -149,21 +149,24 @@ const Projects: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
 
-  // Unified "Add" popup (Task / Note)
+  // Unified "Add" popup (Task / Note / Habit / Goal)
   const [addPopupOpen, setAddPopupOpen] = useState(false);
-  const [addPopupType, setAddPopupType] = useState<'task' | 'note' | null>(null);
+  const [addPopupType, setAddPopupType] = useState<'task' | 'note' | 'habit' | 'goal' | null>(null);
   const [addExistingStep, setAddExistingStep] = useState(false);
   const [addExistingSelected, setAddExistingSelected] = useState<Set<string>>(() => new Set());
 
   const ADD_TYPES = [
     { id: 'task', label: 'Task', description: 'To-dos, projects and checklists', icon: CheckSquare, path: '/tasks' },
     { id: 'note', label: 'Note', description: 'Free-form ideas and docs', icon: StickyNote, path: '/notes' },
+    { id: 'habit', label: 'Habit', description: 'Recurring routines and streaks', icon: Flame, path: '/tasks' },
+    { id: 'goal', label: 'Goal', description: 'Milestones and targets', icon: Target, path: '/tasks' },
   ] as const;
 
-  const existingItemsFor = (type: 'task' | 'note') => {
-    const all = type === 'task'
-      ? board.tasks
-      : notesCtx.board.tasks;
+  const existingItemsFor = (type: 'task' | 'note' | 'habit' | 'goal' | null) => {
+    if (!type) return [];
+    const all = type === 'note'
+      ? notesCtx.board.tasks
+      : board.tasks;
     return all.filter(t => t.projectId !== selectedProject?.id);
   };
 
@@ -177,7 +180,8 @@ const Projects: React.FC = () => {
   const handleAddExisting = () => {
     if (!selectedProject) return;
     if (addExistingSelected.size === 0) return;
-    const isTask = addPopupType === 'task';
+    const isNote = addPopupType === 'note';
+    const isTask = !isNote;
     const sourceBoard = isTask ? board : notesCtx.board;
     const update = isTask
       ? updateTask
@@ -1001,19 +1005,148 @@ const Projects: React.FC = () => {
       return;
     }
     const dstId = result.destination.droppableId;
-    // Drag-to-complete, same single-update pattern as the Tasks page
-    // (toggleTaskCompletion): just mark the task complete, no separate move.
+    const draggedId = result.draggableId;
+    const isNoteDrag = notesCtx.board.tasks.some(t => t.id === draggedId);
+    // Notes never move into the Completed section (no completed state).
     if (dstId.startsWith('completed-')) {
+      if (isNoteDrag) return;
       const colId = dstId.slice('completed-'.length);
-      const taskId = result.draggableId;
-      const existing = board.tasks.find(t => t.id === taskId);
+      const existing = board.tasks.find(t => t.id === draggedId);
       if (existing && !existing.completed) {
-        updateTask(taskId, { completed: true, completedAt: existing.completedAt ?? new Date().toISOString(), status: 'completed' });
+        updateTask(draggedId, { completed: true, completedAt: existing.completedAt ?? new Date().toISOString(), status: 'completed' });
       }
       expandBoardColumn(colId);
       return;
     }
-    moveTask(result.draggableId, dstId, result.destination.index);
+    // Shared column ordering for tasks + notes: the drop index is in the
+    // combined (interleaved) list, so recompute orders in both boards to match.
+    if (isNoteDrag) {
+      const note = notesCtx.board.tasks.find(t => t.id === draggedId);
+      if (!note) return;
+      const srcColId = result.source.droppableId;
+      const dstColId = dstId;
+      const destTasks = board.tasks
+        .filter(t => t.columnId === dstColId && t.projectId === selectedProject?.id && !t.completed)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const destNotes = notesCtx.board.tasks
+        .filter(t => (t as any).columnId === dstColId && t.projectId === selectedProject?.id && t.id !== draggedId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const combined: Array<{ kind: 'task' | 'note'; id: string }> = [
+        ...destTasks.map(t => ({ kind: 'task' as const, id: t.id })),
+        ...destNotes.map(n => ({ kind: 'note' as const, id: n.id })),
+      ].sort((a, b) => {
+        const ao = a.kind === 'task'
+          ? destTasks.find(t => t.id === a.id)?.order || 0
+          : destNotes.find(n => n.id === a.id)?.order || 0;
+        const bo = b.kind === 'task'
+          ? destTasks.find(t => t.id === b.id)?.order || 0
+          : destNotes.find(n => n.id === b.id)?.order || 0;
+        return ao - bo;
+      });
+      const insertAt = Math.max(0, Math.min(result.destination.index, combined.length));
+      combined.splice(insertAt, 0, { kind: 'note', id: draggedId });
+      // Assign shared orders (combined index) so interleaving stays put.
+      combined.forEach((entry, idx) => {
+        if (entry.kind === 'task') {
+          const cur = board.tasks.find(t => t.id === entry.id);
+          if (cur && cur.order !== idx) updateTask(entry.id, { order: idx });
+        } else {
+          const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+          if (!cur) return;
+          const updates: Partial<Task> = {};
+          if (cur.order !== idx) updates.order = idx;
+          if (entry.id === draggedId) {
+            if ((cur as any).columnId !== dstColId) (updates as any).columnId = dstColId;
+            if (cur.projectId !== selectedProject?.id) {
+              updates.projectId = selectedProject?.id;
+              updates.projectName = selectedProject?.name;
+            }
+          }
+          if (Object.keys(updates).length > 0) notesCtx.updateTask(entry.id, updates);
+        }
+      });
+      // Compact source column if moved across columns.
+      if (srcColId !== dstColId) {
+        const srcTasks = board.tasks
+          .filter(t => t.columnId === srcColId && t.projectId === selectedProject?.id && !t.completed)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const srcNotes = notesCtx.board.tasks
+          .filter(t => (t as any).columnId === srcColId && t.projectId === selectedProject?.id && t.id !== draggedId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const srcCombined = [
+          ...srcTasks.map(t => ({ kind: 'task' as const, id: t.id, order: t.order || 0 })),
+          ...srcNotes.map(n => ({ kind: 'note' as const, id: n.id, order: n.order || 0 })),
+        ].sort((a, b) => a.order - b.order);
+        srcCombined.forEach((entry, idx) => {
+          if (entry.kind === 'task') {
+            const cur = board.tasks.find(t => t.id === entry.id);
+            if (cur && cur.order !== idx) updateTask(entry.id, { order: idx });
+          } else {
+            const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+            if (cur && cur.order !== idx) notesCtx.updateTask(entry.id, { order: idx });
+          }
+        });
+      }
+      expandBoardColumn(dstColId);
+      return;
+    }
+    // Task drag in a shared column: convert the combined drop index into a
+    // tasks-aware update, then reassign shared orders so notes stay interleaved.
+    const srcColId = result.source.droppableId;
+    const dstColId = dstId;
+    const destTasksExcl = board.tasks
+      .filter(t => t.columnId === dstColId && t.projectId === selectedProject?.id && !t.completed && t.id !== draggedId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    const destNotes = notesCtx.board.tasks
+      .filter(t => (t as any).columnId === dstColId && t.projectId === selectedProject?.id)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    // Build combined without dragged task to interpret the combined drop index.
+    const destCombinedBase: Array<{ kind: 'task' | 'note'; id: string; order: number }> = [
+      ...destTasksExcl.map(t => ({ kind: 'task' as const, id: t.id, order: t.order || 0 })),
+      ...destNotes.map(n => ({ kind: 'note' as const, id: n.id, order: n.order || 0 })),
+    ].sort((a, b) => a.order - b.order);
+    const insertAt = Math.max(0, Math.min(result.destination.index, destCombinedBase.length));
+    destCombinedBase.splice(insertAt, 0, { kind: 'task', id: draggedId, order: -1 });
+    destCombinedBase.forEach((entry, idx) => {
+      if (entry.kind === 'task') {
+        const cur = board.tasks.find(t => t.id === entry.id);
+        if (!cur) return;
+        const updates: Partial<Task> = {};
+        if (cur.order !== idx) updates.order = idx;
+        if (entry.id === draggedId && cur.columnId !== dstColId) {
+          updates.columnId = dstColId;
+          if (cur.projectId !== selectedProject?.id) {
+            updates.projectId = selectedProject?.id;
+            updates.projectName = selectedProject?.name;
+          }
+        }
+        if (Object.keys(updates).length > 0) updateTask(entry.id, updates);
+      } else {
+        const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+        if (cur && cur.order !== idx) notesCtx.updateTask(entry.id, { order: idx });
+      }
+    });
+    if (srcColId !== dstColId) {
+      const srcTasks = board.tasks
+        .filter(t => t.columnId === srcColId && t.projectId === selectedProject?.id && !t.completed && t.id !== draggedId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const srcNotes = notesCtx.board.tasks
+        .filter(t => (t as any).columnId === srcColId && t.projectId === selectedProject?.id)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      const srcCombined = [
+        ...srcTasks.map(t => ({ kind: 'task' as const, id: t.id, order: t.order || 0 })),
+        ...srcNotes.map(n => ({ kind: 'note' as const, id: n.id, order: n.order || 0 })),
+      ].sort((a, b) => a.order - b.order);
+      srcCombined.forEach((entry, idx) => {
+        if (entry.kind === 'task') {
+          const cur = board.tasks.find(t => t.id === entry.id);
+          if (cur && cur.order !== idx) updateTask(entry.id, { order: idx });
+        } else {
+          const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
+          if (cur && cur.order !== idx) notesCtx.updateTask(entry.id, { order: idx });
+        }
+      });
+    }
     expandBoardColumn(dstId);
   };
 
@@ -1460,7 +1593,7 @@ const Projects: React.FC = () => {
             <p className="text-xs text-muted-foreground">Drag tasks between columns to reorganize the project.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-xs text-muted-foreground">{projectTasks.length} tasks · {projectColumns.length} columns</div>
+            <div className="text-xs text-muted-foreground">{projectTasks.length + projectNotes.length} items · {projectColumns.length} columns</div>
             <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-1.5 py-1">
               <button onClick={() => setBoardZoom(z => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, +(z - ZOOM_STEP).toFixed(2))))} disabled={boardZoom <= MIN_ZOOM} aria-label="Zoom out" title="Zoom out" className="p-1 rounded-lg hover:bg-muted disabled:opacity-30 transition-all">
                 <ZoomOut className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
@@ -1538,13 +1671,16 @@ const Projects: React.FC = () => {
                   <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-6 items-start select-none">
                     {projectColumns.map((column, index) => {
                       const tasks = projectTasks.filter(task => task.columnId === column.id).sort((a, b) => a.order - b.order);
+                      const colNotes = projectNotes.filter(n => (n as any).columnId === column.id).sort((a, b) => (a.order || 0) - (b.order || 0));
                       return (
                         <BoardColumn
                           key={column.id}
                           column={column}
                           tasks={tasks}
+                          notes={colNotes}
                           index={index}
                           onTaskClick={setSelectedTask}
+                          onNoteClick={(note) => navigate(`/notes?open=${note.id}`)}
                           canCreateTasks={canCreateTasks}
                           canEdit={canEdit}
                           boardZoom={boardZoom}
@@ -1600,7 +1736,9 @@ const Projects: React.FC = () => {
   const renderList = () => (
     <ListView
       onTaskClick={setSelectedTask}
+      onNoteClick={(note) => navigate(`/notes?open=${note.id}`)}
       projectId={selectedProject?.id}
+      notes={projectNotes}
       onAddTask={canCreateTasks ? () => {
         setCreateModalColumnId(undefined);
         openAddPopup();
@@ -2233,11 +2371,12 @@ const Projects: React.FC = () => {
                   <div className="space-y-2">
                     <button
                       onClick={() => {
-                        if (addPopupType === 'task') {
+                        if (addPopupType === 'task' || addPopupType === 'habit' || addPopupType === 'goal') {
                           setShowCreateModal(true);
                           setAddPopupOpen(false);
                         } else {
-                          navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}`);
+                          const colParam = createModalColumnId ? `&column=${encodeURIComponent(createModalColumnId)}` : '';
+                          navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}${colParam}`);
                         }
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30 hover:bg-muted hover:border-primary/50 transition-all text-left"

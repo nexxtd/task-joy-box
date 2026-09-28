@@ -66,8 +66,9 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [lang, isRTL]);
 
   const setLanguage = useCallback((newLang: string) => {
-    setLanguageState(canonicalLanguageName(newLang));
-    localStorage.setItem('language', newLang);
+    const canonical = canonicalLanguageName(newLang);
+    setLanguageState(canonical);
+    try { localStorage.setItem('language', canonical); } catch {}
   }, []);
 
   const translate: TranslateFn = useCallback((phrase, vars) => tt(phrase, vars), [language, dictVersion]);

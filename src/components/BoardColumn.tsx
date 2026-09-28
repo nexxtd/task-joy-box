@@ -70,8 +70,10 @@ const getDueTimeWarning = (t: Task): 'overdue' | 'imminent' | 'soon' | 'normal' 
 interface BoardColumnProps {
   column: ColumnType;
   tasks: Task[];
+  notes?: Task[];
   index: number;
   onTaskClick: (task: Task) => void;
+  onNoteClick?: (note: Task) => void;
   canCreateTasks?: boolean;
   onAddClick?: () => void;
   canEdit?: boolean;
@@ -80,7 +82,7 @@ interface BoardColumnProps {
   isTaskDragging?: boolean;
 }
 
-const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskClick, canCreateTasks = true, onAddClick, canEdit = true, isDragging = false, isTaskDragging = false }) => {
+const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], index, onTaskClick, onNoteClick, canCreateTasks = true, onAddClick, canEdit = true, isDragging = false, isTaskDragging = false }) => {
   const { board, addTask, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -456,14 +458,108 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
     window.dispatchEvent(new Event('tasks-expanded-change'));
   };
 
+  // Notes share the same row dimensions as tasks: same width/height/spacing/style,
+  // top line title, bottom line Tags + attachment count, same drag handle left and
+  // chevron right. No dates, checkbox, Deep Focus icon, or body preview.
+  const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
+    const isExpanded = expandedTaskIds.includes(note.id);
+    const attachmentCount = (note.attachments?.length || 0) + ((note as any).images?.length || 0);
+    const noteTags = note.labels.length > 2 ? note.labels.slice(0, 2) : note.labels.slice(0, 2);
+    return (
+      <div
+        data-no-pan="true"
+        data-note-row="true"
+        onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note); }}
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text overflow-hidden max-w-full ${
+          isDraggingRow
+            ? 'border-primary/40 shadow-lg rotate-[2deg]'
+            : 'border-border hover:border-border/80 hover:shadow-sm'
+        }`}
+      >
+        <div className="flex items-center gap-2 px-4 py-4 min-w-0 overflow-hidden">
+          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <GripVertical className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-hidden">
+              {noteTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {note.labels.length > noteTags.length && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{note.labels.length - noteTags.length}
+                </span>
+              )}
+              {attachmentCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {attachmentCount} file{attachmentCount === 1 ? '' : 's'}
+                </span>
+              )}
+              <button
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  tagPopupTaskId === note.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Tag className="w-2.5 h-2.5" />
+                {tagPopupTaskId === note.id ? 'Close' : 'Tags'}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+        {isExpanded && !isDraggingRow && !isDragging && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-3 bg-muted/10 rounded-b-xl">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {note.labels.map(label => (
+                <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                  {label.name}
+                </span>
+              ))}
+              {attachmentCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  {attachmentCount} attachment{attachmentCount === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const COLUMN_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', 
     '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'
   ];
 
-  // Separate completed and uncompleted tasks
+  // Separate completed and uncompleted tasks. Notes share the same columns and
+  // ordering but never move into Completed (they have no completed state).
   const uncompletedTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
+  const uncompletedNotes = (notes || []).filter(n => !(n as any).completed);
+  // Shared ordering: tasks and notes interleaved by `order` so a note dragged
+  // above a task (or vice versa) stays put.
+  const combinedItems: Array<{ kind: 'task' | 'note'; item: Task }> = [
+    ...uncompletedTasks.map(t => ({ kind: 'task' as const, item: t })),
+    ...uncompletedNotes.map(n => ({ kind: 'note' as const, item: n })),
+  ].sort((a, b) => (a.item.order || 0) - (b.item.order || 0));
 
   const handleAddSubtask = () => {
     if (newSubtask.trim()) {
@@ -540,17 +636,32 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
 
   const renderTaskClone = (cloneProvided: any, cloneSnapshot: any, rubric: any) => {
     const t = tasks.find(x => x.id === rubric.draggableId) ?? board.tasks.find(x => x.id === rubric.draggableId);
-    if (!t) return null;
-    return (
-      <CenteredDragClone
-        draggableProps={cloneProvided.draggableProps}
-        dragHandleProps={cloneProvided.dragHandleProps}
-        innerRef={cloneProvided.innerRef}
-        style={cloneProvided.draggableProps.style as any}
-      >
-        {renderTaskRow(t, cloneProvided.dragHandleProps, true)}
-      </CenteredDragClone>
-    );
+    if (t) {
+      return (
+        <CenteredDragClone
+          draggableProps={cloneProvided.draggableProps}
+          dragHandleProps={cloneProvided.dragHandleProps}
+          innerRef={cloneProvided.innerRef}
+          style={cloneProvided.draggableProps.style as any}
+        >
+          {renderTaskRow(t, cloneProvided.dragHandleProps, true)}
+        </CenteredDragClone>
+      );
+    }
+    const n = (notes || []).find(x => x.id === rubric.draggableId);
+    if (n) {
+      return (
+        <CenteredDragClone
+          draggableProps={cloneProvided.draggableProps}
+          dragHandleProps={cloneProvided.dragHandleProps}
+          innerRef={cloneProvided.innerRef}
+          style={cloneProvided.draggableProps.style as any}
+        >
+          {renderNoteRow(n, cloneProvided.dragHandleProps, true)}
+        </CenteredDragClone>
+      );
+    }
+    return null;
   };
 
   return (
@@ -575,7 +686,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/30 transition-all text-left min-w-0"
             >
               <span className="text-sm font-semibold tracking-wide text-muted-foreground/80 truncate">{column.title}</span>
-              <span className="text-xs text-muted-foreground/50 flex-shrink-0">({uncompletedTasks.length})</span>
+              <span className="text-xs text-muted-foreground/50 flex-shrink-0">({uncompletedTasks.length + uncompletedNotes.length})</span>
             </button>
           </div>
 
@@ -590,12 +701,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                 {...dropProvided.droppableProps}
                 className={`${tasksCollapsed ? 'min-h-0 p-0 overflow-hidden' : 'min-h-[100px] p-2'} space-y-3 rounded-xl transition-colors duration-150 ${snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''}`}
               >
-                {/* Uncompleted tasks — only Draggables + placeholder may live inside a Droppable */}
-                {!tasksCollapsed && uncompletedTasks.map((task, taskIndex) => (
-                  <Draggable key={task.id} draggableId={task.id} index={taskIndex} isDragDisabled={!canEdit}>
+                {/* Uncompleted tasks + notes share one ordering — only Draggables + placeholder may live inside a Droppable */}
+                {!tasksCollapsed && combinedItems.map((entry, taskIndex) => (
+                  <Draggable key={entry.item.id} draggableId={entry.item.id} index={taskIndex} isDragDisabled={!canEdit}>
                     {(taskProvided, taskSnapshot) => (
                       <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
-                        {renderTaskRow(task, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
+                        {entry.kind === 'task'
+                          ? renderTaskRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)
+                          : renderNoteRow(entry.item, taskProvided.dragHandleProps, taskSnapshot.isDragging)}
                       </div>
                     )}
                   </Draggable>
@@ -605,7 +718,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
                     onBeforeCapture (pre-lift, see Projects.tsx) so the lift is
                     measured with them present — mounting them later would freeze
                     the card mid-animation. */}
-                {isTaskDragging && (tasksCollapsed || uncompletedTasks.length === 0) && (
+                {isTaskDragging && (tasksCollapsed || combinedItems.length === 0) && (
                   <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
                     Drop here to move into {column.title}
                   </div>
@@ -881,7 +994,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, index, onTaskC
               className={`${tasksCollapsed ? 'mt-0' : 'mt-3'} w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 border-2 border-dashed border-border hover:border-primary/20 rounded-2xl transition-all duration-300 hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed`}
             >
               <Plus className="w-4 h-4" />
-              Add Task
+              Add
             </button>
           )}
         </div>
