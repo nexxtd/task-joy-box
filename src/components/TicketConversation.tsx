@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { X, Send, Loader2, Maximize2, Minimize2, Paperclip, Download, Image as ImageIcon, FileText } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { X, Send, Loader2, Paperclip, Download, Image as ImageIcon, FileText, MoveDiagonal } from 'lucide-react';
 import { format } from 'date-fns';
 
 export interface TicketMessage {
@@ -40,8 +40,11 @@ interface Props {
   onUserNameClick?: () => void;
   sending?: boolean;
   leftPanel?: React.ReactNode;
+  /** @deprecated No longer used — full-page expand was removed. Kept for backward compat. */
   expanded?: boolean;
+  /** @deprecated No longer used — full-page expand was removed. Kept for backward compat. */
   onToggleExpand?: () => void;
+  /** @deprecated No longer used — all chats render as bottom-right modal. Kept for backward compat. */
   embedded?: boolean;
 }
 
@@ -63,9 +66,6 @@ export const TicketConversation: React.FC<Props> = ({
   onUserNameClick,
   sending = false,
   leftPanel,
-  expanded = false,
-  onToggleExpand,
-  embedded = false,
 }) => {
   const [input, setInput] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -73,6 +73,46 @@ export const TicketConversation: React.FC<Props> = ({
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Resizable bottom-right modal. Drag the top-left handle to resize.
+  const [size, setSize] = useState({ w: 400, h: 560 });
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  const onResizeMove = useCallback((e: PointerEvent) => {
+    const s = resizeRef.current;
+    if (!s || typeof window === 'undefined') return;
+    // Dragging top-left: moving left/up grows, right/down shrinks.
+    const dw = s.startX - e.clientX;
+    const dh = s.startY - e.clientY;
+    const maxW = Math.min(860, window.innerWidth - 32);
+    const maxH = Math.min(window.innerHeight - 32, 820);
+    const w = Math.max(320, Math.min(maxW, s.startW + dw));
+    const h = Math.max(380, Math.min(maxH, s.startH + dh));
+    setSize({ w, h });
+  }, []);
+
+  const endResize = useCallback(() => {
+    resizeRef.current = null;
+    try { window.removeEventListener('pointermove', onResizeMove as any); } catch {}
+    try { window.removeEventListener('pointerup', endResize as any); } catch {}
+    try { document.body.style.userSelect = ''; } catch {}
+  }, [onResizeMove]);
+
+  const startResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: size.w, startH: size.h };
+    try { document.body.style.userSelect = 'none'; } catch {}
+    window.addEventListener('pointermove', onResizeMove as any);
+    window.addEventListener('pointerup', endResize as any);
+  }, [size, onResizeMove, endResize]);
+
+  useEffect(() => {
+    return () => {
+      try { window.removeEventListener('pointermove', onResizeMove as any); } catch {}
+      try { window.removeEventListener('pointerup', endResize as any); } catch {}
+    };
+  }, [onResizeMove, endResize]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -129,8 +169,20 @@ export const TicketConversation: React.FC<Props> = ({
   const headerLabel = viewAs === 'admin' ? ticket.userName || 'User' : 'Support Team';
 
   const conversationPanel = (
-    <div className={`${embedded ? 'flex-1 bg-card border border-border rounded-2xl shadow-sm' : expanded ? 'flex-1 h-full bg-card border border-border rounded-2xl shadow-2xl' : leftPanel ? 'w-[420px] bg-card border border-border rounded-2xl shadow-2xl' : 'w-[400px] bg-card border border-border rounded-2xl shadow-2xl'} flex flex-col min-h-0 overflow-hidden`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+    <div
+      className="bg-card border border-border rounded-2xl shadow-2xl flex flex-col min-h-0 overflow-hidden relative"
+      style={{ width: leftPanel ? undefined : size.w, height: size.h, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)' }}
+    >
+      {/* Resize handle — top left, drag to resize */}
+      <button
+        onPointerDown={startResize}
+        title="Drag to resize"
+        aria-label="Resize chat window"
+        className="absolute top-1 left-1 z-10 p-1.5 rounded-lg hover:bg-muted cursor-nwse-resize text-muted-foreground hover:text-foreground transition-colors touch-none"
+      >
+        <MoveDiagonal className="w-3.5 h-3.5" />
+      </button>
+      <div className="flex items-center justify-between pl-8 pr-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-mono text-muted-foreground flex-shrink-0">#{ticket.id}</span>
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
@@ -141,15 +193,10 @@ export const TicketConversation: React.FC<Props> = ({
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {onToggleExpand && !embedded && (
-            <button onClick={onToggleExpand} title={expanded ? 'Exit full view' : 'Expand to full view'} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
-              {expanded ? <Minimize2 className="w-4 h-4 text-muted-foreground" /> : <Maximize2 className="w-4 h-4 text-muted-foreground" />}
-            </button>
-          )}
           {viewAs === 'admin' && onCloseTicket && !isClosed && (
             <button onClick={onCloseTicket} className="text-xs px-2.5 py-1 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors font-medium">Close Ticket</button>
           )}
-          <button onClick={onClose} className="p-1 hover:bg-muted rounded-lg transition-colors"><X className="w-4 h-4 text-muted-foreground" /></button>
+          <button onClick={onClose} aria-label="Close chat" className="p-1 hover:bg-muted rounded-lg transition-colors"><X className="w-4 h-4 text-muted-foreground" /></button>
         </div>
       </div>
       <div className="px-3 py-1.5 border-b border-border bg-muted/30 flex-shrink-0"><p className="text-xs text-muted-foreground truncate">{ticket.subject}</p></div>
@@ -221,23 +268,31 @@ export const TicketConversation: React.FC<Props> = ({
     </div>
   ) : null;
 
-  if (embedded) {
-    return (
-      <>
-        <div className="flex-1 flex gap-3 min-h-0 overflow-hidden">
-          {leftPanel && <div className="flex-1 bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">{leftPanel}</div>}
-          {conversationPanel}
-        </div>
-        {lightboxOverlay}
-      </>
-    );
-  }
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const totalW = leftPanel ? Math.min(size.w + 420, vw - 32) : size.w;
 
   return (
     <>
-      <div className={expanded ? 'fixed inset-3 z-50 flex gap-3' : 'fixed bottom-4 right-4 z-50 flex gap-3'} style={expanded ? { maxHeight: 'none' } : { maxHeight: '85vh' }}>
-        {leftPanel && <div className={`${expanded ? 'flex-1 h-full' : 'w-[520px]'} bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden`}>{leftPanel}</div>}
-        {conversationPanel}
+      {/* Clicking outside the modal closes it */}
+      <div className="fixed inset-0 z-40" onClick={onClose} aria-hidden="true" />
+      <div
+        className="fixed bottom-4 right-4 z-50 flex gap-3 items-end"
+        style={{ maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)' }}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-label={`Ticket #${ticket.id} chat`}
+      >
+        {leftPanel && (
+          <div
+            className="hidden sm:flex bg-card border border-border rounded-2xl shadow-2xl flex-col overflow-hidden flex-shrink-0"
+            style={{ width: 380, height: size.h, maxHeight: 'calc(100vh - 32px)' }}
+          >
+            {leftPanel}
+          </div>
+        )}
+        <div style={{ width: leftPanel ? size.w : totalW, maxWidth: 'calc(100vw - 32px)' }} className="flex-shrink-0">
+          {conversationPanel}
+        </div>
       </div>
       {lightboxOverlay}
     </>

@@ -286,8 +286,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-4 py-4 min-w-0 overflow-hidden">
-          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-4 min-w-0 overflow-hidden">
+          <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
           <div onClick={e => { e.stopPropagation(); handleToggleComplete(e, task); }}>
@@ -362,17 +362,17 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
-              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+              className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             <button
               onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-              className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
+              className="p-2.5 -m-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary min-w-[40px] min-h-[40px] flex items-center justify-center"
               title="Open Deep Focus"
             >
-              <Brain className="w-3.5 h-3.5" />
+              <Brain className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -389,9 +389,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           </div>
         )}
         {dateEditTaskId === task.id && dateEditField && !isDraggingRow && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-3 sm:px-4 py-3 bg-muted/20 rounded-b-xl">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
                 <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
                   type="date"
@@ -403,7 +403,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
                 />
               </div>
-              <div className="relative w-[140px]">
+              <div className="relative w-full sm:w-[140px]">
                 <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                 <input
                   type="time"
@@ -476,8 +476,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-4 py-4 min-w-0 overflow-hidden">
-          <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-3 sm:py-4 min-w-0 overflow-hidden">
+          <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
@@ -517,10 +517,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
-              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+              className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
-              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -668,7 +668,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[680px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[340px] xl:w-[680px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
@@ -761,14 +761,23 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                       </button>
                       {!completedCollapsed && (
                         <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
-                          {completedTasks.map(task => (
-                            <CompletedTaskRow
-                              key={task.id}
-                              task={task}
-                              onToggleComplete={canEdit ? (t) => updateTask(t.id, { completed: false, completedAt: undefined }) : undefined}
-                              onOpenTask={onTaskClick}
-                              onDeleteTask={canEdit ? (t) => deleteTask(t.id) : undefined}
-                            />
+                          {completedTasks.map((task, compIndex) => (
+                            <Draggable key={task.id} draggableId={task.id} index={compIndex} isDragDisabled={!canEdit}>
+                              {(compProvided) => (
+                                <div
+                                  ref={compProvided.innerRef}
+                                  {...compProvided.draggableProps}
+                                  {...compProvided.dragHandleProps}
+                                >
+                                  <CompletedTaskRow
+                                    task={task}
+                                    onToggleComplete={canEdit ? (t) => updateTask(t.id, { completed: false, completedAt: undefined }) : undefined}
+                                    onOpenTask={onTaskClick}
+                                    onDeleteTask={canEdit ? (t) => deleteTask(t.id) : undefined}
+                                  />
+                                </div>
+                              )}
+                            </Draggable>
                           ))}
                         </div>
                       )}
@@ -808,7 +817,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 rows={2}
               />
               
-              <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Priority</label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as any)}>

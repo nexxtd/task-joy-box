@@ -15,18 +15,19 @@ export interface UserDetailViewProps {
 
 const PAGES: { id: string; label: string; icon: any }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'projects', label: 'Projects', icon: FolderOpen },
-  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'insights', label: 'Insights', icon: BarChart3 },
-  { id: 'ai', label: 'AI Assistant', icon: Sparkles },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+  { id: 'projects', label: 'Projects', icon: FolderOpen },
   { id: 'notes', label: 'Notes', icon: NotebookPen },
+  { id: 'settings', label: 'Settings', icon: User },
+  { id: 'ai', label: 'AI Assistant', icon: Sparkles },
+  { id: 'support', label: 'Support', icon: MessageSquare },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'goals', label: 'Goals', icon: Target },
   { id: 'habits', label: 'Habits', icon: CheckCircle2 },
   { id: 'documents', label: 'Documents', icon: FileText },
   { id: 'collaboration', label: 'Collaboration', icon: Users },
   { id: 'whiteboard', label: 'Whiteboard', icon: LayoutGrid },
-  { id: 'support', label: 'Support', icon: MessageSquare },
 ];
 
 const LANGUAGES = ['en', 'fr', 'es', 'de'];
@@ -216,6 +217,43 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     const t = fu.tasks || {}, p = fu.projects || {}, g = fu.goals || {}, h = fu.habits || {},
       n = fu.notes || {}, w = fu.whiteboard || {}, ai = fu.ai || {}, f = fu.focus || {},
       d = fu.dashboard || {}, e = fu.engagement || {};
+    const rawUi = (fu.uiUsage || {}) as Record<string, Record<string, number>>;
+    const widgetsMapForUi = (((fu.dashboard as any)?.widgets || (fu.insights as any)?.widgets || {}) as Record<string, any>);
+    const ui: Record<string, Record<string, number>> = {};
+    for (const [pg, feats] of Object.entries(rawUi)) {
+      ui[String(pg).toLowerCase()] = { ...((feats as any) || {}) };
+    }
+    // Fallback: parse `ui:<page>:<feature>` keys from the widgets map (same
+    // dashboard_widget_usage table). Covers details.featureUsage.dashboard.widgets
+    // when `uiUsage` is absent. Guard avoids double-counting when both exist.
+    for (const [k, v] of Object.entries(widgetsMapForUi)) {
+      if (typeof k !== 'string' || !k.startsWith('ui:')) continue;
+      const parts = k.split(':');
+      if (parts.length < 3) continue;
+      const pg = (parts[1] || 'unknown').toLowerCase();
+      const feat = parts.slice(2).join(':').toLowerCase();
+      ui[pg] = ui[pg] || {};
+      if (!(feat in ui[pg])) ui[pg][feat] = Number(v) || 0;
+    }
+    // AI Assistant alias: frontend tracks as `ai`, server may expose `ai-assistant`.
+    ui['ai'] = { ...(ui['ai-assistant'] || {}), ...(ui['ai'] || {}) };
+    const buttonSection = (pageKey: string, pageLabel: string, icon?: any) => {
+      const key = String(pageKey).toLowerCase();
+      const entries: [string, number][] = Object.entries(ui[key] || {}).map(([k, v]) => [k, Number(v) || 0]);
+      entries.sort((a, b) => b[1] - a[1]);
+      const total = entries.reduce((a, [, b]) => a + b, 0);
+      const top = entries.length ? entries[0] : null;
+      const friendly = (s: string) => s.replace(/-/g, ' ');
+      return [
+        { title: `${pageLabel} — Button Usage`, icon, rows: entries.length ? entries.map(([k, v]) => ({ label: friendly(k), value: v })) : [{ label: 'No button activity yet', value: '—' }] },
+        { title: `${pageLabel} — Button Activity`, rows: [
+          { label: 'Total button presses', value: total },
+          { label: 'Distinct features used', value: entries.length },
+          { label: 'Most used feature', value: top ? `${friendly(top[0])} (${top[1]})` : '—' },
+          { label: 'Avg presses per feature', value: entries.length ? (total / entries.length).toFixed(1) : '—' },
+        ]},
+      ];
+    };
     const widgetEntries: [string, any][] = Object.entries(d.widgets || {});
     const totalWidgets = widgetEntries.reduce((a, [, b]: any) => a + (Number(b) || 0), 0);
     const topWidget = widgetEntries.length ? [...widgetEntries].sort((a: any, b: any) => Number(b[1]) - Number(a[1]))[0] as any : null;
@@ -226,6 +264,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     const totalFiles = (Number(n.attachments) || 0) + (Number(t.attachments) || 0) + (Number(t.images) || 0);
     const s: Record<string, { title: string; icon?: any; rows: { label: string; value: any }[] }[]> = {
       dashboard: [
+        ...buttonSection('dashboard', 'Dashboard', LayoutDashboard),
         { title: 'Widget Usage — Every Widget', icon: LayoutDashboard, rows: widgetEntries.length ? widgetEntries.map(([k, v]: any) => ({ label: WIDGET_LABELS[k] || k.replace(/-/g, ' '), value: v })) : [{ label: 'Widgets tracked', value: 0 }, { label: 'No widget activity yet', value: '—' }] },
         { title: 'Dashboard Activity', rows: [
           { label: 'Total usage events', value: totalWidgets },
@@ -237,6 +276,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       projects: [
+        ...buttonSection('projects', 'Projects', FolderOpen),
         { title: 'Projects & Boards', icon: FolderOpen, rows: [
           { label: 'Boards created', value: p.boards },
           { label: 'Milestones created', value: p.milestones },
@@ -250,6 +290,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       tasks: [
+        ...buttonSection('tasks', 'Tasks', CheckSquare),
         { title: 'Task Overview — Status', icon: CheckSquare, rows: [
           { label: 'Total created', value: t.total },
           { label: 'Completed', value: t.completed },
@@ -297,6 +338,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       insights: [
+        ...buttonSection('insights', 'Insights', BarChart3),
         { title: 'Insights — Productivity', icon: BarChart3, rows: [
           { label: 'Tasks total', value: t.total },
           { label: 'Tasks completed', value: t.completed },
@@ -311,6 +353,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       ai: [
+        ...buttonSection('ai', 'AI Assistant', Sparkles),
         { title: 'AI Assistant — Usage', icon: Sparkles, rows: [
           { label: 'Total AI messages', value: ai.totalMessages },
           { label: 'Avg per task', value: t.total ? (Number(ai.totalMessages || 0) / Number(t.total)).toFixed(2) : '—' },
@@ -325,6 +368,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       notes: [
+        ...buttonSection('notes', 'Notes', NotebookPen),
         { title: 'Notes — Library', icon: NotebookPen, rows: [
           { label: 'Notes created', value: n.total },
           { label: 'Pinned notes', value: n.pinned },
@@ -377,6 +421,14 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           { label: 'Avg items per whiteboard', value: w.whiteboardsCreated ? (Number((Object.values((w.items as any) || {}) as any[]).reduce((a: number, b: any) => a + Number(b || 0), 0)) / Number(w.whiteboardsCreated)).toFixed(1) : '—' },
         ]},
       ],
+      settings: [
+        ...buttonSection('settings', 'Settings', User),
+        { title: 'Settings — Preferences', icon: User, rows: [
+          { label: 'Language', value: (details?.user?.language || 'English') },
+          { label: 'Settings button presses', value: Object.values((ui['settings'] || {}) as Record<string, number>).reduce((a: number, b: any) => a + (Number(b) || 0), 0) },
+          { label: 'Distinct settings features used', value: Object.keys(ui['settings'] || {}).length },
+        ]},
+      ],
       whiteboard: [
         { title: 'Whiteboard — Boards', icon: LayoutGrid, rows: [{ label: 'Whiteboards created', value: w.whiteboardsCreated }] },
         { title: 'Whiteboard — Items Breakdown', rows: Object.entries(w.items || {}).length ? Object.entries(w.items || {}).map(([k, v]) => ({ label: k.replace(/-/g, ' '), value: v })) : [{ label: 'No items yet', value: '—' }] },
@@ -386,6 +438,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
       ],
       support: [
+        ...buttonSection('support', 'Support', MessageSquare),
         { title: 'Support — Tickets', icon: MessageSquare, rows: [
           { label: 'Tickets created', value: e.tickets },
           { label: 'Open tickets', value: e.openTickets },

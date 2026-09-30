@@ -20,7 +20,8 @@ import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, C
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchTemplates as fetchTaskTemplates, createTemplate as createTaskTemplate, updateTemplate as updateTaskTemplate, deleteTemplate as deleteTaskTemplateApi } from '@/services/taskTemplateService';
+import { fetchNoteTemplates, createNoteTemplate } from '@/services/noteTemplateService';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
@@ -65,6 +66,29 @@ export type CreateTaskModalProps = {
   templateMode?: boolean;
   onCreateTemplate?: (details: { name: string; title: string; description: string; priority: Priority; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: Label[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: Attachment[]; attachments: any[] }) => Promise<void> | void;
   hideSubtasks?: boolean;
+  variant?: 'task' | 'note';
+  /** Edit Template mode: same layout as Create Task, title "Edit Template", no AI Builder. */
+  editTemplateMode?: boolean;
+  editTemplateInitial?: {
+    name?: string;
+    title?: string;
+    description?: string;
+    priority?: Priority;
+    duration?: number;
+    startDate?: string;
+    startTime?: string;
+    dueDate?: string;
+    dueTime?: string;
+    projectId?: number | null;
+    columnId?: string;
+    labels?: Label[];
+    subtasks?: Array<{ text: string; durationMinutes: number }>;
+    checklistItems?: string[];
+    checklists?: any[];
+    images?: Attachment[];
+    attachments?: any[];
+  } | null;
+  onUpdateTemplate?: (details: { name: string; title: string; description: string; priority: Priority; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: Label[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: Attachment[]; attachments: any[] }) => Promise<void> | void;
 };
 
 type ProjectMeta = {
@@ -155,7 +179,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   templateMode,
   onCreateTemplate,
   hideSubtasks,
+  variant = 'task',
+  editTemplateMode,
+  editTemplateInitial,
+  onUpdateTemplate,
 }) => {
+  const isNote = variant === 'note';
+  const noun = isNote ? 'Note' : 'Task';
+  const personalBoardValue = isNote ? 'my-notes' : 'my-tasks';
+  const personalBoardLabel = isNote ? 'My Notes' : 'My Tasks';
+  const aiBuilderTitle = isNote ? 'AI Note Builder' : 'AI Task Builder';
+  const fetchTemplates = isNote ? fetchNoteTemplates : fetchTaskTemplates;
+  const createTemplate = isNote ? createNoteTemplate : createTaskTemplate;
   const { board, addTask, updateTask } = useBoardContext();
   const availableColumns = columnsOverride ?? board.columns;
   const createItem = onCreateItem ?? addTask;
@@ -408,6 +443,41 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       if (initialValues.files) setNewFiles(initialValues.files);
       if (initialValues.images) setNewTaskImages(initialValues.images);
     }
+    // Edit Template: prefill the exact same creation layout with existing values.
+    if (editTemplateMode && editTemplateInitial) {
+      const t = editTemplateInitial;
+      if (t.name != null) setTemplateName(t.name);
+      if (t.title != null) setNewTaskTitle(t.title);
+      if (t.description != null) setNewTaskDescription(t.description);
+      if (t.priority != null) setNewTaskPriority(t.priority);
+      if (t.duration != null) setNewTaskDuration(t.duration);
+      if (t.startDate != null) setNewTaskStartDate(t.startDate);
+      if (t.startTime != null) setNewTaskStartTime(t.startTime);
+      if (t.dueDate != null) setNewTaskDueDate(t.dueDate);
+      if (t.dueTime != null) setNewTaskDueTime(t.dueTime);
+      if (t.projectId !== undefined) setNewTaskProjectId(t.projectId === null ? '' : t.projectId);
+      if (t.columnId != null) setNewTaskColumnId(t.columnId);
+      if (t.labels) setNewTaskLabels(t.labels);
+      if (t.subtasks) setNewTaskSubtasks(t.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: st.durationMinutes })));
+      if (t.checklistItems) setNewChecklistItems(t.checklistItems.map(text => ({ id: crypto.randomUUID(), text })));
+      if (t.checklists && Array.isArray(t.checklists)) {
+        const flatItems: { id: string; text: string }[] = [];
+        const lists: { id: string; title: string; items: { id: string; text: string; completed: boolean }[] }[] = [];
+        for (const cl of t.checklists) {
+          if (!cl) continue;
+          if (typeof cl === 'string') { flatItems.push({ id: crypto.randomUUID(), text: cl }); continue; }
+          const items = Array.isArray((cl as any).items) ? (cl as any).items.map((it: any) => typeof it === 'string' ? { id: crypto.randomUUID(), text: it, completed: false } : { id: (it as any).id || crypto.randomUUID(), text: (it as any).text || '', completed: !!(it as any).completed }) : [];
+          if ((cl as any).title === 'Checklist' && lists.length === 0 && flatItems.length === 0) {
+            for (const it of items) flatItems.push({ id: it.id, text: it.text });
+          } else {
+            lists.push({ id: (cl as any).id || crypto.randomUUID(), title: (cl as any).title || 'Checklist', items });
+          }
+        }
+        if (flatItems.length) setNewChecklistItems(flatItems);
+        if (lists.length) setNewChecklistLists(lists);
+      }
+      if (t.images) setNewTaskImages(t.images);
+    }
     if (initialAI) setAiBuilderOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -508,7 +578,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    if (templateMode && !templateName.trim()) return;
+    if ((templateMode || editTemplateMode) && !templateName.trim()) return;
     // When a project is selected the task must live in one of that project's
     // columns, otherwise project boards (which filter by both projectId and
     // column.projectId) will never show it.
@@ -528,8 +598,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       if (!col || col.projectId !== Number(newTaskProjectId)) return;
     }
 
-    if (templateMode && onCreateTemplate) {
-      await onCreateTemplate({
+    if ((templateMode && onCreateTemplate) || (editTemplateMode && onUpdateTemplate)) {
+      const payload = {
         name: templateName.trim(),
         title: newTaskTitle.trim(),
         description: newTaskDescription,
@@ -555,7 +625,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         ],
         images: newTaskImages,
         attachments: [],
-      });
+      };
+      if (editTemplateMode && onUpdateTemplate) {
+        await onUpdateTemplate(payload);
+      } else if (templateMode && onCreateTemplate) {
+        await onCreateTemplate(payload);
+      }
       onClose();
       return;
     }
@@ -686,20 +761,20 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-start justify-center p-4 md:p-8" onClick={() => onClose()}>
+      <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:p-4 md:p-8" onClick={() => onClose()}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
         <div
-          className="relative w-full max-w-5xl bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+          className="relative w-full max-w-5xl bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92dvh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground">{templateMode ? 'Create Template' : 'Create Task'}</h2>
+          <div className="px-4 sm:px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
+            <h2 className="text-base font-semibold text-foreground">{editTemplateMode ? 'Edit Template' : templateMode ? 'Create Template' : `Create ${noun}`}</h2>
             <div className="flex items-center gap-2">
-              {!templateMode && (
+              {!templateMode && !editTemplateMode && (
                 <button
                   onClick={() => setAiBuilderOpen(true)}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-                  title="AI Task Builder"
+                  title={aiBuilderTitle}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   AI Builder
@@ -711,7 +786,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             </div>
           </div>
 
-          {templateMode && (
+          {(templateMode || editTemplateMode) && (
             <div className="px-5 pt-5">
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Template name</label>
               <input
@@ -726,7 +801,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
           <div className="p-5 space-y-5">
             <div>
-              <label className="text-xs font-semibold text-muted-foreground mb-1 block">Task title</label>
+              <label className="text-xs font-semibold text-muted-foreground mb-1 block">{noun} title</label>
               <input
                 autoFocus
                 value={newTaskTitle}
@@ -763,12 +838,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
-                <Select value={newTaskProjectId === '' ? 'my-tasks' : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === 'my-tasks' ? '' : Number(v)); setNewTaskColumnId(''); }}>
+                <Select value={newTaskProjectId === '' ? personalBoardValue : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === personalBoardValue ? '' : Number(v)); setNewTaskColumnId(''); }}>
                   <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="my-tasks">My Tasks</SelectItem>
+                    <SelectItem value={personalBoardValue}>{personalBoardLabel}</SelectItem>
                     {projects.map(project => (
                       <SelectItem key={project.id} value={String(project.id)}>{project.name}</SelectItem>
                     ))}
@@ -1395,7 +1470,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
           <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
             <div className="relative">
-              {!templateMode && (
+              {!templateMode && !editTemplateMode && (
                 <button
                   onClick={() => setTemplateMenuOpen(!templateMenuOpen)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
@@ -1404,7 +1479,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   Templates
                 </button>
               )}
-              {templateMenuOpen && !templateMode && (
+              {templateMenuOpen && !templateMode && !editTemplateMode && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setTemplateMenuOpen(false)} />
                   <div className="absolute bottom-full left-0 mb-2 w-48 bg-card border border-border rounded-xl shadow-xl z-30 p-1.5">
@@ -1446,10 +1521,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               <button onClick={() => { resetTaskDraft(); onClose(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={!newTaskTitle.trim() || (templateMode && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                disabled={!newTaskTitle.trim() || ((templateMode || editTemplateMode) && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
               >
-                {templateMode ? 'Template' : 'Save'}
+                {editTemplateMode ? 'Save Template' : templateMode ? 'Template' : 'Save'}
               </button>
             </div>
           </div>
@@ -1482,7 +1557,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
                 <input
                   autoFocus
-                  placeholder="e.g. Daily Standup Task"
+                  placeholder={`e.g. Daily Standup ${noun}`}
                   value={templateName}
                   onChange={e => setTemplateName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
@@ -1562,7 +1637,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm font-medium text-foreground">No templates yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Save a task as a template first.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Save a {noun.toLowerCase()} as a template first.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -1603,7 +1678,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         </div>
       )}
 
-      {aiBuilderOpen && !templateMode && (
+      {aiBuilderOpen && !templateMode && !editTemplateMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setAiBuilderOpen(false)}>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
           <div
@@ -1616,8 +1691,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">AI Task Builder</h2>
-                  <p className="text-xs text-muted-foreground">Describe your task and AI will structure it for you</p>
+                  <h2 className="text-base font-semibold text-foreground">{aiBuilderTitle}</h2>
+                  <p className="text-xs text-muted-foreground">Describe your {noun.toLowerCase()} and AI will structure it for you</p>
                 </div>
               </div>
               <button onClick={() => setAiBuilderOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
@@ -1631,7 +1706,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   <Sparkles className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">Pro Feature</h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">AI Task Builder is available exclusively for Pro users. Upgrade to unlock AI-powered task creation.</p>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">{aiBuilderTitle} is available exclusively for Pro users. Upgrade to unlock AI-powered {noun.toLowerCase()} creation.</p>
                 <button
                   onClick={() => window.location.href = '/pricing'}
                   className="px-6 py-2.5 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all"
@@ -1645,7 +1720,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   autoFocus
                   value={aiBuilderInput}
                   onChange={e => setAiBuilderInput(e.target.value)}
-                  placeholder={"Describe your task, project, or goal in detail...\n\ne.g. 'I need to launch a new website by next Friday based on image 1 and using attached specs.pdf. It requires designing 3 pages, writing copy, setting up hosting, and testing on mobile.'"}
+                  placeholder={`Describe your ${noun.toLowerCase()}, project, or goal in detail...\n\ne.g. 'I need to launch a new website by next Friday based on image 1 and using attached specs.pdf. It requires designing 3 pages, writing copy, setting up hosting, and testing on mobile.'`}
                   rows={5}
                   className="w-full bg-muted/40 border border-border rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />

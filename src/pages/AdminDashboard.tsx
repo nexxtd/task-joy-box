@@ -718,7 +718,6 @@ const AdminDashboard = () => {
   const [panelMessages, setPanelMessages] = useState<any[]>([]);
   const [sendingAdminMessage, setSendingAdminMessage] = useState(false);
   const [userFullDetails, setUserFullDetails] = useState<any | null>(null);
-  const [chatExpanded, setChatExpanded] = useState(false);
   const [ticketFilter, setTicketFilter] = useState<string>('all');
   const [ticketSort, setTicketSort] = useState<string>('newest');
   const [ticketTypeFilter, setTicketTypeFilter] = useState<string>('all');
@@ -1619,7 +1618,7 @@ if (loading && !stats) {
                   .map((ticket: any) => (
                   <button
                     key={ticket.id}
-                    onClick={() => { setActivePanelTicket(ticket); setChatExpanded(false); }}
+                    onClick={() => { setActivePanelTicket(ticket); }}
                     className={`w-full flex items-center justify-between p-4 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left ${activePanelTicket?.id === ticket.id ? 'border-primary' : 'border-border'}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -2473,8 +2472,6 @@ if (loading && !stats) {
           onCloseTicket={handleCloseTicket}
           onSendMessage={handleAdminSendMessage}
           sending={sendingAdminMessage}
-          expanded={chatExpanded}
-          onToggleExpand={() => setChatExpanded(!chatExpanded)}
           onUserNameClick={() => {
             setAdminPanelTab('user-profile');
             if (activePanelTicket?.userId) handleViewUserData(activePanelTicket.userId);

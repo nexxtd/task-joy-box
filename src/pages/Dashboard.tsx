@@ -7,7 +7,7 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useEnergyAnalysis, isEnergyTrackerEnabled, ENERGY_SLOTS } from '@/utils/energyStats';
 import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import {
-  CheckSquare, Clock, Plus, ArrowRight,
+  CheckSquare, Clock, Plus, ArrowRight, ChevronDown,
   TrendingUp, TrendingDown, Calendar, Zap, X,
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles,
   AlertTriangle, Flag, History, PieChart, Tags,
@@ -20,6 +20,7 @@ import CreateTaskModal from '@/components/CreateTaskModal';
 import TagsModal from '@/components/shared/TagsModal';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -263,9 +264,31 @@ const Dashboard: React.FC = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [viewProjectsMenuOpen, setViewProjectsMenuOpen] = useState(false);
   const viewProjectsMenuRef = useRef<HTMLDivElement | null>(null);
+  // "View X" shortcut target — defaults to Projects, persisted per user.
+  // Every page except Dashboard can be picked from the arrow dropdown.
+  const DASHBOARD_SHORTCUT_PAGES = useMemo(() => ([
+    { label: 'Projects', path: '/projects' },
+    { label: 'Tasks', path: '/tasks' },
+    { label: 'Insights', path: '/insights' },
+    { label: 'Notes', path: '/notes' },
+    { label: 'Calendar', path: '/calendar' },
+    { label: 'AI Assistant', path: '/ai-chat' },
+    { label: 'Support', path: '/support' },
+    { label: 'Settings', path: '/settings' },
+  ]), []);
+  const [dashboardShortcut, setDashboardShortcut] = useState(() => {
+    try { return localStorage.getItem('dashboard_shortcut_target') || '/projects'; } catch { return '/projects'; }
+  });
+  const dashboardShortcutLabel = DASHBOARD_SHORTCUT_PAGES.find(p => p.path === dashboardShortcut)?.label || 'Projects';
+  const setShortcutTarget = (path: string) => {
+    setDashboardShortcut(path);
+    try { localStorage.setItem('dashboard_shortcut_target', path); } catch {}
+    trackUsage('dashboard', 'view-shortcut-change');
+  };
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
   const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  useEffect(() => { trackPageVisit('dashboard'); }, []);
   const [showTaskPicker, setShowTaskPicker] = useState(false);
   const [taskPickerQuery, setTaskPickerQuery] = useState('');
 
@@ -1657,46 +1680,59 @@ style={{ background: 'hsl(var(--primary))' }}>
         className="flex-1 overflow-y-auto"
         style={{ background: 'hsl(var(--background))' }}
       >
-        <header className="px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between"
+        <header className="px-4 sm:px-6 min-h-16 py-2 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between gap-2 flex-shrink-0"
           style={{ borderColor: 'hsl(var(--border))' }}
         >
-          <div className="flex items-baseline gap-2 min-w-0">
-            <h1 className="text-base font-bold text-foreground whitespace-nowrap animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
-            <p className="text-xs text-muted-foreground truncate">
+          <div className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-2 min-w-0 flex-1">
+            <h1 className="text-base font-bold text-foreground truncate animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
+            <p className="hidden sm:block text-xs text-muted-foreground truncate">
               {dateStr} · You have <span className="text-primary font-medium">{activeTasks.length} tasks</span> active. Let's make it productive!
             </p>
+            <p className="sm:hidden text-[11px] text-muted-foreground truncate">
+              {dateStr} · <span className="text-primary font-medium">{activeTasks.length} active</span>
+            </p>
           </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => setShowCustomize(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
               >
                 <LayoutDashboard className="w-4 h-4" /> Customize Dashboard
               </button>
+              <button
+                onClick={() => setShowCustomize(true)}
+                aria-label="Customize dashboard"
+                className="sm:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-muted/50 text-muted-foreground"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+              </button>
               <div className="relative" ref={viewProjectsMenuRef}>
-                <button
-                  onClick={() => navigate('/projects')}
-                  onContextMenu={(e) => { e.preventDefault(); setViewProjectsMenuOpen(prev => !prev); }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                  title="Left-click for Projects, right-click to jump to any page"
-                >
-                  <FolderOpen className="w-4 h-4" /> View Projects
-                </button>
+                <div className="flex items-stretch rounded-xl overflow-hidden border border-border bg-muted/50">
+                  <button
+                    onClick={() => { trackUsage('dashboard', 'view-shortcut-go'); navigate(dashboardShortcut); }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                    title={`Go to ${dashboardShortcutLabel}`}
+                  >
+                    <FolderOpen className="w-4 h-4" /> View {dashboardShortcutLabel}
+                  </button>
+                  <button
+                    onClick={() => setViewProjectsMenuOpen(prev => !prev)}
+                    aria-label="Choose shortcut target"
+                    title="Choose shortcut target"
+                    className="px-2 border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
                 {viewProjectsMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setViewProjectsMenuOpen(false)} onContextMenu={(e) => { e.preventDefault(); setViewProjectsMenuOpen(false); }} />
+                    <div className="fixed inset-0 z-40" onClick={() => setViewProjectsMenuOpen(false)} />
                     <div className="absolute right-0 mt-1.5 w-48 bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
-                      {[
-                        { label: 'Dashboard', path: '/' },
-                        { label: 'Projects', path: '/projects' },
-                        { label: 'Tasks', path: '/tasks' },
-                        { label: 'Notes', path: '/notes' },
-                        { label: 'Calendar', path: '/calendar' },
-                      ].map(item => (
+                      {DASHBOARD_SHORTCUT_PAGES.map(item => (
                         <button
                           key={item.path}
-                          onClick={() => { setViewProjectsMenuOpen(false); navigate(item.path); }}
-                          className="w-full text-left px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
+                          onClick={() => { setShortcutTarget(item.path); setViewProjectsMenuOpen(false); navigate(item.path); }}
+                          className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground'}`}
                         >
                           {item.label}
                         </button>
@@ -1706,15 +1742,15 @@ style={{ background: 'hsl(var(--primary))' }}>
                 )}
               </div>
               <button
-                onClick={() => setShowAddTask(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
+                onClick={() => { trackUsage('dashboard', 'add-task'); navigate('/tasks?create=1'); }}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
               >
                 <Plus className="w-4 h-4" /> Add Task
               </button>
             </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {layout.length === 0 && !previewLayout ? (
             <div className="text-center py-20">
               <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
@@ -1728,9 +1764,12 @@ style={{ background: 'hsl(var(--primary))' }}>
               </button>
             </div>
           ) : (
+            <>
+            {/* Desktop drag grid — hidden on phones (see stacked list below).
+                The 12-column absolute layout squishes unreadably at 375px. */}
             <div
               ref={gridRef}
-              className="relative"
+              className="relative hidden md:block dashboard-grid-desktop"
               style={{ height: gridHeight }}
             >
               {(previewLayout ?? safeLayout).map(widget => {
@@ -1817,6 +1856,45 @@ style={{ background: 'hsl(var(--primary))' }}>
                 );
               })}
             </div>
+            {/* Phone: same widgets as a plain vertical stack — no drag grid,
+                no absolute positioning, full-width cards. */}
+            <div className="md:hidden space-y-4">
+              {safeLayout.map(widget => {
+                const def = WIDGET_DEFS.find(d => d.type === widget.type);
+                const accent = def?.accent || 'label-blue';
+                return (
+                  <section
+                    key={widget.id}
+                    aria-label={widget.title}
+                    className="rounded-2xl flex flex-col overflow-hidden"
+                    style={{
+                      background: cardStyle(accent).background,
+                      border: cardStyle(accent).border,
+                      boxShadow: cardStyle(accent).boxShadow,
+                    }}
+                  >
+                    <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                      <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                        {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
+                      </div>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide flex-1">{widget.title}</h3>
+                      <button
+                        onClick={() => removeWidget(widget.id)}
+                        className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                        title="Remove"
+                        aria-label={`Remove ${widget.title}`}
+                      >
+                        <X className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="px-4 pb-4 pt-1">
+                      {renderWidgetBody(widget)}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+            </>
           )}
         </div>
       </div>

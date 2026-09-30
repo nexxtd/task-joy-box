@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { useAuth } from '@/context/AuthContext';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 type EntryType = 'user' | 'result-success' | 'result-error' | 'result-info' | 'result-warning' | 'confirm' | 'ai-response';
 
@@ -79,6 +80,7 @@ const AIChat: React.FC = () => {
 
   // Load chats once. Reopen the last conversation (or the most recently
   // updated one) so nothing looks lost after switching pages.
+  useEffect(() => { trackPageVisit('ai'); }, []);
   useEffect(() => {
     if (!isPro || didLoad.current) return;
     didLoad.current = true;
@@ -145,6 +147,7 @@ const AIChat: React.FC = () => {
   };
 
   const newChat = () => {
+    trackUsage('ai', 'new-chat');
     setActiveChatId(null);
     setEphemeral([]);
     setExpandedMessages(new Set());
@@ -400,6 +403,7 @@ const AIChat: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
+    trackUsage('ai', 'send-message');
     processCommand(input.trim());
     setInput('');
   };
@@ -519,18 +523,18 @@ const AIChat: React.FC = () => {
       {/* ── Main panel ── */}
       <div className="flex-1 flex flex-col min-w-0 bg-background/40">
         {/* Header */}
-        <header className="px-6 h-16 border-b border-border bg-card shrink-0 flex items-center">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+        <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card shrink-0 flex items-center">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 w-full min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/10 shrink-0">
                 <Wand2 className="w-4 h-4 text-primary" />
               </div>
               <div className="flex items-baseline gap-2 min-w-0">
-                <h1 className="text-base font-bold text-foreground whitespace-nowrap">Planora</h1>
-                <p className="text-[11px] text-muted-foreground whitespace-nowrap">Your AI productivity partner</p>
+                <h1 className="text-base font-bold text-foreground truncate">Planora</h1>
+                <p className="hidden sm:block text-[11px] text-muted-foreground whitespace-nowrap">Your AI productivity partner</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-muted rounded-lg text-xs text-muted-foreground">
                 <Layers className="w-3.5 h-3.5 shrink-0" />
                 <span className="font-semibold text-foreground">{board.tasks.length}</span>

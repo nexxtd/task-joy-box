@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
+import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
 import { fetchNoteTemplates as fetchTemplates, createNoteTemplate as createTemplate, updateNoteTemplate as updateTemplate, deleteNoteTemplate as deleteTemplateApi } from '@/services/noteTemplateService';
@@ -52,6 +53,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
 const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string }> = [
@@ -620,7 +622,9 @@ const Tasks: React.FC = () => {
     deleteTask,
     updateColumn,
     reorderTasksInSection,
+    moveCrossSection,
   } = useNotesContext();
+  const tasksBoard = useBoardContext();
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
@@ -664,16 +668,30 @@ const Tasks: React.FC = () => {
 
   const [addingTask, setAddingTask] = useState(false);
   const [createModalProjectId, setCreateModalProjectId] = useState<number | null | undefined>(undefined);
+  const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
+
+  // Project board columns live in the tasks board — merge them in so a note
+  // can be assigned to any project column the same way a task can.
+  const modalColumns = useMemo(() => {
+    const ids = new Set(board.columns.map(c => c.id));
+    const taskProjectCols = tasksBoard.board.columns.filter(
+      c => (c as any).projectId != null && !ids.has(c.id),
+    );
+    return [...board.columns, ...taskProjectCols];
+  }, [board.columns, tasksBoard.board.columns]);
 
   // "Add New" from the Projects page: ?new=1&project=<id>&column=<id> opens the
   // create modal with the project (and column) pre-selected so the new note is
   // assigned to that column automatically and lands at the bottom.
+  // Shortcuts "Create Note" navigates here with ?create=1 and opens the same flow.
+  useEffect(() => { trackPageVisit('notes'); }, []);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('new') === '1') {
+    if (params.get('new') === '1' || params.get('create') === '1') {
       const pid = params.get('project');
       const col = params.get('column');
       setCreateModalProjectId(pid ? Number(pid) : undefined);
+      setCreateModalColumnId(col ?? undefined);
       if (pid) setNewTaskProjectId(Number(pid));
       if (col) setNewTaskColumnId(col);
       setAddingTask(true);
@@ -681,6 +699,7 @@ const Tasks: React.FC = () => {
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete('new');
+        url.searchParams.delete('create');
         url.searchParams.delete('project');
         url.searchParams.delete('column');
         window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams.toString()}` : ''));
@@ -1001,6 +1020,26 @@ const Tasks: React.FC = () => {
     }
   }, [editingTemplateMeta, templateEditOverrides, templateEditName]);
 
+  // Edit Template via CreateTaskModal (same layout as Task creation, title "Edit Template", no AI Builder).
+  const handleUpdateTemplateFromModal = useCallback(async (details: { name: string; title: string; description: string; priority: any; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: any[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: any[]; attachments: any[] }) => {
+    if (!editingTemplateMeta) return;
+    try {
+      const saved = await updateTemplate(editingTemplateMeta.id, details as any);
+      try {
+        setTemplates((prev: any[]) => prev.map(tm => tm.id === saved.id ? saved : tm));
+      } catch {}
+      try {
+        setMainTemplates((prev: any[]) => prev.map(tm => (tm as any).id === saved.id ? saved : tm));
+      } catch {}
+      setTemplateEditName('');
+      setTemplateEditOverrides(null);
+      setEditingTemplateMeta(null);
+      setOpenTaskId(null);
+    } catch (err) {
+      console.error('Failed to save template:', err);
+    }
+  }, [editingTemplateMeta]);
+
   const toggleSortByDueDate = () => {
     if (!sortByDueDate) {
       setSortByDueDate(true);
@@ -1014,6 +1053,7 @@ const Tasks: React.FC = () => {
   };
 
   const getProjectIdForDroppable = (id: string): number | 'my-notes' | null => {
+    if (id.startsWith('completed-')) return getProjectIdForDroppable(id.slice('completed-'.length));
     if (id === 'my-notes') return 'my-notes';
     if (id.startsWith('col-')) {
       const col = board.columns.find(c => c.id === id.slice(4));
@@ -1023,7 +1063,26 @@ const Tasks: React.FC = () => {
     return null;
   };
 
+  const getCompletedForSection = (baseKey: string): Task[] => {
+    if (baseKey === 'my-notes') return filtered.completed.filter(t => !t.projectId);
+    if (baseKey.startsWith('col-')) {
+      const colId = baseKey.slice(4);
+      const col = board.columns.find(c => c.id === colId) as any;
+      const pid = col?.projectId;
+      if (pid == null) return filtered.completed.filter(t => !t.projectId && t.columnId === colId);
+      return filtered.completed.filter(t => t.projectId === pid && t.columnId === colId);
+    }
+    if (baseKey.startsWith('uncat-')) {
+      const pid = Number(baseKey.slice(6));
+      const pg = projectTaskGroups.find(p => p.project.id === pid);
+      if (pg) return pg.uncategorizedCompleted;
+      return filtered.completed.filter(t => t.projectId === pid);
+    }
+    return [];
+  };
+
   const getTasksForDroppable = (id: string): Task[] | null => {
+    if (id.startsWith('completed-')) return getCompletedForSection(id.slice('completed-'.length));
     if (id === 'my-notes') return myTasksGroup;
     if (id.startsWith('col-')) {
       const colGroup = projectTaskGroups.flatMap(pg => pg.columnGroups).find(cg => cg.column.id === id.slice(4));
@@ -1063,10 +1122,14 @@ const Tasks: React.FC = () => {
       if (proj) updateFields.projectName = proj.name;
       // Dropping into a project's uncategorized section must still land in a real
       // column of that project, otherwise the project board won't show it.
+      // Project columns live in the tasks board — prefer those.
       if (!newColumnId) {
-        const firstCol = board.columns
+        const firstCol = tasksBoard.board.columns
           .filter(c => (c as any).projectId === dstProject)
-          .sort((a, b) => a.order - b.order)[0];
+          .sort((a, b) => a.order - b.order)[0]
+          ?? board.columns
+            .filter(c => (c as any).projectId === dstProject)
+            .sort((a, b) => a.order - b.order)[0];
         if (firstCol) updateFields.columnId = firstCol.id;
       }
     }
@@ -1126,6 +1189,7 @@ const Tasks: React.FC = () => {
     flushSync(() => collapseForDrag());
   };
   const expandDroppableGroup = (droppableId: string) => {
+    if (droppableId.startsWith('completed-')) { expandDroppableGroup(droppableId.slice('completed-'.length)); return; }
     if (droppableId === 'my-notes') { setMyTasksCollapsed(false); return; }
     if (droppableId.startsWith('col-')) {
       const colId = droppableId.slice(4);
@@ -1152,12 +1216,106 @@ const Tasks: React.FC = () => {
 
     const srcId = result.source.droppableId;
     const dstId = result.destination.droppableId;
+    // Dropping into a Completed section: mark complete AND move into the
+    // target column/project so the item lands in the target's Completed list.
     if (dstId.startsWith('completed-')) {
       const sectionKey = dstId.slice('completed-'.length);
-      const srcTasks = getTasksForDroppable(srcId);
-      const moving = srcTasks?.[result.source.index];
-      if (moving && !isTaskCompleted(moving)) toggleTaskCompletion(moving);
+      const moving = board.tasks.find(t => t.id === result.draggableId)
+        ?? getTasksForDroppable(srcId)?.[result.source.index];
+      if (moving) {
+        const updates: Record<string, any> = {};
+        if (sectionKey === 'my-notes') {
+          if (moving.projectId !== null) { updates.projectId = null; updates.projectName = undefined; }
+        } else if (sectionKey.startsWith('col-')) {
+          const colId = sectionKey.slice(4);
+          const col = board.columns.find(c => c.id === colId) as any;
+          if (moving.columnId !== colId) updates.columnId = colId;
+          const targetPid = col?.projectId ?? null;
+          if (targetPid == null) {
+            if (moving.projectId !== null) { updates.projectId = null; updates.projectName = undefined; }
+          } else if (moving.projectId !== targetPid) {
+            updates.projectId = targetPid;
+            const proj = projects.find(p => p.id === targetPid);
+            if (proj) updates.projectName = proj.name;
+          }
+        } else if (sectionKey.startsWith('uncat-')) {
+          const pid = Number(sectionKey.slice(6));
+          if (moving.projectId !== pid) {
+            updates.projectId = pid;
+            const proj = projects.find(p => p.id === pid);
+            if (proj) updates.projectName = proj.name;
+          }
+        }
+        if (!isTaskCompleted(moving)) {
+          updates.completed = true;
+          updates.completedAt = (moving as any).completedAt ?? new Date().toISOString();
+          updates.status = 'completed';
+        } else {
+          if (!(moving as any).completed) updates.completed = true;
+          if (!(moving as any).completedAt) updates.completedAt = new Date().toISOString();
+          if ((moving as any).status !== 'completed') updates.status = 'completed';
+        }
+        if (Object.keys(updates).length > 0 && srcId !== dstId) updateTask(moving.id, updates);
+        else if (Object.keys(updates).length > 0 && !isTaskCompleted(moving)) updateTask(moving.id, updates);
+      }
       setCollapsedCompletedSections(prev => ({ ...prev, [sectionKey]: false }));
+      expandDroppableGroup(sectionKey);
+      return;
+    }
+    // Dragging out of a Completed section back into an active list re-activates.
+    if (srcId.startsWith('completed-')) {
+      const moving = board.tasks.find(t => t.id === result.draggableId)
+        ?? getTasksForDroppable(srcId)?.[result.source.index];
+      const dstProject = getProjectIdForDroppable(dstId);
+      if (!moving || dstProject === null) return;
+      const newColumnId = dstId.startsWith('col-') ? dstId.slice(4) : undefined;
+      const updateFields: Record<string, any> = { completed: false, completedAt: undefined, status: 'to_do' };
+      if (newColumnId) updateFields.columnId = newColumnId;
+      if (dstProject === 'my-notes') {
+        updateFields.projectId = null;
+        updateFields.projectName = undefined;
+        if (!newColumnId) {
+          const myCol = board.columns
+            .filter(c => !(c as any).projectId)
+            .sort((a, b) => a.order - b.order)[0] ?? board.columns[0];
+          if (myCol) updateFields.columnId = myCol.id;
+        }
+      } else if (typeof dstProject === 'number') {
+        const proj = projects.find(p => p.id === dstProject);
+        updateFields.projectId = dstProject;
+        if (proj) updateFields.projectName = proj.name;
+        if (!newColumnId) {
+          const firstCol = tasksBoard.board.columns
+            .filter(c => (c as any).projectId === dstProject)
+            .sort((a, b) => a.order - b.order)[0]
+            ?? board.columns
+              .filter(c => (c as any).projectId === dstProject)
+              .sort((a, b) => a.order - b.order)[0];
+          if (firstCol) updateFields.columnId = firstCol.id;
+        }
+      }
+      const dstTasks = getTasksForDroppable(dstId);
+      if (!dstTasks) { updateTask(moving.id, updateFields); expandDroppableGroup(dstId); return; }
+      const movingId = moving.id;
+      const dstIds = dstTasks.map(t => t.id);
+      const insertIdx = Math.max(0, Math.min(result.destination.index, dstIds.length));
+      dstIds.splice(insertIdx, 0, movingId);
+      const srcTasks = getTasksForDroppable(srcId) ?? [];
+      const srcIds = srcTasks.map(t => t.id).filter(id => id !== movingId);
+      moveCrossSection(movingId, updateFields, srcIds, dstIds);
+      const base = orderedActiveIds.length > 0 ? [...orderedActiveIds] : filtered.active.map(t => t.id);
+      const dstSetOld = new Set(dstTasks.map(t => t.id));
+      const nextIds: string[] = [];
+      let inserted = false;
+      for (const id of base) {
+        if (dstSetOld.has(id) && !inserted) { nextIds.push(...dstIds); inserted = true; }
+        else if (!dstSetOld.has(id)) nextIds.push(id);
+      }
+      if (!inserted) {
+        for (const id of dstIds) if (!nextIds.includes(id)) nextIds.push(id);
+      }
+      setOrderedActiveIds(nextIds);
+      expandDroppableGroup(dstId);
       return;
     }
     const srcProject = getProjectIdForDroppable(result.source.droppableId);
@@ -1372,17 +1530,20 @@ const Tasks: React.FC = () => {
 
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
-    // Notes assigned to a project are grouped by projectId on the Notes page
-    // (notes without a matching project column show as uncategorized), so fall
-    // back to any available column instead of silently aborting when the notes
-    // board has no column for this project yet.
+    // A note assigned to a project must keep its project column (which lives
+    // in the tasks board) so it shows on the project Board/List tabs the same
+    // way a task does. Preserve an explicitly chosen column even when it
+    // isn't part of the notes board (it shows as uncategorized in Notes).
     let targetColumnId = newTaskColumnId;
     if (newTaskProjectId !== '') {
-      const projCols = board.columns
+      const taskProjCols = tasksBoard.board.columns
         .filter(col => (col as any).projectId === Number(newTaskProjectId))
         .sort((a, b) => a.order - b.order);
-      if (!targetColumnId || !projCols.some(c => c.id === targetColumnId)) {
-        targetColumnId = projCols[0]?.id ?? board.columns[0]?.id ?? '';
+      const notesProjCols = board.columns
+        .filter(col => (col as any).projectId === Number(newTaskProjectId))
+        .sort((a, b) => a.order - b.order);
+      if (!targetColumnId) {
+        targetColumnId = taskProjCols[0]?.id ?? notesProjCols[0]?.id ?? board.columns[0]?.id ?? '';
       }
     }
     if (!targetColumnId) targetColumnId = board.columns[0]?.id;
@@ -1569,7 +1730,8 @@ const Tasks: React.FC = () => {
         ? undefined
         : (projects.find(project => project.id === Number(quickEditProjectId))?.name || undefined);
       // Assigning to a project MUST also assign a column of that project,
-      // otherwise the item is invisible on the project board.
+      // otherwise the item is invisible on the project board. Project
+      // columns live in the tasks board, so prefer those for notes.
       if (newPid !== task.projectId) {
         if (newPid === null) {
           const myCol = board.columns
@@ -1577,9 +1739,12 @@ const Tasks: React.FC = () => {
             .sort((a, b) => a.order - b.order)[0] ?? board.columns[0];
           if (myCol) updates.columnId = myCol.id;
         } else {
-          const firstCol = board.columns
+          const firstCol = tasksBoard.board.columns
             .filter(c => (c as any).projectId === newPid)
-            .sort((a, b) => a.order - b.order)[0];
+            .sort((a, b) => a.order - b.order)[0]
+            ?? board.columns
+              .filter(c => (c as any).projectId === newPid)
+              .sort((a, b) => a.order - b.order)[0];
           if (firstCol) updates.columnId = firstCol.id;
         }
       }
@@ -2054,7 +2219,15 @@ const Tasks: React.FC = () => {
             </button>
             {!collapsed && (
               <div className="border-t border-label-green/15 px-2 py-2 space-y-1.5">
-                {tasks.map(task => renderCompletedTaskRow(task))}
+                {tasks.map((task, compIndex) => (
+                  <Draggable key={task.id} draggableId={task.id} index={compIndex} isDragDisabled={sortByDueDate}>
+                    {(compProvided) => (
+                      <div ref={compProvided.innerRef} {...compProvided.draggableProps} {...compProvided.dragHandleProps}>
+                        {renderCompletedTaskRow(task)}
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
               </div>
             )}
             {isTaskDragging && (
@@ -2073,15 +2246,16 @@ const Tasks: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-6 h-16 border-b border-border flex items-center justify-between bg-card/30">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h1 className="text-base font-bold text-foreground whitespace-nowrap">All Notes</h1>
-          <p className="text-xs text-muted-foreground truncate">{matchingCount} notes matching filters</p>
+      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center justify-between gap-2 bg-card/30 flex-shrink-0">
+        <div className="flex items-baseline gap-2 min-w-0 flex-1">
+          <h1 className="text-base font-bold text-foreground truncate">All Notes</h1>
+          <p className="hidden sm:block text-xs text-muted-foreground truncate">{matchingCount} notes matching filters</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 
           <button
             onClick={() => {
+              trackUsage('notes', 'delete-mode');
               if (isDeleteMode) {
                 setIsDeleteMode(false);
                 setSelectedDeleteTaskIds([]);
@@ -2090,19 +2264,20 @@ const Tasks: React.FC = () => {
                 setSelectedDeleteTaskIds([]);
               }
             }}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border transition-all ${
+            className={`flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border transition-all ${
               isDeleteMode
                 ? 'bg-destructive/15 border-destructive/30 text-destructive'
                 : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
             <Trash2 className="w-4 h-4" />
-            {isDeleteMode ? 'Exit Delete' : 'Delete'}
+            <span className="hidden md:inline">{isDeleteMode ? 'Exit Delete' : 'Delete'}</span>
           </button>
 
           <div className="relative">
             <button
               onClick={async () => {
+                trackUsage('notes', 'open-templates');
                 if (mainTmplPopupOpen) {
                   setMainTmplPopupOpen(false);
                   return;
@@ -2115,15 +2290,16 @@ const Tasks: React.FC = () => {
                   console.error('Failed to fetch templates:', err);
                 }
               }}
-              className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border transition-all bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              aria-label="Templates"
+              className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border transition-all bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <Star className="w-4 h-4" />
-              Templates
+              <span className="hidden md:inline">Templates</span>
             </button>
             {mainTmplPopupOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMainTmplPopupOpen(false)} />
-                <div className="absolute right-0 mt-1.5 w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-3rem)] bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-primary" />
@@ -2190,7 +2366,7 @@ const Tasks: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setAddingTask(true)}
+            onClick={() => { trackUsage('notes', 'new-note'); setAddingTask(true); }}
             className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -2357,8 +2533,9 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
-          {/* MY TASKS section */}
-          {(myTasksGroup.length > 0 || filtered.completed.some(t => !t.projectId) || isTaskDragging) && (
+          {/* MY NOTES section — always mounted (even when empty) so dropping
+              into an empty My Notes works reliably without mid-drag mounting. */}
+          {(
             <div className="mb-3">
               <button
                 onClick={() => setMyTasksCollapsed(prev => !prev)}
@@ -2372,7 +2549,7 @@ const Tasks: React.FC = () => {
               </button>
               <Droppable droppableId="my-notes" renderClone={renderTaskClone}>
                 {(dropProvided, snapshot) => (
-                  <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5">
+                  <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="space-y-1.5 min-h-[48px]">
                     {!myTasksCollapsed && myTasksGroup.map((task, index) => (
                       <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={sortByDueDate}>
                         {(taskProvided, taskSnapshot) => (
@@ -2382,6 +2559,11 @@ const Tasks: React.FC = () => {
                         )}
                       </Draggable>
                     ))}
+                    {myTasksGroup.length === 0 && !isTaskDragging && !myTasksCollapsed && (
+                      <div className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-[11px] text-muted-foreground/60">
+                        No notes — drag here to move into My Notes
+                      </div>
+                    )}
                     {(myTasksCollapsed || myTasksGroup.length === 0) && isTaskDragging && (
                       <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
                         Drop here to move into My Notes
@@ -2508,7 +2690,7 @@ const Tasks: React.FC = () => {
 
         {/* Floating AI Task button */}
         <button
-          onClick={() => setAiBuilderOpen(true)}
+          onClick={() => { trackUsage('notes', 'ai-builder'); setAiBuilderOpen(true); }}
           className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
           title="AI Note Builder"
         >
@@ -2522,11 +2704,13 @@ const Tasks: React.FC = () => {
           onClose={() => setAddingTask(false)}
           initialValues={aiTaskDraft}
           defaultProjectId={createModalProjectId}
-          columnsOverride={board.columns}
+          defaultColumnId={createModalColumnId}
+          columnsOverride={modalColumns}
           onCreateItem={(columnId, title, details) => addTask(columnId, title, details)}
           tasksOverride={board.tasks}
           onUpdateItem={(taskId, updates) => updateTask(taskId, updates)}
           hideSubtasks
+          variant="note"
         />
       )}
 
@@ -3587,11 +3771,11 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
-      {(openTask || templateEditTask) && (
+      {openTask && !editingTemplateMeta && (
         <TaskFullView
-          key={(templateEditTask || openTask!).id}
-          task={templateEditTask || openTask!}
-          onClose={() => { setOpenTaskId(null); setEditingTemplateMeta(null); setTemplateEditName(''); }}
+          key={openTask.id}
+          task={openTask}
+          onClose={() => { setOpenTaskId(null); }}
           boardColumns={board.columns}
           projects={projects}
           allTags={allTags}
@@ -3668,6 +3852,34 @@ const Tasks: React.FC = () => {
           editingTemplateMeta={editingTemplateMeta}
           templateEditName={templateEditName}
           onTemplateEditNameChange={setTemplateEditName}
+        />
+      )}
+
+      {editingTemplateMeta && (
+        <CreateTaskModal
+          open={!!editingTemplateMeta}
+          onClose={() => { setEditingTemplateMeta(null); setTemplateEditOverrides(null); setTemplateEditName(''); }}
+          variant="note"
+          editTemplateMode
+          editTemplateInitial={{
+            name: templateEditName || editingTemplateMeta.name,
+            title: editingTemplateMeta.template.title,
+            description: editingTemplateMeta.template.description,
+            priority: editingTemplateMeta.template.priority,
+            duration: editingTemplateMeta.template.duration,
+            startDate: editingTemplateMeta.template.startDate,
+            startTime: editingTemplateMeta.template.startTime,
+            dueDate: editingTemplateMeta.template.dueDate,
+            dueTime: editingTemplateMeta.template.dueTime,
+            projectId: editingTemplateMeta.template.projectId,
+            columnId: editingTemplateMeta.template.columnId,
+            labels: editingTemplateMeta.template.labels,
+            subtasks: editingTemplateMeta.template.subtasks,
+            checklists: editingTemplateMeta.template.checklists,
+            images: editingTemplateMeta.template.images,
+            attachments: editingTemplateMeta.template.attachments,
+          }}
+          onUpdateTemplate={handleUpdateTemplateFromModal}
         />
       )}
 

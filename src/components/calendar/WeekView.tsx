@@ -118,9 +118,9 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
   const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-gradient-to-b from-background to-muted/5">
-      {/* Day headers */}
-      <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border/60 bg-gradient-to-r from-muted/30 via-background/80 to-muted/30 flex-shrink-0 backdrop-blur-sm">
+    <div className="flex flex-col h-full overflow-auto bg-gradient-to-b from-background to-muted/5">
+      {/* Day headers — min width keeps day columns tappable on phones (scrolls horizontally) */}
+      <div className="grid grid-cols-[56px_repeat(7,minmax(72px,1fr))] sm:grid-cols-[70px_repeat(7,1fr)] min-w-[560px] sm:min-w-0 border-b border-border/60 bg-gradient-to-r from-muted/30 via-background/80 to-muted/30 flex-shrink-0 backdrop-blur-sm">
         <div className="p-2 border-r border-border/20" />
         {weekDays.map((day, i) => (
           <div key={i} className={cn(
@@ -149,7 +149,7 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto relative" ref={gridRef}>
+      <div className="flex-1 overflow-auto relative min-w-[560px] sm:min-w-0" ref={gridRef}>
         {isToday(selectedDate) && (
           <div className="absolute left-[70px] right-0 z-20 pointer-events-none" style={{ top: `${currentTop}px` }}>
             <div className="h-[3px] bg-gradient-to-r from-red-500 via-red-500/80 to-transparent relative shadow-lg shadow-red-500/40 ml-2">
@@ -160,7 +160,7 @@ const WeekView: React.FC<WeekViewProps> = ({ selectedDate, slots, onSlotsChange,
 
         <div className="relative min-h-full">
           {HOURS.map(hour => (
-            <div key={hour} className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-border/20">
+            <div key={hour} className="grid grid-cols-[56px_repeat(7,minmax(72px,1fr))] sm:grid-cols-[70px_repeat(7,1fr)] border-b border-border/20">
               <div className="relative flex items-start justify-end" style={{ height: `${HOUR_HEIGHT}px` }}>
                 <span className="absolute -top-2.5 right-2 text-[11px] font-semibold text-muted-foreground/70 select-none">
                   {hour === 0 ? '' : format(new Date().setHours(hour, 0, 0, 0), 'ha')}

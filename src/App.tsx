@@ -156,6 +156,29 @@ function ProtectedRoutes() {
   const location = useLocation();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
+  // Preload all primary pages on idle so every navigation feels instant
+  // (same snappiness as Tasks/Projects which render from cache).
+  useEffect(() => {
+    const preload = () => {
+      void import("@/pages/Dashboard");
+      void import("@/pages/Tasks");
+      void import("@/pages/Projects");
+      void import("@/pages/Notes");
+      void import("@/pages/Insights");
+      void import("@/pages/SettingsPage");
+      void import("@/pages/AIChat");
+      void import("@/pages/Support");
+    };
+    try {
+      const ric = (window as any).requestIdleCallback;
+      if (typeof ric === 'function') {
+        const id = ric(preload, { timeout: 2000 });
+        return () => { try { (window as any).cancelIdleCallback?.(id); } catch {} };
+      }
+    } catch {}
+    const t = setTimeout(preload, 800);
+    return () => clearTimeout(t);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     const ctrl = new AbortController();
@@ -251,8 +274,10 @@ function ProtectedRoutes() {
 }
 
 const PageLoader = () => {
+  // Instant, minimal spinner — no artificial delay. The "stuck" hint appears
+  // quickly so slow networks get feedback instead of a blank wait.
   const [stuck, setStuck] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setStuck(true), 3000); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => setStuck(true), 1500); return () => clearTimeout(t); }, []);
   if (stuck) {
     return (
       <div className="h-[60vh] flex flex-col items-center justify-center gap-3 bg-background">

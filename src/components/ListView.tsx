@@ -360,8 +360,41 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     setPreDragExpanded(null);
     if (!result.destination) return;
     const draggedId = result.draggableId;
-    const dstColId = result.destination.droppableId;
+    const srcId = result.source.droppableId;
+    const dstIdRaw = result.destination.droppableId;
+    const srcIsCompleted = srcId.startsWith('completed-');
+    const dstIsCompleted = dstIdRaw.startsWith('completed-');
+    const dstColId = dstIsCompleted ? dstIdRaw.slice('completed-'.length) : dstIdRaw;
     const isNote = notesCtx.board.tasks.some(t => t.id === draggedId) || notes.some(n => n.id === draggedId);
+    // Dropping into a Completed section completes the task AND moves it into
+    // the target column so it lands in the target's Completed list
+    // (not the source's). Works for active->completed and completed->completed.
+    if (dstIsCompleted) {
+      if (isNote) return;
+      const existing = board.tasks.find(t => t.id === draggedId);
+      if (!existing) return;
+      const updates: Partial<Task> = {};
+      if (existing.columnId !== dstColId) {
+        updates.columnId = dstColId;
+        // Keep projectId in sync when moving across project columns.
+        const targetCol = board.columns.find(c => c.id === dstColId) as any;
+        if (targetCol && targetCol.projectId !== undefined && existing.projectId !== targetCol.projectId) {
+          (updates as any).projectId = targetCol.projectId;
+        }
+      }
+      if (!existing.completed) {
+        updates.completed = true;
+        updates.completedAt = existing.completedAt ?? new Date().toISOString();
+        updates.status = 'completed';
+      } else {
+        if (!(existing as any).completed) (updates as any).completed = true;
+        if (!(existing as any).completedAt) (updates as any).completedAt = new Date().toISOString();
+        if ((existing as any).status !== 'completed') updates.status = 'completed';
+      }
+      if (Object.keys(updates).length > 0 && srcId !== dstIdRaw) updateTask(draggedId, updates);
+      else if (Object.keys(updates).length > 0 && !existing.completed) updateTask(draggedId, updates);
+      return;
+    }
     if (isNote) {
       // Shared ordering: recompute combined orders in destination column.
       const destTasks = board.tasks
@@ -410,7 +443,15 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
         if (!cur) return;
         const updates: Partial<Task> = {};
         if (cur.order !== idx) updates.order = idx;
-        if (entry.id === draggedId && cur.columnId !== dstColId) updates.columnId = dstColId;
+        if (entry.id === draggedId) {
+          if (cur.columnId !== dstColId) updates.columnId = dstColId;
+          // Dragging out of Completed back into an active list re-activates.
+          if (srcIsCompleted && cur.completed) {
+            updates.completed = false;
+            (updates as any).completedAt = undefined;
+            updates.status = 'to_do';
+          }
+        }
         if (Object.keys(updates).length > 0) updateTask(entry.id, updates);
       } else {
         const cur = notesCtx.board.tasks.find(t => t.id === entry.id);
@@ -810,33 +851,59 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                     )}
                   </Droppable>
                 )}
-                {!isColumnCollapsed && columnCompleted.length > 0 && (
+                {!isColumnCollapsed && (columnCompleted.length > 0 || isDragging) && (
                   <div className="pl-3 mt-1.5">
-                    <div className="border border-label-green/20 rounded-xl bg-label-green/5 overflow-hidden">
-                      <button
-                        onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
-                        className="w-full flex items-center justify-between px-4 py-3"
-                      >
-                        <span className="text-sm font-semibold text-label-green flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" />
-                          Completed ({columnCompleted.length})
-                        </span>
-                        {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                      </button>
-                      {!isCompletedCollapsed && (
-                        <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
-                          {columnCompleted.map(task => (
-                            <CompletedTaskRow
-                              key={task.id}
-                              task={task}
-                              onToggleComplete={toggleTaskCompletion}
-                              onOpenTask={onTaskClick}
-                              onDeleteTask={(t) => deleteTask(t.id)}
-                            />
-                          ))}
+                    <Droppable droppableId={'completed-' + column.id}>
+                      {(completedProvided, completedSnapshot) => (
+                        <div
+                          ref={completedProvided.innerRef}
+                          {...completedProvided.droppableProps}
+                        >
+                          {columnCompleted.length > 0 && (
+                            <div className={`border rounded-xl overflow-hidden transition-colors duration-150 ${completedSnapshot.isDraggingOver ? 'border-label-green/50 ring-2 ring-label-green/30 bg-label-green/10' : 'border-label-green/20 bg-label-green/5'}`}>
+                              <button
+                                onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
+                                className="w-full flex items-center justify-between px-4 py-3"
+                              >
+                                <span className="text-sm font-semibold text-label-green flex items-center gap-2">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Completed ({columnCompleted.length})
+                                </span>
+                                {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                              </button>
+                              {!isCompletedCollapsed && (
+                                <div className="border-t border-border/60 px-2 py-2 space-y-1.5">
+                                  {columnCompleted.map((task, compIndex) => (
+                                    <Draggable key={task.id} draggableId={task.id} index={compIndex}>
+                                      {(compProvided) => (
+                                        <div
+                                          ref={compProvided.innerRef}
+                                          {...compProvided.draggableProps}
+                                          {...compProvided.dragHandleProps}
+                                        >
+                                          <CompletedTaskRow
+                                            task={task}
+                                            onToggleComplete={toggleTaskCompletion}
+                                            onOpenTask={onTaskClick}
+                                            onDeleteTask={(t) => deleteTask(t.id)}
+                                          />
+                                        </div>
+                                      )}
+                                    </Draggable>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {isDragging && (
+                            <div className={`${columnCompleted.length > 0 ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
+                              Drop here to complete
+                            </div>
+                          )}
+                          {completedProvided.placeholder}
                         </div>
                       )}
-                    </div>
+                    </Droppable>
                   </div>
                 )}
               </div>

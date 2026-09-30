@@ -10,6 +10,7 @@ import SupportContent from '@/components/SupportContent';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { useAuth } from '@/context/AuthContext';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 type View = 'main' | 'faqs' | 'resources' | 'submit' | 'tickets';
 
@@ -195,40 +196,7 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     } catch {} finally { setSending(false); }
   };
 
-  if (selected) {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setSelected(null); setMessages([]); fetchTickets(); }} className="p-2 hover:bg-muted rounded-xl transition-colors">
-              <ChevronRight className="w-5 h-5 text-muted-foreground rotate-180" />
-            </button>
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <LifeBuoy className="w-4 h-4 text-primary" />
-            </div>
-            <h1 className="text-lg font-bold text-foreground">Ticket #{selected.id}</h1>
-          </div>
-          <button onClick={() => { setSelected(null); setMessages([]); fetchTickets(); }} className="p-2 hover:bg-muted rounded-xl transition-colors">
-            <X className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </header>
-        <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 bg-muted/20 overflow-hidden">
-          <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto">
-            <TicketConversation
-              ticket={selected}
-              messages={messages}
-              viewAs="user"
-              currentUserName={user?.name || 'You'}
-              onClose={() => { setSelected(null); setMessages([]); fetchTickets(); }}
-              onSendMessage={handleSend}
-              sending={sending}
-              embedded
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const closeSelected = () => { setSelected(null); setMessages([]); fetchTickets(); };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -250,7 +218,7 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           ) : tickets.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-12">No tickets yet. Submit a request to get started.</p>
           ) : tickets.map(t => (
-            <button key={t.id} onClick={() => setSelected(t)} className="w-full text-left p-4 bg-card border border-border rounded-xl hover:border-primary/30 transition-colors">
+            <button key={t.id} onClick={() => { trackUsage('support', 'open-ticket'); setSelected(t); }} className="w-full text-left p-4 bg-card border border-border rounded-xl hover:border-primary/30 transition-colors">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-mono text-muted-foreground">#{t.id}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${t.status === 'open' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-muted text-muted-foreground'}`}>{t.status}</span>
@@ -261,6 +229,17 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           ))}
         </div>
       </div>
+      {selected && (
+        <TicketConversation
+          ticket={selected}
+          messages={messages}
+          viewAs="user"
+          currentUserName={user?.name || 'You'}
+          onClose={closeSelected}
+          onSendMessage={handleSend}
+          sending={sending}
+        />
+      )}
     </div>
   );
 };
@@ -300,6 +279,7 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        trackUsage('support', 'submit-ticket');
         setSubmitted(true);
         toast({ title: 'Submitted', description: TYPE_TOASTS[type] });
         fetchCheck();
@@ -438,6 +418,8 @@ const Support: React.FC = () => {
   const openSubmit = () => { setView('submit'); };
   const openTickets = () => { setView('tickets'); };
   const openAi = () => { navigate('/ai-chat'); };
+
+  useEffect(() => { trackPageVisit('support'); }, []);
 
   useEffect(() => {
     let cancelled = false;

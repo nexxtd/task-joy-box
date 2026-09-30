@@ -861,6 +861,20 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
     const widgetUsageMap: Record<string, number> = {};
     widgetUsage.forEach(w => { widgetUsageMap[w.widgetType] = w.count; });
 
+    // Per-button UI usage: widgetType `ui:<page>:<feature>` -> {page: {feature: count}}.
+    // Tracked per button press (not just per page visit) via src/lib/usage.ts.
+    const uiUsage: Record<string, Record<string, number>> = {};
+    for (const w of widgetUsage) {
+      const t = String((w as any).widgetType || '');
+      if (!t.startsWith('ui:')) continue;
+      const parts = t.split(':');
+      if (parts.length < 3) continue;
+      const page = (parts[1] || 'unknown').toLowerCase();
+      const feature = parts.slice(2).join(':').toLowerCase();
+      uiUsage[page] = uiUsage[page] || {};
+      uiUsage[page][feature] = ((uiUsage[page][feature]) || 0) + (Number((w as any).count) || 0);
+    }
+
     res.json({
       user: {
         id: userRow.id,
@@ -929,6 +943,34 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
         },
         dashboard: {
           widgets: widgetUsageMap,
+        },
+        // Per-button presses per page (Dashboard, Insights, Tasks, Projects,
+        // Notes, Settings, AI Assistant, Support). Same depth as Insights.
+        uiUsage,
+        insights: {
+          widgets: widgetUsageMap,
+          buttonPresses: uiUsage['insights'] || {},
+        },
+        tasksPage: {
+          buttonPresses: uiUsage['tasks'] || {},
+        },
+        projectsPage: {
+          buttonPresses: uiUsage['projects'] || {},
+        },
+        notesPage: {
+          buttonPresses: uiUsage['notes'] || {},
+        },
+        settingsPage: {
+          buttonPresses: uiUsage['settings'] || {},
+        },
+        aiAssistant: {
+          buttonPresses: uiUsage['ai-assistant'] || uiUsage['ai'] || {},
+        },
+        supportPage: {
+          buttonPresses: uiUsage['support'] || {},
+        },
+        dashboardPage: {
+          buttonPresses: uiUsage['dashboard'] || {},
         },
         engagement: {
           tickets: ticketRows.length,

@@ -65,7 +65,20 @@ router.patch('/', requireAuth, async (req, res) => {
       .returning();
 
     if (!updatedSettings) {
-      const [created] = await db.insert(userSettings).values({ userId } as any).returning();
+      const [created] = await db.insert(userSettings).values({
+        userId,
+        ...(theme !== undefined ? { theme } : {}),
+        ...(fontFamily !== undefined ? { fontFamily } : {}),
+        ...(accentColor !== undefined ? { accentColor } : {}),
+        ...(accentHsl !== undefined ? { accentHsl } : {}),
+        ...(language !== undefined ? { language } : {}),
+        ...(smartAlerts !== undefined ? { smartAlerts } : {}),
+        ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+        ...(energyMorning !== undefined ? { energyMorning } : {}),
+        ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
+        ...(energyEvening !== undefined ? { energyEvening } : {}),
+        ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+      } as any).returning();
       return res.json(created);
     }
     res.json(updatedSettings);

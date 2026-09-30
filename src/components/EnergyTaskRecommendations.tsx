@@ -157,7 +157,7 @@ const EnergyTaskRecommendations: React.FC<EnergyTaskRecommendationsProps> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {ENERGY_SLOTS.map(s => {
           const level = analysis.today[s.id];
           const hour = new Date().getHours();

@@ -32,8 +32,6 @@ import {
   ZoomIn,
   ZoomOut,
   CheckSquare,
-  Flame,
-  Target,
   StickyNote,
   ArrowLeft,
   Check,
@@ -53,6 +51,7 @@ import { Label, LabelColor, DEFAULT_LABELS, Task } from '@/types/board';
 import { fetchTags, createTag, deleteTag, updateTag } from '@/services/tagService';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CircleToggle } from '@/components/ToggleComponents';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 interface ChatMessage {
   id: string;
@@ -102,6 +101,8 @@ const Projects: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  useEffect(() => { trackPageVisit('projects'); }, []);
+
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -149,25 +150,32 @@ const Projects: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalColumnId, setCreateModalColumnId] = useState<string | undefined>(undefined);
 
-  // Unified "Add" popup (Task / Note / Habit / Goal)
+  // Unified "Add" popup (Task / Note)
   const [addPopupOpen, setAddPopupOpen] = useState(false);
-  const [addPopupType, setAddPopupType] = useState<'task' | 'note' | 'habit' | 'goal' | null>(null);
+  const [addPopupType, setAddPopupType] = useState<'task' | 'note' | null>(null);
   const [addExistingStep, setAddExistingStep] = useState(false);
   const [addExistingSelected, setAddExistingSelected] = useState<Set<string>>(() => new Set());
 
   const ADD_TYPES = [
     { id: 'task', label: 'Task', description: 'To-dos, projects and checklists', icon: CheckSquare, path: '/tasks' },
     { id: 'note', label: 'Note', description: 'Free-form ideas and docs', icon: StickyNote, path: '/notes' },
-    { id: 'habit', label: 'Habit', description: 'Recurring routines and streaks', icon: Flame, path: '/tasks' },
-    { id: 'goal', label: 'Goal', description: 'Milestones and targets', icon: Target, path: '/tasks' },
   ] as const;
 
-  const existingItemsFor = (type: 'task' | 'note' | 'habit' | 'goal' | null) => {
+  const existingItemsFor = (type: 'task' | 'note' | null) => {
     if (!type) return [];
     const all = type === 'note'
       ? notesCtx.board.tasks
       : board.tasks;
-    return all.filter(t => t.projectId !== selectedProject?.id);
+    // Include items outside this project plus items already in the project
+    // but not in any of its columns (e.g. legacy notes with only projectId)
+    // so their column can be (re)assigned the same way as a new item.
+    const projectColumnIds = new Set(
+      [...board.columns].filter(c => c.projectId === selectedProject?.id).map(c => c.id),
+    );
+    return all.filter(t => {
+      if (t.projectId !== selectedProject?.id) return true;
+      return !projectColumnIds.has((t as any).columnId);
+    });
   };
 
   const openAddPopup = () => {
@@ -223,36 +231,40 @@ const Projects: React.FC = () => {
       }
       toast({ title: applied > 1 ? `${applied} items added` : 'Item added', description: `Added to "${selectedProject.name}"` });
     } else {
-      // Notes live in a separate notes board (NotesContext) while the project
-      // Board/List tabs only render the tasks board. Project columns are only
-      // created in the tasks board, so the notes board normally has no column
-      // with this projectId — requiring one would leave the note unassigned.
-      // The Notes page groups by projectId and shows notes without a matching
-      // column as uncategorized, so setting projectId is enough there. Ensure
-      // the notes board has at least one column for this project for future
-      // grouping, then assign projectId and report where to find the note.
-      const notesProjectColumns = [...notesCtx.board.columns]
-        .filter(c => (c as any).projectId === selectedProject.id)
+      // Notes share the project board columns (which live in the tasks
+      // board) the same way tasks do: a note must carry both projectId AND
+      // a columnId of that project, otherwise the Board/List tabs (which
+      // filter by column) will never show it.
+      const projectColumns = [...board.columns]
+        .filter(c => c.projectId === selectedProject.id)
         .sort((a, b) => a.order - b.order);
-      if (notesProjectColumns.length === 0) {
-        const mirror = [...board.columns]
-          .filter(c => c.projectId === selectedProject.id)
-          .sort((a, b) => a.order - b.order)[0];
-        notesCtx.addColumn(mirror?.title ?? 'To Do', selectedProject.id);
+      const preferred = createModalColumnId
+        ? projectColumns.find(c => c.id === createModalColumnId)
+        : undefined;
+      const targetColumnId = preferred?.id ?? projectColumns[0]?.id;
+      if (!targetColumnId) {
+        toast({ title: 'No columns yet', description: `Add a column to "${selectedProject.name}" first, then add notes.` });
+        return;
       }
+      const baseOrder = notesCtx.board.tasks.filter(t => (t as any).columnId === targetColumnId).length;
       let applied = 0;
       addExistingSelected.forEach(id => {
         const note = notesCtx.board.tasks.find(t => t.id === id);
         if (!note) return;
-        if (note.projectId === selectedProject.id) return;
-        notesCtx.updateTask(id, { projectId: selectedProject.id, projectName: selectedProject.name });
+        if (note.projectId === selectedProject.id && (note as any).columnId === targetColumnId) return;
+        const updates: Partial<Task> = { projectId: selectedProject.id, projectName: selectedProject.name };
+        if ((note as any).columnId !== targetColumnId) {
+          (updates as any).columnId = targetColumnId;
+          updates.order = baseOrder + applied;
+        }
+        notesCtx.updateTask(id, updates);
         applied += 1;
       });
       if (applied === 0) {
         toast({ title: 'Already in project', description: 'Selected notes are already in this project.' });
         return;
       }
-      toast({ title: applied > 1 ? `${applied} notes added` : 'Note added', description: `Added to "${selectedProject.name}" — view it under Project Notes on Home or in Notes.` });
+      toast({ title: applied > 1 ? `${applied} notes added` : 'Note added', description: `Added to "${selectedProject.name}"` });
     }
     setAddPopupOpen(false);
     setAddPopupType(null);
@@ -831,6 +843,7 @@ const Projects: React.FC = () => {
   };
 
   const handleAddProject = async () => {
+    trackUsage('projects', 'create-project');
     if (!newProjectName.trim()) return;
     if (!canAddProject) {
       setLimitHint(true);
@@ -1005,16 +1018,31 @@ const Projects: React.FC = () => {
       return;
     }
     const dstId = result.destination.droppableId;
+    const srcId = result.source.droppableId;
     const draggedId = result.draggableId;
     const isNoteDrag = notesCtx.board.tasks.some(t => t.id === draggedId);
+    const srcIsCompleted = srcId.startsWith('completed-');
+    const dstIsCompleted = dstId.startsWith('completed-');
+    const dstColNormalized = dstIsCompleted ? dstId.slice('completed-'.length) : dstId;
+    const srcColNormalized = srcIsCompleted ? srcId.slice('completed-'.length) : srcId;
     // Notes never move into the Completed section (no completed state).
-    if (dstId.startsWith('completed-')) {
+    if (dstIsCompleted) {
       if (isNoteDrag) return;
-      const colId = dstId.slice('completed-'.length);
+      const colId = dstColNormalized;
       const existing = board.tasks.find(t => t.id === draggedId);
-      if (existing && !existing.completed) {
-        updateTask(draggedId, { completed: true, completedAt: existing.completedAt ?? new Date().toISOString(), status: 'completed' });
+      if (!existing) { expandBoardColumn(colId); return; }
+      const updates: Partial<Task> = {};
+      if (existing.columnId !== colId) updates.columnId = colId;
+      if (existing.projectId !== selectedProject?.id) {
+        updates.projectId = selectedProject?.id;
+        updates.projectName = selectedProject?.name;
       }
+      if (!existing.completed) {
+        updates.completed = true;
+        updates.completedAt = existing.completedAt ?? new Date().toISOString();
+        updates.status = 'completed';
+      }
+      if (Object.keys(updates).length > 0) updateTask(draggedId, updates);
       expandBoardColumn(colId);
       return;
     }
@@ -1023,8 +1051,8 @@ const Projects: React.FC = () => {
     if (isNoteDrag) {
       const note = notesCtx.board.tasks.find(t => t.id === draggedId);
       if (!note) return;
-      const srcColId = result.source.droppableId;
-      const dstColId = dstId;
+      const srcColId = srcColNormalized;
+      const dstColId = dstColNormalized;
       const destTasks = board.tasks
         .filter(t => t.columnId === dstColId && t.projectId === selectedProject?.id && !t.completed)
         .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -1092,8 +1120,10 @@ const Projects: React.FC = () => {
     }
     // Task drag in a shared column: convert the combined drop index into a
     // tasks-aware update, then reassign shared orders so notes stay interleaved.
-    const srcColId = result.source.droppableId;
-    const dstColId = dstId;
+    // srcColNormalized/dstColNormalized strip any completed- prefix so a drag
+    // starting in a Completed section still resolves to its real column.
+    const srcColId = srcColNormalized;
+    const dstColId = dstColNormalized;
     const destTasksExcl = board.tasks
       .filter(t => t.columnId === dstColId && t.projectId === selectedProject?.id && !t.completed && t.id !== draggedId)
       .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -1113,11 +1143,20 @@ const Projects: React.FC = () => {
         if (!cur) return;
         const updates: Partial<Task> = {};
         if (cur.order !== idx) updates.order = idx;
-        if (entry.id === draggedId && cur.columnId !== dstColId) {
-          updates.columnId = dstColId;
-          if (cur.projectId !== selectedProject?.id) {
-            updates.projectId = selectedProject?.id;
-            updates.projectName = selectedProject?.name;
+        if (entry.id === draggedId) {
+          if (cur.columnId !== dstColId) {
+            updates.columnId = dstColId;
+            if (cur.projectId !== selectedProject?.id) {
+              updates.projectId = selectedProject?.id;
+              updates.projectName = selectedProject?.name;
+            }
+          }
+          // Dragging out of a Completed section back into an active column
+          // re-activates the task.
+          if (srcIsCompleted && cur.completed) {
+            updates.completed = false;
+            (updates as any).completedAt = undefined;
+            updates.status = 'to_do';
           }
         }
         if (Object.keys(updates).length > 0) updateTask(entry.id, updates);
@@ -1251,7 +1290,6 @@ const Projects: React.FC = () => {
                                 {project.completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
                                 {project.archived && <Lock className="h-3.5 w-3.5 text-amber-500" />}
                               </div>
-                              <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                             </div>
                   <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
@@ -1320,7 +1358,6 @@ const Projects: React.FC = () => {
                       {project.completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
                       {project.archived && <Lock className="h-3.5 w-3.5 text-amber-500" />}
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">{project.description}</p>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 transition-all group-hover:opacity-100">
                               <button
@@ -1989,21 +2026,22 @@ const Projects: React.FC = () => {
           </div>
         ) : (
           <>
-            <header className="h-16 border-b border-border bg-background/80 px-5 backdrop-blur-xl lg:px-8 flex items-center">
+            <header className="min-h-16 py-2 border-b border-border bg-background/80 px-4 backdrop-blur-xl lg:px-8 flex items-center flex-shrink-0">
               <div className="flex items-center justify-between gap-2 min-w-0 w-full">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-x-auto">
                   <button
                     onClick={() => {
                       const next = !sidebarCollapsed;
                       setSidebarCollapsed(next);
                       if (user?.id) localStorage.setItem(`sidebar_collapsed_${user.id}`, String(next));
                     }}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+                    aria-label="Toggle project sidebar"
+                    className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors lg:hidden flex-shrink-0"
                   >
                     <FolderKanban className="h-4 w-4" />
                   </button>
                   {!canEdit && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground flex-shrink-0">
                       <EyeOff className="h-3 w-3" />
                       View only
                     </span>
@@ -2017,14 +2055,15 @@ const Projects: React.FC = () => {
                     <button
                       key={tab.id}
                       onClick={() => setCurrentTab(tab.id as ProjectTab)}
-                      className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
+                      aria-pressed={currentTab === tab.id}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-2.5 min-h-[44px] text-xs font-medium transition-all flex-shrink-0', currentTab === tab.id ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground')}
                     >
                       <tab.icon className="h-3.5 w-3.5" />
-                      {tab.label}
+                      <span className="hidden min-[420px]:inline">{tab.label}</span>
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   {canManage && (
                     <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
                       <Share2 className="h-3.5 w-3.5" />
@@ -2371,10 +2410,12 @@ const Projects: React.FC = () => {
                   <div className="space-y-2">
                     <button
                       onClick={() => {
-                        if (addPopupType === 'task' || addPopupType === 'habit' || addPopupType === 'goal') {
+                        if (addPopupType === 'task') {
+                          trackUsage('projects', 'add-task');
                           setShowCreateModal(true);
                           setAddPopupOpen(false);
                         } else {
+                          trackUsage('projects', 'add-note');
                           const colParam = createModalColumnId ? `&column=${encodeURIComponent(createModalColumnId)}` : '';
                           navigate(`${ADD_TYPES.find(t => t.id === addPopupType)?.path}?new=1&project=${selectedProject?.id}${colParam}`);
                         }

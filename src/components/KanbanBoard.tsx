@@ -41,15 +41,15 @@ const KanbanBoard: React.FC = () => {
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
 
   return (
-    <div className="h-dvh flex bg-background">
+    <div className="h-full flex bg-background min-h-0">
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-border">
+        <header className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <h1 className="text-base font-bold text-foreground truncate min-w-0 flex-1">{board.title}</h1>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
             <span>{board.tasks.length} tasks</span>
             <span>·</span>
             <span>{board.columns.length} columns</span>
@@ -58,14 +58,14 @@ const KanbanBoard: React.FC = () => {
 
         {/* View content */}
         {currentView === 'board' && (
-          <div className="flex-1 overflow-x-auto p-6">
+          <div className="flex-1 overflow-x-auto p-4 sm:p-6 kanban-scroll">
             <DragDropContext onBeforeCapture={() => { flushSync(() => setIsDragging(true)); }} onDragStart={() => setIsDragging(true)} onDragEnd={handleDragEnd}>
               <Droppable droppableId="board" type="column" direction="horizontal">
                 {(provided) => (
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="flex gap-6 items-start h-full"
+                    className="flex gap-4 sm:gap-6 items-start h-full"
                   >
                     {sortedColumns.map((column, index) => {
                       const tasks = board.tasks

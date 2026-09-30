@@ -24,6 +24,7 @@ export const LANGUAGES: LanguageDef[] = [
   { code: 'ja', native: '日本語', english: 'Japanese' },
   { code: 'ko', native: '한국어', english: 'Korean' },
   { code: 'ar', native: 'العربية', english: 'Arabic', rtl: true },
+  { code: 'he', native: 'עברית', english: 'Hebrew', rtl: true },
   { code: 'hi', native: 'हिन्दी', english: 'Hindi' },
   { code: 'ru', native: 'Русский', english: 'Russian' },
   { code: 'nl', native: 'Nederlands', english: 'Dutch' },

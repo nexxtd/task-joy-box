@@ -539,13 +539,13 @@ const Collaboration: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <header className="px-6 h-16 border-b border-border flex items-center">
-        <h1 className="text-base font-bold text-foreground">Collaboration</h1>
+      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center flex-shrink-0">
+        <h1 className="text-base font-bold text-foreground truncate">Collaboration</h1>
       </header>
 
       {/* Tabs */}
-      <div className="px-6 py-3 border-b border-border">
-        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 w-fit">
+      <div className="px-4 sm:px-6 py-3 border-b border-border overflow-x-auto">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 w-fit max-w-full overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -562,7 +562,7 @@ const Collaboration: React.FC = () => {
         </div>
       </div>
 
-      <div className="p-6 max-w-4xl mx-auto">
+      <div className="p-4 sm:p-6 max-w-4xl mx-auto w-full">
         {/* Informational banner about collaboration features */}
         <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">

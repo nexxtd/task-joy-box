@@ -1,24 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Palette, Bell, Globe, Calendar, Battery,
+  Palette, Bell, Globe, Calendar, Battery, Keyboard,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus
 } from 'lucide-react';
+import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, loadShortcuts, saveShortcuts, normalizeCombo, type ShortcutDef } from '@/lib/shortcuts';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { LANGUAGES } from '@/i18n/translations';
+import { LANGUAGES, canonicalLanguageName } from '@/i18n/translations';
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
+import ComingSoon from '@/components/shared/ComingSoon';
 import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
 import { applyFontFamily, ensureFontLoaded } from '@/lib/fonts';
 import { ColorPicker, ConfigProvider, theme as antdTheme } from 'antd';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const THEMES = [
   { id: 'light', label: 'Light', icon: Sun },
@@ -128,6 +131,46 @@ const SettingsPage: React.FC = () => {
   const [deleteError, setDeleteError] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  // Shortcuts — pre-loaded defaults to every page + Create Task / Create Note.
+  const [shortcuts, setShortcuts] = useState<ShortcutDef[]>(() => loadShortcuts());
+  const [rebindingId, setRebindingId] = useState<string | null>(null);
+  const [addShortcutOpen, setAddShortcutOpen] = useState(false);
+  const [newShortcutTitle, setNewShortcutTitle] = useState('');
+  const [newShortcutKeys, setNewShortcutKeys] = useState('');
+  const [newShortcutAction, setNewShortcutAction] = useState(SHORTCUT_ACTIONS[0].id);
+  const [capturingNewKeys, setCapturingNewKeys] = useState(false);
+
+  useEffect(() => {
+    if (!rebindingId) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const combo = normalizeCombo(e);
+      if (!combo || combo === 'Escape') { setRebindingId(null); return; }
+      setShortcuts(prev => {
+        const next = prev.map(s => s.id === rebindingId ? { ...s, keys: combo } : s);
+        saveShortcuts(next);
+        return next;
+      });
+      trackUsage('settings', 'rebind-shortcut');
+      setRebindingId(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [rebindingId]);
+
+  useEffect(() => {
+    if (!capturingNewKeys) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const combo = normalizeCombo(e);
+      if (combo && combo !== 'Escape') setNewShortcutKeys(combo);
+      setCapturingNewKeys(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [capturingNewKeys]);
 
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -135,6 +178,7 @@ const SettingsPage: React.FC = () => {
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'energy', label: 'Energy Levels', icon: Battery },
     { id: 'history', label: 'History', icon: History },
+    { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
     { id: 'tickets', label: 'Tickets', icon: MessageSquare },
@@ -160,6 +204,7 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     fetchSettings();
     fetchUserTickets();
+    trackPageVisit('settings');
     fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json()).then(d => { if (d?.user) setTwoFactorEnabled(!!d.user.twoFactorEnabled); }).catch(() => {});
   }, []);
 
@@ -237,7 +282,42 @@ const SettingsPage: React.FC = () => {
           setAccentColor(hex);
           applyAccentHsl(hsl);
         }
-        if (data.language) setLanguage(data.language);
+        // Language persistence: localStorage is the source of truth for the
+        // just-picked language. Only adopt the server value when there is no
+        // local choice; otherwise keep the local pick and push it to the server
+        // so leaving/returning never reverts to a stale value.
+        try {
+          const { canonicalLanguageName: canon } = await import('@/i18n/translations');
+          const localRaw = localStorage.getItem('language');
+          if (data.language) {
+            if (!localRaw) {
+              setLanguage(data.language);
+              try { localStorage.setItem('language', canon(data.language)); } catch {}
+            } else {
+              const localCanon = canon(localRaw);
+              const serverCanon = canon(data.language);
+              if (localCanon !== serverCanon) {
+                // Keep user's pick, sync it up in the background.
+                setLanguage(localCanon);
+                fetch('/api/settings', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({ language: localCanon }),
+                }).catch(() => {});
+              } else {
+                setLanguage(localCanon);
+              }
+            }
+          } else if (localRaw) {
+            setLanguage(canon(localRaw));
+          }
+        } catch {
+          if (data.language) {
+            const localRaw = (() => { try { return localStorage.getItem('language'); } catch { return null; } })();
+            if (!localRaw) setLanguage(data.language);
+          }
+        }
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
       }
@@ -437,6 +517,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleThemeChange = async (id: string) => {
+    trackUsage('settings', 'change-theme');
     setSelectedTheme(id as any);
     if (id === 'light' && theme === 'dark') toggleTheme();
     if (id === 'dark' && theme === 'light') toggleTheme();
@@ -609,8 +690,8 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <header className="px-6 h-16 border-b border-border flex items-center justify-between flex-shrink-0 bg-background">
-        <h1 className="text-base font-bold text-foreground">Settings</h1>
+      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center justify-between gap-2 flex-shrink-0 bg-background">
+        <h1 className="text-base font-bold text-foreground truncate">Settings</h1>
         {saved && (
           <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400 animate-fade-in">
             <CheckCircle className="w-3.5 h-3.5" /> Saved
@@ -618,8 +699,26 @@ const SettingsPage: React.FC = () => {
         )}
       </header>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <div className="w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 overflow-y-auto">
+      <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+        {/* Section tabs — horizontal scroll chips on phones, sidebar on desktop */}
+        <div className="sm:hidden flex-shrink-0 border-b border-border px-3 py-2 flex gap-1.5 overflow-x-auto">
+          {sections.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              aria-pressed={activeSection === s.id}
+              className={`flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs font-semibold rounded-xl whitespace-nowrap transition-all flex-shrink-0 ${
+                activeSection === s.id
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground bg-muted/50'
+              }`}
+            >
+              <s.icon className="w-4 h-4" />
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="hidden sm:block w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 overflow-y-auto">
           {sections.map(s => (
             <button
               key={s.id}
@@ -762,15 +861,20 @@ const SettingsPage: React.FC = () => {
                 <Select
                   value={language}
                   onValueChange={async (newLanguage) => {
-                    setLanguage(newLanguage);
-                    try { localStorage.setItem('language', newLanguage); } catch {}
+                    const canon = canonicalLanguageName(newLanguage);
+                    trackUsage('settings', 'change-language');
+                    // Update UI instantly everywhere, persist locally first so
+                    // leaving/returning to Settings never reverts the pick.
+                    setLanguage(canon);
+                    try { localStorage.setItem('language', canon); } catch {}
                     try {
-                      await fetch('/api/settings', {
+                      const res = await fetch('/api/settings', {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify({ language: newLanguage }),
+                        body: JSON.stringify({ language: canon }),
                       });
+                      if (!res.ok) throw new Error(`save failed: ${res.status}`);
                       showSaved();
                     } catch (error) {
                       console.error('Error saving language:', error);
@@ -903,146 +1007,14 @@ const SettingsPage: React.FC = () => {
           )}
 
           {activeSection === 'calendar' && (
-            <div className="space-y-5">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground mb-1">Google Calendar Sync</h2>
-                <p className="text-xs text-muted-foreground">Sync your tasks with Google Calendar for seamless scheduling.</p>
-              </div>
-
-              {syncError && (
-                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-xl px-4 py-3 space-y-2">
-                  <p>
-                    {syncError.includes('redirect_uri_mismatch')
-                      ? 'Google rejected the redirect URI (Error 400: redirect_uri_mismatch). The URI below must be added EXACTLY in Google Cloud Console.'
-                      : syncError}
-                  </p>
-                  {(syncError.includes('redirect_uri_mismatch') || syncError.includes('auth_failed') || syncError.includes('Connection error')) && calendarRedirectUri && (
-                    <div className="pt-1">
-                      <p className="text-xs font-medium mb-1">Add this exact Authorized redirect URI:</p>
-                      <div className="flex items-center gap-2">
-                        <code className="flex-1 text-xs font-mono bg-background border border-border rounded-lg px-2 py-1.5 break-all select-all">{calendarRedirectUri}</code>
-                        <button
-                          type="button"
-                          onClick={() => navigator.clipboard?.writeText(calendarRedirectUri)}
-                          className="text-xs px-2 py-1.5 rounded-lg border border-border hover:bg-muted flex-shrink-0"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                      <ol className="text-xs mt-2 space-y-1 list-decimal list-inside opacity-90">
-                        <li>Open Google Cloud Console → APIs &amp; Services → Credentials → your OAuth 2.0 Client ID.</li>
-                        <li>Under “Authorized redirect URIs” click Add URI and paste the value above exactly (https, no trailing slash).</li>
-                        <li>Save, wait ~5 minutes, then try Connect again.</li>
-                        <li>If the app is in Testing mode, also add your Gmail under OAuth consent screen → Test users.</li>
-                      </ol>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {syncStatus && (
-                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm rounded-xl px-4 py-3 flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                  Synced {syncStatus.synced} of {syncStatus.total} tasks to Google Calendar
-                </div>
-              )}
-
-              <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${calendarConnected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'}`}>
-                    {calendarConnected
-                      ? <Link2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      : <GoogleGIcon className="w-5 h-5 text-muted-foreground" />
-                    }
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">
-                      {calendarConnected ? 'Google Calendar Connected' : 'Not connected'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {calendarConnected
-                        ? `${tasksWithDates} task${tasksWithDates !== 1 ? 's' : ''} with due dates ready to sync`
-                        : 'Link your Google Calendar to sync events and tasks'}
-                    </p>
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${calendarConnected ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
-                    {calendarConnected ? 'Connected' : 'Disconnected'}
-                  </span>
-                </div>
-
-                <div className="flex gap-2 flex-wrap">
-                  {!isPaid ? (
-                    <button
-                      onClick={() => window.location.href = '/pricing'}
-                      className="flex items-center gap-2 px-4 py-2 text-sm bg-primary/10 border border-primary/20 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Upgrade to Link Google Calendar
-                    </button>
-                  ) : !calendarConnected ? (
-                    <button
-                      onClick={connectCalendar}
-                      disabled={calendarLoading || !calendarConfigured}
-                      data-testid="button-connect-google-calendar"
-                      className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      <GoogleGIcon className="w-4 h-4" />
-                      {calendarLoading ? 'Connecting...' : 'Connect Google Calendar'}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={syncToGoogle}
-                        disabled={calendarLoading || tasksWithDates === 0}
-                        data-testid="button-sync-to-google"
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing to Google...' : `Sync ${tasksWithDates} Task${tasksWithDates !== 1 ? 's' : ''} to GC`}
-                      </button>
-                      <button
-                        onClick={syncFromGoogle}
-                        disabled={calendarLoading}
-                        data-testid="button-sync-from-google"
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${calendarLoading ? 'animate-spin' : ''}`} />
-                        {calendarLoading ? 'Syncing from Google...' : 'Import from Google Calendar'}
-                      </button>
-                      <button
-                        onClick={disconnectCalendar}
-                        disabled={calendarLoading}
-                        data-testid="button-disconnect-calendar"
-                        className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
-                      >
-                        <Link2Off className="w-4 h-4" />
-                        Disconnect
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {!calendarConfigured && (
-                  <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                    To enable Google Calendar sync, add <code className="font-mono">GOOGLE_CLIENT_SECRET</code> to your environment secrets.
-                  </div>
-                )}
-
-                {calendarRedirectUri && !calendarConnected && (
-                  <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
-                    <p className="font-medium text-foreground mb-1">Google Cloud Console must list this redirect URI exactly:</p>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 font-mono break-all select-all">{calendarRedirectUri}</code>
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard?.writeText(calendarRedirectUri)}
-                        className="px-2 py-1 rounded-md border border-border hover:bg-muted flex-shrink-0"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
+            <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
+              <div className="max-w-lg">
+                <ComingSoon
+                  title="Calendar"
+                  accent="blue"
+                  description="Plan your tasks on a visual calendar with drag-and-drop scheduling, time-blocking and timeline views. Coming soon to organize your time like never before."
+                  onNotify={() => (window.location.href = '/pricing')}
+                />
               </div>
             </div>
           )}
@@ -1197,6 +1169,89 @@ const SettingsPage: React.FC = () => {
                       );
                     })
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === 'shortcuts' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">Keyboard Shortcuts</h2>
+                <button
+                  onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setAddShortcutOpen(true); }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Shortcut
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Click a command badge, then press the new key combination to rebind it.</p>
+              <div className="space-y-2">
+                {shortcuts.map(s => {
+                  const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;
+                  const isRebinding = rebindingId === s.id;
+                  return (
+                    <div key={s.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{s.title}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
+                      </div>
+                      <button
+                        onClick={() => setRebindingId(s.id)}
+                        className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
+                        title="Click, then press new keys"
+                      >
+                        {isRebinding ? 'Press keys…' : s.keys}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {addShortcutOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setAddShortcutOpen(false)}>
+                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+                  <div className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+                    <h3 className="text-sm font-bold text-foreground">Add Shortcut</h3>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground mb-1 block">Title</label>
+                      <input value={newShortcutTitle} onChange={e => setNewShortcutTitle(e.target.value)} placeholder="e.g. My focus view" className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground mb-1 block">Command (key combo)</label>
+                      <button onClick={() => setCapturingNewKeys(true)} className="w-full px-3 py-2.5 text-sm font-mono rounded-xl border border-border bg-muted/40 hover:border-primary/40 transition-all text-left">
+                        {capturingNewKeys ? 'Press keys…' : (newShortcutKeys || 'Click to set keys')}
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted-foreground mb-1 block">Action</label>
+                      <Select value={newShortcutAction} onValueChange={setNewShortcutAction}>
+                        <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                          <SelectValue placeholder="Choose action" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SHORTCUT_ACTIONS.map(a => (
+                            <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button onClick={() => setAddShortcutOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+                      <button
+                        onClick={() => {
+                          if (!newShortcutTitle.trim() || !newShortcutKeys.trim()) return;
+                          trackUsage('settings', 'add-shortcut');
+                          const entry: ShortcutDef = { id: `sc-${Date.now().toString(36)}`, title: newShortcutTitle.trim(), keys: newShortcutKeys.trim(), action: newShortcutAction };
+                          setShortcuts(prev => { const next = [...prev, entry]; saveShortcuts(next); return next; });
+                          setAddShortcutOpen(false);
+                        }}
+                        disabled={!newShortcutTitle.trim() || !newShortcutKeys.trim()}
+                        className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
+                      >
+                        Save Shortcut
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1426,14 +1481,20 @@ const SettingsPage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">Get a 6-digit code by email on every login</p>
                 </div>
                 <button
-                  disabled={twoFactorLoading}
+                  aria-label="Toggle two-factor email authentication"
                   onClick={async () => {
-                    setTwoFactorLoading(true);
+                    // Instant response: flip the UI immediately, sync in background.
+                    const next = !twoFactorEnabled;
+                    const prev = twoFactorEnabled;
+                    setTwoFactorEnabled(next);
                     try {
-                      const res = await fetch('/api/auth/two-factor/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ enabled: !twoFactorEnabled }) });
+                      const res = await fetch('/api/auth/two-factor/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ enabled: next }) });
                       if (!res.ok) throw new Error('Failed');
-                      setTwoFactorEnabled(!twoFactorEnabled);
-                    } catch {} finally { setTwoFactorLoading(false); }
+                      showSaved();
+                    } catch {
+                      // Revert only if the save actually failed.
+                      setTwoFactorEnabled(prev);
+                    }
                   }}
                   className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 ${twoFactorEnabled ? 'bg-primary' : 'bg-muted'}`}
                 >
@@ -1468,20 +1529,15 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
       {activePanelTicket && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col p-4">
-          <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto bg-background rounded-2xl shadow-xl border border-border overflow-hidden">
-            <TicketConversation
-              ticket={activePanelTicket}
-              messages={panelMessages}
-              viewAs="user"
-              currentUserName={user?.name || 'You'}
-              onClose={() => { setActivePanelTicket(null); setPanelMessages([]); fetchUserTickets(); }}
-              onSendMessage={handleSendTicketMessage}
-              sending={sendingMessage}
-              embedded
-            />
-          </div>
-        </div>
+        <TicketConversation
+          ticket={activePanelTicket}
+          messages={panelMessages}
+          viewAs="user"
+          currentUserName={user?.name || 'You'}
+          onClose={() => { setActivePanelTicket(null); setPanelMessages([]); fetchUserTickets(); }}
+          onSendMessage={handleSendTicketMessage}
+          sending={sendingMessage}
+        />
       )}
     </div>
   );

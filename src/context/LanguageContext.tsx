@@ -114,12 +114,21 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (firstVisit) {
       const detectedLang = detectLanguageFromBrowser();
       const storedLang = localStorage.getItem('language');
-      const effectiveLang = storedLang || detectedLang;
+      const effectiveLang = storedLang ? canonicalLanguageName(storedLang) : canonicalLanguageName(detectedLang);
       localStorage.setItem(FIRST_VISIT_KEY, 'true');
       localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: effectiveLang, currency: detectedCurrency, tz: detectedTz }));
       if (!storedLang && LANGUAGE_MAP[detectedLang]) {
-        setLanguageState(canonicalLanguageName(detectedLang));
-        localStorage.setItem('language', detectedLang);
+        const canonical = canonicalLanguageName(detectedLang);
+        setLanguageState(canonical);
+        localStorage.setItem('language', canonical);
+      } else if (storedLang) {
+        // Normalize any legacy/raw stored value to canonical native name so
+        // leaving and returning to Settings shows the picked language.
+        const canonical = canonicalLanguageName(storedLang);
+        if (canonical !== storedLang) {
+          setLanguageState(canonical);
+          try { localStorage.setItem('language', canonical); } catch {}
+        }
       }
       setCurrency(detectedCurrency);
       fetch('/api/settings', {

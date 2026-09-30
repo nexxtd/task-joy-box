@@ -267,6 +267,41 @@ router.post('/google', async (req: Request, res: Response) => {
       if (Object.keys(updates).length) await db.update(users).set(updates).where(eq(users.id, user.id));
     }
 
+    // Two-factor: Google sign-in must also require the email code when enabled.
+    // Previously this path issued a session immediately, so enabling 2FA then
+    // logging out/back in via Google skipped the code step entirely.
+    // Re-fetch the flag to include just-created users, then send exactly one code.
+    try {
+      const [fresh] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+      if ((fresh as any)?.twoFactorEnabled) {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        try {
+          await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
+        } catch {}
+        await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+        let emailSent = false;
+        try {
+          const { twoFactorEmailHtml } = await import('../lib/email.js');
+          const { sendEmail: send2FA } = await import('../lib/email.js');
+          emailSent = await send2FA({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(fresh.name || name, code), text: `Your code is ${code} (expires in 10 min)` });
+        } catch (e) { console.error('2fa google email failed', e); emailSent = false; }
+        console.log(`[2FA google] code for ${user.email}: ${code} emailSent=${emailSent}`);
+        const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+        return res.json({
+          requires2FA: true,
+          email: user.email,
+          emailSent,
+          debugCode: exposeCode ? code : undefined,
+          message: emailSent
+            ? 'Two-factor code sent to your email. Please enter it to continue.'
+            : 'We could not deliver the email (check server email settings). Use the code shown here or click Resend.',
+        });
+      }
+    } catch (e) {
+      console.error('2fa google check failed', e);
+    }
+
     await issueToken(res, user.id, user.email);
     res.json({
       user: {
@@ -523,22 +558,16 @@ router.post('/two-factor/enable', requireAuth, async (req: AuthRequest, res: Res
   try {
     const enabled = Boolean(req.body.enabled);
     await db.update(users).set({ twoFactorEnabled: enabled } as any).where(eq(users.id, req.userId!));
-    let emailSent = true;
-    let debugCode: string | undefined;
-    if (enabled) {
-      const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-      await db.insert(twoFactorTokens).values({ userId: req.userId!, code, expiresAt });
+    // Do NOT send any email here. Exactly one email is sent per login attempt
+    // in POST /login (and Google 2FA path / resend). Sending a "test" code on
+    // enable caused two valid codes to coexist and was perceived as double-send.
+    // When disabling, invalidate any outstanding unused codes.
+    if (!enabled) {
       try {
-        const { twoFactorEmailHtml: html2 } = await import('../lib/email.js');
-        const { sendEmail: sendEnable } = await import('../lib/email.js');
-        emailSent = await sendEnable({ to: user.email, subject: '2FA enabled — MyPlanner', html: html2(user.name, code), text: `Your 2FA test code is ${code}` });
-      } catch { emailSent = false; }
-      console.log(`[2FA enable] code for ${user.email}: ${code} emailSent=${emailSent}`);
-      if (!emailSent) debugCode = code;
+        await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, req.userId!), eq(twoFactorTokens.used, false)));
+      } catch {}
     }
-    res.json({ enabled, emailSent, debugCode });
+    res.json({ enabled, emailSent: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 

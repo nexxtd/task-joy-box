@@ -277,3 +277,92 @@
 .draggable-image-grid {
   transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1);
 }
+
+/* ---------- Mobile polish (phone-first fixes, desktop untouched) ---------- */
+
+/* Safe-area insets for notched phones (bottom tab bar / floating buttons) */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* Never allow accidental horizontal page scroll on small screens */
+@media (max-width: 767px) {
+  html, body, #root {
+    overflow-x: clip;
+    max-width: 100vw;
+  }
+
+  /* All app page headers share the `px-6 h-16` pattern. On phones the old
+     floating hamburger used to sit on top of them; now the mobile top bar
+     owns that space, so just tighten padding and let headers wrap/scroll
+     instead of clipping. */
+  header {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  header h1 {
+    font-size: 1rem !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 44px minimum tap target for primary buttons inside headers */
+  header button {
+    min-height: 40px;
+  }
+
+  /* Generic grids that forgot their breakpoint collapse to one column.
+     Only applies when the author left a bare `grid-cols-2/3` — explicit
+     `sm:`/`md:` grids are untouched. */
+  .grid.grid-cols-3:not([class*="sm:"]):not([class*="md:"]) {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  /* Tables: keep horizontal scroll contained, never push the page wide */
+  .overflow-x-auto table {
+    min-width: 560px;
+  }
+
+  /* Dialogs / popovers that used fixed pixel widths fit the viewport */
+  [role="dialog"], [role="menu"], [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 2rem) !important;
+  }
+
+  /* Native date/time inputs stay legible instead of crushing side-by-side */
+  input[type="date"], input[type="time"], input[type="datetime-local"] {
+    min-height: 44px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+  input, select, textarea {
+    font-size: 16px;
+  }
+
+  /* Kanban horizontal scroll gets momentum + snap on touch */
+  .kanban-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .kanban-scroll > * {
+    scroll-snap-align: start;
+  }
+
+  /* Dashboard absolute grid becomes a normal vertical stack on phones:
+     the JS still positions for desktop, but under md: we render the
+     dedicated stacked list (see Dashboard.tsx `md:hidden` block). */
+  .dashboard-grid-desktop {
+    display: none !important;
+  }
+}
+
+/* Touch devices: hover-only controls must stay visible/tappable */
+@media (hover: none) {
+  .group\/widget .opacity-0,
+  .group .opacity-0,
+  .checklist-header-delete {
+    opacity: 1 !important;
+  }
+  .kanban-grip {
+    display: none !important;
+  }
+}

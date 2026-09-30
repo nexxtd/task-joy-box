@@ -24,6 +24,7 @@ import {
 } from '@/components/insights/InsightPremiumWidgets';
 import { GridWidgetDef, useWidgetGrid, cellStyle, WidgetTier } from '@/hooks/useWidgetGrid';
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
+import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -105,6 +106,8 @@ const Insights: React.FC = () => {
 
   const tasks = board?.tasks || [];
   const columns = board?.columns || [];
+
+  useEffect(() => { trackPageVisit('insights'); }, []);
 
   const doneColIds = useMemo(
     () => (board?.columns || []).filter(c => /done|completed|finish/i.test(c.title)).map(c => c.id),
@@ -398,24 +401,25 @@ const Insights: React.FC = () => {
 
   return (
     <div ref={scrollElRef} className="flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
-      <header className="px-6 h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h1 className="text-base font-bold text-foreground whitespace-nowrap">Insights &amp; Analytics</h1>
-          <p className="text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
+      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
+        <div className="flex items-baseline gap-2 min-w-0 flex-1">
+          <h1 className="text-base font-bold text-foreground truncate">Insights &amp; Analytics</h1>
+          <p className="hidden lg:block text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <button
-            onClick={runAi}
+            onClick={() => { trackUsage('insights', 'run-ai-analysis'); runAi(); }}
             disabled={aiLoading}
-            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> Run AI Analysis
+            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Run AI Analysis</span><span className="sm:hidden">AI</span>
           </button>
           <button
-            onClick={() => setShowCustomize(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            onClick={() => { trackUsage('insights', 'customize'); setShowCustomize(true); }}
+            aria-label="Customize insights"
+            className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
           >
-            <LayoutDashboard className="w-4 h-4" /> Customize Insights
+            <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline">Customize Insights</span>
           </button>
         </div>
       </header>
@@ -459,7 +463,7 @@ const Insights: React.FC = () => {
             <p className="text-base font-semibold text-foreground">Your insights board is empty</p>
             <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Insights to add widgets</p>
             <button
-              onClick={() => setShowCustomize(true)}
+              onClick={() => { trackUsage('insights', 'customize'); setShowCustomize(true); }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
             >
               Add widgets

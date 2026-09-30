@@ -53,7 +53,7 @@ const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick, isDraggin
         <p className={`text-sm font-bold text-foreground leading-snug truncate flex-1 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</p>
         <button
           onClick={handleDeepFocusClick}
-          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded text-muted-foreground hover:text-primary"
+          className="ml-auto opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 transition-opacity p-2 -m-1 min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-primary/10 rounded text-muted-foreground hover:text-primary"
           title="Start Deep Focus"
         >
           <Brain className="w-3.5 h-3.5" />

@@ -160,7 +160,16 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
     setError('');
     setLoading(true);
     try {
-      await loginWithGoogle(credentialResponse.credential);
+      const res: any = await loginWithGoogle(credentialResponse.credential);
+      if (res?.requires2FA) {
+        setTwoFARequired(true);
+        setTwoFAEmail(res.email || '');
+        setTwoFAEmailSent(res.emailSent !== false);
+        setTwoFADebugCode(res.debugCode || '');
+        setTwoFACode('');
+        setSuccess(res.message || 'Code sent to your email.');
+        return;
+      }
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed');
     } finally {
@@ -255,7 +264,11 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
             )}
 
             {twoFARequired && (
-              <form onSubmit={handle2FASubmit} className="space-y-4 mb-4">
+              <form onSubmit={handle2FASubmit} className="space-y-4 mb-4" aria-label="Enter two-factor code">
+                <div className="text-center mb-1">
+                  <h2 className="text-base font-bold text-foreground">Check your email for a code</h2>
+                  <p className="text-xs text-muted-foreground mt-1">Enter the 6-digit code we sent to complete login. One code is sent per login attempt.</p>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-foreground mb-1.5">Two-factor code</label>
                   <input type="text" inputMode="numeric" value={twoFACode} onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" required className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-foreground text-sm tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-primary/30" />

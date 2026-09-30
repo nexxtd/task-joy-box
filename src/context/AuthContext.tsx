@@ -143,7 +143,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {}
     let cancelled = false;
-    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 1500);
+    // Safety fallback so a slow /api/auth/me never leaves a spinner up.
+    // Cache-first initial state already renders instantly when a session exists.
+    const t = setTimeout(() => { if (!cancelled) setLoading(false); }, 600);
     refreshUserData().finally(() => { if (!cancelled) setLoading(false); clearTimeout(t); });
     return () => { cancelled = true; clearTimeout(t); };
   }, [refreshUserData]);
@@ -182,6 +184,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential }),
     });
+    // When 2FA is enabled, Google sign-in returns {requires2FA} with exactly
+    // one emailed code instead of a session — caller shows the code entry step.
+    if ((data as any)?.requires2FA) return data;
     setUser(data.user);
     try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     return data;
