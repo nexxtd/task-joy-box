@@ -61,6 +61,7 @@ export interface ShortcutDef {
   title: string;
   keys: string;
   action: string;
+  enabled?: boolean;
 }
 
 /** Legacy alias. */
@@ -105,8 +106,9 @@ function normalizeStored(raw: any): ShortcutDef | null {
   const title = String((raw as any).title || '');
   const keys = String((raw as any).keys ?? (raw as any).combo ?? '');
   const action = String((raw as any).action ?? (raw as any).actionId ?? '');
+  const enabled = (raw as any).enabled;
   if (!id || !title || !keys || !action) return null;
-  return { id, title, keys, action };
+  return { id, title, keys, action, enabled: enabled !== false };
 }
 
 export function loadShortcuts(): ShortcutDef[] {
@@ -121,10 +123,14 @@ export function loadShortcuts(): ShortcutDef[] {
     const byId = new Map<string, ShortcutDef>();
     for (const item of parsed) {
       const n = normalizeStored(item);
-      if (n) byId.set(n.id, n);
+      if (n) {
+        // Ensure enabled field exists
+        n.enabled = n.enabled !== false;
+        byId.set(n.id, n);
+      }
     }
     for (const d of DEFAULT_SHORTCUTS) {
-      if (!byId.has(d.id)) byId.set(d.id, { ...d });
+      if (!byId.has(d.id)) byId.set(d.id, { ...d, enabled: true });
     }
     return Array.from(byId.values());
   } catch {
@@ -144,8 +150,13 @@ export function saveShortcuts(list: Array<ShortcutDef | Shortcut>) {
 
 export function removeShortcut(id: string) {
   const current = loadShortcuts();
-  const filtered = current.filter(s => s.id !== id);
-  saveShortcuts(filtered);
+  // Do not remove default shortcuts (IDs starting with 'sc-' that are
+  // defined in DEFAULT_SHORTCUTS). Only allow removing user-added ones.
+  const defaultIds = new Set(DEFAULT_SHORTCUTS.map(d => d.id));
+  const filtered = current.filter(s => s.id !== id || defaultIds.has(s.id));
+  if (filtered.length !== current.length) {
+    saveShortcuts(filtered);
+  }
 }
 
 // ---------------------------------------------------------------------------

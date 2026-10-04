@@ -4,7 +4,7 @@ import {
   Palette, Bell, Globe, Calendar, Battery, Keyboard,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
+  History, Brain, CheckCircle2, X, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
   Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine
 } from 'lucide-react';
@@ -1204,6 +1204,7 @@ const SettingsPage: React.FC = () => {
                 {shortcuts.map(s => {
                   const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;
                   const isRebinding = rebindingId === s.id;
+                  const isDefault = DEFAULT_SHORTCUTS.some(d => d.id === s.id);
                   return (
                     <div key={s.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl">
                       <div className="min-w-0">
@@ -1211,6 +1212,7 @@ const SettingsPage: React.FC = () => {
                         <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Enabled toggle */}
                         <button
                           onClick={() => setRebindingId(isRebinding ? null : s.id)}
                           className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
@@ -1218,14 +1220,25 @@ const SettingsPage: React.FC = () => {
                         >
                           {isRebinding ? 'Press keys…' : s.keys}
                         </button>
+                        {/* Enabled/disabled toggle */}
                         <button
-                          onClick={() => removeShortcut(s.id)}
-                          className="px-2 py-1 text-xs text-destructive hover:text-destructive/90 rounded border bg-destructive/5 hover:bg-destructive/10 transition-all"
-                          title="Remove shortcut"
-                          aria-label="Remove shortcut"
+                          onClick={() => setShortcuts(prev => prev.map(x => x.id === s.id ? { ...x, enabled: !x.enabled } : x))}
+                          className={`px-2 py-1 rounded-md text-[10px] font-medium flex-shrink-0 ${s.enabled ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground'} transition-all`}
+                          title={s.enabled ? 'Disable shortcut' : 'Enable shortcut'}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          {s.enabled ? <CheckCircle2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
                         </button>
+                        {/* Delete button — only for user-added shortcuts */}
+                        {!isDefault && (
+                          <button
+                            onClick={() => removeShortcut(s.id)}
+                            className="px-2 py-1 text-xs text-destructive hover:text-destructive/90 rounded border bg-destructive/5 hover:bg-destructive/10 transition-all"
+                            title="Remove shortcut"
+                            aria-label="Remove shortcut"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
