@@ -553,7 +553,7 @@ export const PriorityBadge: React.FC<{
           ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{ backgroundColor: pc?.bg }}
-          className="text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
+          className="text-xs px-3.5 py-1 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
         >
           {pc?.label}
         </button>
@@ -561,7 +561,7 @@ export const PriorityBadge: React.FC<{
         <button
           ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
+          className="text-xs px-3.5 py-1 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
         >
           Priority
         </button>
@@ -2948,7 +2948,7 @@ const Tasks: React.FC = () => {
                   {newTaskLabels.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {newTaskLabels.map(label => (
-                        <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                        <span key={label.id} className={`inline-flex items-center gap-1 px-3.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
                           {label.name}
                           <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
                             <X className="w-3 h-3" />

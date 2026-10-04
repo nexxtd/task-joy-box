@@ -320,9 +320,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-3 sm:px-4 py-4 sm:py-5 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-            <GripVertical className="w-5 h-5" />
+            <GripVertical className="w-4 h-4" />
           </div>
           <div onClick={e => { e.stopPropagation(); handleToggleComplete(e, task); }}>
             <CircleToggle
@@ -334,9 +334,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[15px] font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
+              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap mt-2 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -349,7 +349,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 <button
                   onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
                   title="Edit duration"
-                  className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0 hover:bg-muted/80"
+                  className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0 hover:bg-muted/80"
                 >
                   {taskDurFmt}
                 </button>
@@ -362,7 +362,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   setDateEditField('start');
                 }}
                 title="Edit start date and time"
-                className="text-xs px-2.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-muted/80"
+                className="text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-muted/80"
               >
                 <Calendar className="w-3 h-3" />
                 {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
@@ -375,7 +375,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   setDateEditField('due');
                 }}
                 title="Edit due date and time"
-                className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   task.dueDate
                     ? (() => {
                         const warning = getDueTimeWarning(task);
@@ -392,14 +392,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
               </button>
               {checklistTotal > 0 && (
-                <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
               {subtaskCount > 0 && (() => {
                 const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
                 return (
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                     {subtaskDone}/{subtaskCount} sub task
                   </span>
                 );
@@ -407,7 +407,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {taskTags.map(label => (
                 <span
                   key={label.id}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                  className={`text-xs px-3.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
                 </span>
@@ -415,14 +415,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {task.labels.length > taskTags.length && (
                 <button
                   onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                  className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
               >
@@ -434,14 +434,14 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(task.id); }}
-              className="p-3 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
             <button
               onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-              className="p-3 -m-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2.5 -m-1 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary min-w-[40px] min-h-[40px] flex items-center justify-center"
               title="Open Deep Focus"
             >
               <Brain className="w-4 h-4" />
@@ -547,31 +547,31 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-3 sm:px-4 py-4 sm:py-5 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-            <GripVertical className="w-5 h-5" />
+            <GripVertical className="w-4 h-4" />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[15px] font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
+              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap mt-2 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
               {noteTags.map(label => (
                 <span
                   key={label.id}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                  className={`text-xs px-3.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
                 </span>
               ))}
               {note.labels.length > noteTags.length && (
-                <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   +{note.labels.length - noteTags.length}
                 </span>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                className={`text-xs px-2.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   tagPopupTaskId === note.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
               >
@@ -583,7 +583,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={e => { e.stopPropagation(); toggleExpand(note.id); }}
-              className="p-3 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[44px] min-h-[44px] flex items-center justify-center"
+              className="p-2.5 -m-1 rounded-md hover:bg-muted text-muted-foreground min-w-[40px] min-h-[40px] flex items-center justify-center"
               title={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -744,7 +744,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[340px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[400px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
