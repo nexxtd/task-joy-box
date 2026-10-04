@@ -61,7 +61,7 @@ async function loadBoard(userId: number): Promise<Board> {
         void (async () => {
           try {
             const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 4000);
+            const tid = setTimeout(() => ctrl.abort(), 30000);
             const res = await fetch('/api/note-boards/snapshot', { 
               credentials: 'include', 
               signal: ctrl.signal 
@@ -82,7 +82,7 @@ async function loadBoard(userId: number): Promise<Board> {
   void (async () => {
     try {
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const tid = setTimeout(() => ctrl.abort(), 30000);
       const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
       clearTimeout(tid);
       if (res.status === 403 || res.status === 400) return;
