@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Subtask, Task } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -1550,13 +1550,21 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          {showUploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
+                          <Paperclip className="w-5 h-5 text-primary" />
                         </div>
-                        <p className="text-sm font-medium text-foreground">{showUploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
                         <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
                       <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                     </label>
+                    {showUploadingFiles && (
+                      <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm font-medium">Uploading...</span>
+                        </div>
+                      </div>
+                    )}
                     {(selectedTask.attachments?.length ?? 0) > 0 ? (
                       <FreeAttachmentList
                         attachments={selectedTask.attachments || []}
@@ -1589,9 +1597,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                          <Image className="w-5 h-5 text-primary" />
                         </div>
-                        <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                        <p className="text-sm font-medium text-foreground">Click to upload</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
                       <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />

@@ -993,14 +993,19 @@ const Projects: React.FC = () => {
   }, []);
 
   // Un-collapse a board column after a task is dropped into it (same as the
-  // Tasks page expanding the destination group on drop).
-  const expandBoardColumn = (columnId: string) => {
+  // Tasks page expanding the destination group on drop). Completed drops also
+  // un-collapse the target's Completed section so the item stays visible.
+  const expandBoardColumn = (columnId: string, includeCompleted = false) => {
     try {
       const key = 'tasks-column-collapsed';
       const raw = localStorage.getItem(key);
       const map = raw ? JSON.parse(raw) : {};
-      if (map && map[columnId]?.tasks) {
-        map[columnId] = { ...map[columnId], tasks: false };
+      if (map && (map[columnId]?.tasks || (includeCompleted && map[columnId]?.completed))) {
+        map[columnId] = {
+          ...map[columnId],
+          tasks: false,
+          ...(includeCompleted ? { completed: false } : {}),
+        };
         localStorage.setItem(key, JSON.stringify(map));
         window.dispatchEvent(new Event('tasks-column-collapsed-change'));
       }
@@ -1030,7 +1035,7 @@ const Projects: React.FC = () => {
       if (isNoteDrag) return;
       const colId = dstColNormalized;
       const existing = board.tasks.find(t => t.id === draggedId);
-      if (!existing) { expandBoardColumn(colId); return; }
+      if (!existing) { expandBoardColumn(colId, true); return; }
       const updates: Partial<Task> = {};
       if (existing.columnId !== colId) updates.columnId = colId;
       if (existing.projectId !== selectedProject?.id) {
@@ -1042,8 +1047,36 @@ const Projects: React.FC = () => {
         updates.completedAt = existing.completedAt ?? new Date().toISOString();
         updates.status = 'completed';
       }
-      if (Object.keys(updates).length > 0) updateTask(draggedId, updates);
-      expandBoardColumn(colId);
+      // Completed -> Completed (same or different column): insert at the drop
+      // index within the target column's Completed list so the item lands
+      // exactly where it was dropped, then compact the source list.
+      const srcColId = srcColNormalized;
+      const dstCompletedIds = board.tasks
+        .filter(t => t.columnId === colId && t.projectId === selectedProject?.id && t.completed && t.id !== draggedId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(t => t.id);
+      const insertAt = Math.max(0, Math.min(result.destination.index, dstCompletedIds.length));
+      dstCompletedIds.splice(insertAt, 0, draggedId);
+      dstCompletedIds.forEach((id, idx) => {
+        const cur = board.tasks.find(t => t.id === id);
+        if (!cur) return;
+        if (id === draggedId) {
+          updateTask(id, { ...updates, order: idx });
+        } else if (cur.order !== idx) {
+          updateTask(id, { order: idx });
+        }
+      });
+      if (srcColId !== colId) {
+        const srcCompletedIds = board.tasks
+          .filter(t => t.columnId === srcColId && t.projectId === selectedProject?.id && t.completed && t.id !== draggedId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(t => t.id);
+        srcCompletedIds.forEach((id, idx) => {
+          const cur = board.tasks.find(t => t.id === id);
+          if (cur && cur.order !== idx) updateTask(id, { order: idx });
+        });
+      }
+      expandBoardColumn(colId, true);
       return;
     }
     // Shared column ordering for tasks + notes: the drop index is in the
@@ -1581,38 +1614,6 @@ const Projects: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-foreground">Project Notes ({projectNotes.length})</h3>
-          {canCreateTasks && (
-            <button onClick={openAddPopup} className="text-xs font-semibold text-primary hover:underline">
-              Add note
-            </button>
-          )}
-        </div>
-        {projectNotes.length > 0 ? (
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {projectNotes.slice(0, 20).map(note => (
-              <button
-                key={note.id}
-                onClick={() => navigate('/notes')}
-                className="w-full flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 text-left hover:bg-muted/40 transition-colors"
-              >
-                <StickyNote className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-sm text-foreground truncate">{note.title}</p>
-                  {note.description && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{note.description}</p>
-                  )}
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No notes yet" description="Assign existing notes or create a new one — it will appear here and in Notes." />
-        )}
-      </div>
     </div>
   );
 
@@ -1733,7 +1734,7 @@ const Projects: React.FC = () => {
                     {provided.placeholder}
 
                     {addingColumn ? (
-                      <div className="flex-shrink-0 w-[680px] max-w-[90vw] animate-fade-in bg-card border border-border rounded-2xl p-4" data-no-pan="true">
+                      <div className="flex-shrink-0 w-[85vw] sm:w-[340px] max-w-[calc(100vw-2rem)] animate-fade-in bg-card border border-border rounded-2xl p-4" data-no-pan="true">
                         <input
                           autoFocus
                           value={newColTitle}
@@ -1754,7 +1755,7 @@ const Projects: React.FC = () => {
                       <button
                         onClick={() => setAddingColumn(true)}
                         data-no-pan="true"
-                        className="flex-shrink-0 w-[680px] max-w-[90vw] flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
+                        className="flex-shrink-0 w-[85vw] sm:w-[340px] max-w-[calc(100vw-2rem)] flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
                       >
                         <Plus className="w-4 h-4" />
                         Add Column

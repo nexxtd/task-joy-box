@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
 import { Column as ColumnType, Task, LABEL_COLORS, Label, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
+import { useNotesContext } from '@/context/NotesContext';
 import { Plus, Trash2, Sparkles, Lock, X, ChevronDown, ChevronUp, Calendar, Brain, Clock3, GripVertical, Tag, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { TaskDropdownExpanded, PriorityBadge } from '@/pages/Tasks';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
+import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import CenteredDragClone from '@/components/CenteredDragClone';
 
@@ -84,6 +86,7 @@ interface BoardColumnProps {
 
 const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], index, onTaskClick, onNoteClick, canCreateTasks = true, onAddClick, canEdit = true, isDragging = false, isTaskDragging = false }) => {
   const { board, addTask, updateColumn, updateTask, moveTask, deleteTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
+  const notesCtx = useNotesContext();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -127,7 +130,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
   }, [tasksCollapsed, completedCollapsed, column.id]);
   React.useEffect(() => {
     const syncCollapsed = () => {
-      try { setTasksCollapsed(!!readColCollapsed()[column.id]?.tasks); } catch {}
+      try {
+        const entry = readColCollapsed()[column.id];
+        setTasksCollapsed(!!entry?.tasks);
+        // A drop into this column's Completed section clears its collapsed
+        // flag in storage — sync it here so the landed item stays visible.
+        setCompletedCollapsed(!!entry?.completed);
+      } catch {}
     };
     window.addEventListener('tasks-column-collapsed-change', syncCollapsed);
     return () => window.removeEventListener('tasks-column-collapsed-change', syncCollapsed);
@@ -176,9 +185,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
       if (!map.has(key)) map.set(key, label);
     };
     board.tasks.forEach(task => task.labels.forEach(add));
+    notesCtx.board.tasks.forEach(note => note.labels.forEach(add));
     sharedTags.forEach(tag => add(sharedTagToLabel(tag)));
     return Array.from(map.values());
-  }, [board.tasks, sharedTags]);
+  }, [board.tasks, notesCtx.board.tasks, sharedTags]);
 
   const openQuickEdit = (task: Task, field: 'duration') => {
     setQuickEditTaskId(task.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
@@ -199,10 +209,19 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
   };
 
   const toggleTaskTag = (taskId: string, label: Label) => {
+    // Tasks live in the board context, notes live in the notes context —
+    // check both so tag toggles work on every row type.
     const task = board.tasks.find(item => item.id === taskId);
-    if (!task) return;
-    const has = task.labels.some(item => item.id === label.id);
-    updateTask(taskId, { labels: has ? task.labels.filter(item => item.id !== label.id) : [...task.labels, label] });
+    if (task) {
+      const has = task.labels.some(item => item.id === label.id);
+      updateTask(taskId, { labels: has ? task.labels.filter(item => item.id !== label.id) : [...task.labels, label] });
+      return;
+    }
+    const note = notesCtx.board.tasks.find(item => item.id === taskId);
+    if (note) {
+      const has = note.labels.some(item => item.id === label.id);
+      notesCtx.updateTask(taskId, { labels: has ? note.labels.filter(item => item.id !== label.id) : [...note.labels, label] });
+    }
   };
 
   const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
@@ -229,6 +248,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
         updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
       }
     });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
   };
 
   const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
@@ -246,6 +270,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     board.tasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
         updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.map(label => label.id === tagId ? { ...label, color } : label) });
       }
     });
   };
@@ -267,6 +296,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
         updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
       }
     });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.filter(label => label.id !== tagId) });
+      }
+    });
   };
 
   const renderTaskRow = (task: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
@@ -280,7 +314,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
       <div
         data-no-pan="true"
         onClick={() => onTaskClick(task)}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text overflow-hidden max-w-full ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
           isDraggingRow
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'
@@ -302,7 +336,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -314,11 +348,49 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {taskDurFmt && (
                 <button
                   onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                  title="Edit duration"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 hover:bg-muted/80"
                 >
                   {taskDurFmt}
                 </button>
               )}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null);
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
+                  setDateEditField('start');
+                }}
+                title="Edit start date and time"
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground hover:bg-muted/80"
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+              </button>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null);
+                  setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
+                  setDateEditField('due');
+                }}
+                title="Edit due date and time"
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
+                  task.dueDate
+                    ? (() => {
+                        const warning = getDueTimeWarning(task);
+                        return warning === 'overdue'
+                          ? 'bg-destructive/10 text-destructive'
+                          : warning === 'imminent' || warning === 'soon'
+                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                            : 'bg-muted text-muted-foreground';
+                      })()
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Calendar className="w-2.5 h-2.5" />
+                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+              </button>
               {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
@@ -463,14 +535,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
   // chevron right. No dates, checkbox, Deep Focus icon, or body preview.
   const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
-    const attachmentCount = (note.attachments?.length || 0) + ((note as any).images?.length || 0);
     const noteTags = note.labels.length > 2 ? note.labels.slice(0, 2) : note.labels.slice(0, 2);
     return (
       <div
         data-no-pan="true"
         data-note-row="true"
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note); }}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text overflow-hidden max-w-full ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
           isDraggingRow
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'
@@ -484,7 +555,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
               {noteTags.map(label => (
                 <span
                   key={label.id}
@@ -496,11 +567,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {note.labels.length > noteTags.length && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   +{note.labels.length - noteTags.length}
-                </span>
-              )}
-              {attachmentCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {attachmentCount} file{attachmentCount === 1 ? '' : 's'}
                 </span>
               )}
               <button
@@ -525,19 +591,29 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           </div>
         </div>
         {isExpanded && !isDraggingRow && !isDragging && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-3 bg-muted/10 rounded-b-xl">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {note.labels.map(label => (
-                <span key={label.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
-                  {label.name}
-                </span>
-              ))}
-              {attachmentCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {attachmentCount} attachment{attachmentCount === 1 ? '' : 's'}
-                </span>
-              )}
-            </div>
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/10 rounded-b-xl">
+            <NoteDropdownExpanded
+              key={note.id}
+              note={note}
+              onUpdateNote={notesCtx.updateTask}
+              onToggleChecklistItem={notesCtx.toggleChecklistItem}
+              onAddChecklistItem={notesCtx.addChecklistItem}
+              onDeleteChecklistItem={notesCtx.deleteChecklistItem}
+              onAddChecklist={notesCtx.addChecklist}
+              allTags={allTags}
+              onToggleTag={tagId => { const label = allTags.find(t => t.id === tagId); if (label) toggleTaskTag(note.id, label); }}
+              onCreateTag={async (name, color) => {
+                try {
+                  const newLabel = await createSharedTaskLabel(name, color);
+                  notesCtx.updateTask(note.id, { labels: [...note.labels, newLabel] });
+                } catch (error) {
+                  console.error('Failed to create note tag:', error);
+                }
+              }}
+              onDeleteTag={tagId => deleteTagEverywhere(tagId)}
+              onRenameTag={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+              onColorChangeTag={(tagId, color) => changeTagColorEverywhere(tagId, color)}
+            />
           </div>
         )}
       </div>
@@ -668,7 +744,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[340px] xl:w-[680px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[340px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
@@ -1011,8 +1087,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     </Draggable>
 
     {tagPopupTaskId && (() => {
-      const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
+      const popupTask = board.tasks.find(t => t.id === tagPopupTaskId)
+        ?? notesCtx.board.tasks.find(t => t.id === tagPopupTaskId);
       if (!popupTask) return null;
+      const isNote = !board.tasks.some(t => t.id === tagPopupTaskId);
       return (
         <TagsModal
           open={!!tagPopupTaskId}
@@ -1023,7 +1101,8 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           onCreate={async (name, color) => {
             try {
               const newLabel = await createSharedTaskLabel(name, color);
-              updateTask(popupTask.id, { labels: [...popupTask.labels, newLabel] });
+              if (isNote) notesCtx.updateTask(popupTask.id, { labels: [...popupTask.labels, newLabel] });
+              else updateTask(popupTask.id, { labels: [...popupTask.labels, newLabel] });
             } catch (error) {
               console.error('Failed to create task tag:', error);
             }

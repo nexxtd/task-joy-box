@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Image, Trash2, GripVertical } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Image, Trash2, GripVertical, X } from 'lucide-react';
 import { Attachment } from '@/types/board';
 import { useFreeReorderDrag } from '@/hooks/useFreeReorderDrag';
 
@@ -65,10 +66,19 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
     items: images,
     onReorder,
   });
+  const [preview, setPreview] = useState<Attachment | null>(null);
+
+  React.useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreview(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [preview]);
 
   if (images.length === 0) return null;
 
   return (
+    <>
     <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3 select-none ${dragId ? 'cursor-grabbing bg-primary/5 rounded-xl p-1 border border-dashed border-primary/20' : ''}`}>
       {displayItems.map((img) => {
         const isDragged = dragId === img.id;
@@ -76,7 +86,8 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
           <div
             key={img.id}
             ref={(el) => setItemRef(img.id, el)}
-            className={`relative group/img aspect-square rounded-xl border bg-muted/40 overflow-hidden ${isDragged ? 'opacity-30 border-dashed border-primary/50 scale-[0.97] z-0' : 'hover:border-primary/40 hover:shadow-md border-border'}`}
+            onClick={() => { if (!dragId) setPreview(img); }}
+            className={`relative group/img aspect-square rounded-xl border bg-muted/40 overflow-hidden cursor-zoom-in ${isDragged ? 'opacity-30 border-dashed border-primary/50 scale-[0.97] z-0' : 'hover:border-primary/40 hover:shadow-md border-border'}`}
             style={{ transition: isDragged ? 'none' : 'transform 200ms cubic-bezier(0.22,1,0.36,1), opacity 150ms, border-color 150ms' }}
           >
             <div
@@ -112,6 +123,21 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
         );
       })()}
     </div>
+    {preview && createPortal(
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80" onClick={() => setPreview(null)}>
+        <div className="relative max-w-[90vw] max-h-[85vh]" onClick={e => e.stopPropagation()}>
+          <img src={getImageSrc(preview)} alt={preview.fileName} className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain bg-black" />
+          <div className="mt-2 text-center">
+            <p className="text-sm text-white/90 truncate max-w-[90vw]">{preview.fileName}</p>
+          </div>
+          <button onClick={() => setPreview(null)} aria-label="Close preview" className="absolute -top-2 -right-2 p-2 rounded-full bg-background border border-border shadow-lg text-foreground hover:text-destructive">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 };
 

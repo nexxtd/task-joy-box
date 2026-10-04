@@ -156,27 +156,25 @@ function ProtectedRoutes() {
   const location = useLocation();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
-  // Preload all primary pages on idle so every navigation feels instant
-  // (same snappiness as Tasks/Projects which render from cache).
+  // Preload the most likely next pages on idle so common navigation feels
+  // instant — without downloading the whole app (antd/recharts/AI) on boot,
+  // which saturated the network and made everything feel slow to load.
   useEffect(() => {
     const preload = () => {
-      void import("@/pages/Dashboard");
       void import("@/pages/Tasks");
       void import("@/pages/Projects");
-      void import("@/pages/Notes");
-      void import("@/pages/Insights");
-      void import("@/pages/SettingsPage");
-      void import("@/pages/AIChat");
-      void import("@/pages/Support");
     };
     try {
+      const conn = (navigator as any)?.connection;
+      // Respect data-saver / very slow connections: skip preloading entirely.
+      if (conn && (conn.saveData || /2g/.test(String(conn.effectiveType || '')))) return;
       const ric = (window as any).requestIdleCallback;
       if (typeof ric === 'function') {
-        const id = ric(preload, { timeout: 2000 });
+        const id = ric(preload, { timeout: 8000 });
         return () => { try { (window as any).cancelIdleCallback?.(id); } catch {} };
       }
     } catch {}
-    const t = setTimeout(preload, 800);
+    const t = setTimeout(preload, 4000);
     return () => clearTimeout(t);
   }, []);
   useEffect(() => {

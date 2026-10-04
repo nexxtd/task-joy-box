@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
 import MobileNav from './MobileNav';
-import { loadShortcuts, matchesAnyShortcut, runShortcutAction } from '@/lib/shortcuts';
+import { loadShortcuts, matchesAnyShortcut, runShortcutAction, isShortcutCapturing } from '@/lib/shortcuts';
 import { trackPageVisit } from '@/lib/usage';
 
 const pathToPage = (pathname: string): string => {
@@ -29,8 +29,13 @@ const AppLayout: React.FC = () => {
     try { trackPageVisit(pathToPage(location.pathname)); } catch {}
   }, [location.pathname]);
   // Global keyboard shortcuts (Settings > Shortcuts). Rebound combos apply app-wide.
+  // Capture phase + stopPropagation so browser-reserved Alt combos are claimed
+  // before the browser (or a child handler) swallows them — this is what made
+  // shortcuts flaky on the first press.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // While Settings is capturing a new combo, never fire shortcuts.
+      if (isShortcutCapturing()) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         // Allow shortcuts with modifiers even inside fields (e.g. Alt+T),
@@ -43,12 +48,13 @@ const AppLayout: React.FC = () => {
         const hit = matchesAnyShortcut(e, list);
         if (hit) {
           e.preventDefault();
+          e.stopPropagation();
           runShortcutAction(hit.action, (p: string) => navigate(p));
         }
       } catch {}
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [navigate]);
   return (
     <div className="h-dvh flex flex-col md:flex-row bg-background overflow-hidden">

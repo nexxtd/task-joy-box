@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
@@ -35,7 +36,6 @@ import {
   Trash2,
   X,
   Zap,
-  Loader2,
 } from 'lucide-react';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
@@ -506,18 +506,51 @@ export const PriorityBadge: React.FC<{
   isOpen: boolean;
   onToggle: () => void;
 }> = ({ task, onUpdate, isOpen, onToggle }) => {
-  const ref = React.useRef<HTMLDivElement>(null);
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = React.useState<{ top: number; left: number } | null>(null);
+  // The menu renders in a portal on document.body (fixed position from the
+  // button rect). Row containers on the project board and elsewhere use
+  // overflow-hidden / transforms, which would clip or displace an
+  // absolutely-positioned dropdown.
+  React.useLayoutEffect(() => {
+    if (!isOpen || !btnRef.current) { setMenuPos(null); return; }
+    const update = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 144; // w-36
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      setMenuPos({ top: rect.bottom + 4, left });
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [isOpen]);
   React.useEffect(() => {
     if (!isOpen) return;
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onToggle(); };
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest?.('[data-priority-menu]')) return;
+      if (btnRef.current && !btnRef.current.contains(target)) onToggle();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onToggle(); };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [isOpen, onToggle]);
   const pc = PRIORITY_COLORS[task.priority];
   return (
-    <div className="relative flex-shrink-0 flex items-center" ref={ref}>
+    <div className="relative flex-shrink-0 flex items-center">
       {task.priority !== 'none' ? (
         <button
+          ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{ backgroundColor: pc?.bg }}
           className="text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
@@ -526,28 +559,35 @@ export const PriorityBadge: React.FC<{
         </button>
       ) : isOpen ? (
         <button
+          ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
           className="text-[11px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
         >
           Priority
         </button>
       ) : null}
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-1 z-50 w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5">
+      {isOpen && menuPos && typeof document !== 'undefined' && createPortal(
+        <div
+          data-priority-menu
+          className="fixed z-[100] w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5"
+          style={{ top: menuPos.top, left: menuPos.left }}
+          onClick={e => e.stopPropagation()}
+        >
           {(['urgent', 'high', 'medium', 'low', 'none'] as const).map(p => {
             const c = PRIORITY_COLORS[p];
             return (
               <button
                 key={p}
-                onClick={e => { e.stopPropagation(); onUpdate(p); }}
-                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
+                onClick={e => { e.stopPropagation(); onUpdate(p); onToggle(); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 min-h-[40px] text-xs rounded-lg transition-all ${task.priority === p ? 'bg-primary/10 font-bold' : 'hover:bg-muted'}`}
               >
                 <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: c.bg }} />
                 {c.label}
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -626,7 +666,7 @@ const Tasks: React.FC = () => {
   const { user } = useAuth();
   const { open: openDeepFocus } = useDeepFocus();
 
-  const tier = user?.subscriptionTier || 'free';
+  const tier = (user?.subscriptionTier || 'free').toLowerCase();
   const isPremium = tier === 'premium' || tier === 'pro';
   const isPro = tier === 'pro';
   const mediaLimit = tier === 'free' ? 5 : tier === 'premium' ? 10 : 20;
@@ -664,10 +704,12 @@ const Tasks: React.FC = () => {
 
   // "Add New" from the Projects page: ?new=1&project=<id> opens the create modal
   // with the project pre-selected so the new task is assigned to it.
-  // Dashboard "Add Task" navigates here with ?create=1 and opens the same flow.
+  // Dashboard "Add Task" / the "Create Task" shortcut navigate here with
+  // ?create=1 and open the same flow.
   useEffect(() => { trackPageVisit('tasks'); }, []);
+  const location = useLocation();
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     if (params.get('new') === '1' || params.get('create') === '1') {
       const pid = params.get('project');
       setCreateModalProjectId(pid ? Number(pid) : undefined);
@@ -681,6 +723,17 @@ const Tasks: React.FC = () => {
       } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+  // Keyboard shortcut "Create Task" while already on this page: the URL may
+  // not change (same route), so the query effect above never fires — open the
+  // modal directly from the shortcut event instead.
+  useEffect(() => {
+    const open = () => {
+      setCreateModalProjectId(undefined);
+      setAddingTask(true);
+    };
+    window.addEventListener('shortcut:create-task', open);
+    return () => window.removeEventListener('shortcut:create-task', open);
   }, []);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -3273,7 +3326,7 @@ const Tasks: React.FC = () => {
                 >
                   <div className="flex items-center gap-2">
                     <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Files</h3>
                     {newFiles.length > 0 && (
                       <span className="text-xs text-muted-foreground">({newFiles.length})</span>
                     )}
@@ -3369,14 +3422,17 @@ const Tasks: React.FC = () => {
                         <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                              <Image className="w-5 h-5 text-primary" />
                             </div>
-                            <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                            <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                           </div>
                           <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                             if (!e.target.files) return;
-                            const files = Array.from(e.target.files);
+                            const allPicked = Array.from(e.target.files);
+                            const remainingImgs = mediaLimit - (newTaskImages.length || 0);
+                            if (remainingImgs <= 0) { e.currentTarget.value = ''; return; }
+                            const files = allPicked.slice(0, remainingImgs);
                             e.currentTarget.value = '';
                             setUploadingImages(true);
                             try {
@@ -3390,14 +3446,6 @@ const Tasks: React.FC = () => {
                             } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                         {newTaskImages.length > 0 && (
                           <DraggableImageGrid
                             images={newTaskImages}
@@ -4145,21 +4193,13 @@ const Tasks: React.FC = () => {
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                            <Image className="w-5 h-5 text-primary" />
                           </div>
-                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                          <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
                       )}
@@ -4499,8 +4539,11 @@ export const TaskDropdownExpanded: React.FC<{
   }, [task.attachments, onUpdateTask]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    if (picked.length === 0) return;
+    const remaining = mediaLimit - (taskRef.current.attachments?.length || 0);
+    if (remaining <= 0) { e.currentTarget.value = ''; return; }
+    const files = picked.slice(0, remaining);
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
@@ -4752,7 +4795,6 @@ export const TaskDropdownExpanded: React.FC<{
                                       {list.title}
                                     </span>
                                   )}
-                                  <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                 </button>
                                 <div className="flex items-center gap-1">
                                   <button
@@ -4871,7 +4913,7 @@ export const TaskDropdownExpanded: React.FC<{
         >
           <div className="flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+            <h3 className="text-sm font-semibold text-foreground">Files</h3>
             {(task.attachments ?? []).length > 0 && (
               <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
             )}
@@ -4890,6 +4932,13 @@ export const TaskDropdownExpanded: React.FC<{
               </div>
             ) : (
               <>
+                {(task.attachments?.length || 0) >= mediaLimit ? (
+                  isPro ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">Limit reached ({mediaLimit} max)</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                  )
+                ) : (
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
@@ -4900,13 +4949,6 @@ export const TaskDropdownExpanded: React.FC<{
                   </div>
                   <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                 </label>
-                {showUploading && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
                 )}
                 {(task.attachments || []).length > 0 && (
                   <FreeAttachmentList
@@ -4950,20 +4992,27 @@ export const TaskDropdownExpanded: React.FC<{
               </div>
             ) : (
               <>
-                {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                {(task.images?.length || 0) >= mediaLimit ? (
+                  isPro ? (
+                    <p className="text-xs text-muted-foreground text-center py-2">Limit reached ({mediaLimit} max)</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                  )
                 ) : (
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                        <Image className="w-5 h-5 text-primary" />
                       </div>
-                      <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                      <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                     </div>
                     <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                       if (!e.target.files) return;
-                      const files = Array.from(e.target.files);
+                      const allPicked = Array.from(e.target.files);
+                      const remainingImgs = mediaLimit - ((taskRef.current.images?.length || 0));
+                      if (remainingImgs <= 0) { e.currentTarget.value = ''; return; }
+                      const files = allPicked.slice(0, remainingImgs);
                       e.currentTarget.value = '';
                       setUploadingImages(true);
                       try {
@@ -4996,14 +5045,6 @@ export const TaskDropdownExpanded: React.FC<{
                       }
                     }} className="hidden" />
                   </label>
-                )}
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
                 )}
                 {task.images && task.images.length > 0 && (
                   <DraggableImageGrid
@@ -5373,8 +5414,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   }, [task.attachments, onUpdateTask]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
+    const picked = e.target.files ? Array.from(e.target.files) : [];
+    if (picked.length === 0) return;
+    const remaining = mediaLimit - (taskRef.current.attachments?.length || 0);
+    if (remaining <= 0) { e.currentTarget.value = ''; return; }
+    const files = picked.slice(0, remaining);
     setUploading(true);
     const uploaded: Attachment[] = [];
     for (const file of files) {
@@ -5814,7 +5858,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         {list.title}
                                       </span>
                                     )}
-                                    <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                   </button>
                                   <div className="flex items-center gap-1">
                                     <button
@@ -5932,7 +5975,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           >
             <div className="flex items-center gap-2">
               <Paperclip className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
+              <h3 className="text-sm font-semibold text-foreground">Files</h3>
               {(task.attachments ?? []).length > 0 && (
                 <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
               )}
@@ -5951,6 +5994,13 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
               ) : (
                 <>
+                  {(task.attachments?.length || 0) >= mediaLimit ? (
+                    isPro ? (
+                      <p className="text-xs text-muted-foreground text-center py-2">Limit reached ({mediaLimit} max)</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                    )
+                  ) : (
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
@@ -5961,13 +6011,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
                   </label>
-                  {showUploading && (
-                    <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm font-medium">Uploading...</span>
-                      </div>
-                    </div>
                   )}
                   {(task.attachments || []).length > 0 && (
                     <FreeAttachmentList
@@ -6010,20 +6053,27 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
               ) : (
                 <>
-              {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
-                <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+              {(task.images?.length || 0) >= mediaLimit ? (
+                isPro ? (
+                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached ({mediaLimit} max)</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
+                )
               ) : (
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                      <Image className="w-5 h-5 text-primary" />
                     </div>
-                    <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                    <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                   </div>
                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
                     if (!e.target.files) return;
-                      const files = Array.from(e.target.files);
+                      const allPicked = Array.from(e.target.files);
+                      const remainingImgs = mediaLimit - ((taskRef.current.images?.length || 0));
+                      if (remainingImgs <= 0) { e.currentTarget.value = ''; return; }
+                      const files = allPicked.slice(0, remainingImgs);
                       e.currentTarget.value = '';
                       setUploadingImages(true);
                       try {
@@ -6057,14 +6107,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     }} className="hidden" />
                 </label>
               )}
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                 {task.images && task.images.length > 0 && (
                 <DraggableImageGrid
                   images={task.images}

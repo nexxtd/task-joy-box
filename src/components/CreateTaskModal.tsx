@@ -16,7 +16,7 @@ import {
 } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain, Loader2 } from 'lucide-react';
+import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
@@ -826,6 +826,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   </SelectContent>
                 </Select>
               </div>
+              {!isNote && (
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
                 <input
@@ -836,6 +837,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
                 />
               </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                 <Select value={newTaskProjectId === '' ? personalBoardValue : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === personalBoardValue ? '' : Number(v)); setNewTaskColumnId(''); }}>
@@ -873,6 +875,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               )}
             </div>
 
+            {!isNote && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Start Date</label>
@@ -893,7 +896,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 />
               </div>
             </div>
+            )}
 
+            {!isNote && (
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Due Date</label>
@@ -914,6 +919,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 />
               </div>
             </div>
+            )}
 
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Description</label>
@@ -1324,6 +1330,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               )}
             </div>
 
+            {!isNote && (
+            <>
             {/* Attachments */}
             <div className="rounded-2xl border border-border bg-muted/20">
               <button
@@ -1424,9 +1432,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
+                            <Image className="w-5 h-5 text-primary" />
                           </div>
-                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                          <p className="text-sm font-medium text-foreground">Click to upload</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
@@ -1447,14 +1455,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           }
                         }} className="hidden" />
                       </label>
-                      {showUploadingImages && (
-                        <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm font-medium">Uploading...</span>
-                          </div>
-                        </div>
-                      )}
 <DraggableImageGrid
                         images={newTaskImages}
                         onReorder={setNewTaskImages}
@@ -1466,6 +1466,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
 
           <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
@@ -1780,14 +1782,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         <span>Add Image</span>
                         <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
                       {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>
                   </button>

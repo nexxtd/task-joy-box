@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  User, CheckSquare, FolderOpen, Target, CheckCircle2, NotebookPen, LayoutGrid, Sparkles,
-  LayoutDashboard, MessageSquare, Save, Loader2, X, Calendar, BarChart3, FileText, Users, Crown, Shield, KeyRound, Mail, Ban,
+  User, CheckSquare, FolderOpen, NotebookPen, Sparkles,
+  LayoutDashboard, Save, Loader2, X, BarChart3, FileText, Crown, Shield, KeyRound, Mail, Ban,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
@@ -21,13 +21,6 @@ const PAGES: { id: string; label: string; icon: any }[] = [
   { id: 'notes', label: 'Notes', icon: NotebookPen },
   { id: 'settings', label: 'Settings', icon: User },
   { id: 'ai', label: 'AI Assistant', icon: Sparkles },
-  { id: 'support', label: 'Support', icon: MessageSquare },
-  { id: 'calendar', label: 'Calendar', icon: Calendar },
-  { id: 'goals', label: 'Goals', icon: Target },
-  { id: 'habits', label: 'Habits', icon: CheckCircle2 },
-  { id: 'documents', label: 'Documents', icon: FileText },
-  { id: 'collaboration', label: 'Collaboration', icon: Users },
-  { id: 'whiteboard', label: 'Whiteboard', icon: LayoutGrid },
 ];
 
 const LANGUAGES = ['en', 'fr', 'es', 'de'];
@@ -261,7 +254,8 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     const completionRate = t.total ? Math.round((Number(t.completed || 0) / Number(t.total)) * 100) + '%' : '—';
     const avgChecklistItems = t.checklists ? (Number(t.checklistItems || 0) / Number(t.checklists)).toFixed(1) : '—';
     const totalMedia = (Number(t.images) || 0) + (Number(t.attachments) || 0);
-    const totalFiles = (Number(n.attachments) || 0) + (Number(t.attachments) || 0) + (Number(t.images) || 0);
+    const avg2 = (num: any, den: any) => den ? (Number(num || 0) / Number(den)).toFixed(2) : '—';
+    const pct = (num: any, den: any) => den ? Math.round((Number(num || 0) / Number(den)) * 100) + '%' : '—';
     const s: Record<string, { title: string; icon?: any; rows: { label: string; value: any }[] }[]> = {
       dashboard: [
         ...buttonSection('dashboard', 'Dashboard', LayoutDashboard),
@@ -320,23 +314,6 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           { label: 'Media per task', value: t.total ? (totalMedia / Number(t.total)).toFixed(2) : '—' },
         ]},
       ],
-      calendar: [
-        { title: 'Calendar — Scheduling', icon: Calendar, rows: [
-          { label: 'Total tasks scheduled', value: t.total },
-          { label: 'Completed', value: t.completed },
-          { label: 'Active', value: activeTasks },
-          { label: 'Overdue', value: (t as any).overdue ?? 0 },
-          { label: 'Tasks with checklists (scheduled)', value: t.checklists },
-          { label: 'Checklist items (agenda)', value: t.checklistItems },
-        ]},
-        { title: 'Calendar Activity', rows: [
-          { label: 'Deep focus sessions', value: f.sessions ?? t.deepFocusSessions ?? 0 },
-          { label: 'Total focus minutes', value: f.totalMinutes ?? 0 },
-          { label: 'Completed focus', value: f.completed ?? 0 },
-          { label: 'Avg minutes per session', value: f.sessions ? (Number(f.totalMinutes || 0) / Number(f.sessions)).toFixed(1) : '—' },
-          { label: 'Calendar events (est.)', value: t.total ?? 0 },
-        ]},
-      ],
       insights: [
         ...buttonSection('insights', 'Insights', BarChart3),
         { title: 'Insights — Productivity', icon: BarChart3, rows: [
@@ -369,56 +346,46 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
       ],
       notes: [
         ...buttonSection('notes', 'Notes', NotebookPen),
-        { title: 'Notes — Library', icon: NotebookPen, rows: [
+        { title: 'Notes — Overview', icon: NotebookPen, rows: [
           { label: 'Notes created', value: n.total },
-          { label: 'Pinned notes', value: n.pinned },
-          { label: 'Pinned %', value: n.total ? Math.round((Number(n.pinned || 0) / Number(n.total)) * 100) + '%' : '—' },
-          { label: 'Tags created', value: n.tags },
-          { label: 'Tags per note', value: n.total ? (Number(n.tags || 0) / Number(n.total)).toFixed(2) : '—' },
+          { label: 'Completed', value: n.completed },
+          { label: 'Active', value: n.active },
+          { label: 'Completion %', value: pct(n.completed, n.total) },
+          { label: 'Personal notes (My Notes)', value: n.personal },
+          { label: 'Notes in projects', value: n.inProjects },
         ]},
-        { title: 'Notes — Attachments', rows: [
-          { label: 'Attachments', value: n.attachments },
-          { label: 'Attachments per note', value: n.total ? (Number(n.attachments || 0) / Number(n.total)).toFixed(2) : '—' },
+        { title: 'Notes — Images', rows: [
+          { label: 'Images uploaded (total)', value: n.images },
+          { label: 'Avg images per note', value: avg2(n.images, n.total) },
+          { label: 'Notes with images', value: n.notesWithImages },
+          { label: 'Notes with images %', value: pct(n.notesWithImages, n.total) },
         ]},
-      ],
-      goals: [
-        { title: 'Goals — Overview', icon: Target, rows: [
-          { label: 'Goals created', value: g.total },
-          { label: 'Goals completed', value: g.completed },
-          { label: 'Active goals', value: Math.max(0, (Number(g.total) || 0) - (Number(g.completed) || 0)) },
-          { label: 'Completion rate', value: g.total ? Math.round((Number(g.completed || 0) / Number(g.total)) * 100) + '%' : '—' },
+        { title: 'Notes — Files', rows: [
+          { label: 'Files uploaded (total)', value: n.files },
+          { label: 'Avg files per note', value: avg2(n.files, n.total) },
+          { label: 'Notes with files', value: n.notesWithFiles },
+          { label: 'Notes with files %', value: pct(n.notesWithFiles, n.total) },
         ]},
-      ],
-      habits: [
-        { title: 'Habits — Tracking', icon: CheckCircle2, rows: [
-          { label: 'Habits created', value: h.total },
-          { label: 'Total completions', value: h.totalCompletions },
-          { label: 'Avg completions per habit', value: h.total ? (Number(h.totalCompletions || 0) / Number(h.total)).toFixed(1) : '—' },
-          { label: 'Highest streak', value: h.highestStreak },
+        { title: 'Notes — Checklists', rows: [
+          { label: 'Checklists in total', value: n.checklists },
+          { label: 'Checklist items in total', value: n.checklistItems },
+          { label: 'Checklist items done', value: n.checklistItemsDone },
+          { label: 'Avg checklists per note', value: avg2(n.checklists, n.total) },
+          { label: 'Avg items per note', value: avg2(n.checklistItems, n.total) },
+          { label: 'Avg items per checklist', value: n.checklists ? (Number(n.checklistItems || 0) / Number(n.checklists)).toFixed(1) : '—' },
+          { label: 'Notes with checklists', value: n.notesWithChecklists },
         ]},
-      ],
-      documents: [
-        { title: 'Documents — Files', icon: FileText, rows: [
-          { label: 'Note attachments', value: n.attachments },
-          { label: 'Task attachments', value: t.attachments },
-          { label: 'Task images', value: t.images },
-          { label: 'Whiteboard exports (est.)', value: w.whiteboardsCreated },
-          { label: 'Total files', value: totalFiles },
-          { label: 'Files per note', value: n.total ? (Number(n.attachments || 0) / Number(n.total)).toFixed(2) : '—' },
-          { label: 'Files per task', value: t.total ? (Number(t.attachments || 0) / Number(t.total)).toFixed(2) : '—' },
-        ]},
-      ],
-      collaboration: [
-        { title: 'Collaboration — Workspace', icon: Users, rows: [
-          { label: 'Boards (shared)', value: p.boards },
-          { label: 'Milestones (team)', value: p.milestones },
-          { label: 'Whiteboards (collab)', value: w.whiteboardsCreated },
-          { label: 'Open support tickets', value: e.openTickets },
-          { label: 'Total tickets (collab history)', value: e.tickets },
-        ]},
-        { title: 'Collaboration Activity', rows: [
-          { label: 'Whiteboard items (total)', value: (Object.values((w.items as any) || {}) as any[]).reduce((a: number, b: any) => a + Number(b || 0), 0) },
-          { label: 'Avg items per whiteboard', value: w.whiteboardsCreated ? (Number((Object.values((w.items as any) || {}) as any[]).reduce((a: number, b: any) => a + Number(b || 0), 0)) / Number(w.whiteboardsCreated)).toFixed(1) : '—' },
+        { title: 'Notes — Sub-tasks & Tags', rows: [
+          { label: 'Sub-tasks in total', value: n.subtasks },
+          { label: 'Sub-tasks done', value: n.subtasksDone },
+          { label: 'Avg sub-tasks per note', value: avg2(n.subtasks, n.total) },
+          { label: 'Notes with sub-tasks', value: n.notesWithSubtasks },
+          { label: 'Notes with sub-tasks %', value: pct(n.notesWithSubtasks, n.total) },
+          { label: 'Tags applied', value: n.tagAssignments },
+          { label: 'Distinct tags used', value: n.distinctTags },
+          { label: 'Tags per note', value: avg2(n.tagAssignments, n.total) },
+          { label: 'Notes with tags', value: n.notesWithTags },
+          { label: 'Notes with tags %', value: pct(n.notesWithTags, n.total) },
         ]},
       ],
       settings: [
@@ -427,29 +394,6 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           { label: 'Language', value: (details?.user?.language || 'English') },
           { label: 'Settings button presses', value: Object.values((ui['settings'] || {}) as Record<string, number>).reduce((a: number, b: any) => a + (Number(b) || 0), 0) },
           { label: 'Distinct settings features used', value: Object.keys(ui['settings'] || {}).length },
-        ]},
-      ],
-      whiteboard: [
-        { title: 'Whiteboard — Boards', icon: LayoutGrid, rows: [{ label: 'Whiteboards created', value: w.whiteboardsCreated }] },
-        { title: 'Whiteboard — Items Breakdown', rows: Object.entries(w.items || {}).length ? Object.entries(w.items || {}).map(([k, v]) => ({ label: k.replace(/-/g, ' '), value: v })) : [{ label: 'No items yet', value: '—' }] },
-        { title: 'Whiteboard — Totals', rows: [
-          { label: 'Total items', value: (Object.values((w.items as any) || {}) as any[]).reduce((a: number, b: any) => a + Number(b || 0), 0) },
-          { label: 'Items per board', value: w.whiteboardsCreated ? (Number((Object.values((w.items as any) || {}) as any[]).reduce((a: number, b: any) => a + Number(b || 0), 0)) / Number(w.whiteboardsCreated)).toFixed(1) : '—' },
-        ]},
-      ],
-      support: [
-        ...buttonSection('support', 'Support', MessageSquare),
-        { title: 'Support — Tickets', icon: MessageSquare, rows: [
-          { label: 'Tickets created', value: e.tickets },
-          { label: 'Open tickets', value: e.openTickets },
-          { label: 'Closed tickets', value: Math.max(0, (Number(e.tickets) || 0) - (Number(e.openTickets) || 0)) },
-          { label: 'Open %', value: e.tickets ? Math.round((Number(e.openTickets || 0) / Number(e.tickets)) * 100) + '%' : '—' },
-        ]},
-        { title: 'Billing & Coupons', rows: [
-          { label: 'Transactions', value: e.transactions },
-          { label: 'Total spent', value: `$${(Number(e.totalSpent) || 0).toFixed(2)}` },
-          { label: 'Avg per transaction', value: e.transactions ? `$${(Number(e.totalSpent || 0) / Number(e.transactions)).toFixed(2)}` : '—' },
-          { label: 'Coupons redeemed', value: e.couponsRedeemed },
         ]},
       ],
     };

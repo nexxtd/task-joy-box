@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Palette, Bell, Globe, Calendar, Battery, Keyboard,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
-  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus
+  History, Brain, CheckCircle2, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
+  LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
+  Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine
 } from 'lucide-react';
-import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, loadShortcuts, saveShortcuts, normalizeCombo, type ShortcutDef } from '@/lib/shortcuts';
+import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -143,10 +146,18 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (!rebindingId) return;
     const onKey = (e: KeyboardEvent) => {
+      // Capture phase: swallow everything so existing shortcuts don't fire mid-rebind.
       e.preventDefault();
       e.stopPropagation();
+      // Escape cancels the rebind.
+      if (e.key === 'Escape') { setRebindingId(null); return; }
+      // Modifier-only keydown (user pressed Alt/Ctrl/Shift first) — keep
+      // listening for the rest of the chord instead of cancelling.
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
       const combo = normalizeCombo(e);
-      if (!combo || combo === 'Escape') { setRebindingId(null); return; }
+      // Incomplete combo (e.g. a plain key with no modifier) — keep waiting
+      // rather than dropping out of rebind mode.
+      if (!combo || combo === 'Escape') return;
       setShortcuts(prev => {
         const next = prev.map(s => s.id === rebindingId ? { ...s, keys: combo } : s);
         saveShortcuts(next);
@@ -164,8 +175,11 @@ const SettingsPage: React.FC = () => {
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      if (e.key === 'Escape') { setCapturingNewKeys(false); return; }
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
       const combo = normalizeCombo(e);
-      if (combo && combo !== 'Escape') setNewShortcutKeys(combo);
+      if (!combo || combo === 'Escape') return;
+      setNewShortcutKeys(combo);
       setCapturingNewKeys(false);
     };
     window.addEventListener('keydown', onKey, true);
@@ -1185,7 +1199,7 @@ const SettingsPage: React.FC = () => {
                   <Plus className="w-3.5 h-3.5" /> Add Shortcut
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">Click a command badge, then press the new key combination to rebind it.</p>
+              <p className="text-xs text-muted-foreground">Click a command badge, then press the new key combination (include Ctrl, Alt, Shift or Meta). Press Esc to cancel.</p>
               <div className="space-y-2">
                 {shortcuts.map(s => {
                   const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;
@@ -1197,7 +1211,7 @@ const SettingsPage: React.FC = () => {
                         <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
                       </div>
                       <button
-                        onClick={() => setRebindingId(s.id)}
+                        onClick={() => setRebindingId(isRebinding ? null : s.id)}
                         className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
                         title="Click, then press new keys"
                       >
@@ -1218,8 +1232,8 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground mb-1 block">Command (key combo)</label>
-                      <button onClick={() => setCapturingNewKeys(true)} className="w-full px-3 py-2.5 text-sm font-mono rounded-xl border border-border bg-muted/40 hover:border-primary/40 transition-all text-left">
-                        {capturingNewKeys ? 'Press keys…' : (newShortcutKeys || 'Click to set keys')}
+                      <button onClick={() => setCapturingNewKeys(v => !v)} className="w-full px-3 py-2.5 text-sm font-mono rounded-xl border border-border bg-muted/40 hover:border-primary/40 transition-all text-left">
+                        {capturingNewKeys ? 'Press keys… (Esc to cancel)' : (newShortcutKeys || 'Click to set keys')}
                       </button>
                     </div>
                     <div>

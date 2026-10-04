@@ -8,6 +8,7 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import { useAuth } from '@/context/AuthContext';
 import { TaskDropdownExpanded } from '@/pages/Tasks';
+import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import TagsModal from '@/components/shared/TagsModal';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
@@ -208,13 +209,17 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
       const key = normalizeTagName(label.name).toLowerCase();
       if (!byName.has(key)) byName.set(key, label);
     }));
+    notesCtx.board.tasks.forEach(note => note.labels.forEach(label => {
+      const key = normalizeTagName(label.name).toLowerCase();
+      if (!byName.has(key)) byName.set(key, label);
+    }));
     sharedTags.forEach(tag => {
       const label = sharedTagToLabel(tag);
       const key = normalizeTagName(label.name).toLowerCase();
       byName.set(key, label);
     });
     return Array.from(byName.values());
-  }, [board.tasks, sharedTags]);
+  }, [board.tasks, notesCtx.board.tasks, sharedTags]);
 
   const toggleExpand = (taskId: string) => {
     setExpandedTaskIds(prev =>
@@ -257,13 +262,24 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
   };
 
   const toggleTaskTag = (taskId: string, label: Label) => {
+    // Tasks live in the board context, notes live in the notes context —
+    // check both so tag toggles work on every row type.
     const task = board.tasks.find(item => item.id === taskId);
-    if (!task) return;
-    const has = task.labels.some(item => item.id === label.id);
-    const nextLabels = has
-      ? task.labels.filter(item => item.id !== label.id)
-      : [...task.labels, label];
-    updateTask(taskId, { labels: nextLabels });
+    if (task) {
+      const has = task.labels.some(item => item.id === label.id);
+      const nextLabels = has
+        ? task.labels.filter(item => item.id !== label.id)
+        : [...task.labels, label];
+      updateTask(taskId, { labels: nextLabels });
+      return;
+    }
+    const note = notesCtx.board.tasks.find(item => item.id === taskId);
+    if (note) {
+      const has = note.labels.some(item => item.id === label.id);
+      notesCtx.updateTask(taskId, {
+        labels: has ? note.labels.filter(item => item.id !== label.id) : [...note.labels, label],
+      });
+    }
   };
 
   const renameTagEverywhere = async (tagId: string, newName: string) => {
@@ -286,6 +302,11 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
         updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, name } : label) });
       }
     });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.map(label => label.id === tagId ? { ...label, name } : label) });
+      }
+    });
   };
 
   const changeTagColorEverywhere = async (tagId: string, color: LabelColor) => {
@@ -306,6 +327,11 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
         updateTask(task.id, { labels: task.labels.map(label => label.id === tagId ? { ...label, color } : label) });
       }
     });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.map(label => label.id === tagId ? { ...label, color } : label) });
+      }
+    });
   };
 
   const deleteTagEverywhere = async (tagId: string) => {
@@ -324,6 +350,11 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     board.tasks.forEach(task => {
       if (task.labels.some(label => label.id === tagId)) {
         updateTask(task.id, { labels: task.labels.filter(label => label.id !== tagId) });
+      }
+    });
+    notesCtx.board.tasks.forEach(note => {
+      if (note.labels.some(label => label.id === tagId)) {
+        notesCtx.updateTask(note.id, { labels: note.labels.filter(label => label.id !== tagId) });
       }
     });
   };
@@ -368,7 +399,8 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     const isNote = notesCtx.board.tasks.some(t => t.id === draggedId) || notes.some(n => n.id === draggedId);
     // Dropping into a Completed section completes the task AND moves it into
     // the target column so it lands in the target's Completed list
-    // (not the source's). Works for active->completed and completed->completed.
+    // (not the source's). Works for active->completed and completed->completed:
+    // the item is inserted at the drop index within the target Completed list.
     if (dstIsCompleted) {
       if (isNote) return;
       const existing = board.tasks.find(t => t.id === draggedId);
@@ -391,8 +423,35 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
         if (!(existing as any).completedAt) (updates as any).completedAt = new Date().toISOString();
         if ((existing as any).status !== 'completed') updates.status = 'completed';
       }
-      if (Object.keys(updates).length > 0 && srcId !== dstIdRaw) updateTask(draggedId, updates);
-      else if (Object.keys(updates).length > 0 && !existing.completed) updateTask(draggedId, updates);
+      const inScope = (t: Task) => (projectId === undefined ? true : t.projectId === projectId);
+      const dstCompletedIds = board.tasks
+        .filter(t => t.columnId === dstColId && inScope(t) && t.completed && t.id !== draggedId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map(t => t.id);
+      const insertAt = Math.max(0, Math.min(result.destination.index, dstCompletedIds.length));
+      dstCompletedIds.splice(insertAt, 0, draggedId);
+      dstCompletedIds.forEach((id, idx) => {
+        const cur = board.tasks.find(t => t.id === id);
+        if (!cur) return;
+        if (id === draggedId) {
+          updateTask(id, { ...updates, order: idx });
+        } else if (cur.order !== idx) {
+          updateTask(id, { order: idx });
+        }
+      });
+      const srcColId = srcIsCompleted ? srcId.slice('completed-'.length) : srcId;
+      if (srcColId !== dstColId) {
+        const srcCompletedIds = board.tasks
+          .filter(t => t.columnId === srcColId && inScope(t) && t.completed && t.id !== draggedId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(t => t.id);
+        srcCompletedIds.forEach((id, idx) => {
+          const cur = board.tasks.find(t => t.id === id);
+          if (cur && cur.order !== idx) updateTask(id, { order: idx });
+        });
+      }
+      // Un-collapse the target Completed section so the landed item is visible.
+      setCollapsedCompletedCols(prev => prev.filter(id => id !== dstColId));
       return;
     }
     if (isNote) {
@@ -689,7 +748,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
 
   const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
-    const attachmentCount = (note.attachments?.length || 0) + ((note as any).images?.length || 0);
     const noteTags = note.labels.slice(0, 2);
     return (
       <div
@@ -726,11 +784,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                   +{note.labels.length - noteTags.length}
                 </span>
               )}
-              {attachmentCount > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {attachmentCount} file{attachmentCount === 1 ? '' : 's'}
-                </span>
-              )}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
@@ -752,6 +805,29 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             </button>
           </div>
         </div>
+        {isExpanded && !isDraggingRow && !isDragging && (
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/10 rounded-b-xl">
+            <NoteDropdownExpanded
+              key={note.id}
+              note={note}
+              onUpdateNote={notesCtx.updateTask}
+              onToggleChecklistItem={notesCtx.toggleChecklistItem}
+              onAddChecklistItem={notesCtx.addChecklistItem}
+              onDeleteChecklistItem={notesCtx.deleteChecklistItem}
+              onAddChecklist={notesCtx.addChecklist}
+              allTags={allTags}
+              onToggleTag={tagId => { const label = allTags.find(t => t.id === tagId); if (label) toggleTaskTag(note.id, label); }}
+              onCreateTag={async (name, color) => {
+                const tag = await createTag({ name, color });
+                const label = sharedTagToLabel(tag);
+                notesCtx.updateTask(note.id, { labels: [...note.labels, label] });
+              }}
+              onDeleteTag={deleteTagEverywhere}
+              onRenameTag={renameTagEverywhere}
+              onColorChangeTag={changeTagColorEverywhere}
+            />
+          </div>
+        )}
       </div>
     );
   };
@@ -986,8 +1062,10 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
       )}
 
       {tagPopupTaskId && (() => {
-        const popupTask = board.tasks.find(t => t.id === tagPopupTaskId);
+        const popupTask = board.tasks.find(t => t.id === tagPopupTaskId)
+          ?? notesCtx.board.tasks.find(t => t.id === tagPopupTaskId);
         if (!popupTask) return null;
+        const isNote = !board.tasks.some(t => t.id === tagPopupTaskId);
         return (
           <TagsModal
             open
@@ -999,7 +1077,8 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             onCreate={async (name, color) => {
               const tag = await createTag({ name, color });
               const label = sharedTagToLabel(tag);
-              updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+              if (isNote) notesCtx.updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
+              else updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
             }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}

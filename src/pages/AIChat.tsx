@@ -155,6 +155,28 @@ const AIChat: React.FC = () => {
     inputRef.current?.focus();
   };
 
+  // "New AI Chat" shortcut: `?new=1` opens a fresh chat on arrival, and a live
+  // event covers the case where the shortcut fires while already on this page
+  // (same route → no remount, so the query effect alone would miss it).
+  const newChatRef = useRef(newChat);
+  newChatRef.current = newChat;
+  useEffect(() => {
+    let hasNew = false;
+    try { hasNew = new URLSearchParams(window.location.search).get('new') === '1'; } catch {}
+    if (hasNew) {
+      newChatRef.current();
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('new');
+        window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams.toString()}` : ''));
+      } catch {}
+    }
+    const onShortcut = () => newChatRef.current();
+    window.addEventListener('shortcut:new-ai-chat', onShortcut);
+    return () => window.removeEventListener('shortcut:new-ai-chat', onShortcut);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const deleteChat = (id: string) => {
     commitChats(prev => prev.filter(c => c.id !== id));
     if (activeChatId === id) {

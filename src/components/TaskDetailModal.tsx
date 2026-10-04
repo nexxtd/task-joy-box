@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical, Loader2 } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
@@ -533,12 +533,20 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               <div className="group relative mt-1">
                 <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${!isPremium && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
                   <div className="flex flex-col items-center justify-center py-2">
-                    {showUploading ? <Loader2 className="w-5 h-5 text-primary mb-1 animate-spin" /> : <FileUp className="w-5 h-5 text-primary mb-1" />}
-                    <p className="text-[10px] font-medium text-foreground">{showUploading ? 'Uploading...' : 'Click to upload'}</p>
+                    <FileUp className="w-5 h-5 text-primary mb-1" />
+                    <p className="text-[10px] font-medium text-foreground">Click to upload</p>
                   </div>
                   <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium} />
                 </label>
               </div>
+              {showUploading && (
+                <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-3 mt-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-medium">Uploading...</span>
+                  </div>
+                </div>
+              )}
 
               <FreeAttachmentList
                 attachments={task.attachments || []}

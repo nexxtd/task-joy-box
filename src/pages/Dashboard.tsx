@@ -264,6 +264,26 @@ const Dashboard: React.FC = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [viewProjectsMenuOpen, setViewProjectsMenuOpen] = useState(false);
   const viewProjectsMenuRef = useRef<HTMLDivElement | null>(null);
+  // Close the shortcut menu on outside click / Escape. (The menu lives inside
+  // the sticky header, so a `fixed` click-away layer in here would be trapped
+  // by the header's backdrop-blur containing block — handle it via window.)
+  useEffect(() => {
+    if (!viewProjectsMenuOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (viewProjectsMenuRef.current && !viewProjectsMenuRef.current.contains(e.target as Node)) {
+        setViewProjectsMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewProjectsMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [viewProjectsMenuOpen]);
   // "View X" shortcut target — defaults to Projects, persisted per user.
   // Every page except Dashboard can be picked from the arrow dropdown.
   const DASHBOARD_SHORTCUT_PAGES = useMemo(() => ([
@@ -473,19 +493,25 @@ const Dashboard: React.FC = () => {
     [board.columns]
   );
 
-  const activeTasks = board.tasks.filter(t => !doneColIds.includes(t.columnId) && !t.completed);
-  const completedTasks = board.tasks.filter(t => doneColIds.includes(t.columnId) || t.completed);
+  const activeTasks = useMemo(
+    () => board.tasks.filter(t => !doneColIds.includes(t.columnId) && !t.completed),
+    [board.tasks, doneColIds]
+  );
+  const completedTasks = useMemo(
+    () => board.tasks.filter(t => doneColIds.includes(t.columnId) || t.completed),
+    [board.tasks, doneColIds]
+  );
   const completionRate = board.tasks.length > 0
     ? Math.round((completedTasks.length / board.tasks.length) * 100)
     : 0;
 
-  const priorityTasks = activeTasks
+  const priorityTasks = useMemo(() => activeTasks
     .filter(t => t.priority !== 'none')
     .sort((a, b) => {
       const order = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
       return order[a.priority] - order[b.priority];
     })
-    .slice(0, 5);
+    .slice(0, 5), [activeTasks]);
 
   const pickedTasks = useMemo(() => {
     const q = taskPickerQuery.trim().toLowerCase();
@@ -1680,7 +1706,7 @@ style={{ background: 'hsl(var(--primary))' }}>
         className="flex-1 overflow-y-auto"
         style={{ background: 'hsl(var(--background))' }}
       >
-        <header className="px-4 sm:px-6 min-h-16 py-2 border-b border-border bg-card/30 backdrop-blur-sm flex items-center justify-between gap-2 flex-shrink-0"
+        <header className="sticky top-0 z-30 px-4 sm:px-6 min-h-16 py-2 border-b border-border bg-card/95 backdrop-blur-xl flex items-center justify-between gap-2 flex-shrink-0"
           style={{ borderColor: 'hsl(var(--border))' }}
         >
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-2 min-w-0 flex-1">
@@ -1725,8 +1751,6 @@ style={{ background: 'hsl(var(--primary))' }}>
                   </button>
                 </div>
                 {viewProjectsMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setViewProjectsMenuOpen(false)} />
                     <div className="absolute right-0 mt-1.5 w-48 bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
                       {DASHBOARD_SHORTCUT_PAGES.map(item => (
                         <button
@@ -1738,7 +1762,6 @@ style={{ background: 'hsl(var(--primary))' }}>
                         </button>
                       ))}
                     </div>
-                  </>
                 )}
               </div>
               <button
@@ -1898,6 +1921,15 @@ style={{ background: 'hsl(var(--primary))' }}>
           )}
         </div>
       </div>
+
+      {/* Click-away layer for the "View …" shortcut menu. Rendered here (outside
+          the sticky header) so `fixed` isn't trapped by the header's
+          backdrop-blur containing block. Sits below the header (z-30) but above
+          the widget cards, so the menu stays clickable and any outside click
+          closes it instead of starting a widget drag. */}
+      {viewProjectsMenuOpen && (
+        <div className="fixed inset-0 z-20" onClick={() => setViewProjectsMenuOpen(false)} />
+      )}
 
       {showCustomize && (
         <div className="fixed inset-0 z-50 flex justify-end">

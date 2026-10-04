@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, notes, tags, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts } from '../../shared/schema.js';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, noteSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts } from '../../shared/schema.js';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
@@ -792,8 +792,64 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
 
     const goalRows = await db.select().from(goals).where(eq(goals.userId, userId));
     const habitRows = await db.select().from(habits).where(eq(habits.userId, userId));
-    const noteRows = await db.select().from(notes).where(eq(notes.userId, userId));
-    const noteTagRows = await db.select().from(tags).where(eq(tags.userId, userId));
+    // Notes live in the note-board snapshot (same Task model as tasks: images,
+    // attachments, checklists, subtasks, labels). The legacy `notes` table is
+    // not written by the app, so all note stats must come from the snapshot.
+    const [noteSnapshotRow] = await db.select().from(noteSnapshots).where(eq(noteSnapshots.userId, userId)).orderBy(desc(noteSnapshots.updatedAt)).limit(1);
+    let noteTasks: any[] = [];
+    if (noteSnapshotRow) {
+      try {
+        const parsed = JSON.parse(noteSnapshotRow.snapshot);
+        if (Array.isArray(parsed?.tasks)) noteTasks = parsed.tasks;
+      } catch { noteTasks = []; }
+    }
+    const noteStats = (() => {
+      const total = noteTasks.length;
+      const completed = noteTasks.filter(t => t.completed || t.status === 'completed').length;
+      let images = 0, files = 0, checklists = 0, checklistItems = 0, checklistItemsDone = 0;
+      let subtasks = 0, subtasksDone = 0, tagAssignments = 0, inProjects = 0;
+      let withImages = 0, withFiles = 0, withChecklists = 0, withSubtasks = 0, withTags = 0;
+      const distinctTags = new Set<string>();
+      for (const t of noteTasks) {
+        const imgs = Array.isArray(t.images) ? t.images.length : 0;
+        const fls = Array.isArray(t.attachments) ? t.attachments.length : 0;
+        images += imgs; files += fls;
+        if (imgs > 0) withImages += 1;
+        if (fls > 0) withFiles += 1;
+        // Mirror the app: a checklist literally titled "subtasks" is legacy
+        // subtask storage, not a real checklist.
+        const lists = Array.isArray(t.checklists) ? t.checklists : [];
+        const legacy = lists.find((l: any) => String(l?.title || '').toLowerCase().trim() === 'subtasks');
+        const realLists = lists.filter((l: any) => l !== legacy);
+        const effSubtasks = (Array.isArray(t.subtasks) && t.subtasks.length > 0)
+          ? t.subtasks
+          : (Array.isArray(legacy?.items) ? legacy.items : []);
+        subtasks += effSubtasks.length;
+        subtasksDone += effSubtasks.filter((s: any) => s?.completed).length;
+        if (effSubtasks.length > 0) withSubtasks += 1;
+        checklists += realLists.length;
+        if (realLists.length > 0) withChecklists += 1;
+        for (const l of realLists) {
+          const items = Array.isArray(l?.items) ? l.items : [];
+          checklistItems += items.length;
+          checklistItemsDone += items.filter((i: any) => i?.completed).length;
+        }
+        const lbs = Array.isArray(t.labels) ? t.labels : [];
+        tagAssignments += lbs.length;
+        if (lbs.length > 0) withTags += 1;
+        for (const lb of lbs) {
+          const key = String(lb?.name || '').trim().toLowerCase();
+          if (key) distinctTags.add(key);
+        }
+        if (t.projectId != null) inProjects += 1;
+      }
+      return {
+        total, completed, active: Math.max(0, total - completed),
+        images, files, checklists, checklistItems, checklistItemsDone, subtasks, subtasksDone,
+        tagAssignments, distinctTags: distinctTags.size, inProjects, personal: Math.max(0, total - inProjects),
+        withImages, withFiles, withChecklists, withSubtasks, withTags,
+      };
+    })();
     const focusRows = await db.select().from(deepFocusSessions).where(eq(deepFocusSessions.userId, userId));
     const whiteboardRows = await db.select().from(whiteboards).where(eq(whiteboards.userId, userId));
     const aiRows = await db.select().from(aiRequests).where(eq(aiRequests.userId, userId));
@@ -825,7 +881,6 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
       try { return sum + (JSON.parse(h.completedDays as string) as any[]).length; } catch { return sum; }
     }, 0);
     const maxStreak = habitRows.reduce((max, h) => Math.max(max, h.streak || 0), 0);
-    const pinnedNotes = noteRows.filter(n => n.pinned).length;
 
     const wbCounts: Record<string, number> = {};
     wbItemRows.forEach(item => { wbCounts[item.type] = (wbCounts[item.type] || 0) + 1; });
@@ -895,7 +950,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
         goals: goalRows.length,
         completedGoals,
         habits: habitRows.length,
-        notes: noteRows.length,
+        notes: noteStats.total,
       },
       featureUsage: {
         tasks: {
@@ -924,10 +979,25 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
           highestStreak: maxStreak,
         },
         notes: {
-          total: noteRows.length,
-          tags: noteTagRows.length,
-          pinned: pinnedNotes,
-          attachments: attachmentRows.length,
+          total: noteStats.total,
+          completed: noteStats.completed,
+          active: noteStats.active,
+          images: noteStats.images,
+          notesWithImages: noteStats.withImages,
+          files: noteStats.files,
+          notesWithFiles: noteStats.withFiles,
+          checklists: noteStats.checklists,
+          checklistItems: noteStats.checklistItems,
+          checklistItemsDone: noteStats.checklistItemsDone,
+          notesWithChecklists: noteStats.withChecklists,
+          subtasks: noteStats.subtasks,
+          subtasksDone: noteStats.subtasksDone,
+          notesWithSubtasks: noteStats.withSubtasks,
+          tagAssignments: noteStats.tagAssignments,
+          distinctTags: noteStats.distinctTags,
+          notesWithTags: noteStats.withTags,
+          inProjects: noteStats.inProjects,
+          personal: noteStats.personal,
         },
         whiteboard: {
           whiteboardsCreated: whiteboardRows.length,

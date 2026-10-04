@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { createPortal, flushSync } from 'react-dom';
 import { useNotesContext } from '@/context/NotesContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -8,13 +9,10 @@ import { fetchNoteTemplates as fetchTemplates, createNoteTemplate as createTempl
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
-import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
-import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import {
   ArrowDown,
   ArrowUp,
   BarChart3,
-  Brain,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -25,8 +23,6 @@ import {
   Edit3,
   GripVertical,
   FolderKanban,
-  Image,
-  Paperclip,
   Plus,
   Save,
   Search,
@@ -36,13 +32,11 @@ import {
   Trash2,
   X,
   Zap,
-  Loader2,
 } from 'lucide-react';
-import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
+import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
 import TagsModal from '@/components/shared/TagsModal';
-import AttachmentRow from '@/components/AttachmentRow';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import {
   DragDropContext,
@@ -52,7 +46,6 @@ import {
 } from '@hello-pangea/dnd';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
-import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
@@ -396,8 +389,6 @@ const getStatusLabel = (status: TaskStatus) =>
 
 export const fileToDataUrl = (file: File): Promise<string> => dataUrlForFile(file);
 
-const imageToDataUrl = (file: File): Promise<string> => dataUrlForFile(file);
-
 const daysUntilAutoDelete = (completedAt?: string) => {
   if (!completedAt) return 5;
   const started = new Date(completedAt);
@@ -616,6 +607,7 @@ const Tasks: React.FC = () => {
     board,
     addTask,
     updateTask,
+    addChecklist,
     toggleChecklistItem,
     addChecklistItem,
     deleteChecklistItem,
@@ -626,12 +618,10 @@ const Tasks: React.FC = () => {
   } = useNotesContext();
   const tasksBoard = useBoardContext();
   const { user } = useAuth();
-  const { open: openDeepFocus } = useDeepFocus();
 
-  const tier = user?.subscriptionTier || 'free';
+  const tier = (user?.subscriptionTier || 'free').toLowerCase();
   const isPremium = tier === 'premium' || tier === 'pro';
   const isPro = tier === 'pro';
-  const mediaLimit = tier === 'free' ? 5 : tier === 'premium' ? 10 : 20;
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
@@ -642,11 +632,10 @@ const Tasks: React.FC = () => {
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
   const [quickEditTaskId, setQuickEditTaskId] = useState<string | null>(null);
-  const [quickEditField, setQuickEditField] = useState<'duration' | 'project' | null>(null);
+  const [quickEditField, setQuickEditField] = useState<'project' | null>(null);
   const [priorityEditTaskId, setPriorityEditTaskId] = useState<string | null>(null);
   const [quickEditDueDate, setQuickEditDueDate] = useState('');
   const [quickEditDueTime, setQuickEditDueTime] = useState('');
-  const [quickEditDuration, setQuickEditDuration] = useState(0);
   const [quickEditStatus, setQuickEditStatus] = useState<TaskStatus>('to_do');
   const [quickEditProjectId, setQuickEditProjectId] = useState<number | ''>('');
 
@@ -685,8 +674,9 @@ const Tasks: React.FC = () => {
   // assigned to that column automatically and lands at the bottom.
   // Shortcuts "Create Note" navigates here with ?create=1 and opens the same flow.
   useEffect(() => { trackPageVisit('notes'); }, []);
+  const location = useLocation();
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     if (params.get('new') === '1' || params.get('create') === '1') {
       const pid = params.get('project');
       const col = params.get('column');
@@ -706,6 +696,18 @@ const Tasks: React.FC = () => {
       } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+  // Keyboard shortcut "Create Note" while already on this page: the URL may
+  // not change (same route), so the query effect above never fires — open the
+  // modal directly from the shortcut event instead.
+  useEffect(() => {
+    const open = () => {
+      setCreateModalProjectId(undefined);
+      setCreateModalColumnId(undefined);
+      setAddingTask(true);
+    };
+    window.addEventListener('shortcut:create-note', open);
+    return () => window.removeEventListener('shortcut:create-note', open);
   }, []);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -729,9 +731,6 @@ const Tasks: React.FC = () => {
   const [collapsedDraftChecklists, setCollapsedDraftChecklists] = useState<Set<string>>(new Set());
   const [editingDraftChecklistId, setEditingDraftChecklistId] = useState<string | null>(null);
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
-  const [newFiles, setNewFiles] = useState<File[]>([]);
-  const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
-  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const [newTaskLabels, setNewTaskLabels] = useState<Label[]>([]);
   const [newTagPickerOpen, setNewTagPickerOpen] = useState(false);
   const [pendingDragMove, setPendingDragMove] = useState<{ taskId: string; srcDroppableId: string; dstDroppableId: string; srcIndex: number; dstIndex: number; dstProject: number | 'my-notes' | null; moveType: 'column' | 'project' } | null>(null);
@@ -745,8 +744,6 @@ const Tasks: React.FC = () => {
   // Creation modal section collapse states
   const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
   const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
-  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
-  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(() => localStorage.getItem('notes-mynotes-collapsed') === 'true');
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
@@ -799,10 +796,6 @@ const Tasks: React.FC = () => {
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
-  const [aiBuilderFiles, setAiBuilderFiles] = useState<File[]>([]);
-  const [aiBuilderImages, setAiBuilderImages] = useState<Attachment[]>([]);
-  const [aiBuilderFilesCollapsed, setAiBuilderFilesCollapsed] = useState(false);
-  const [aiBuilderImagesCollapsed, setAiBuilderImagesCollapsed] = useState(false);
   const [aiTaskDraft, setAiTaskDraft] = useState<CreateTaskInitialValues | null>(null);
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
@@ -926,7 +919,10 @@ const Tasks: React.FC = () => {
   const projectTaskGroups = useMemo(() => {
     return projects.map(project => {
       const tasks = filtered.active.filter(t => t.projectId === project.id);
-      const columns = board.columns
+      // Project columns live in the tasks board — include them so notes
+      // assigned to any project column group under that column the same
+      // way tasks do (instead of falling into "uncategorized").
+      const columns = modalColumns
         .filter(col => (col as any).projectId === project.id)
         .sort((a, b) => a.order - b.order);
       const columnGroups = columns.map(col => ({
@@ -940,7 +936,7 @@ const Tasks: React.FC = () => {
       if (tasks.length === 0 && columnGroups.length === 0 && uncategorizedCompleted.length === 0) return null;
       return { project, tasks, columnGroups, uncategorized, uncategorizedCompleted };
     }).filter(Boolean) as Array<{ project: ProjectMeta; tasks: Task[]; columnGroups: Array<{ column: any; tasks: Task[]; completed: Task[] }>; uncategorized: Task[]; uncategorizedCompleted: Task[] }>;
-  }, [filtered.active, filtered.completed, projects, board.columns]);
+  }, [filtered.active, filtered.completed, projects, modalColumns]);
 
   const matchingCount = filtered.active.length + filtered.completed.length;
   const openTask = openTaskId ? board.tasks.find(task => task.id === openTaskId) ?? null : null;
@@ -1056,7 +1052,9 @@ const Tasks: React.FC = () => {
     if (id.startsWith('completed-')) return getProjectIdForDroppable(id.slice('completed-'.length));
     if (id === 'my-notes') return 'my-notes';
     if (id.startsWith('col-')) {
-      const col = board.columns.find(c => c.id === id.slice(4));
+      // Project columns live in the tasks board — resolve against the merged
+      // columns so notes sitting in a project column map to that project.
+      const col = modalColumns.find(c => c.id === id.slice(4)) as any;
       return col?.projectId ?? null;
     }
     if (id.startsWith('uncat-')) return Number(id.slice(6));
@@ -1067,7 +1065,7 @@ const Tasks: React.FC = () => {
     if (baseKey === 'my-notes') return filtered.completed.filter(t => !t.projectId);
     if (baseKey.startsWith('col-')) {
       const colId = baseKey.slice(4);
-      const col = board.columns.find(c => c.id === colId) as any;
+      const col = modalColumns.find(c => c.id === colId) as any;
       const pid = col?.projectId;
       if (pid == null) return filtered.completed.filter(t => !t.projectId && t.columnId === colId);
       return filtered.completed.filter(t => t.projectId === pid && t.columnId === colId);
@@ -1194,7 +1192,7 @@ const Tasks: React.FC = () => {
     if (droppableId.startsWith('col-')) {
       const colId = droppableId.slice(4);
       setCollapsedColumns(prev => prev.includes(colId) ? prev.filter(id => id !== colId) : prev);
-      const col = board.columns.find(c => c.id === colId) as any;
+      const col = modalColumns.find(c => c.id === colId) as any;
       const pid = col?.projectId;
       if (typeof pid === 'number') setCollapsedProjects(prev => prev.filter(id => id !== pid));
       return;
@@ -1228,7 +1226,7 @@ const Tasks: React.FC = () => {
           if (moving.projectId !== null) { updates.projectId = null; updates.projectName = undefined; }
         } else if (sectionKey.startsWith('col-')) {
           const colId = sectionKey.slice(4);
-          const col = board.columns.find(c => c.id === colId) as any;
+          const col = modalColumns.find(c => c.id === colId) as any;
           if (moving.columnId !== colId) updates.columnId = colId;
           const targetPid = col?.projectId ?? null;
           if (targetPid == null) {
@@ -1523,9 +1521,7 @@ const Tasks: React.FC = () => {
     setNewChecklistTitle('');
     setPerChecklistInput({});
     setCollapsedDraftChecklists(new Set());
-    setNewFiles([]);
     setNewTaskLabels([]);
-    setNewTaskImages([]);
   };
 
   const createTask = async () => {
@@ -1565,10 +1561,6 @@ const Tasks: React.FC = () => {
       })),
     ];
 
-    const attachmentUrls = newFiles.length > 0
-      ? await Promise.all(newFiles.map(f => fileToDataUrl(f)))
-      : [];
-
     addTask(targetColumnId, newTaskTitle.trim(), {
       id: taskId,
       description: newTaskDescription,
@@ -1589,16 +1581,9 @@ const Tasks: React.FC = () => {
       })),
       labels: newTaskLabels,
       checklists: allChecklists,
-      attachments: newFiles.map((file, i) => ({
-        id: crypto.randomUUID(),
-        taskId,
-        fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
-        fileSize: file.size,
-        fileUrl: attachmentUrls[i],
-        createdAt: new Date().toISOString(),
-      })),
-      images: newTaskImages,
+      // Notes don't carry files or images.
+      attachments: [],
+      images: [],
       completed: false,
       completedAt: undefined,
     });
@@ -1637,8 +1622,6 @@ const Tasks: React.FC = () => {
           input: aiBuilderInput,
           columns: board.columns.map(c => ({ id: c.id, title: c.title })),
           tags: allTags.map(t => t.name),
-          attachedFiles: aiBuilderFiles.map(f => f.name),
-          attachedImages: aiBuilderImages.map(img => img.fileName),
         }),
       });
       if (!res.ok) {
@@ -1686,14 +1669,10 @@ const Tasks: React.FC = () => {
         })),
         checklistItems: (data.checklistItems || []).map(text => text),
         labels: matchedTags,
-        files: [...aiBuilderFiles],
-        images: [...aiBuilderImages],
       });
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
-      setAiBuilderFiles([]);
-      setAiBuilderImages([]);
       setAddingTask(true);
     } catch (err: any) {
       setAiBuilderError(err.message || 'Something went wrong');
@@ -1705,11 +1684,10 @@ const Tasks: React.FC = () => {
   const newSubtaskTotal = newTaskSubtasks.reduce((s, st) => s + st.durationMinutes, 0);
   const newSubtaskRemaining = newTaskDuration - newSubtaskTotal;
 
-  const openQuickEdit = (task: Task, field: 'duration' | 'project') => {
+  const openQuickEdit = (task: Task, field: 'project') => {
     setQuickEditTaskId(task.id); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(null);
     setQuickEditField(field);
     setQuickEditStatus(getTaskStatus(task));
-    setQuickEditDuration(Math.max(0, Number(task.duration) || 0));
     setQuickEditProjectId(task.projectId || '');
   };
 
@@ -1720,9 +1698,6 @@ const Tasks: React.FC = () => {
 
   const applyQuickEdit = (task: Task) => {
     const updates: Partial<Task> = {};
-    if (quickEditField === 'duration') {
-      updates.duration = Math.max(0, Number(quickEditDuration) || 0);
-    }
     if (quickEditField === 'project') {
       const newPid = quickEditProjectId === '' ? null : Number(quickEditProjectId);
       updates.projectId = newPid;
@@ -1864,7 +1839,6 @@ const Tasks: React.FC = () => {
     const isExpanded = expandedTaskIds.includes(task.id);
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-    const taskDurFmt = formatDuration(task.duration || 0);
     const taskTags = task.labels.slice(0, 3);
     return (
       <div
@@ -1929,47 +1903,6 @@ const Tasks: React.FC = () => {
                   onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
                 />
               )}
-              {taskDurFmt && (
-                <button
-                  onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  {taskDurFmt}
-                </button>
-              )}
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'start' ? null : task.id);
-                  setDateEditField(prev => prev === 'start' ? null : 'start');
-                }}
-                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground"
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
-              </button>
-              <button
-                onClick={e => {
-                  e.stopPropagation();
-                  setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(null); setDateEditTaskId(dateEditTaskId === task.id && dateEditField === 'due' ? null : task.id);
-                  setDateEditField(prev => prev === 'due' ? null : 'due');
-                }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  task.dueDate
-                    ? (() => {
-                        const warning = getDueTimeWarning(task);
-                        return warning === 'overdue'
-                          ? 'bg-destructive/10 text-destructive'
-                          : warning === 'imminent' || warning === 'soon'
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            : 'bg-muted text-muted-foreground';
-                      })()
-                    : 'bg-muted text-muted-foreground'
-                }`}
-              >
-                <Calendar className="w-2.5 h-2.5" />
-                {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
-              </button>
               {checklistTotal > 0 && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
@@ -1985,14 +1918,14 @@ const Tasks: React.FC = () => {
               ))}
               {task.labels.length > taskTags.length && (
                 <button
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                   className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
-                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
@@ -2011,25 +1944,12 @@ const Tasks: React.FC = () => {
               >
                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
-              <button
-                onClick={e => { e.stopPropagation(); openDeepFocus(task); }}
-                className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary"
-                title="Open Deep Focus"
-              >
-                <Brain className="w-3.5 h-3.5" />
-              </button>
             </div>
           )}
         </div>
-        {quickEditTaskId === task.id && (
+        {quickEditTaskId === task.id && quickEditField === 'project' && (
           <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
             <div className="flex flex-wrap items-center gap-2">
-              {quickEditField === 'duration' && (
-                <div className="flex items-center gap-2">
-                  <input type="number" min={0} value={quickEditDuration} onChange={e => setQuickEditDuration(Math.max(0, Number(e.target.value) || 0))} onBlur={() => applyQuickEdit(task)} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-                  <span className="text-xs text-muted-foreground">minutes</span>
-                </div>
-              )}
               {quickEditField === 'project' && (
                 <Select value={quickEditProjectId === '' ? 'my-notes' : String(quickEditProjectId)} onValueChange={val => setQuickEditProjectId(val === 'my-notes' ? '' : Number(val))}>
                   <SelectTrigger className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm h-9">
@@ -2046,63 +1966,31 @@ const Tasks: React.FC = () => {
             </div>
           </div>
         )}
-        {dateEditTaskId === task.id && dateEditField && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/20 rounded-b-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={dateEditField === 'start' ? (task.startDate || '') : (task.dueDate || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(task.id, dateEditField === 'start' ? { startDate: val } : { dueDate: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[140px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={dateEditField === 'start' ? (task.startTime || '') : (task.dueTime || '')}
-                  onChange={e => {
-                    const val = e.target.value || undefined;
-                    updateTask(task.id, dateEditField === 'start' ? { startTime: val } : { dueTime: val });
-                  }}
-                  className="w-full bg-background border border-border rounded-lg pl-8 pr-3 py-2 text-sm [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              {((dateEditField === 'start' && task.startDate) || (dateEditField === 'due' && task.dueDate)) && (
-                <button
-                  onClick={() => {
-                    updateTask(task.id, dateEditField === 'start' ? { startDate: undefined, startTime: undefined } : { dueDate: undefined, dueTime: undefined });
-                    setDateEditTaskId(null);
-                    setDateEditField(null);
-                  }}
-                  className="text-xs text-destructive hover:bg-destructive/10 px-3 py-2 rounded-lg"
-                >
-                  Clear
-                </button>
-              )}
-              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Save</button>
-              <button onClick={() => { setDateEditTaskId(null); setDateEditField(null); }} className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">Cancel</button>
-            </div>
-          </div>
-        )}
         {isExpanded && !isDeleteMode && !isTaskDragging && (
-          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 space-y-4 bg-muted/10 rounded-b-xl">
-            <TaskDropdownExpanded
+          <div onClick={e => e.stopPropagation()} className="border-t border-border px-4 py-3 bg-muted/10 rounded-b-xl">
+            <NoteDropdownExpanded
               key={task.id}
-              task={task}
-              onUpdateTask={updateTask}
+              note={task}
+              onUpdateNote={updateTask}
               onToggleChecklistItem={toggleChecklistItem}
               onAddChecklistItem={addChecklistItem}
               onDeleteChecklistItem={deleteChecklistItem}
-              isPremium={isPremium}
-              isPro={isPro}
+              onAddChecklist={addChecklist}
+              allTags={allTags}
+              onToggleTag={tagId => { const label = allTags.find(t => t.id === tagId); if (label) toggleTaskTag(task.id, label); }}
+              onCreateTag={async (name, color) => {
+                try {
+                  const newLabel = await createSharedTaskLabel(name, color);
+                  updateTask(task.id, { labels: [...task.labels, newLabel] });
+                } catch (error) {
+                  console.error('Failed to create note tag:', error);
+                }
+              }}
+              onDeleteTag={tagId => deleteTagEverywhere(tagId)}
+              onRenameTag={(tagId, newName) => renameTagEverywhere(tagId, newName)}
+              onColorChangeTag={(tagId, color) => changeTagColorEverywhere(tagId, color)}
             />
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-end pt-3">
               <button
                 onClick={e => { e.stopPropagation(); setSingleDeleteTaskId(task.id); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg transition-all"
@@ -2375,155 +2263,8 @@ const Tasks: React.FC = () => {
         </div>
       </header>
 
-      <div className="px-6 py-4 border-b border-border bg-card/10">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search notes..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-
-          <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-xl border border-border">
-            {PRIORITY_FILTERS.map(priority => (
-              <button
-                key={priority}
-                onClick={() => setPriorityFilter(priority)}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all ${
-                  priorityFilter === priority
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {priority === 'all' ? 'All' : priority.charAt(0).toUpperCase() + priority.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-2 min-w-0">
-            {tagFilterIds.length > 0 && (
-              <button
-                onClick={() => setTagFilterIds([])}
-                className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              >
-                Clear tags
-              </button>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setTagPickerOpen(prev => !prev)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-            >
-              <Tag className="w-3.5 h-3.5" />
-              Tags
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            <TagsModal
-              open={tagPickerOpen}
-              onClose={() => setTagPickerOpen(false)}
-              tags={allTags}
-              selectedIds={tagFilterIds}
-              onToggle={tagId => toggleTagFilter(tagId)}
-              onCreate={async (name, color) => {
-                try {
-                  await createSharedTaskLabel(name, color);
-                } catch (error) {
-                  console.error('Failed to create task tag:', error);
-                }
-              }}
-              onDelete={tagId => deleteTagEverywhere(tagId)}
-              onRename={renameTagEverywhere}
-              onColorChange={changeTagColorEverywhere}
-              emptyText="No tags yet. Create one below."
-            />
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setProjectDropdownOpen(prev => !prev)}
-              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
-                projectFilterId !== 'all'
-                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-              }`}
-            >
-              <FolderKanban className="w-3.5 h-3.5" />
-              <span>
-                {projectFilterId === 'all'
-                  ? 'Project Filter'
-                  : `Project: ${projects.find(project => project.id === projectFilterId)?.name || 'Selected'}`}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 ml-1" />
-            </button>
-            {projectDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setProjectDropdownOpen(false)} />
-              <div className="absolute left-0 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-lg z-30 p-2">
-                <button
-                  onClick={() => { setProjectFilterId('all'); setProjectDropdownOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted"
-                >
-                  All projects
-                </button>
-                <div className="space-y-1 max-h-52 overflow-y-auto">
-                  {projects.map(project => (
-                    <button
-                      key={project.id}
-                      onClick={() => { setProjectFilterId(project.id); setProjectDropdownOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted flex items-center gap-2 ${
-                        projectFilterId === project.id ? 'bg-primary/10 text-primary' : ''
-                      }`}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
-                      <span className="flex-1 truncate">{project.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              </>
-            )}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={toggleSortByDueDate}
-              className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border transition-all ${
-                sortByDueDate
-                  ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
-                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground'
-              }`}
-              title={sortByDueDate ? (sortDueDateDesc ? 'Latest first — click to disable' : 'Soonest first — click for latest first') : 'Sort by due date'}
-            >
-              {sortByDueDate && sortDueDateDesc ? (
-                <ArrowDown className="w-3.5 h-3.5" />
-              ) : sortByDueDate ? (
-                <ArrowUp className="w-3.5 h-3.5" />
-              ) : (
-                <ArrowUp className="w-3.5 h-3.5 opacity-40" />
-              )}
-              Sort by Due Date
-            </button>
-            {sortByDueDate && (
-              <span className="text-[11px] text-muted-foreground">Manual reorder paused while sorted</span>
-            )}
-            <button
-              onClick={() => { setAnalysisPanelOpen(true); runTaskAnalysis(activeAnalysisTab); }}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              Note Analysis
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
+      {/* Filter removed - note page shows all notes without filters */}
+            <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
@@ -2756,16 +2497,6 @@ const Tasks: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={newTaskDuration}
-                    onChange={e => setNewTaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                    className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-                  />
-                </div>
-                <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
                   <Select value={newTaskProjectId === '' ? 'my-notes' : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === 'my-notes' ? '' : Number(v)); setNewTaskColumnId(''); }}>
                     <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
@@ -2787,8 +2518,8 @@ const Tasks: React.FC = () => {
                         <SelectValue placeholder="Select column" />
                       </SelectTrigger>
                       <SelectContent>
-                        {board.columns
-                          .filter(col => col.projectId === Number(newTaskProjectId))
+                        {modalColumns
+                          .filter(col => (col as any).projectId === Number(newTaskProjectId))
                           .sort((a, b) => a.order - b.order)
                           .map(col => (
                             <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
@@ -3232,143 +2963,6 @@ const Tasks: React.FC = () => {
                 )}
               </div>
 
-              {/* Attachments Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftAttachmentsCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Paperclip className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-                    {newFiles.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newFiles.length})</span>
-                    )}
-                  </div>
-                  {draftAttachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftAttachmentsCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {!isPremium ? (
-                      <div className="border border-dashed border-border rounded-xl">
-                        <PremiumGate
-                          title="File Attachments"
-                          description="Attach files, images, and documents directly to your tasks."
-                          icon={<Paperclip className="w-6 h-6 text-primary" />}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                          <div className="flex flex-col items-center justify-center py-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              <Paperclip className="w-5 h-5 text-primary" />
-                            </div>
-                            <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                            <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                          </div>
-                          <input
-                            type="file"
-                            multiple
-                            onChange={e => {
-                              if (!e.target.files) return;
-                              setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
-                            }}
-                            className="hidden"
-                          />
-                        </label>
-                        {newFiles.length > 0 && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {newFiles.map((file, fileIdx) => (
-                              <div key={`${file.name}-${fileIdx}`} className="relative group/att">
-                                <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                                  <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center">
-                                    <Paperclip className="w-5 h-5 text-muted-foreground" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={e => { e.preventDefault(); e.stopPropagation(); setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }}
-                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/att:opacity-100 transition-all shadow-sm"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Images Card */}
-              <div className="rounded-2xl border border-border bg-muted/20">
-                <button
-                  onClick={() => setDraftImagesCollapsed(prev => !prev)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Image className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">Images</h3>
-                    {newTaskImages.length > 0 && (
-                      <span className="text-xs text-muted-foreground">({newTaskImages.length})</span>
-                    )}
-                  </div>
-                  {draftImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                </button>
-                {!draftImagesCollapsed && (
-                  <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                    {!isPremium ? (
-                      <div className="border border-dashed border-border rounded-xl">
-                        <PremiumGate
-                          title="Image Attachments"
-                          description="Upload images directly to your tasks."
-                          icon={<Image className="w-6 h-6 text-primary" />}
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                          <div className="flex flex-col items-center justify-center py-4">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
-                            </div>
-                            <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
-                            <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                          </div>
-                          <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                            if (!e.target.files) return;
-                            const files = Array.from(e.target.files);
-                            e.currentTarget.value = '';
-                            setUploadingImages(true);
-                            try {
-                              const newImgs: Attachment[] = [];
-                              for (const file of files) {
-                                const fileUrl = await imageToDataUrl(file);
-                                const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                                newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                              }
-                              setNewTaskImages(prev => [...prev, ...newImgs]);
-                            } finally { setUploadingImages(false); }
-                          }} className="hidden" />
-                        </label>
-                        {newTaskImages.length > 0 && (
-                          <DraggableImageGrid
-                            images={newTaskImages}
-                            onReorder={setNewTaskImages}
-                            onRemove={(id) => setNewTaskImages(prev => prev.filter(x => x.id !== id))}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
 
             <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
@@ -3776,7 +3370,7 @@ const Tasks: React.FC = () => {
           key={openTask.id}
           task={openTask}
           onClose={() => { setOpenTaskId(null); }}
-          boardColumns={board.columns}
+          boardColumns={modalColumns}
           projects={projects}
           allTags={allTags}
           onUpdateTask={wrappedUpdateTask}
@@ -3933,7 +3527,7 @@ const Tasks: React.FC = () => {
       )}
 
       {columnEditId && columnEditPos && (() => {
-        const col = board.columns.find(c => c.id === columnEditId);
+        const col = modalColumns.find(c => c.id === columnEditId) as any;
         if (!col) return null;
         return createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setColumnEditId(null); closeColumnEdit(); }}>
@@ -3978,7 +3572,16 @@ const Tasks: React.FC = () => {
                       className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
                     />
                     <button
-                      onClick={() => { updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined }); setColumnEditId(null); closeColumnEdit(); }}
+                      onClick={() => {
+                        // Project columns live in the tasks board — route the
+                        // rename to the board that owns the column so a note
+                        // column edit behaves the same way a task one does.
+                        const ownsInTasks = tasksBoard.board.columns.some(c => c.id === columnEditId);
+                        const ownsInNotes = board.columns.some(c => c.id === columnEditId);
+                        if (ownsInTasks) tasksBoard.updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined });
+                        if (ownsInNotes) updateColumn(columnEditId, { title: columnEditName, color: columnEditColor, icon: columnEditIcon || undefined });
+                        setColumnEditId(null); closeColumnEdit();
+                      }}
                       className="px-5 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"
                     >
                       Save
@@ -4040,84 +3643,6 @@ const Tasks: React.FC = () => {
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
-
-                <div className="rounded-2xl border border-border bg-muted/20">
-                  <button onClick={() => setAiBuilderFilesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Paperclip className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">Files</h3>
-                      {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
-                    </div>
-                    {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                  {!aiBuilderFilesCollapsed && (
-                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                        <div className="flex flex-col items-center justify-center py-4">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Paperclip className="w-5 h-5 text-primary" />
-                          </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                        </div>
-                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
-                      </label>
-                      {aiBuilderFiles.length > 0 && (
-                        <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(aiBuilderFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setAiBuilderFiles(items); }}>
-                          <Droppable droppableId="ai-builder-files-tasks">
-                            {provided => (
-                              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                {aiBuilderFiles.map((file, fileIdx) => (
-                                  <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-task-file-${fileIdx}-${file.name}`} index={fileIdx}>
-                                    {provided => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/file">
-                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
-                                        <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
-                                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
-                                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
-                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/file:opacity-100 transition-opacity duration-200"><Trash2 className="w-3.5 h-3.5" /></button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                ))}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
-                        </DragDropContext>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-border bg-muted/20">
-                  <button onClick={() => setAiBuilderImagesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Image className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold text-foreground">Images</h3>
-                      {aiBuilderImages.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderImages.length})</span>}
-                    </div>
-                    {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                  {!aiBuilderImagesCollapsed && (
-                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                        <div className="flex flex-col items-center justify-center py-4">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
-                          </div>
-                          <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
-                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                        </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
-                      </label>
-                      {aiBuilderImages.length > 0 && (
-                        <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
-                      )}
-                    </div>
-                  )}
-                </div>
 
                 <div className="flex justify-end gap-2">
                   <button
@@ -4253,724 +3778,6 @@ export interface TaskFullViewProps {
   onTemplateEditNameChange?: (name: string) => void;
 }
 
-export const TaskDropdownExpanded: React.FC<{
-  task: Task;
-  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
-  onToggleChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
-  onAddChecklistItem: (taskId: string, checklistId: string, text: string) => void;
-  onDeleteChecklistItem: (taskId: string, checklistId: string, itemId: string) => void;
-  isPremium: boolean;
-  isPro: boolean;
-}> = ({ task, onUpdateTask, onToggleChecklistItem, onAddChecklistItem, onDeleteChecklistItem, isPremium, isPro }) => {
-  const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const [newChecklistText, setNewChecklistText] = useState('');
-  const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
-  const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
-
-  // Added checklist states
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
-  const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
-  const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
-  const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
-
-  // Added attachments/images states
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
-  useEffect(() => {
-    const prev = readTaskSections(task.id);
-    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, collapsedLists: [...collapsedChecklists] });
-  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, collapsedChecklists]);
-  const { uploading, showUploading, setUploading } = useDelayedUploading();
-  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
-
-  const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const taskRef = useRef(task);
-  taskRef.current = task;
-  useEffect(() => {
-    if (String(task.id).startsWith('template-edit-')) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const rows = await res.json();
-        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
-        const cur = taskRef.current;
-        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
-        const missing = rows.filter((r: any) => !known.has(String(r.id)));
-        if (missing.length === 0) return;
-        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
-        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
-        const updates: Partial<Task> = {};
-        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
-        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
-        onUpdateTask(task.id, updates);
-      } catch { /* offline - keep local state */ }
-    })();
-    return () => { cancelled = true; };
-  }, [task.id, onUpdateTask]);
-
-  const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
-  const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
-  const effectiveSubtasks = (task.subtasks && task.subtasks.length > 0)
-    ? task.subtasks
-    : (legacySubtasksChecklist?.items || []).map(item => ({ ...item, durationMinutes: 0 }));
-  const primaryChecklist = checklistLists[0];
-  const taskDuration = Math.max(0, Number(task.duration) || 0);
-  const subtaskTotal = effectiveSubtasks.reduce((s, st) => s + Math.max(0, Number(st.durationMinutes) || 0), 0);
-  const subtaskTimeRemaining = taskDuration - subtaskTotal;
-  const allSubtasksDone = effectiveSubtasks.length > 0 && effectiveSubtasks.every(st => st.completed);
-  const subtaskDoneCount = effectiveSubtasks.filter(st => st.completed).length;
-  const subtaskPct = effectiveSubtasks.length > 0 ? Math.round((subtaskDoneCount / effectiveSubtasks.length) * 100) : 0;
-  const checklistTotal = checklistLists.reduce((s, l) => s + l.items.length, 0);
-  const checklistDone = checklistLists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
-  const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
-
-  const persistSubtasks = (nextSubtasks: Task['subtasks']) => {
-    const nextChecklists = legacySubtasksChecklist
-      ? task.checklists.filter(list => list.id !== legacySubtasksChecklist.id)
-      : task.checklists;
-    onUpdateTask(task.id, { subtasks: nextSubtasks as any, checklists: nextChecklists });
-  };
-
-  const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
-    const updateRecursive = (list: Subtask[]): Subtask[] =>
-      list.map(st => st.id === subtaskId ? { ...st, ...updates } : { ...st, children: st.children ? updateRecursive(st.children) : undefined });
-    persistSubtasks(updateRecursive(effectiveSubtasks as any) as any);
-  };
-
-  const addSubtask = () => {
-    if (!newSubtaskText.trim()) return;
-    persistSubtasks([
-      ...effectiveSubtasks,
-      { id: crypto.randomUUID(), text: newSubtaskText.trim(), completed: false, durationMinutes: Math.max(0, Number(newSubtaskDuration) || 0) },
-    ]);
-    setNewSubtaskText('');
-    setNewSubtaskDuration(10);
-  };
-
-  const removeSubtask = (subtaskId: string) => {
-    const removeRecursive = (list: Subtask[]): Subtask[] =>
-      list.filter(st => st.id !== subtaskId).map(st => st.children ? { ...st, children: removeRecursive(st.children) } : st);
-    persistSubtasks(removeRecursive(effectiveSubtasks as any) as any);
-  };
-
-  const saveSubtaskEdit = (subtaskId: string) => {
-    const next = editingSubtaskText.trim();
-    if (next) updateSubtask(subtaskId, { text: next });
-    setEditingSubtaskId(null);
-    setEditingSubtaskText('');
-  };
-
-  const saveChecklistItemEdit = (checklistId: string, itemId: string) => {
-    const next = editingChecklistText.trim();
-    if (next) {
-      onUpdateTask(task.id, {
-        checklists: task.checklists.map(list =>
-          list.id !== checklistId ? list : {
-            ...list,
-            items: list.items.map(item => item.id === itemId ? { ...item, text: next } : item),
-          }
-        ),
-      });
-    }
-    setEditingChecklistItemId(null);
-    setEditingChecklistText('');
-  };
-
-  const handleDropdownReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    if (result.source.droppableId === `dropdown-subtasks-${task.id}`) {
-      const items = Array.from(effectiveSubtasks);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      persistSubtasks(items);
-    } else if (result.source.droppableId === `dropdown-checklist-lists-${task.id}`) {
-      const items = Array.from(task.checklists);
-      const [removed] = items.splice(result.source.index, 1);
-      items.splice(result.destination.index, 0, removed);
-      onUpdateTask(task.id, { checklists: items });
-    } else if (result.source.droppableId.startsWith(`dropdown-checklist-${task.id}-`)) {
-      const srcChecklistId = result.source.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
-      const dstChecklistId = result.destination.droppableId.replace(`dropdown-checklist-${task.id}-`, '');
-
-      if (srcChecklistId === dstChecklistId) {
-        onUpdateTask(task.id, {
-          checklists: task.checklists.map(cl =>
-            cl.id === srcChecklistId
-              ? { ...cl, items: (() => {
-                  const items = Array.from(cl.items);
-                  const [removed] = items.splice(result.source.index, 1);
-                  items.splice(result.destination.index, 0, removed);
-                  return items;
-                })() }
-              : cl
-          ),
-        });
-      } else {
-        let movedItem: ChecklistItem | null = null;
-        const without = task.checklists.map(cl =>
-          cl.id === srcChecklistId
-            ? (() => { const items = Array.from(cl.items); [movedItem] = items.splice(result.source.index, 1); return { ...cl, items }; })()
-            : cl
-        );
-        if (!movedItem) return;
-        onUpdateTask(task.id, {
-          checklists: without.map(cl =>
-            cl.id === dstChecklistId
-              ? { ...cl, items: [...cl.items.slice(0, result.destination!.index), movedItem!, ...cl.items.slice(result.destination!.index)] }
-              : cl
-          ),
-        });
-      }
-    }
-  }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
-
-  const handleImageReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.images || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { images: items });
-  }, [task.images, onUpdateTask]);
-
-  const handleAttachmentReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.attachments || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { attachments: items });
-  }, [task.attachments, onUpdateTask]);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-    setUploading(true);
-    const uploaded: Attachment[] = [];
-    for (const file of files) {
-      let saved = false;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
-    }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
-    setUploading(false);
-    e.currentTarget.value = '';
-  };
-
-  const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
-    if (/^\d+$/.test(String(attachmentId))) {
-      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
-    }
-  };
-
-  const renderSubtaskItem = (subtask: Subtask, index: number): React.ReactNode => {
-    return (
-      <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                <GripVertical className="w-4 h-4" />
-              </div>
-              <CircleToggle
-                completed={subtask.completed}
-                onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
-                size="sm"
-              />
-              {editingSubtaskId === subtask.id ? (
-                <input
-                  autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                  value={editingSubtaskText}
-                  onChange={e => setEditingSubtaskText(e.target.value)}
-                  onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
-                />
-              ) : (
-                <span
-                  onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                >
-                  {subtask.text}
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                  value={subtask.durationMinutes || 0}
-                  onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
-                />
-                <span className="text-[10px] text-muted-foreground">min</span>
-                <button
-                  onClick={() => removeSubtask(subtask.id)}
-                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Draggable>
-    );
-  };
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h4 className="text-xs font-semibold text-muted-foreground mb-1.5">Description</h4>
-        <textarea
-          value={task.description}
-          onChange={e => onUpdateTask(task.id, { description: e.target.value })}
-          rows={3}
-          className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
-        />
-      </div>
-
-      {false && (<>
-      {/* Sub-tasks Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setSubtasksCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Sub-tasks</h3>
-            {effectiveSubtasks.length > 0 && (
-              <span className="text-xs text-muted-foreground">({effectiveSubtasks.length})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {taskDuration > 0 && (
-              <span className={`text-xs font-medium ${
-                subtaskTimeRemaining > 0 ? 'text-muted-foreground' :
-                subtaskTimeRemaining < 0 ? 'text-orange-500' : 'text-label-green'
-              }`}>
-                {subtaskTimeRemaining > 0
-                  ? `${subtaskTimeRemaining} mins left`
-                  : subtaskTimeRemaining < 0
-                  ? `Over by ${Math.abs(subtaskTimeRemaining)} mins`
-                  : '0 mins left ✓'}
-              </span>
-            )}
-            {subtasksCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </div>
-        </button>
-        {!subtasksCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={subtaskPct} aria-valuemin={0} aria-valuemax={100} aria-label="Sub-tasks progress" data-testid="subtasks-progress">
-              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${subtaskPct}%` }} data-testid="subtasks-progress-bar" />
-            </div>
-            {allSubtasksDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All sub-tasks are done ✓
-              </div>
-            )}
-
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-subtasks-${task.id}`} type="subtask">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1">
-                    {effectiveSubtasks.map((subtask, si) => renderSubtaskItem(subtask as any, si))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-
-            <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
-                value={newSubtaskText}
-                onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                placeholder="Add sub-task"
-                className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={newSubtaskDuration}
-                onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="min"
-                className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
-              />
-              <button onClick={addSubtask} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
-                Add
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-      </>)}
-      {/* Checklist Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setChecklistsSectionCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Checklist</h3>
-            {checklistLists.length > 0 && (
-              <span className="text-xs text-muted-foreground">({checklistLists.length})</span>
-            )}
-          </div>
-          {checklistsSectionCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!checklistsSectionCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            <div className="h-2 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={checklistPct} aria-valuemin={0} aria-valuemax={100} aria-label="Checklist progress" data-testid="checklist-progress">
-              <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${checklistPct}%` }} data-testid="checklist-progress-bar" />
-            </div>
-            {allChecklistsDone && (
-              <div className="text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md inline-block">
-                All checklists are done ✓
-              </div>
-            )}
-            {checklistLists.length === 0 && <p className="text-xs text-muted-foreground">No checklist yet. Add an item to create one.</p>}
-            <DragDropContext onDragEnd={handleDropdownReorder}>
-              <Droppable droppableId={`dropdown-checklist-lists-${task.id}`} type="checklistList">
-                {(provided) => (
-                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
-                    {checklistLists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
-                      return (
-                        <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
-                          {(provided) => (
-                            <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
-                              <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                  <GripVertical className="w-4 h-4" />
-                                </div>
-                                <button
-                                  onClick={() => {
-                                    const next = new Set(collapsedChecklists);
-                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                    setCollapsedChecklists(next);
-                                  }}
-                                  className="flex-1 flex items-center gap-2 text-left"
-                                >
-                                  <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
-                                   {editingChecklistId === list.id ? (
-                                    <input
-                                      autoFocus
-                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
-                                      value={editingChecklistTitle}
-                                      onChange={e => setEditingChecklistTitle(e.target.value)}
-                                      onClick={e => e.stopPropagation()}
-                                      onBlur={() => {
-                                        if (editingChecklistTitle.trim()) {
-                                          onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                        }
-                                        setEditingChecklistId(null);
-                                        setEditingChecklistTitle('');
-                                      }}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                          if (editingChecklistTitle.trim()) {
-                                            onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
-                                          }
-                                          setEditingChecklistId(null);
-                                          setEditingChecklistTitle('');
-                                        }
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }}
-                                      className="text-sm font-semibold text-foreground cursor-text"
-                                    >
-                                      {list.title}
-                                    </span>
-                                  )}
-                                  <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
-                                </button>
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => onUpdateTask(task.id, { checklists: task.checklists.filter(cl => cl.id !== list.id) })}
-                                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/header:opacity-100 checklist-header-delete transition-opacity duration-200"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
-                                    }}
-                                    className="p-1 text-muted-foreground hover:text-foreground"
-                                  >
-                                    {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                                  </button>
-                                </div>
-                              </div>
-                              {!isCollapsed && (
-                                <div className="border-t border-border/60 px-3 py-2 space-y-1.5">
-                                  <Droppable droppableId={`dropdown-checklist-${task.id}-${list.id}`} type="checklistItem">
-                                    {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                        {list.items.map((item, index) => (
-                                          <Draggable key={item.id} draggableId={item.id} index={index}>
-                                            {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                  <GripVertical className="w-4 h-4" />
-                                                </div>
-                                                <SquareToggle
-                                                  completed={item.completed}
-                                                  onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                                  size="md"
-                                                />
-                                                {editingChecklistItemId === item.id ? (
-                                                  <input
-                                                    autoFocus
-                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                                    value={editingChecklistText}
-                                                    onChange={e => setEditingChecklistText(e.target.value)}
-                                                    onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
-                                                  />
-                                                ) : (
-                                                  <span
-                                                    onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                  >
-                                                    {item.text}
-                                                  </span>
-                                                )}
-                                                <button
-                                                  onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                              </div>
-                                            )}
-                                          </Draggable>
-                                        ))}
-                                        {provided.placeholder}
-                                      </div>
-                                    )}
-                                  </Droppable>
-                                  <div className="flex gap-2 pt-1">
-                                    <input
-                                      value={perChecklistInput[list.id] ?? ''}
-                                      onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
-                                      placeholder="Add checklist item"
-                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
-                                    />
-                                    <button onClick={() => { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } }} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </Draggable>
-                      );
-                    })}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </DragDropContext>
-            <div className="flex gap-2">
-              <input
-                value={newChecklistTitle}
-                onChange={e => setNewChecklistTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                placeholder="New checklist name"
-                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-              />
-              <button
-                onClick={() => { if (newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
-                disabled={!newChecklistTitle.trim()}
-                className="px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg"
-              >
-                Add checklist
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Attachments Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setAttachmentsCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <Paperclip className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-            {(task.attachments ?? []).length > 0 && (
-              <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
-            )}
-          </div>
-          {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!attachmentsCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate
-                  title="File Attachments"
-                  description="Attach files, images, and documents directly to your tasks."
-                  icon={<Paperclip className="w-6 h-6 text-primary" />}
-                />
-              </div>
-            ) : (
-              <>
-                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      <Paperclip className="w-5 h-5 text-primary" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                    <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                  </div>
-                  <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
-                </label>
-                {showUploading && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
-                {(task.attachments || []).length > 0 && (
-                  <FreeAttachmentList
-                    attachments={task.attachments || []}
-                    onReorder={(newItems) => onUpdateTask(task.id, { attachments: newItems })}
-                    onDelete={(id) => deleteAttachment(id)}
-                    taskId={task.id}
-                    taskTitle={task.title}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Images Section */}
-      <div className="rounded-2xl border border-border bg-muted/20">
-        <button
-          onClick={() => setImagesCollapsed(prev => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3"
-        >
-          <div className="flex items-center gap-2">
-            <Image className="w-4 h-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold text-foreground">Images</h3>
-            {task.images && task.images.length > 0 && (
-              <span className="text-xs text-muted-foreground">({task.images.length})</span>
-            )}
-          </div>
-          {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {!imagesCollapsed && (
-          <div className="border-t border-border/60 px-4 py-3 space-y-3">
-            {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate
-                  title="Image Attachments"
-                  description="Upload images directly to your tasks."
-                  icon={<Image className="w-6 h-6 text-primary" />}
-                />
-              </div>
-            ) : (
-              <>
-                {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
-                  <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
-                ) : (
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                    <div className="flex flex-col items-center justify-center py-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
-                      </div>
-                      <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
-                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                    </div>
-                    <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                      if (!e.target.files) return;
-                      const files = Array.from(e.target.files);
-                      e.currentTarget.value = '';
-                      setUploadingImages(true);
-                      try {
-                        const newImages: Attachment[] = [];
-                      for (const file of files) {
-                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-                        let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
-                        if (!saved) {
-                          try {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          } catch { /* skip unreadable file, keep the rest */ }
-                        }
-                      }
-                        onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
-                      } finally { setUploadingImages(false); }
-                    }} className="hidden" />
-                  </label>
-                )}
-                {showUploadingImages && (
-                  <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      <span className="text-sm font-medium">Uploading...</span>
-                    </div>
-                  </div>
-                )}
-                {task.images && task.images.length > 0 && (
-                  <DraggableImageGrid
-                    images={task.images}
-                    onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                    onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export const TaskFullView: React.FC<TaskFullViewProps> = ({
   task,
   boardColumns,
@@ -5006,8 +3813,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-  const { uploading, showUploading, setUploading } = useDelayedUploading();
-  const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState<LabelColor>(randomTagColor());
@@ -5031,9 +3836,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
   const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
@@ -5042,36 +3845,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
   useEffect(() => {
     const prev = readTaskSections(task.id);
-    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
-  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, collapsedChecklists]);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, activityCollapsed, collapsedChecklists]);
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
-  const taskRef = useRef(task);
-  taskRef.current = task;
-  useEffect(() => {
-    if (String(task.id).startsWith('template-edit-')) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/attachments/${task.id}`, { credentials: 'include' });
-        if (!res.ok || cancelled) return;
-        const rows = await res.json();
-        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
-        const cur = taskRef.current;
-        const known = new Set([...(cur.images || []), ...(cur.attachments || [])].map(a => String(a.id)));
-        const missing = rows.filter((r: any) => !known.has(String(r.id)));
-        if (missing.length === 0) return;
-        const missingImages = missing.filter((r: any) => (r.fileType || '').startsWith('image/'));
-        const missingFiles = missing.filter((r: any) => !(r.fileType || '').startsWith('image/'));
-        const updates: Partial<Task> = {};
-        if (missingImages.length > 0) updates.images = [...(cur.images || []), ...missingImages];
-        if (missingFiles.length > 0) updates.attachments = [...(cur.attachments || []), ...missingFiles];
-        onUpdateTask(task.id, updates);
-      } catch { /* offline - keep local state */ }
-    })();
-    return () => { cancelled = true; };
-  }, [task.id, onUpdateTask]);
 
   const legacySubtasksChecklist = task.checklists.find(list => list.title.toLowerCase().trim() === 'subtasks');
   const checklistLists = task.checklists.filter(list => list.id !== legacySubtasksChecklist?.id);
@@ -5306,56 +4083,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     }
   }, [effectiveSubtasks, persistSubtasks, task.checklists, onUpdateTask]);
 
-  const handleImageReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.images || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { images: items });
-  }, [task.images, onUpdateTask]);
-
-  const handleAttachmentReorder = useCallback((result: DropResult) => {
-    if (!result.destination) return;
-    const items = Array.from(task.attachments || []);
-    const [removed] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, removed);
-    onUpdateTask(task.id, { attachments: items });
-  }, [task.attachments, onUpdateTask]);
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-    setUploading(true);
-    const uploaded: Attachment[] = [];
-    for (const file of files) {
-      let saved = false;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
-    }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
-    setUploading(false);
-    e.currentTarget.value = '';
-  };
-
-  const deleteAttachment = async (attachmentId: string) => {
-    onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
-    if (/^\d+$/.test(String(attachmentId))) {
-      try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
-    }
-  };
-
   const createTagForTask = () => {
     const name = normalizeTagName(newTagName);
     if (!name) return;
@@ -5428,16 +4155,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground mb-1 block">Estimated duration (minutes)</label>
-            <input
-              type="number"
-              min={0}
-              value={task.duration || 0}
-              onChange={e => onUpdateTask(task.id, { duration: Math.max(0, Number(e.target.value) || 0) })}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm"
-            />
-          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
@@ -5476,59 +4193,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </Select>
               </div>
             )}
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> Start
-            </label>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={task.startDate || ''}
-                  onChange={e => onUpdateTask(task.id, { startDate: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[130px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={task.startTime || ''}
-                  onChange={e => onUpdateTask(task.id, { startTime: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="w-3 h-3" /> End
-            </label>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="relative flex-1">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="date"
-                  value={task.dueDate || ''}
-                  onChange={e => onUpdateTask(task.id, { dueDate: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-              <div className="relative w-[130px]">
-                <Clock3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <input
-                  type="time"
-                  value={task.dueTime || ''}
-                  onChange={e => onUpdateTask(task.id, { dueTime: e.target.value || undefined })}
-                  className="w-full bg-muted/40 border border-border rounded-lg pl-8 pr-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all [color-scheme:var(--color-scheme)]"
-                />
-              </div>
-            </div>
           </div>
         </div>
 
@@ -5754,7 +4418,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         {list.title}
                                       </span>
                                     )}
-                                    <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                   </button>
                                   <div className="flex items-center gap-1">
                                     <button
@@ -5865,235 +4528,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setAttachmentsCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <Paperclip className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Attachments</h3>
-              {(task.attachments ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
-              )}
-            </div>
-            {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!attachmentsCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {!isPremium ? (
-                <div className="border border-dashed border-border rounded-xl">
-                  <PremiumGate
-                    title="File Attachments"
-                    description="Attach files, images, and documents directly to your tasks."
-                    icon={<Paperclip className="w-6 h-6 text-primary" />}
-                  />
-                </div>
-              ) : (
-                <>
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                    <div className="flex flex-col items-center justify-center py-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <Paperclip className="w-5 h-5 text-primary" />
-                      </div>
-                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                      <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
-                    </div>
-                    <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
-                  </label>
-                  {showUploading && (
-                    <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm font-medium">Uploading...</span>
-                      </div>
-                    </div>
-                  )}
-                  {(task.attachments || []).length > 0 && (
-                    <FreeAttachmentList
-                    attachments={task.attachments || []}
-                    onReorder={(newItems) => onUpdateTask(task.id, { attachments: newItems })}
-                    onDelete={(id) => deleteAttachment(id)}
-                    taskId={task.id}
-                    taskTitle={task.title}
-                  />
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setImagesCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <Image className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Images</h3>
-              {task.images && task.images.length > 0 && (
-                <span className="text-xs text-muted-foreground">({task.images.length})</span>
-              )}
-            </div>
-            {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!imagesCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              {!isPremium ? (
-                <div className="border border-dashed border-border rounded-xl">
-                  <PremiumGate
-                    title="Image Attachments"
-                    description="Upload images directly to your tasks."
-                    icon={<Image className="w-6 h-6 text-primary" />}
-                  />
-                </div>
-              ) : (
-                <>
-              {(task.images?.length || 0) + (task.attachments?.length || 0) >= mediaLimit ? (
-                <p className="text-xs text-muted-foreground text-center py-2">Limit reached — upgrade for more</p>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              {showUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
-                    </div>
-                    <p className="text-sm font-medium text-foreground">{showUploadingImages ? 'Uploading...' : 'Click to upload'}</p>
-                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
-                  </div>
-                   <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                    if (!e.target.files) return;
-                    const files = Array.from(e.target.files);
-                    e.currentTarget.value = '';
-                    setUploadingImages(true);
-                    try {
-                      const newImages: Attachment[] = [];
-                      for (const file of files) {
-                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-                        let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
-                        if (!saved) {
-                          try {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          } catch { /* skip unreadable file, keep the rest */ }
-                        }
-                      }
-                      onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
-                    } finally { setUploadingImages(false); }
-                  }} className="hidden" />
-                </label>
-              )}
-              {showUploadingImages && (
-                <div className="bg-background/60 backdrop-blur-[1px] flex items-center justify-center rounded-xl py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm font-medium">Uploading...</span>
-                  </div>
-                </div>
-              )}
-              {task.images && task.images.length > 0 && (
-                <DraggableImageGrid
-                  images={task.images}
-                  onReorder={(newImages) => onUpdateTask(task.id, { images: newImages })}
-                  onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
-                />
-              )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setActivityCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Activity</h3>
-            </div>
-            {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!activityCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
-              {activityEntries.map(entry => (
-                <div key={entry.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                  <p className="text-sm text-foreground">{entry.text}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {entry.actor && <><span className="font-semibold">{entry.actor}</span> · </>}
-                    {new Date(entry.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground">Comments</h3>
-          <div className="space-y-2">
-            {(task.comments || []).map(comment => (
-              <div key={comment.id} className="border border-border rounded-lg px-3 py-2 group">
-                <div className="flex items-start justify-between gap-2">
-                  {editingCommentId === comment.id ? (
-                    <textarea
-                      autoFocus
-                      className="flex-1 bg-muted/40 border border-primary/30 rounded px-2 py-1 text-sm resize-none"
-                      value={editingCommentText}
-                      onChange={e => setEditingCommentText(e.target.value)}
-                      onBlur={() => { updateComment(comment.id, editingCommentText); setEditingCommentId(null); }}
-                    />
-                  ) : (
-                    <p
-                      onClick={() => { setEditingCommentId(comment.id); setEditingCommentText(comment.text); }}
-                      className="text-sm text-foreground whitespace-pre-wrap flex-1 cursor-text"
-                    >
-                      {comment.text}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => deleteComment(comment.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Removed status + due from comments header area */}
-
-          <div className="flex gap-2">
-            <input
-              value={newCommentText}
-              onChange={e => setNewCommentText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addComment()}
-              placeholder="Add a comment..."
-              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={addComment}
-              className="px-4 py-2 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium"
-            >
-              Send
-            </button>
-          </div>
-        </div>
+        {/* Files and Images removed - notes do not include media sections */}
 
         <div className="flex items-center justify-between pt-2 border-t border-border">
           <div className="flex items-center gap-2">
@@ -6406,45 +4841,19 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>
                 <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Priority</label>
-                  <Select value={editingTmplPriority} onValueChange={setEditingTmplPriority}>
-                    <SelectTrigger className="w-full bg-muted/40 border-border rounded-xl px-3 py-2.5 text-sm h-auto">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Duration (min)</label>
-                  <input type="number" min={0} value={editingTmplDuration} onChange={e => setEditingTmplDuration(Math.max(0, Number(e.target.value) || 0))} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Start date</label>
-                  <input type="date" value={editingTmplStartDate} onChange={e => setEditingTmplStartDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Start time</label>
-                  <input type="time" value={editingTmplStartTime} onChange={e => setEditingTmplStartTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Due date</label>
-                  <input type="date" value={editingTmplDueDate} onChange={e => setEditingTmplDueDate(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all [color-scheme:var(--color-scheme)]" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Due time</label>
-                  <input type="time" value={editingTmplDueTime} onChange={e => setEditingTmplDueTime(e.target.value)} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
-                </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Priority</label>
+                <Select value={editingTmplPriority} onValueChange={setEditingTmplPriority}>
+                  <SelectTrigger className="w-full bg-muted/40 border-border rounded-xl px-3 py-2.5 text-sm h-auto">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
