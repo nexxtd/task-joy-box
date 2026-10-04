@@ -15,6 +15,7 @@ interface Note {
   color: string;
   pinned: boolean;
   projectId?: number | null;
+  columnId?: string | null;
   tags: NoteTag[];
   images?: NoteImage[];
   checklists: Checklist[];
@@ -23,9 +24,13 @@ interface Note {
   createdAt: string;
 }
 
+interface Project { id: number; name: string; color: string; }
+interface BoardColumn { id: string; title: string; order: number; projectId?: number | null; }
+
 interface NoteDetailModalProps {
   note: Note | null;
-  projects: { id: number; name: string; color: string }[];
+  projects: Project[];
+  boardColumns: BoardColumn[];
   tags: NoteTag[];
   isTemplateEdit?: boolean;
   templateEditName?: string;
@@ -33,6 +38,7 @@ interface NoteDetailModalProps {
   onTitleChange: (title: string) => void;
   onContentChange: (content: string) => void;
   onProjectChange: (projectId: string) => void;
+  onColumnChange: (columnId: string) => void;
   onStatusChange: (status: TaskStatus) => void;
   onChecklistsChange: (checklists: Checklist[]) => void;
   onSubtasksChange: (subtasks: Subtask[]) => void;
@@ -47,8 +53,8 @@ interface NoteDetailModalProps {
 }
 
 const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
-  note, projects, tags, isTemplateEdit, templateEditName, onTemplateEditNameChange,
-  onTitleChange, onContentChange, onProjectChange, onStatusChange,
+  note, projects, boardColumns, tags, isTemplateEdit, templateEditName, onTemplateEditNameChange,
+  onTitleChange, onContentChange, onProjectChange, onColumnChange, onStatusChange,
   onChecklistsChange, onSubtasksChange, onPinToggle, onClose, onTagPopup,
   onDelete, onImageUpload, onImageDelete, onSaveTemplate, onCancelTemplateEdit
 }) => {
@@ -95,19 +101,33 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
-            <Select value={String(note.projectId || '') || 'none'} onValueChange={onProjectChange}>
-              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                <SelectValue placeholder="My Notes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">My Notes</SelectItem>
-                {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
+          <Select value={String(note.projectId || '') || 'none'} onValueChange={onProjectChange}>
+            <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+              <SelectValue placeholder="My Notes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">My Notes</SelectItem>
+              {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
+          <Select value={String(note.columnId || '') || 'none'} onValueChange={onColumnChange}>
+            <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+              <SelectValue placeholder={note.projectId ? 'Select column' : 'Select a project first'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No column</SelectItem>
+              {boardColumns
+                .filter(c => !note.projectId || String(c.projectId) === String(note.projectId))
+                .sort((a, b) => a.order - b.order)
+                .map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div>

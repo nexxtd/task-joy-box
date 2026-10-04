@@ -69,34 +69,33 @@ const NoteCreateModal: React.FC<NoteCreateModalProps> = ({
             ))}
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
-              <Select value={projectId || 'none'} onValueChange={v => { setProjectId(v === 'none' ? '' : v); setColumnId(''); }}>
-                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                  <SelectValue placeholder="My Notes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">My Notes</SelectItem>
-                  {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
-              <Select value={columnId || 'none'} onValueChange={v => setColumnId(v === 'none' ? '' : v)}>
-                <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
-                  <SelectValue placeholder={projectId ? 'Select column' : 'Select a project first'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No column</SelectItem>
-                  {boardColumns
-                    .filter(c => !projectId || String(c.projectId) === String(projectId))
-                    .sort((a, b) => a.order - b.order)
-                    .map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Project</label>
+            <Select value={projectId || 'none'} onValueChange={v => { setProjectId(v === 'none' ? '' : v); setColumnId(''); }}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder="My Notes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">My Notes</SelectItem>
+                {projects.map(p => (<SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Column</label>
+            <Select value={columnId || 'none'} onValueChange={v => setColumnId(v === 'none' ? '' : v)}>
+              <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                <SelectValue placeholder={projectId ? 'Select column' : 'Select a project first'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No column</SelectItem>
+                {boardColumns
+                  .filter(c => !projectId || String(c.projectId) === String(projectId))
+                  .sort((a, b) => a.order - b.order)
+                  .map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
