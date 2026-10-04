@@ -569,6 +569,16 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   +{note.labels.length - noteTags.length}
                 </span>
               )}
+              {note.images && note.images.length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary-foreground flex-shrink-0">
+                  {note.images.length} image
+                </span>
+              )}
+              {note.attachments && note.attachments.length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {note.attachments.length} file
+                </span>
+              )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
