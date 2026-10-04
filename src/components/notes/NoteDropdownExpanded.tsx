@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Calendar, Clock3, Tag, CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { Task, Label, LabelColor, LABEL_COLORS } from '@/types/board';
 import TagsModal from '@/components/shared/TagsModal';
+import TaskMediaSections from '@/components/shared/TaskMediaSections';
+import { useAuth } from '@/context/AuthContext';
 
 export interface NoteDropdownExpandedProps {
   note: Task;
@@ -19,9 +21,10 @@ export interface NoteDropdownExpandedProps {
 }
 
 /**
- * The NOTE version of the expanded row panel. Deliberately slimmer than the
- * task version: description, tags, start/due dates and plain checklists /
- * subtasks. No duration editor, no images, no file attachments.
+ * The NOTE version of the expanded row panel: content, tags,
+ * start/due dates, plain checklists / subtasks, plus images
+ * and file attachments (notes share the Task model). No
+ * duration editor.
  */
 export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
   note,
@@ -43,6 +46,8 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
   const [addingChecklist, setAddingChecklist] = useState(false);
   const [newItemTexts, setNewItemTexts] = useState<Record<string, string>>({});
   const [newSubtaskText, setNewSubtaskText] = useState('');
+  const { user } = useAuth();
+  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
 
   React.useEffect(() => { setDescription(note.description || ''); }, [note.id]);
 
@@ -254,6 +259,9 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Images & Files */}
+      <TaskMediaSections task={note} onUpdateTask={onUpdateNote} tier={user?.subscriptionTier} isPremium={isPremium} />
     </div>
   );
 };

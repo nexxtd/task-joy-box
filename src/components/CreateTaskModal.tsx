@@ -1330,8 +1330,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               )}
             </div>
 
-            {!isNote && (
-            <>
             {/* Attachments */}
             <div className="rounded-2xl border border-border bg-muted/20">
               <button
@@ -1466,8 +1464,6 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </div>
               )}
             </div>
-            </>
-            )}
           </div>
 
           <div className="px-5 py-4 border-t border-border flex justify-between items-center gap-2">
