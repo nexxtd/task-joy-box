@@ -553,7 +553,7 @@ export const PriorityBadge: React.FC<{
           ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{ backgroundColor: pc?.bg }}
-          className="text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
+          className="text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 text-white inline-flex items-center"
         >
           {pc?.label}
         </button>
@@ -561,7 +561,7 @@ export const PriorityBadge: React.FC<{
         <button
           ref={btnRef}
           onClick={e => { e.stopPropagation(); onToggle(); }}
-          className="text-[11px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
+          className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 border border-border text-muted-foreground"
         >
           Priority
         </button>
