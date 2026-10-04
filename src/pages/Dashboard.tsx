@@ -1751,7 +1751,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                   </button>
                 </div>
                 {viewProjectsMenuOpen && (
-                    <div className="absolute right-0 mt-1 w-44 bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
+                    <div className="absolute right-0 mt-0 w-auto bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
                       {DASHBOARD_SHORTCUT_PAGES.map(item => (
                         <button
                           key={item.path}
