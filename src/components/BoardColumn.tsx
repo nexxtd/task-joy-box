@@ -320,7 +320,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 sm:px-7 py-4 sm:py-5 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
@@ -547,7 +547,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-2 px-4 sm:px-5 py-3 sm:py-4 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 sm:px-7 py-4 sm:py-5 min-w-0 overflow-hidden">
           <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
