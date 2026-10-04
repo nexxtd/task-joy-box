@@ -142,6 +142,12 @@ export function saveShortcuts(list: Array<ShortcutDef | Shortcut>) {
   } catch {}
 }
 
+export function removeShortcut(id: string) {
+  const current = loadShortcuts();
+  const filtered = current.filter(s => s.id !== id);
+  saveShortcuts(filtered);
+}
+
 // ---------------------------------------------------------------------------
 // Capture guard: while the user is rebinding a shortcut (Settings is listening
 // for the next keypress), the global handler must stay quiet so the capture

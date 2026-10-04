@@ -8,7 +8,7 @@ import {
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
   Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine
 } from 'lucide-react';
-import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
+import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, removeShortcut, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -1210,13 +1210,23 @@ const SettingsPage: React.FC = () => {
                         <p className="text-sm font-medium text-foreground truncate">{s.title}</p>
                         <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
                       </div>
-                      <button
-                        onClick={() => setRebindingId(isRebinding ? null : s.id)}
-                        className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
-                        title="Click, then press new keys"
-                      >
-                        {isRebinding ? 'Press keys…' : s.keys}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRebindingId(isRebinding ? null : s.id)}
+                          className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
+                          title="Click, then press new keys"
+                        >
+                          {isRebinding ? 'Press keys…' : s.keys}
+                        </button>
+                        <button
+                          onClick={() => removeShortcut(s.id)}
+                          className="px-2 py-1 text-xs text-destructive hover:text-destructive/90 rounded border bg-destructive/5 hover:bg-destructive/10 transition-all"
+                          title="Remove shortcut"
+                          aria-label="Remove shortcut"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
