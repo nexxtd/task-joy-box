@@ -569,7 +569,7 @@ export const PriorityBadge: React.FC<{
       {isOpen && menuPos && typeof document !== 'undefined' && createPortal(
         <div
           data-priority-menu
-          className="fixed z-[100] w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5"
+          className="fixed z-[100] w-28 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5"
           style={{ top: menuPos.top, left: menuPos.left }}
           onClick={e => e.stopPropagation()}
         >
