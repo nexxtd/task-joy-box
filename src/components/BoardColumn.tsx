@@ -336,7 +336,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
+            <div className="flex items-center gap-1 flex-wrap mt-0.5 min-w-0">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -349,7 +349,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 <button
                   onClick={e => { e.stopPropagation(); openQuickEdit(task, 'duration'); }}
                   title="Edit duration"
-                  className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0 hover:bg-muted/80"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0 hover:bg-muted/80"
                 >
                   {taskDurFmt}
                 </button>
@@ -362,9 +362,9 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   setDateEditField('start');
                 }}
                 title="Edit start date and time"
-                className="text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-muted/80"
+                className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-muted/80"
               >
-                <Calendar className="w-3 h-3" />
+                <Calendar className="w-2.5 h-2.5" />
                 {task.startDate ? `${formatDate(task.startDate)}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
               </button>
               <button
@@ -375,7 +375,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   setDateEditField('due');
                 }}
                 title="Edit due date and time"
-                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   task.dueDate
                     ? (() => {
                         const warning = getDueTimeWarning(task);
@@ -388,18 +388,18 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
-                <Calendar className="w-3 h-3" />
+                <Calendar className="w-2.5 h-2.5" />
                 {task.dueDate ? `${formatDate(task.dueDate)}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
               </button>
               {checklistTotal > 0 && (
-                <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {checklistDone}/{checklistTotal} checklist
                 </span>
               )}
               {subtaskCount > 0 && (() => {
                 const subtaskDone = (task.subtasks || []).filter(s => s.completed).length;
                 return (
-                  <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                     {subtaskDone}/{subtaskCount} sub task
                   </span>
                 );
@@ -407,7 +407,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {taskTags.map(label => (
                 <span
                   key={label.id}
-                  className={`text-xs px-3.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
                 </span>
@@ -415,18 +415,18 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               {task.labels.length > taskTags.length && (
                 <button
                   onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
                 >
                   +{task.labels.length - taskTags.length}
                 </button>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
               >
-                <Tag className="w-3 h-3" />
+                <Tag className="w-2.5 h-2.5" />
                 {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
             </div>
@@ -555,27 +555,27 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
+            <div className="flex items-center gap-1 flex-wrap mt-0.5 min-w-0">
               {noteTags.map(label => (
                 <span
                   key={label.id}
-                  className={`text-xs px-3.5 py-1 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
                 >
                   {label.name}
                 </span>
               ))}
               {note.labels.length > noteTags.length && (
-                <span className="text-xs px-3.5 py-1 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   +{note.labels.length - noteTags.length}
                 </span>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                className={`text-xs px-3.5 py-1 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
+                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1.5 ${
                   tagPopupTaskId === note.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                 }`}
               >
-                <Tag className="w-3 h-3" />
+                <Tag className="w-2.5 h-2.5" />
                 {tagPopupTaskId === note.id ? 'Close' : 'Tags'}
               </button>
             </div>
@@ -744,7 +744,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[400px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[560px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
