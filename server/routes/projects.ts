@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { projectMembers, projects, users } from '../../shared/schema.js';
+import { projectJoinRequests, projectMembers, projects, users } from '../../shared/schema.js';
 
 const router = Router();
 
@@ -258,14 +258,27 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
       return res.status(400).json({ error: 'User is already a member of this project' });
     }
 
-    await db.insert(projectMembers).values({
-      projectId,
-      userId: recipient.id,
-      role: 'edit',
-    });
+    // Invites become join requests — the owner approves before they join.
+    const existingRequest = await db
+      .select()
+      .from(projectJoinRequests)
+      .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, recipient.id)));
+    if (existingRequest.length > 0 && existingRequest[0].status === 'pending') {
+      return res.status(200).json({ pending: true, message: 'A join request is already waiting for approval.' });
+    }
+    if (existingRequest.length > 0) {
+      await db.update(projectJoinRequests)
+        .set({ status: 'pending', updatedAt: new Date().toISOString() })
+        .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, recipient.id)));
+    } else {
+      await db.insert(projectJoinRequests).values({
+        projectId,
+        userId: recipient.id,
+        status: 'pending',
+      });
+    }
 
-    const projectData = await serializeProject(projectId);
-    res.json({ project: projectData, message: 'User added to project' });
+    res.json({ pending: true, message: 'Invite sent — they will join once the owner approves the request.' });
   } catch (error) {
     console.error('Invite project member error:', error);
     res.status(500).json({ error: 'Failed to invite member' });
@@ -300,16 +313,164 @@ router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Resp
       });
     }
 
-    await db.insert(projectMembers).values({
-      projectId,
-      userId: req.userId!,
-      role: 'edit',
-    });
+    // Joining via link creates a request — the owner approves before you join.
+    const existingRequest = await db
+      .select()
+      .from(projectJoinRequests)
+      .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, req.userId!)));
+    if (existingRequest.length > 0 && existingRequest[0].status === 'pending') {
+      return res.json({
+        pending: true,
+        project: { id: projectId, name: project[0].name },
+        message: 'Your join request is already waiting for approval.',
+      });
+    }
+    if (existingRequest.length > 0) {
+      await db.update(projectJoinRequests)
+        .set({ status: 'pending', updatedAt: new Date().toISOString() })
+        .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, req.userId!)));
+    } else {
+      await db.insert(projectJoinRequests).values({
+        projectId,
+        userId: req.userId!,
+        status: 'pending',
+      });
+    }
 
-    res.json({ project: await serializeProject(projectId) });
+    res.json({
+      pending: true,
+      project: { id: projectId, name: project[0].name },
+      message: 'Join request sent — the project owner will review it.',
+    });
   } catch (error) {
     console.error('Join project error:', error);
     res.status(500).json({ error: 'Failed to join project' });
+  }
+});
+
+// List pending join requests (owner only)
+router.get('/:projectId/join-requests', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can review join requests' });
+    }
+
+    const rows = await db
+      .select({
+        id: projectJoinRequests.id,
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        status: projectJoinRequests.status,
+        createdAt: projectJoinRequests.createdAt,
+      })
+      .from(projectJoinRequests)
+      .innerJoin(users, eq(users.id, projectJoinRequests.userId))
+      .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.status, 'pending')));
+
+    res.json({
+      requests: rows.map(r => ({
+        id: r.id,
+        userId: r.userId,
+        name: r.name || r.email.split('@')[0],
+        email: r.email,
+        createdAt: r.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('List join requests error:', error);
+    res.status(500).json({ error: 'Failed to load join requests' });
+  }
+});
+
+// Approve a join request (owner only) — the user becomes a member.
+router.post('/:projectId/join-requests/:requestId/approve', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const requestId = parseInt(req.params.requestId, 10);
+
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can approve join requests' });
+    }
+
+    const rows = await db
+      .select()
+      .from(projectJoinRequests)
+      .where(and(eq(projectJoinRequests.id, requestId), eq(projectJoinRequests.projectId, projectId)));
+    if (rows.length === 0 || rows[0].status !== 'pending') {
+      return res.status(404).json({ error: 'Join request not found' });
+    }
+
+    const requesterId = rows[0].userId;
+    const alreadyMember = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, requesterId)));
+    if (alreadyMember.length === 0) {
+      const userRow = await db
+        .select({ subscriptionTier: users.subscriptionTier })
+        .from(users)
+        .where(eq(users.id, requesterId));
+      const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+      const currentCount = await getProjectMembershipCount(requesterId);
+      if (currentCount >= PLAN_LIMITS[planTier]) {
+        return res.status(402).json({
+          error: 'RECIPIENT_LIMIT_REACHED',
+          message: 'This user cannot join any more projects on their current plan.',
+        });
+      }
+      await db.insert(projectMembers).values({
+        projectId,
+        userId: requesterId,
+        role: 'edit',
+      });
+    }
+
+    await db.update(projectJoinRequests)
+      .set({ status: 'approved', updatedAt: new Date().toISOString() })
+      .where(eq(projectJoinRequests.id, requestId));
+
+    res.json({ project: await serializeProject(projectId), message: 'Join request approved' });
+  } catch (error) {
+    console.error('Approve join request error:', error);
+    res.status(500).json({ error: 'Failed to approve join request' });
+  }
+});
+
+// Deny a join request (owner only) — the user does not become a member.
+router.post('/:projectId/join-requests/:requestId/deny', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const requestId = parseInt(req.params.requestId, 10);
+
+    const project = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (project.length === 0) return res.status(404).json({ error: 'Project not found' });
+    if (project[0].ownerId !== req.userId!) {
+      return res.status(403).json({ error: 'Only the owner can deny join requests' });
+    }
+
+    const rows = await db
+      .select()
+      .from(projectJoinRequests)
+      .where(and(eq(projectJoinRequests.id, requestId), eq(projectJoinRequests.projectId, projectId)));
+    if (rows.length === 0 || rows[0].status !== 'pending') {
+      return res.status(404).json({ error: 'Join request not found' });
+    }
+
+    await db.update(projectJoinRequests)
+      .set({ status: 'denied', updatedAt: new Date().toISOString() })
+      .where(eq(projectJoinRequests.id, requestId));
+
+    res.json({ ok: true, message: 'Join request denied' });
+  } catch (error) {
+    console.error('Deny join request error:', error);
+    res.status(500).json({ error: 'Failed to deny join request' });
   }
 });
 

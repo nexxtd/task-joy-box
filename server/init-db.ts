@@ -349,6 +349,25 @@ export async function initDatabase() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS project_members_project_id_idx ON project_members(project_id);
     `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_join_requests (
+        id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(project_id, user_id)
+      );
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS project_join_requests_project_id_idx ON project_join_requests(project_id);
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS project_join_requests_user_id_idx ON project_join_requests(user_id);
+    `);
     console.log('Project tables verified');
 
     // --- UNIFIED TAGS TABLE (shared across notes, goals, habits, tasks) ---

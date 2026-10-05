@@ -569,7 +569,7 @@ export const PriorityBadge: React.FC<{
       {isOpen && menuPos && typeof document !== 'undefined' && createPortal(
         <div
           data-priority-menu
-          className="fixed z-[100] w-28 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5"
+          className="fixed z-[100] w-36 bg-card border border-border rounded-xl shadow-xl p-1.5 space-y-0.5"
           style={{ top: menuPos.top, left: menuPos.left }}
           onClick={e => e.stopPropagation()}
         >
@@ -2948,7 +2948,7 @@ const Tasks: React.FC = () => {
                   {newTaskLabels.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {newTaskLabels.map(label => (
-                        <span key={label.id} className={`inline-flex items-center gap-1 px-3.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
+                        <span key={label.id} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${LABEL_COLORS[label.color]} text-primary-foreground`}>
                           {label.name}
                           <button onClick={() => setNewTaskLabels(prev => prev.filter(l => l.id !== label.id))} className="hover:opacity-70">
                             <X className="w-3 h-3" />

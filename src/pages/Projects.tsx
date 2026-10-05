@@ -137,6 +137,55 @@ const Projects: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<ProjectMember | null>(null);
 
+  interface JoinRequest {
+    id: number;
+    userId: number;
+    name: string;
+    email: string;
+    createdAt: string;
+  }
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [joinRequestsLoading, setJoinRequestsLoading] = useState(false);
+  const [joinDecisionId, setJoinDecisionId] = useState<number | null>(null);
+
+  const loadJoinRequests = async (projectId: number) => {
+    setJoinRequestsLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/join-requests`, { credentials: 'include' });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && Array.isArray(data.requests)) setJoinRequests(data.requests);
+      else setJoinRequests([]);
+    } catch {
+      setJoinRequests([]);
+    } finally {
+      setJoinRequestsLoading(false);
+    }
+  };
+
+  const handleJoinDecision = async (requestId: number, decision: 'approve' | 'deny') => {
+    if (!selectedProject || joinDecisionId !== null) return;
+    setJoinDecisionId(requestId);
+    try {
+      const response = await fetch(`/api/projects/${selectedProject.id}/join-requests/${requestId}/${decision}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || `Could not ${decision} request`);
+      if (decision === 'approve' && data.project) {
+        setProjects(prev => prev.map(project => (project.id === data.project.id ? data.project : project)));
+        toast({ title: 'Request approved', description: 'The new member has joined the project.' });
+      } else {
+        toast({ title: 'Request denied', description: 'The join request was declined.' });
+      }
+      setJoinRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (error: any) {
+      toast({ title: 'Action failed', description: error?.message || 'Could not update the join request.' });
+    } finally {
+      setJoinDecisionId(null);
+    }
+  };
+
   const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
   const [projectToLeave, setProjectToLeave] = useState<number | null>(null);
 
@@ -623,6 +672,16 @@ const Projects: React.FC = () => {
   const canManage = currentUserRole === 'owner';
   const canCreateTasks = canEdit;
 
+  // Owners review pending join requests for the selected project.
+  useEffect(() => {
+    if (!selectedProject?.id || !canManage) {
+      setJoinRequests([]);
+      return;
+    }
+    loadJoinRequests(selectedProject.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id, canManage]);
+
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
   const projectTasks = useMemo(
     () => board.tasks.filter(task => task.projectId === selectedProject?.id),
@@ -786,6 +845,12 @@ const Projects: React.FC = () => {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Join failed');
+        if (data.pending) {
+          toast({ title: 'Join request sent', description: data.message || 'The project owner will review your request before you join.' });
+          searchParams.delete('join');
+          setSearchParams(searchParams, { replace: true });
+          return;
+        }
         const nextProject: ProjectMeta | undefined = data.project;
         if (nextProject) {
           setProjects(prev => {
@@ -891,6 +956,9 @@ const Projects: React.FC = () => {
       if (!response.ok) throw new Error(data.message || data.error || 'Invite failed');
       if (data.project) {
         setProjects(prev => prev.map(project => (project.id === data.project.id ? data.project : project)));
+      }
+      if (data.pending && selectedProject) {
+        loadJoinRequests(selectedProject.id);
       }
       toast({ title: 'Invite sent', description: data.message || 'The member has been added.' });
       setInviteEmail('');
@@ -1464,6 +1532,61 @@ const Projects: React.FC = () => {
                   </div>
                 )}
               </div>
+              {canManage && (
+                <div className="pt-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Join Requests</label>
+                    {joinRequests.length > 0 && (
+                      <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                        {joinRequests.length}
+                      </span>
+                    )}
+                  </div>
+                  {joinRequestsLoading ? (
+                    <div className="rounded-2xl border border-border bg-muted/20 p-4 flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : joinRequests.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+                      No pending requests
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {joinRequests.map(request => (
+                        <div key={request.id} className="rounded-2xl border border-border bg-card px-3 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary flex-shrink-0">
+                              {request.name.slice(0, 1).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-foreground truncate">{request.name}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">{request.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => handleJoinDecision(request.id, 'approve')}
+                              disabled={joinDecisionId !== null}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-2 py-2 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all"
+                            >
+                              {joinDecisionId === request.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleJoinDecision(request.id, 'deny')}
+                              disabled={joinDecisionId !== null}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-destructive/30 px-2 py-2 text-[11px] font-bold text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-all"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                              Deny
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -2343,7 +2466,7 @@ const Projects: React.FC = () => {
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">Share project</h3>
-                <p className="text-sm text-muted-foreground">Invite by email or copy a join link.</p>
+                <p className="text-sm text-muted-foreground">Invite by email or copy a join link. New members join after your approval.</p>
               </div>
               <button onClick={() => setShowInviteModal(false)} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
                 <X className="h-4 w-4" />

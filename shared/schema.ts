@@ -319,6 +319,15 @@ export const projectMembers = pgTable('project_members', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const projectJoinRequests = pgTable('project_join_requests', {
+  id: serial('id').primaryKey(),
+  projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const goals = pgTable('goals', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),
