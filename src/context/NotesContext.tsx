@@ -79,20 +79,23 @@ async function loadBoard(userId: number): Promise<Board> {
     } catch {}
   }
 
-  void (async () => {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 30000);
-      const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
-      clearTimeout(tid);
-      if (res.status === 403 || res.status === 400) return;
-      if (res.ok) {
-        const data = await res.json();
-        const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
-        if (board) localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+  // No usable cache — fetch the server snapshot and use it when it's real,
+  // so a fresh device loads the actual notes instead of empty defaults.
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 10000);
+    const res = await fetch('/api/note-boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+    clearTimeout(tid);
+    if (res.status === 403 || res.status === 400) return { ...emptyBoard };
+    if (res.ok) {
+      const data = await res.json();
+      const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+      if (board?.columns) {
+        try { localStorage.setItem(getBoardKey(userId), JSON.stringify(board)); } catch {}
+        return board as Board;
       }
-    } catch {}
-  })();
+    }
+  } catch {}
   return { ...emptyBoard };
 }
 
@@ -147,7 +150,15 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const boardRef = useRef<Board>({ ...emptyBoard });
   const dirtyRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { boardRef.current = board; try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(board)); } catch {} }, [board, user?.id]);
+  // Guards the cache mirror below: until the initial load has READ the cache,
+  // writing would clobber real cached notes with the empty initial state and
+  // every reload would show "No notes found" with no Completed sections.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    boardRef.current = board;
+    if (!hydratedRef.current) return;
+    try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(board)); } catch {}
+  }, [board, user?.id]);
   const flushBoardSave = useCallback(() => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
     if (!dirtyRef.current || !user) return;
@@ -160,6 +171,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
 
   useEffect(() => {
+    hydratedRef.current = false;
     if (user) {
       try {
         const cached = localStorage.getItem(getBoardKey(user.id));
@@ -169,22 +181,33 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           else setLoading(false);
         } else {
           const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          setBoard(def); boardRef.current = def; setLoading(false); saveBoard(user.id, def);
+          // No local cache — render defaults locally but NEVER push them to
+          // the server yet; loadBoard below adopts the real server board when
+          // one exists, so a fresh device can't wipe server notes.
+          setBoard(def); boardRef.current = def; setLoading(false);
         }
       } catch { setLoading(false); }
       loadBoard(user.id).then(loaded => {
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          saveBoard(user.id, loaded);
+        }
+        // Don't overwrite local pending changes with a stale server snapshot.
+        if (dirtyRef.current) {
+          flushBoardSave();
+          setLoading(false);
+          hydratedRef.current = true;
+          return;
         }
         const cur = JSON.stringify(boardRef.current);
         const nxt = JSON.stringify(loaded);
         if (cur !== nxt) { setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date()); }
         setLoading(false);
-      }).catch(() => setLoading(false));
+        hydratedRef.current = true;
+      }).catch(() => { setLoading(false); hydratedRef.current = true; });
     } else {
       setBoard({ ...emptyBoard });
       setLoading(false);
+      hydratedRef.current = true;
     }
   }, [user?.id]);
 
