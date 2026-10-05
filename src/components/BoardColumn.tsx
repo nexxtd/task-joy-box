@@ -336,7 +336,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-x-auto scrollbar-none">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -533,6 +533,18 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
   // Notes share the same row dimensions as tasks: same width/height/spacing/style,
   // top line title, bottom line Tags + attachment count, same drag handle left and
   // chevron right. No dates, checkbox, Deep Focus icon, or body preview.
+  // Notes are completable just like tasks — the toggle lives in the notes
+  // context, and completed notes land in the column's Completed section.
+  const toggleNoteCompletion = (note: Task) => {
+    if (!canEdit) return;
+    const done = Boolean(note.completed || (note as any).status === 'completed');
+    if (done) {
+      notesCtx.updateTask(note.id, { completed: false, completedAt: undefined, status: 'to_do' as any });
+    } else {
+      notesCtx.updateTask(note.id, { completed: true, completedAt: new Date().toISOString(), status: 'completed' as any });
+    }
+  };
+
   const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
     const noteTags = note.labels.length > 2 ? note.labels.slice(0, 2) : note.labels.slice(0, 2);
@@ -551,11 +563,19 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           <div {...dragHandleProps} className="kanban-grip cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
             <GripVertical className="w-4 h-4" />
           </div>
+          <div onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}>
+            <CircleToggle
+              completed={Boolean(note.completed)}
+              onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}
+              size="md"
+              title="Mark complete"
+            />
+          </div>
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5 min-w-0">
+            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-x-auto scrollbar-none">
               {noteTags.map(label => (
                 <span
                   key={label.id}
@@ -635,11 +655,13 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'
   ];
 
-  // Separate completed and uncompleted tasks. Notes share the same columns and
-  // ordering but never move into Completed (they have no completed state).
+  // Separate completed and uncompleted tasks. Notes are completable too and
+  // land in the same Completed section (as plain rows, not draggables, so
+  // drag indices for tasks stay untouched).
   const uncompletedTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
   const uncompletedNotes = (notes || []).filter(n => !(n as any).completed);
+  const completedNotes = (notes || []).filter(n => Boolean((n as any).completed));
   // Shared ordering: tasks and notes interleaved by `order` so a note dragged
   // above a task (or vice versa) stays put.
   const combinedItems: Array<{ kind: 'task' | 'note'; item: Task }> = [
@@ -754,7 +776,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[340px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[480px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}
@@ -820,7 +842,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               active-task Droppable so plain rows can't corrupt drag measurements.
               It mounts (with the hint) in onBeforeCapture — i.e. before the lift
               is measured — so drops always register. */}
-          {(completedTasks.length > 0 || isTaskDragging) && !tasksCollapsed && (
+          {(completedTasks.length > 0 || completedNotes.length > 0 || isTaskDragging) && !tasksCollapsed && (
             <Droppable
               droppableId={'completed-' + column.id}
               type="task"
@@ -833,7 +855,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   className="pt-2 px-2"
                   data-no-pan="true"
                 >
-                  {completedTasks.length > 0 && (
+                  {(completedTasks.length > 0 || completedNotes.length > 0) && (
                     <div className={`border rounded-xl overflow-hidden transition-colors duration-150 ${completedSnapshot.isDraggingOver ? 'border-label-green/50 ring-2 ring-label-green/30 bg-label-green/10' : 'border-label-green/20 bg-label-green/5'}`}>
                       <button
                         onClick={() => setCompletedCollapsed(prev => !prev)}
@@ -841,7 +863,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                       >
                         <span className="text-sm font-semibold text-label-green flex items-center gap-2">
                           <CheckCircle2 className="w-4 h-4" />
-                          Completed ({completedTasks.length})
+                          Completed ({completedTasks.length + completedNotes.length})
                         </span>
                         {completedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                       </button>
@@ -865,12 +887,21 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                               )}
                             </Draggable>
                           ))}
+                          {completedNotes.map(note => (
+                            <CompletedTaskRow
+                              key={note.id}
+                              task={note}
+                              onToggleComplete={canEdit ? () => toggleNoteCompletion(note) : undefined}
+                              onOpenTask={onNoteClick ?? onTaskClick}
+                              onDeleteTask={canEdit ? () => notesCtx.deleteTask(note.id) : undefined}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>
                   )}
                   {isTaskDragging && (
-                    <div className={`${completedTasks.length > 0 ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
+                    <div className={`${(completedTasks.length > 0 || completedNotes.length > 0) ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
                       Drop here to complete
                     </div>
                   )}

@@ -1098,9 +1098,28 @@ const Projects: React.FC = () => {
     const dstIsCompleted = dstId.startsWith('completed-');
     const dstColNormalized = dstIsCompleted ? dstId.slice('completed-'.length) : dstId;
     const srcColNormalized = srcIsCompleted ? srcId.slice('completed-'.length) : srcId;
-    // Notes never move into the Completed section (no completed state).
+    // Dropping into a Completed section completes the item AND moves it into
+    // the target column. Notes are completable too, via the notes context.
     if (dstIsCompleted) {
-      if (isNoteDrag) return;
+      if (isNoteDrag) {
+        const note = notesCtx.board.tasks.find(t => t.id === draggedId);
+        if (!note) return;
+        const colId = dstColNormalized;
+        const noteUpdates: Partial<Task> = {};
+        if ((note as any).columnId !== colId) (noteUpdates as any).columnId = colId;
+        if (note.projectId !== selectedProject?.id) {
+          noteUpdates.projectId = selectedProject?.id;
+          (noteUpdates as any).projectName = selectedProject?.name;
+        }
+        if (!(note as any).completed) {
+          noteUpdates.completed = true;
+          noteUpdates.completedAt = (note as any).completedAt ?? new Date().toISOString();
+          (noteUpdates as any).status = 'completed';
+        }
+        if (Object.keys(noteUpdates).length > 0) notesCtx.updateTask(draggedId, noteUpdates);
+        expandBoardColumn(colId, true);
+        return;
+      }
       const colId = dstColNormalized;
       const existing = board.tasks.find(t => t.id === draggedId);
       if (!existing) { expandBoardColumn(colId, true); return; }

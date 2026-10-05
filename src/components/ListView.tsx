@@ -402,7 +402,20 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     // (not the source's). Works for active->completed and completed->completed:
     // the item is inserted at the drop index within the target Completed list.
     if (dstIsCompleted) {
-      if (isNote) return;
+      if (isNote) {
+        const note = notesCtx.board.tasks.find(t => t.id === draggedId) ?? notes.find(n => n.id === draggedId);
+        if (!note) return;
+        const noteUpdates: Partial<Task> = {};
+        if ((note as any).columnId !== dstColId) (noteUpdates as any).columnId = dstColId;
+        if (!(note as any).completed) {
+          noteUpdates.completed = true;
+          noteUpdates.completedAt = (note as any).completedAt ?? new Date().toISOString();
+          (noteUpdates as any).status = 'completed';
+        }
+        if (Object.keys(noteUpdates).length > 0) notesCtx.updateTask(draggedId, noteUpdates);
+        setCollapsedCompletedCols(prev => prev.filter(id => id !== dstColId));
+        return;
+      }
       const existing = board.tasks.find(t => t.id === draggedId);
       if (!existing) return;
       const updates: Partial<Task> = {};
@@ -746,6 +759,14 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     );
   };
 
+  const toggleNoteCompletion = (note: Task) => {
+    if (isTaskCompleted(note)) {
+      notesCtx.updateTask(note.id, { completed: false, completedAt: undefined, status: 'to_do' });
+    } else {
+      notesCtx.updateTask(note.id, { completed: true, completedAt: new Date().toISOString(), status: 'completed' });
+    }
+  };
+
   const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
     const noteTags = note.labels.slice(0, 2);
@@ -764,6 +785,14 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
               <GripVertical className="w-4 h-4" />
             </div>
           )}
+          <div onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}>
+            <CircleToggle
+              completed={isTaskCompleted(note)}
+              onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}
+              size="md"
+              title="Mark complete"
+            />
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium text-left text-foreground truncate">
@@ -857,7 +886,12 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             const colNotes = (projectId === undefined
               ? notesCtx.board.tasks
               : notesCtx.board.tasks.filter(t => t.projectId === projectId)
-            ).filter(t => (t as any).columnId === column.id)
+            ).filter(t => (t as any).columnId === column.id && !isTaskCompleted(t as Task))
+              .sort((a, b) => (a.order || 0) - (b.order || 0));
+            const colNotesCompleted = (projectId === undefined
+              ? notesCtx.board.tasks
+              : notesCtx.board.tasks.filter(t => t.projectId === projectId)
+            ).filter(t => (t as any).columnId === column.id && isTaskCompleted(t as Task))
               .sort((a, b) => (a.order || 0) - (b.order || 0));
             const combinedActive: Array<{ kind: 'task' | 'note'; item: Task }> = [
               ...columnActive.map(t => ({ kind: 'task' as const, item: t })),
@@ -937,7 +971,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                     )}
                   </Droppable>
                 )}
-                {!isColumnCollapsed && (columnCompleted.length > 0 || isDragging) && (
+                {!isColumnCollapsed && (columnCompleted.length > 0 || colNotesCompleted.length > 0 || isDragging) && (
                   <div className="pl-3 mt-1.5">
                     <Droppable droppableId={'completed-' + column.id}>
                       {(completedProvided, completedSnapshot) => (
@@ -945,7 +979,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                           ref={completedProvided.innerRef}
                           {...completedProvided.droppableProps}
                         >
-                          {columnCompleted.length > 0 && (
+                          {(columnCompleted.length > 0 || colNotesCompleted.length > 0) && (
                             <div className={`border rounded-xl overflow-hidden transition-colors duration-150 ${completedSnapshot.isDraggingOver ? 'border-label-green/50 ring-2 ring-label-green/30 bg-label-green/10' : 'border-label-green/20 bg-label-green/5'}`}>
                               <button
                                 onClick={() => setCollapsedCompletedCols(prev => prev.includes(column.id) ? prev.filter(id => id !== column.id) : [...prev, column.id])}
@@ -953,7 +987,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                               >
                                 <span className="text-sm font-semibold text-label-green flex items-center gap-2">
                                   <CheckCircle2 className="w-4 h-4" />
-                                  Completed ({columnCompleted.length})
+                                  Completed ({columnCompleted.length + colNotesCompleted.length})
                                 </span>
                                 {isCompletedCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                               </button>
@@ -977,12 +1011,21 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                                       )}
                                     </Draggable>
                                   ))}
+                                  {colNotesCompleted.map(note => (
+                                    <CompletedTaskRow
+                                      key={note.id}
+                                      task={note}
+                                      onToggleComplete={() => toggleNoteCompletion(note)}
+                                      onOpenTask={onNoteClick ?? onTaskClick}
+                                      onDeleteTask={() => notesCtx.deleteTask(note.id)}
+                                    />
+                                  ))}
                                 </div>
                               )}
                             </div>
                           )}
                           {isDragging && (
-                            <div className={`${columnCompleted.length > 0 ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
+                            <div className={`${(columnCompleted.length > 0 || colNotesCompleted.length > 0) ? 'mt-2' : ''} rounded-lg border-2 border-dashed border-label-green/30 bg-label-green/5 px-3 py-1.5 text-center text-[11px] font-semibold text-label-green/70`}>
                               Drop here to complete
                             </div>
                           )}
