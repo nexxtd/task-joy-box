@@ -87,11 +87,11 @@ const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '
 const PROJECT_COLOR_OPTIONS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'];
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
 const ROLE_OPTIONS = [
-  { value: 'view', label: 'View only', description: 'Read-only access — can view tasks, milestones and project details, but can\'t create or edit anything.' },
-  { value: 'edit', label: 'Edit', description: 'Can create, edit and complete tasks and milestones, but can\'t manage members or delete the project.' },
-  { value: 'full edit', label: 'Full Edit', description: 'Everything in Edit, plus full board control — assign, label and organise tasks across columns.' },
-  { value: 'admin', label: 'Admin', description: 'Everything in Full Edit — the highest collaborator role below the project owner.' },
-  { value: 'owner', label: 'Owner', description: 'Full control — manages members, invites, project settings, archiving and deletion.' },
+  { value: 'view', label: 'View only', description: 'Read-only access — can view tasks, milestones and project details, but can\'t create or edit anything.', color: '#6b7280' },
+  { value: 'edit', label: 'Edit', description: 'Can create, edit and complete tasks and milestones, but can\'t manage members or delete the project.', color: '#3b82f6' },
+  { value: 'full edit', label: 'Full Edit', description: 'Everything in Edit, plus full board control — assign, label and organise tasks across columns.', color: '#8b5cf6' },
+  { value: 'admin', label: 'Admin', description: 'Everything in Full Edit — the highest collaborator role below the project owner.', color: '#f59e0b' },
+  { value: 'owner', label: 'Owner', description: 'Full control — manages members, invites, project settings, archiving and deletion.', color: '#10b981' },
 ];
 
 const Projects: React.FC = () => {
@@ -2218,8 +2218,8 @@ const Projects: React.FC = () => {
                 <p className="text-xs text-muted-foreground">{selectedMember.email}</p>
               </div>
 
-              <div className="w-full text-left space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase ml-1">Permission Level</label>
+              <div className="w-full text-left space-y-1.5">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Permission Level</label>
                 <Select
                   value={selectedMember.role}
                   onValueChange={async (newRole) => {
@@ -2242,18 +2242,42 @@ const Projects: React.FC = () => {
                   }}
                   disabled={selectedMember.id === selectedProject.ownerId}
                 >
-                  <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl p-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer h-10">
-                    <SelectValue>{ROLE_OPTIONS.find(r => r.value === selectedMember.role)?.label ?? selectedMember.role.charAt(0).toUpperCase() + selectedMember.role.slice(1)}</SelectValue>
+                  <SelectTrigger className="w-full h-12 bg-muted/40 border border-border rounded-xl px-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
+                    {(() => {
+                      const current = ROLE_OPTIONS.find(r => r.value === selectedMember.role);
+                      return (
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: current?.color ?? '#6b7280' }} />
+                          <span className="font-semibold truncate">
+                            {current?.label ?? selectedMember.role.charAt(0).toUpperCase() + selectedMember.role.slice(1)}
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map(option => (
-                      <SelectItem key={option.value} value={option.value} className="py-2 pr-3">
-                        <span className="block text-xs font-semibold text-foreground">{option.label}</span>
-                        <span className="block text-[10px] leading-snug text-muted-foreground mt-0.5">{option.description}</span>
+                  <SelectContent className="rounded-xl p-1.5">
+                    {ROLE_OPTIONS.filter(option => option.value !== 'owner').map(option => (
+                      <SelectItem key={option.value} value={option.value} className="rounded-lg py-2.5 pl-9 pr-3 focus:bg-muted">
+                        <span className="flex items-start gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: option.color }} />
+                          <span className="min-w-0">
+                            <span className="block text-[13px] font-semibold text-foreground leading-tight">{option.label}</span>
+                            <span className="block text-[11px] leading-snug text-muted-foreground mt-1 whitespace-normal">{option.description}</span>
+                          </span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {(() => {
+                  const current = ROLE_OPTIONS.find(r => r.value === selectedMember.role);
+                  return current ? (
+                    <p className="text-[11px] leading-snug text-muted-foreground px-1 pt-0.5">{current.description}</p>
+                  ) : null;
+                })()}
+                {selectedMember.id === selectedProject.ownerId && (
+                  <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400 px-1">The project owner's role can't be changed.</p>
+                )}
               </div>
             </div>
 

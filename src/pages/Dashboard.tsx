@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +21,7 @@ import TagsModal from '@/components/shared/TagsModal';
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
+import { createPortal } from 'react-dom';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -263,25 +264,49 @@ const Dashboard: React.FC = () => {
   const { open: openDeepFocus } = useDeepFocus();
   const [showAddTask, setShowAddTask] = useState(false);
   const [viewProjectsMenuOpen, setViewProjectsMenuOpen] = useState(false);
-  const viewProjectsMenuRef = useRef<HTMLDivElement | null>(null);
-  // Close the shortcut menu on outside click / Escape. (The menu lives inside
-  // the sticky header, so a `fixed` click-away layer in here would be trapped
-  // by the header's backdrop-blur containing block — handle it via window.)
+  const shortcutBtnRef = useRef<HTMLDivElement | null>(null);
+  const [shortcutMenuPos, setShortcutMenuPos] = useState<{ top: number; right: number; minWidth: number } | null>(null);
+  // The shortcut menu renders in a portal on document.body, positioned from
+  // the split-button rect. The sticky header's backdrop-blur creates a
+  // containing block that traps non-portalled layers, and a separate
+  // click-away overlay can swallow item clicks — the portal sidesteps both.
+  useLayoutEffect(() => {
+    if (!viewProjectsMenuOpen) { setShortcutMenuPos(null); return; }
+    const update = () => {
+      const el = shortcutBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setShortcutMenuPos({
+        top: rect.bottom + 6,
+        right: Math.max(8, window.innerWidth - rect.right),
+        minWidth: rect.width,
+      });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [viewProjectsMenuOpen]);
   useEffect(() => {
     if (!viewProjectsMenuOpen) return;
-    const onDown = (e: PointerEvent) => {
-      if (viewProjectsMenuRef.current && !viewProjectsMenuRef.current.contains(e.target as Node)) {
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('[data-shortcut-menu]')) return;
+      if (shortcutBtnRef.current && !shortcutBtnRef.current.contains(t as Node)) {
         setViewProjectsMenuOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setViewProjectsMenuOpen(false);
     };
-    window.addEventListener('pointerdown', onDown);
-    window.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
     return () => {
-      window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
     };
   }, [viewProjectsMenuOpen]);
   // "View X" shortcut target — defaults to Projects, persisted per user.
@@ -1732,9 +1757,10 @@ style={{ background: 'hsl(var(--primary))' }}>
               >
                 <LayoutDashboard className="w-5 h-5" />
               </button>
-              <div className="relative" ref={viewProjectsMenuRef}>
+              <div className="relative" ref={shortcutBtnRef}>
                 <div className="flex items-stretch rounded-xl overflow-hidden border border-border bg-muted/50">
                   <button
+                    type="button"
                     onClick={() => { trackUsage('dashboard', 'view-shortcut-go'); navigate(dashboardShortcut); }}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                     title={`Go to ${dashboardShortcutLabel}`}
@@ -1742,28 +1768,37 @@ style={{ background: 'hsl(var(--primary))' }}>
                     <FolderOpen className="w-4 h-4" /> View {dashboardShortcutLabel}
                   </button>
                   <button
+                    type="button"
                     onClick={() => setViewProjectsMenuOpen(prev => !prev)}
                     aria-label="Choose shortcut target"
+                    aria-expanded={viewProjectsMenuOpen}
                     title="Choose shortcut target"
                     className="px-2 border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
                   >
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className={`w-4 h-4 transition-transform ${viewProjectsMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
-                {viewProjectsMenuOpen && (
-                    <div className="absolute right-0 mt-1 w-auto bg-card border border-border rounded-xl shadow-xl z-50 p-1.5">
-                      {DASHBOARD_SHORTCUT_PAGES.map(item => (
-                        <button
-                          key={item.path}
-                          onClick={() => { setShortcutTarget(item.path); setViewProjectsMenuOpen(false); navigate(item.path); }}
-                          className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground'}`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                )}
               </div>
+              {viewProjectsMenuOpen && shortcutMenuPos && typeof document !== 'undefined' && createPortal(
+                <div
+                  data-shortcut-menu
+                  className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl p-1.5"
+                  style={{ top: shortcutMenuPos.top, right: shortcutMenuPos.right, minWidth: shortcutMenuPos.minWidth }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {DASHBOARD_SHORTCUT_PAGES.map(item => (
+                    <button
+                      key={item.path}
+                      type="button"
+                      onClick={() => { setShortcutTarget(item.path); navigate(item.path); setViewProjectsMenuOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all whitespace-nowrap ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>,
+                document.body
+              )}
               <button
                 onClick={() => { trackUsage('dashboard', 'add-task'); navigate('/tasks?create=1'); }}
                 className="flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
@@ -1921,15 +1956,6 @@ style={{ background: 'hsl(var(--primary))' }}>
           )}
         </div>
       </div>
-
-      {/* Click-away layer for the "View …" shortcut menu. Rendered here (outside
-          the sticky header) so `fixed` isn't trapped by the header's
-          backdrop-blur containing block. Sits below the header (z-30) but above
-          the widget cards, so the menu stays clickable and any outside click
-          closes it instead of starting a widget drag. */}
-      {viewProjectsMenuOpen && (
-        <div className="fixed inset-0 z-20" onClick={() => setViewProjectsMenuOpen(false)} />
-      )}
 
       {showCustomize && (
         <div className="fixed inset-0 z-50 flex justify-end">
