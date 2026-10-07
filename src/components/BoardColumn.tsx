@@ -333,10 +333,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{task.title}</span>
+            <div className="flex items-start gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground break-words whitespace-normal leading-snug min-w-0 flex-1">{task.title}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1.5 flex-wrap mt-1 min-w-0">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -572,10 +572,10 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
             />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-sm font-medium text-left text-foreground truncate min-w-0">{note.title || 'Untitled note'}</span>
+            <div className="flex items-start gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground break-words whitespace-normal leading-snug min-w-0 flex-1">{note.title || 'Untitled note'}</span>
             </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 min-w-0 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1.5 flex-wrap mt-1 min-w-0">
               {noteTags.map(label => (
                 <span
                   key={label.id}

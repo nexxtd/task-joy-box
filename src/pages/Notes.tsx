@@ -905,7 +905,7 @@ const Tasks: React.FC = () => {
     const completedSorted = [...completed].sort((a, b) => {
       const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-      return bTime - aTime;
+      return aTime - bTime;
     });
 
     return { active: activeSorted, completed: completedSorted };
@@ -2263,8 +2263,119 @@ const Tasks: React.FC = () => {
         </div>
       </header>
 
-      {/* Filter removed - note page shows all notes without filters */}
-            <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-card/10">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search notes..."
+              aria-label="Search notes"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-muted/50 border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2 min-w-0">
+            {tagFilterIds.length > 0 && (
+              <button
+                onClick={() => setTagFilterIds([])}
+                className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              >
+                Clear tags
+              </button>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setTagPickerOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Tag className="w-3.5 h-3.5" />
+              Tags
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            <TagsModal
+              open={tagPickerOpen}
+              onClose={() => setTagPickerOpen(false)}
+              tags={allTags}
+              selectedIds={tagFilterIds}
+              onToggle={tagId => toggleTagFilter(tagId)}
+              onCreate={async (name, color) => {
+                try {
+                  await createSharedTaskLabel(name, color);
+                } catch (error) {
+                  console.error('Failed to create task tag:', error);
+                }
+              }}
+              onDelete={tagId => deleteTagEverywhere(tagId)}
+              onRename={renameTagEverywhere}
+              onColorChange={changeTagColorEverywhere}
+              emptyText="No tags yet. Create one below."
+            />
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setProjectDropdownOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs rounded-xl border transition-all ${
+                projectFilterId !== 'all'
+                  ? 'bg-primary/10 border-primary/20 text-primary font-bold shadow-sm'
+                  : 'bg-muted/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>
+                {projectFilterId === 'all'
+                  ? 'Project Filter'
+                  : `Project: ${projects.find(project => project.id === projectFilterId)?.name || 'Selected'}`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 ml-1" />
+            </button>
+            {projectDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setProjectDropdownOpen(false)} />
+              <div className="absolute left-0 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-lg z-30 p-2">
+                <button
+                  onClick={() => { setProjectFilterId('all'); setProjectDropdownOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted"
+                >
+                  All projects
+                </button>
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {projects.map(project => (
+                    <button
+                      key={project.id}
+                      onClick={() => { setProjectFilterId(project.id); setProjectDropdownOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-muted flex items-center gap-2 ${
+                        projectFilterId === project.id ? 'bg-primary/10 text-primary' : ''
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                      <span className="flex-1 truncate">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              </>
+            )}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => { setAnalysisPanelOpen(true); runTaskAnalysis(activeAnalysisTab); }}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Note Analysis
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="max-w-5xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (

@@ -42,6 +42,7 @@ import BoardColumn from '@/components/BoardColumn';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import ListView from '@/components/ListView';
 const TaskFullView = lazy(() => import('@/pages/Tasks').then(m => ({ default: m.TaskFullView })));
+const NoteFullView = lazy(() => import('@/pages/Notes').then(m => ({ default: m.TaskFullView })));
 import CreateTaskModal from '@/components/CreateTaskModal';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
@@ -107,6 +108,7 @@ const Projects: React.FC = () => {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Task | null>(null);
   const [currentTab, setCurrentTab] = useState<ProjectTab>('home');
   const [showProjectMenuId, setShowProjectMenuId] = useState<number | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
@@ -583,13 +585,24 @@ const Projects: React.FC = () => {
       const key = normalizeTagName(label.name).toLowerCase();
       if (!byName.has(key)) byName.set(key, label);
     }));
+    notesCtx.board.tasks.forEach(note => note.labels.forEach(label => {
+      const key = normalizeTagName(label.name).toLowerCase();
+      if (!byName.has(key)) byName.set(key, label);
+    }));
     sharedTags.forEach(tag => {
       const label = sharedTagToLabel(tag);
       const key = normalizeTagName(label.name).toLowerCase();
       byName.set(key, label);
     });
     return Array.from(byName.values());
-  }, [board.tasks, sharedTags]);
+  }, [board.tasks, notesCtx.board.tasks, sharedTags]);
+
+  const toggleNoteTag = (taskId: string, label: Label) => {
+    const note = notesCtx.board.tasks.find(item => item.id === taskId);
+    if (!note) return;
+    const has = note.labels.some(item => item.id === label.id);
+    notesCtx.updateTask(taskId, { labels: has ? note.labels.filter(item => item.id !== label.id) : [...note.labels, label] });
+  };
 
   const toggleTaskTag = (taskId: string, label: Label) => {
     const task = board.tasks.find(item => item.id === taskId);
@@ -683,6 +696,7 @@ const Projects: React.FC = () => {
   }, [selectedProject?.id, canManage]);
 
   const currentTask = selectedTask ? board.tasks.find(t => t.id === selectedTask.id) : null;
+  const currentNote = selectedNote ? notesCtx.board.tasks.find(t => t.id === selectedNote.id) ?? selectedNote : null;
   const projectTasks = useMemo(
     () => board.tasks.filter(task => task.projectId === selectedProject?.id),
     [board.tasks, selectedProject?.id]
@@ -1860,7 +1874,7 @@ const Projects: React.FC = () => {
                           notes={colNotes}
                           index={index}
                           onTaskClick={setSelectedTask}
-                          onNoteClick={(note) => navigate(`/notes?open=${note.id}`)}
+                          onNoteClick={setSelectedNote}
                           canCreateTasks={canCreateTasks}
                           canEdit={canEdit}
                           boardZoom={boardZoom}
@@ -1916,7 +1930,7 @@ const Projects: React.FC = () => {
   const renderList = () => (
     <ListView
       onTaskClick={setSelectedTask}
-      onNoteClick={(note) => navigate(`/notes?open=${note.id}`)}
+      onNoteClick={setSelectedNote}
       projectId={selectedProject?.id}
       notes={projectNotes}
       onAddTask={canCreateTasks ? () => {
@@ -2671,6 +2685,34 @@ const Projects: React.FC = () => {
             const label = await createSharedTaskLabel(name, color);
             const task = board.tasks.find(item => item.id === taskId);
             if (task) updateTask(taskId, { labels: [...task.labels, label] });
+          }}
+          onDeleteTagEverywhere={deleteTagEverywhere}
+          onRenameTagEverywhere={renameTagEverywhere}
+          onColorChangeTagEverywhere={changeTagColorEverywhere}
+          isPremium={isPremium}
+          isPro={isPro}
+        />
+        </Suspense>
+      )}
+
+      {currentNote && (
+        <Suspense fallback={null}>
+        <NoteFullView
+          task={currentNote}
+          boardColumns={board.columns}
+          projects={projects.map(p => ({ id: p.id, name: p.name, color: p.color, description: p.description }))}
+          allTags={allTags}
+          onClose={() => setSelectedNote(null)}
+          onUpdateTask={(taskId, updates) => notesCtx.updateTask(taskId, updates)}
+          onToggleChecklistItem={notesCtx.toggleChecklistItem}
+          onAddChecklistItem={notesCtx.addChecklistItem}
+          onDeleteChecklistItem={notesCtx.deleteChecklistItem}
+          onDeleteTask={taskId => { notesCtx.deleteTask(taskId); setSelectedNote(null); }}
+          onToggleTag={toggleNoteTag}
+          onCreateTag={async (taskId, name, color) => {
+            const label = await createSharedTaskLabel(name, color);
+            const note = notesCtx.board.tasks.find(item => item.id === taskId);
+            if (note) notesCtx.updateTask(taskId, { labels: [...note.labels, label] });
           }}
           onDeleteTagEverywhere={deleteTagEverywhere}
           onRenameTagEverywhere={renameTagEverywhere}
