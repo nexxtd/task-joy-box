@@ -274,6 +274,8 @@ function actionOf(s: AnyShortcut): string {
 export function matchesAnyShortcut(e: KeyboardEvent, list: AnyShortcut[]): { shortcut: AnyShortcut; action: ShortcutAction } | null {
   for (const sc of list || []) {
     if (!sc) continue;
+    // Disabled shortcuts never fire.
+    if ((sc as ShortcutDef).enabled === false) continue;
     const combo = comboOf(sc as AnyShortcut);
     const actionId = actionOf(sc as AnyShortcut);
     if (!combo || !actionId) continue;

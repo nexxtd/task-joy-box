@@ -8,7 +8,7 @@ import {
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
   Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine
 } from 'lucide-react';
-import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, removeShortcut, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
+import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -137,20 +137,41 @@ const SettingsPage: React.FC = () => {
   // Shortcuts — pre-loaded defaults to every page + Create Task / Create Note.
   const [shortcuts, setShortcuts] = useState<ShortcutDef[]>(() => loadShortcuts());
   const [rebindingId, setRebindingId] = useState<string | null>(null);
+  const [rebindError, setRebindError] = useState('');
   const [addShortcutOpen, setAddShortcutOpen] = useState(false);
   const [newShortcutTitle, setNewShortcutTitle] = useState('');
   const [newShortcutKeys, setNewShortcutKeys] = useState('');
   const [newShortcutAction, setNewShortcutAction] = useState(SHORTCUT_ACTIONS[0].id);
   const [capturingNewKeys, setCapturingNewKeys] = useState(false);
+  const [newShortcutError, setNewShortcutError] = useState('');
+
+  const persistShortcuts = (next: ShortcutDef[]) => {
+    setShortcuts(next);
+    saveShortcuts(next);
+  };
+
+  const setAllShortcutsEnabled = (enabled: boolean) => {
+    persistShortcuts(shortcuts.map(s => ({ ...s, enabled })));
+    trackUsage('settings', enabled ? 'enable-all-shortcuts' : 'disable-all-shortcuts');
+  };
+
+  const findShortcutWithKeys = (combo: string, exceptId?: string) => {
+    const want = normalizeCombo(combo).toLowerCase();
+    if (!want) return undefined;
+    return shortcuts.find(s => s.id !== exceptId && normalizeCombo(s.keys).toLowerCase() === want);
+  };
 
   useEffect(() => {
     if (!rebindingId) return;
+    beginShortcutCapture();
+    setRebindError('');
     const onKey = (e: KeyboardEvent) => {
       // Capture phase: swallow everything so existing shortcuts don't fire mid-rebind.
+      // Never navigate to / run the existing shortcut while capturing.
       e.preventDefault();
       e.stopPropagation();
       // Escape cancels the rebind.
-      if (e.key === 'Escape') { setRebindingId(null); return; }
+      if (e.key === 'Escape') { setRebindingId(null); setRebindError(''); return; }
       // Modifier-only keydown (user pressed Alt/Ctrl/Shift first) — keep
       // listening for the rest of the chord instead of cancelling.
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
@@ -158,6 +179,12 @@ const SettingsPage: React.FC = () => {
       // Incomplete combo (e.g. a plain key with no modifier) — keep waiting
       // rather than dropping out of rebind mode.
       if (!combo || combo === 'Escape') return;
+      const clash = findShortcutWithKeys(combo, rebindingId);
+      if (clash) {
+        setRebindError(`That keybind is already in use in shortcut "${clash.title}".`);
+        return;
+      }
+      setRebindError('');
       setShortcuts(prev => {
         const next = prev.map(s => s.id === rebindingId ? { ...s, keys: combo } : s);
         saveShortcuts(next);
@@ -167,11 +194,15 @@ const SettingsPage: React.FC = () => {
       setRebindingId(null);
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      endShortcutCapture();
+    };
   }, [rebindingId]);
 
   useEffect(() => {
     if (!capturingNewKeys) return;
+    beginShortcutCapture();
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -179,11 +210,20 @@ const SettingsPage: React.FC = () => {
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
       const combo = normalizeCombo(e);
       if (!combo || combo === 'Escape') return;
+      const clash = findShortcutWithKeys(combo);
+      if (clash) {
+        setNewShortcutError(`That keybind is already in use in shortcut "${clash.title}".`);
+        return;
+      }
+      setNewShortcutError('');
       setNewShortcutKeys(combo);
       setCapturingNewKeys(false);
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      endShortcutCapture();
+    };
   }, [capturingNewKeys]);
 
   const sections = [
@@ -1190,16 +1230,37 @@ const SettingsPage: React.FC = () => {
 
           {activeSection === 'shortcuts' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h2 className="text-sm font-semibold text-foreground">Keyboard Shortcuts</h2>
-                <button
-                  onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setAddShortcutOpen(true); }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Shortcut
-                </button>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const enabledCount = shortcuts.filter(s => s.enabled !== false).length;
+                    const allEnabled = enabledCount === shortcuts.length && shortcuts.length > 0;
+                    return (
+                      <button
+                        onClick={() => setAllShortcutsEnabled(!allEnabled)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg border border-border bg-card hover:border-primary/40 transition-all"
+                        title={allEnabled ? 'Disable all shortcuts' : 'Enable all shortcuts'}
+                      >
+                        <span className={`w-8 h-[18px] rounded-full relative transition-all flex-shrink-0 ${allEnabled ? 'bg-primary' : 'bg-muted'}`}>
+                          <span className={`absolute top-[2px] w-[14px] h-[14px] bg-white rounded-full shadow transition-all ${allEnabled ? 'left-[16px]' : 'left-[2px]'}`} />
+                        </span>
+                        {allEnabled ? 'Disable all' : 'Enable all'}
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setAddShortcutOpen(true); }}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Shortcut
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">Click a command badge, then press the new key combination (include Ctrl, Alt, Shift or Meta). Press Esc to cancel.</p>
+              {rebindError && (
+                <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2" role="alert">{rebindError}</p>
+              )}
               <div className="space-y-2">
                 {shortcuts.map(s => {
                   const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;
@@ -1212,9 +1273,9 @@ const SettingsPage: React.FC = () => {
                         <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* Enabled toggle */}
+                        {/* Rebind badge */}
                         <button
-                          onClick={() => setRebindingId(isRebinding ? null : s.id)}
+                          onClick={() => { setRebindError(''); setRebindingId(isRebinding ? null : s.id); }}
                           className={`px-2.5 py-1.5 text-xs font-mono rounded-lg border transition-all flex-shrink-0 ${isRebinding ? 'border-primary bg-primary/10 text-primary animate-pulse' : 'border-border bg-muted/50 text-foreground hover:border-primary/40'}`}
                           title="Click, then press new keys"
                         >
@@ -1222,16 +1283,17 @@ const SettingsPage: React.FC = () => {
                         </button>
                         {/* Enabled/disabled toggle */}
                         <button
-                          onClick={() => setShortcuts(prev => prev.map(x => x.id === s.id ? { ...x, enabled: !x.enabled } : x))}
-                          className={`px-2 py-1 rounded-md text-[10px] font-medium flex-shrink-0 ${s.enabled ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground'} transition-all`}
-                          title={s.enabled ? 'Disable shortcut' : 'Enable shortcut'}
+                          onClick={() => persistShortcuts(shortcuts.map(x => x.id === s.id ? { ...x, enabled: !(x.enabled !== false) } : x))}
+                          aria-pressed={s.enabled !== false}
+                          className={`px-2 py-1 rounded-md text-[10px] font-medium flex-shrink-0 ${s.enabled !== false ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground'} transition-all`}
+                          title={s.enabled !== false ? 'Disable shortcut' : 'Enable shortcut'}
                         >
-                          {s.enabled ? <CheckCircle2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                          {s.enabled !== false ? <CheckCircle2 className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
                         </button>
                         {/* Delete button — only for user-added shortcuts */}
                         {!isDefault && (
                           <button
-                            onClick={() => removeShortcut(s.id)}
+                            onClick={() => { const next = shortcuts.filter(x => x.id !== s.id); persistShortcuts(next); }}
                             className="px-2 py-1 text-xs text-destructive hover:text-destructive/90 rounded border bg-destructive/5 hover:bg-destructive/10 transition-all"
                             title="Remove shortcut"
                             aria-label="Remove shortcut"
@@ -1255,9 +1317,12 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground mb-1 block">Command (key combo)</label>
-                      <button onClick={() => setCapturingNewKeys(v => !v)} className="w-full px-3 py-2.5 text-sm font-mono rounded-xl border border-border bg-muted/40 hover:border-primary/40 transition-all text-left">
+                      <button onClick={() => { setNewShortcutError(''); setCapturingNewKeys(v => !v); }} className="w-full px-3 py-2.5 text-sm font-mono rounded-xl border border-border bg-muted/40 hover:border-primary/40 transition-all text-left">
                         {capturingNewKeys ? 'Press keys… (Esc to cancel)' : (newShortcutKeys || 'Click to set keys')}
                       </button>
+                      {newShortcutError && (
+                        <p className="mt-1.5 text-xs text-destructive" role="alert">{newShortcutError}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-muted-foreground mb-1 block">Action</label>
@@ -1277,10 +1342,16 @@ const SettingsPage: React.FC = () => {
                       <button
                         onClick={() => {
                           if (!newShortcutTitle.trim() || !newShortcutKeys.trim()) return;
+                          const clash = findShortcutWithKeys(newShortcutKeys.trim());
+                          if (clash) {
+                            setNewShortcutError(`That keybind is already in use in shortcut "${clash.title}".`);
+                            return;
+                          }
                           trackUsage('settings', 'add-shortcut');
-                          const entry: ShortcutDef = { id: `sc-${Date.now().toString(36)}`, title: newShortcutTitle.trim(), keys: newShortcutKeys.trim(), action: newShortcutAction };
-                          setShortcuts(prev => { const next = [...prev, entry]; saveShortcuts(next); return next; });
+                          const entry: ShortcutDef = { id: `sc-${Date.now().toString(36)}`, title: newShortcutTitle.trim(), keys: normalizeCombo(newShortcutKeys.trim()) || newShortcutKeys.trim(), action: newShortcutAction, enabled: true };
+                          persistShortcuts([...shortcuts, entry]);
                           setAddShortcutOpen(false);
+                          setNewShortcutError('');
                         }}
                         disabled={!newShortcutTitle.trim() || !newShortcutKeys.trim()}
                         className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"

@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, noteSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts } from '../../shared/schema.js';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, noteSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts, projects, projectMembers } from '../../shared/schema.js';
 import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
@@ -786,6 +786,16 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
     const userBoards = await db.select({ id: boards.id }).from(boards).where(eq(boards.userId, userId));
     const boardIds = userBoards.map(b => b.id);
 
+    // Projects live in their own tables (owned + member). Counting boards
+    // here was wrong — it reported e.g. 1 project when the user had many.
+    const ownedProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, userId));
+    const memberRows = await db.select({ projectId: projectMembers.projectId }).from(projectMembers).where(eq(projectMembers.userId, userId));
+    const projectIds = Array.from(new Set([
+      ...ownedProjects.map(p => p.id),
+      ...memberRows.map(m => m.projectId),
+    ]));
+    const projectCount = projectIds.length;
+
     const taskRows = boardIds.length > 0
       ? await db.select().from(tasks).where(inArray(tasks.boardId, boardIds))
       : [];
@@ -853,8 +863,10 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
     const focusRows = await db.select().from(deepFocusSessions).where(eq(deepFocusSessions.userId, userId));
     const whiteboardRows = await db.select().from(whiteboards).where(eq(whiteboards.userId, userId));
     const aiRows = await db.select().from(aiRequests).where(eq(aiRequests.userId, userId));
-    const milestoneRows = await db.select({ id: milestones.id }).from(milestones)
-      .where(inArray(milestones.projectId, userBoards.map(b => b.id)));
+    const milestoneRows = projectIds.length > 0
+      ? await db.select({ id: milestones.id }).from(milestones)
+        .where(inArray(milestones.projectId, projectIds))
+      : [];
     const ticketRows = await db.select().from(supportTickets).where(eq(supportTickets.userId, userId));
     const redemptions = await db.select({ couponId: couponRedemptions.couponId }).from(couponRedemptions).where(eq(couponRedemptions.userId, userId));
     const userTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
@@ -965,7 +977,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
           deepFocusSessions: focusRows.length,
         },
         projects: {
-          boards: boardIds.length,
+          boards: projectCount,
           milestones: milestoneRows.length,
           whiteboards: whiteboardRows.length,
         },
