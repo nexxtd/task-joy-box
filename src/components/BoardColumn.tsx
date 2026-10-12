@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Draggable, Droppable } from '@hello-pangea/dnd';
@@ -31,7 +32,7 @@ const formatDate = (value?: string) => {
   if (!value) return 'No due date';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 };
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
@@ -776,7 +777,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     <>
     <Draggable draggableId={column.id} index={index} isDragDisabled={!canEdit}>
       {(provided) => (
-        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[480px] max-w-[calc(100vw-2rem)] select-none">
+        <div ref={provided.innerRef} {...provided.draggableProps} className="flex-shrink-0 w-[85vw] sm:w-[960px] max-w-[calc(100vw-2rem)] select-none">
           <div {...provided.dragHandleProps} data-no-pan="true" className="column-header-row flex items-center gap-1.5 px-2 py-1.5 mb-1.5 group">
             <button
               onClick={() => setTasksCollapsed(!tasksCollapsed)}

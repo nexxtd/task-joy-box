@@ -85,7 +85,7 @@ const KanbanBoard: React.FC = () => {
                     {provided.placeholder}
 
                     {addingColumn ? (
-                      <div className="flex-shrink-0 w-72 animate-fade-in">
+                      <div className="flex-shrink-0 w-[85vw] sm:w-[576px] max-w-[calc(100vw-2rem)] animate-fade-in">
                         <input
                           autoFocus
                           value={newColTitle}
@@ -105,7 +105,7 @@ const KanbanBoard: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => setAddingColumn(true)}
-                        className="flex-shrink-0 w-72 flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-lg transition-colors"
+                        className="flex-shrink-0 w-[85vw] sm:w-[576px] max-w-[calc(100vw-2rem)] flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-lg transition-colors"
                       >
                         <Plus className="w-4 h-4" />
                         Add Column

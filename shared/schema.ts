@@ -416,6 +416,7 @@ export const userSettings = pgTable('user_settings', {
   accentColor: text('accent_color').default('#000000'),
   accentHsl: text('accent_hsl').default('0 0% 0%'),
   language: text('language').default('English'),
+  dashboardShortcut: text('dashboard_shortcut').default('/projects'),
   smartAlerts: boolean('smart_alerts').default(true),
   emailNotifs: boolean('email_notifs').default(true),
   autoSortTasks: boolean('autoSortTasks').default(false),

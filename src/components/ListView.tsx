@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
@@ -44,7 +45,7 @@ const formatDate = (value?: string) => {
   if (!value) return 'No due date';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 };
 
 const isTaskCompleted = (task: Task) => Boolean(task.completed || task.status === 'completed');

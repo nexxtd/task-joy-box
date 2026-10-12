@@ -1,9 +1,10 @@
+import { useLanguage } from '@/context/LanguageContext';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import {
   Wand2, Send, Loader2, Plus, Trash2, Search, Copy,
   XCircle, AlertTriangle, ChevronRight,
-  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare, Pencil
+  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare
 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { useAuth } from '@/context/AuthContext';
@@ -56,6 +57,8 @@ function loadChats(key: string): Chat[] {
 }
 
 const AIChat: React.FC = () => {
+  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
+  useLanguage();
   const { user } = useAuth();
   const isPro = user?.subscriptionTier === 'pro';
 
@@ -523,13 +526,6 @@ const AIChat: React.FC = () => {
                   {chat.title || 'New chat'}
                 </button>
               )}
-              <button
-                onClick={(e) => { e.stopPropagation(); startRename(chat); }}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-                title="Rename chat"
-              >
-                <Pencil className="w-3 h-3" />
-              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
                 className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all"

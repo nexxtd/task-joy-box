@@ -1,3 +1,6 @@
+import { tt } from '@/i18n/translations';
+import { useLanguage } from '@/context/LanguageContext';
+import { dateLocale } from '@/i18n/format';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { createPortal, flushSync } from 'react-dom';
@@ -372,7 +375,7 @@ const formatDate = (value?: string) => {
   if (!value) return 'No due date';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parsed.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 };
 
 const formatDuration = (minutes: number) => {
@@ -651,6 +654,8 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({ count, onConf
 );
 
 const Tasks: React.FC = () => {
+  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
+  useLanguage();
   const {
     board,
     addTask,
@@ -2608,7 +2613,7 @@ const Tasks: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="max-w-5xl mx-auto space-y-2 pb-24">
+        <div className="max-w-7xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
             <div className="text-center py-16">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
@@ -5186,8 +5191,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const activityEntries = useMemo(() => {
     const entries: Array<{ id: string; text: string; createdAt: string; actor?: string }> = [
       ...(task.activityLog || []).map(entry => ({ id: entry.id, text: entry.text, createdAt: entry.createdAt, actor: entry.actor })),
-      { id: 'created', text: `Created ${new Date(task.createdAt).toLocaleDateString()}`, createdAt: task.createdAt },
-      ...(task.updatedAt ? [{ id: 'updated', text: `Updated ${new Date(task.updatedAt).toLocaleDateString()}`, createdAt: task.updatedAt }] : []),
+      { id: 'created', text: tt('Created {{date}}', { date: new Date(task.createdAt).toLocaleDateString(dateLocale()) }), createdAt: task.createdAt },
+      ...(task.updatedAt ? [{ id: 'updated', text: tt('Updated {{date}}', { date: new Date(task.updatedAt).toLocaleDateString(dateLocale()) }), createdAt: task.updatedAt }] : []),
       ...(task.projectId ? [{ id: 'project', text: `Assigned to ${taskProject?.name || 'project'}`, createdAt: task.updatedAt || task.createdAt }] : []),
       ...(task.comments || []).map(comment => ({
         id: comment.id,
@@ -6138,7 +6143,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   <p className="text-sm text-foreground">{entry.text}</p>
                   <p className="text-[11px] text-muted-foreground mt-1">
                     {entry.actor && <><span className="font-semibold">{entry.actor}</span> · </>}
-                    {new Date(entry.createdAt).toLocaleString()}
+                    {new Date(entry.createdAt).toLocaleString(dateLocale())}
                   </p>
                 </div>
               ))}
@@ -6175,7 +6180,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString(dateLocale())}</p>
               </div>
             ))}
           </div>
@@ -6206,7 +6211,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 {PRIORITY_CONFIG[task.priority as Exclude<typeof task.priority, 'none'>]?.label}
               </span>
             )}
-            <span className="text-xs text-muted-foreground">Created: {new Date(task.createdAt).toLocaleDateString()}</span>
+            <span className="text-xs text-muted-foreground">Created: {new Date(task.createdAt).toLocaleDateString(dateLocale())}</span>
             <div className="relative">
               <button
                 onClick={async () => {

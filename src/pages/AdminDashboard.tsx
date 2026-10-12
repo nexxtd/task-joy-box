@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
+import { dateLocale } from '@/i18n/format';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import {
   ShieldCheck, DollarSign, Users, CreditCard, Ticket, TrendingUp, Calendar,
@@ -1232,9 +1233,9 @@ if (loading && !stats) {
               <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Total Earnings', value: `$${stats?.summary.totalEarnings?.toLocaleString() ?? '0'}`, icon: DollarSign, accent: 'label-green' },
-                { label: 'Revenue This Month', value: `$${stats?.summary.revenueThisMonth?.toLocaleString() ?? '0'}`, icon: TrendingUp, accent: 'label-green' },
-                { label: 'Total Users', value: stats?.summary.totalUsers?.toLocaleString() ?? '0', icon: Users, accent: 'label-blue' },
+                { label: 'Total Earnings', value: `$${stats?.summary.totalEarnings?.toLocaleString(dateLocale()) ?? '0'}`, icon: DollarSign, accent: 'label-green' },
+                { label: 'Revenue This Month', value: `$${stats?.summary.revenueThisMonth?.toLocaleString(dateLocale()) ?? '0'}`, icon: TrendingUp, accent: 'label-green' },
+                { label: 'Total Users', value: stats?.summary.totalUsers?.toLocaleString(dateLocale()) ?? '0', icon: Users, accent: 'label-blue' },
                 { label: 'New Users (7d)', value: `+${stats?.summary.newUsersThisWeek ?? 0}`, icon: User, accent: 'label-blue' },
                 { label: 'Active Subscriptions', value: stats?.summary.activeSubscriptions ?? 0, icon: CreditCard, accent: 'label-purple' },
                 { label: 'Active Users (7d)', value: stats?.summary.activeUsers7d ?? 0, icon: Activity, accent: 'label-purple' },

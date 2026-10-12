@@ -31,7 +31,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.patch('/', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { theme, fontFamily, accentColor, accentHsl, language, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled } = req.body;
+    const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled } = req.body;
 
     const allowedAccents = new Set(['#000000', '#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#DB2777'].map(s => s.toLowerCase()));
     const isCustomAccent = accentColor !== undefined && !allowedAccents.has(String(accentColor).toLowerCase());
@@ -46,13 +46,16 @@ router.patch('/', requireAuth, async (req, res) => {
       }
     }
 
-    const [updatedSettings] = await db.update(userSettings)
-      .set({
+    const VALID_SHORTCUTS = new Set(['/projects', '/tasks', '/insights', '/notes', '/calendar', '/ai-chat', '/support', '/settings']);
+    const cleanShortcut = dashboardShortcut !== undefined && VALID_SHORTCUTS.has(String(dashboardShortcut)) ? String(dashboardShortcut) : undefined;
+
+    const buildSet = (withShortcut: boolean) => ({
         ...(theme !== undefined ? { theme } : {}),
         ...(fontFamily !== undefined ? { fontFamily } : {}),
         ...(accentColor !== undefined ? { accentColor } : {}),
         ...(accentHsl !== undefined ? { accentHsl } : {}),
         ...(language !== undefined ? { language } : {}),
+        ...(withShortcut && cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
         ...(smartAlerts !== undefined ? { smartAlerts } : {}),
         ...(emailNotifs !== undefined ? { emailNotifs } : {}),
         ...(energyMorning !== undefined ? { energyMorning } : {}),
@@ -60,26 +63,65 @@ router.patch('/', requireAuth, async (req, res) => {
         ...(energyEvening !== undefined ? { energyEvening } : {}),
         ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
         updatedAt: new Date().toISOString(),
-      } as UpdateUserSettings as any)
-      .where(eq(userSettings.userId, userId))
-      .returning();
+      } as UpdateUserSettings as any);
+
+    let updatedSettings: any = null;
+    try {
+      [updatedSettings] = await db.update(userSettings)
+        .set(buildSet(true))
+        .where(eq(userSettings.userId, userId))
+        .returning();
+    } catch (e: any) {
+      // Old DBs without the dashboard_shortcut column (pre-migration):
+      // retry without it so language/other saves never fail.
+      if (cleanShortcut !== undefined && String(e?.message || '').includes('dashboard_shortcut')) {
+        [updatedSettings] = await db.update(userSettings)
+          .set(buildSet(false))
+          .where(eq(userSettings.userId, userId))
+          .returning();
+      } else {
+        throw e;
+      }
+    }
 
     if (!updatedSettings) {
-      const [created] = await db.insert(userSettings).values({
-        userId,
-        ...(theme !== undefined ? { theme } : {}),
-        ...(fontFamily !== undefined ? { fontFamily } : {}),
-        ...(accentColor !== undefined ? { accentColor } : {}),
-        ...(accentHsl !== undefined ? { accentHsl } : {}),
-        ...(language !== undefined ? { language } : {}),
-        ...(smartAlerts !== undefined ? { smartAlerts } : {}),
-        ...(emailNotifs !== undefined ? { emailNotifs } : {}),
-        ...(energyMorning !== undefined ? { energyMorning } : {}),
-        ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
-        ...(energyEvening !== undefined ? { energyEvening } : {}),
-        ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
-      } as any).returning();
-      return res.json(created);
+      try {
+        const [created] = await db.insert(userSettings).values({
+          userId,
+          ...(theme !== undefined ? { theme } : {}),
+          ...(fontFamily !== undefined ? { fontFamily } : {}),
+          ...(accentColor !== undefined ? { accentColor } : {}),
+          ...(accentHsl !== undefined ? { accentHsl } : {}),
+          ...(language !== undefined ? { language } : {}),
+          ...(cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
+          ...(smartAlerts !== undefined ? { smartAlerts } : {}),
+          ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+          ...(energyMorning !== undefined ? { energyMorning } : {}),
+          ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
+          ...(energyEvening !== undefined ? { energyEvening } : {}),
+          ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+        } as any).returning();
+        return res.json(created);
+      } catch (e: any) {
+        if (cleanShortcut !== undefined && String(e?.message || '').includes('dashboard_shortcut')) {
+          const [created] = await db.insert(userSettings).values({
+            userId,
+            ...(theme !== undefined ? { theme } : {}),
+            ...(fontFamily !== undefined ? { fontFamily } : {}),
+            ...(accentColor !== undefined ? { accentColor } : {}),
+            ...(accentHsl !== undefined ? { accentHsl } : {}),
+            ...(language !== undefined ? { language } : {}),
+            ...(smartAlerts !== undefined ? { smartAlerts } : {}),
+            ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+            ...(energyMorning !== undefined ? { energyMorning } : {}),
+            ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
+            ...(energyEvening !== undefined ? { energyEvening } : {}),
+            ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+          } as any).returning();
+          return res.json(created);
+        }
+        throw e;
+      }
     }
     res.json(updatedSettings);
   } catch (error) {

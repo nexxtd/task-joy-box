@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React, { useState } from 'react';
 import { Modal, Form, Input, Select, DatePicker, TimePicker, Upload, Button, Space, Tag } from 'antd';
 import { PlusOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -259,7 +260,7 @@ const ProjectBoard = () => {
                       {task.dueDate && (
                         <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
                           <CalendarIcon className="w-3 h-3" />
-                          {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                          {new Date(task.dueDate).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}
                         </span>
                       )}
                       {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (() => {

@@ -25,3 +25,21 @@ export const formatDuration = (minutes?: number | null, empty: string | null = n
   const m = Math.round(minutes % 60);
   return m > 0 ? tt('{{count}}h {{mins}}m', { count: h, mins: m }) : tt('{{count}}h', { count: h });
 };
+
+export const formatNumber = (value: number | string): string => {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (typeof n !== 'number' || Number.isNaN(n)) return String(value);
+  try {
+    return new Intl.NumberFormat(dateLocale()).format(n);
+  } catch {
+    return String(value);
+  }
+};
+
+export const formatFullDate = (d: Date): string => {
+  try {
+    return d.toLocaleDateString(dateLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
+  } catch {
+    return d.toLocaleDateString();
+  }
+};

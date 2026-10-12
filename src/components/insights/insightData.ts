@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import { Task, Column, Priority } from '@/types/board';
 
 export interface DoneCtx {
@@ -31,14 +32,14 @@ export const formatDate = (value?: string): string => {
   if (!value) return 'No date';
   const d = safeDate(value);
   if (!d) return value;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 };
 
 export const formatDateTime = (value?: string): string => {
   const d = safeDate(value);
   if (!d) return '—';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-    ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString(dateLocale(), { hour: 'numeric', minute: '2-digit' });
 };
 
 export const formatDuration = (minutes?: number): string => {
@@ -294,7 +295,7 @@ export const buildWeeklyActivity = (tasks: Task[], ctx: DoneCtx): DayActivity[] 
     return {
       dayIndex: i,
       label,
-      dateLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      dateLabel: d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }),
       count: 0,
       tasks: [],
     };
@@ -458,7 +459,7 @@ export const buildCompletionTrend = (tasks: Task[], ctx: DoneCtx): { days: Trend
     const start = slice[0].date;
     const end = slice[slice.length - 1].date;
     weeks.push({
-      weekLabel: `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      weekLabel: `${start.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}`,
       count: slice.reduce((s, d) => s + d.count, 0),
       days: slice,
     });
@@ -587,7 +588,7 @@ export const buildBusiest = (tasks: Task[], ctx: DoneCtx): BusyDayEntry[] => {
       id: t.id,
       title: t.title,
       hour,
-      timeLabel: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+      timeLabel: d.toLocaleTimeString(dateLocale(), { hour: 'numeric', minute: '2-digit' }),
       projectName: t.projectName,
       completedAt: stamp || '',
     });
@@ -746,7 +747,7 @@ export const buildReport = (tasks: Task[], ctx: DoneCtx, metric: ReportMetric, r
     const d = new Date(startKey + i * DAY_MS);
     map.set(startKey + i * DAY_MS, {
       key: String(startKey + i * DAY_MS),
-      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + WEEKDAY_SHORT[d.getDay()],
+      label: d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }) + ' ' + WEEKDAY_SHORT[d.getDay()],
       count: 0,
       items: [],
     });

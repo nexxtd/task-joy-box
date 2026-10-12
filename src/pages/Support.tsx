@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   LifeBuoy, BookOpen, FileText, Send, X, ChevronRight,
@@ -390,6 +391,8 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 };
 
 const Support: React.FC = () => {
+  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
+  useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [supportEmail, setSupportEmail] = useState<string | null>(null);

@@ -1,3 +1,5 @@
+import { tt } from '@/i18n/translations';
+
 const PERMISSION_KEY = 'notif_permission_requested';
 
 export type AlertTier = 'premium' | 'pro';
@@ -26,7 +28,9 @@ export const hasRequestedPermission = (): boolean => localStorage.getItem(PERMIS
 export const deviceNotify = (title: string, body: string, tag?: string): void => {
   if (!notificationsSupported() || Notification.permission !== 'granted') return;
   try {
-    const n = new Notification(title, { body, icon: '/favicon.ico', tag, silent: false });
+    const tTitle = typeof title === 'string' ? tt(title) : title;
+    const tBody = typeof body === 'string' ? tt(body) : body;
+    const n = new Notification(tTitle, { body: tBody, icon: '/favicon.ico', tag, silent: false });
     n.onclick = () => { window.focus(); n.close(); };
     setTimeout(() => n.close(), 15000);
   } catch {
@@ -97,13 +101,13 @@ export const formatOverdueDelta = (dueDate: string, dueTime?: string): string =>
   try {
     const due = dueTime ? new Date(`${dueDate}T${dueTime}`) : new Date(`${dueDate}T23:59:59`);
     const mins = Math.floor((Date.now() - due.getTime()) / 60000);
-    if (mins < 60) return `${mins} minutes ago`;
+    if (mins < 60) return tt('{{count}} minutes ago', { count: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    if (hours < 48) return hours === 1 ? tt('{{count}} hour ago', { count: hours }) : tt('{{count}} hours ago', { count: hours });
     const days = Math.floor(hours / 24);
-    return `${days} day${days === 1 ? '' : 's'} ago`;
+    return days === 1 ? tt('{{count}} day ago', { count: days }) : tt('{{count}} days ago', { count: days });
   } catch {
-    return 'overdue';
+    return tt('overdue');
   }
 };
 

@@ -46,6 +46,27 @@
   <script>
     (function () {
       try {
+        // Set <html lang/dir> from the saved language before React paints,
+        // so a saved non-English language never flashes English first.
+        var langRaw = null;
+        try { langRaw = localStorage.getItem('language'); } catch (e) {}
+        var code = 'en';
+        var rtl = false;
+        if (langRaw) {
+          var m = {
+            'English': 'en', 'Español': 'es', 'Français': 'fr', 'Deutsch': 'de',
+            'Português': 'pt', 'Italiano': 'it', '中文': 'zh', '日本語': 'ja',
+            '한국어': 'ko', 'العربية': 'ar', 'עברית': 'he', 'हिन्दी': 'hi',
+            'Русский': 'ru', 'Nederlands': 'nl', 'Türkçe': 'tr', 'Tiếng Việt': 'vi',
+            'es': 'es', 'fr': 'fr', 'de': 'de', 'pt': 'pt', 'it': 'it', 'zh': 'zh',
+            'ja': 'ja', 'ko': 'ko', 'ar': 'ar', 'he': 'he', 'hi': 'hi', 'ru': 'ru',
+            'nl': 'nl', 'tr': 'tr', 'vi': 'vi', 'en': 'en'
+          };
+          if (m[langRaw]) code = m[langRaw];
+        }
+        rtl = (code === 'ar' || code === 'he');
+        document.documentElement.lang = code;
+        document.documentElement.dir = rtl ? 'rtl' : 'ltr';
         var hasAuth = !!localStorage.getItem('auth_user_cache');
         var theme = localStorage.getItem('theme');
         if (theme === 'dark') document.documentElement.classList.add('dark');

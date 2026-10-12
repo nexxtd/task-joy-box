@@ -1,3 +1,5 @@
+import { useLanguage } from '@/context/LanguageContext';
+import { dateLocale } from '@/i18n/format';
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { flushSync } from 'react-dom';
 import { DragDropContext, Droppable, DropResult, Draggable, DragStart, BeforeCapture } from '@hello-pangea/dnd';
@@ -96,6 +98,8 @@ const ROLE_OPTIONS = [
 ];
 
 const Projects: React.FC = () => {
+  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
+  useLanguage();
   const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
   const notesCtx = useNotesContext();
   const { user } = useAuth();
@@ -1704,7 +1708,7 @@ const Projects: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className={`text-xs font-semibold truncate ${milestone.completed ? 'text-muted-foreground/60 line-through' : 'text-foreground'}`}>{milestone.name}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {new Date(milestone.date + 'T12:00:00').toLocaleDateString()}
+                        {new Date(milestone.date + 'T12:00:00').toLocaleDateString(dateLocale())}
                       </p>
                       {milestone.description && <p className={`text-[10px] mt-1 break-words ${milestone.completed ? 'text-muted-foreground/50' : 'text-muted-foreground/80'}`}>{milestone.description}</p>}
                     </div>
@@ -1762,7 +1766,7 @@ const Projects: React.FC = () => {
                   <p className="text-sm text-foreground">{activity.text}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {activity.actor && <><span className="font-semibold">{activity.actor}</span> · </>}
-                    {new Date(activity.time).toLocaleString()}
+                    {new Date(activity.time).toLocaleString(dateLocale())}
                   </p>
                 </div>
               </div>

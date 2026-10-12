@@ -160,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.user) {
       setUser(data.user);
       try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+      try { window.dispatchEvent(new Event('language-refresh')); } catch {}
     }
     return data;
   }, []);
@@ -174,6 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.user) {
       setUser(data.user);
       try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+      try { window.dispatchEvent(new Event('language-refresh')); } catch {}
     }
     return data;
   }, []);
@@ -189,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if ((data as any)?.requires2FA) return data;
     setUser(data.user);
     try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    try { window.dispatchEvent(new Event('language-refresh')); } catch {}
     return data;
   }, []);
 
@@ -241,6 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     setUser(data.user);
     try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
+    try { window.dispatchEvent(new Event('language-refresh')); } catch {}
     return data;
   }, []);
 

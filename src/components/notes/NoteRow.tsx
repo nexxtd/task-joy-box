@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React, { useState } from 'react';
 import { Pin, Tag, Trash2, ChevronUp, ChevronDown, GripVertical, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -113,7 +114,7 @@ const NoteRow: React.FC<NoteRowProps> = ({
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="text-[10px] text-muted-foreground">
-            {new Date(note.updatedAt || note.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(note.updatedAt || note.createdAt).toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' })}
           </span>
           <button
             onClick={e => { e.stopPropagation(); onToggleExpand(); }}

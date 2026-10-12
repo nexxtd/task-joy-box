@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import { useState, useMemo } from 'react';
 import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays, StickyNote } from 'lucide-react';
 import { Task, Column, Priority } from '@/types/board';
@@ -495,7 +496,7 @@ function NotesOverviewBody() {
           <div key={n.id} className="p-2 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
             <p className="text-xs font-medium text-foreground truncate">{n.title || 'Untitled note'}</p>
             {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description.slice(0, 80)}</p>}
-            <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString(dateLocale()) : ''}</p>
           </div>
         ))}
       </div>

@@ -1,3 +1,4 @@
+import { useLanguage } from '@/context/LanguageContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -95,6 +96,8 @@ try {
 let analysisInFlight: Promise<void> | null = null;
 
 const Insights: React.FC = () => {
+  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
+  useLanguage();
   const navigate = useNavigate();
   const { board, updateTask } = useBoardContext();
   const { user } = useAuth();

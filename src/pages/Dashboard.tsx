@@ -22,6 +22,9 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { createPortal } from 'react-dom';
+import { useLanguage } from '@/context/LanguageContext';
+import { dateLocale, formatFullDate } from '@/i18n/format';
+import { tt } from '@/i18n/translations';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -193,15 +196,15 @@ const formatShortDate = (value?: string) => {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
 };
 
 const timeAgo = (ts: number) => {
   const diff = Date.now() - ts;
-  if (diff < 60 * 1000) return 'just now';
-  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)}h ago`;
-  return `${Math.floor(diff / 86400000)}d ago`;
+  if (diff < 60 * 1000) return tt('just now');
+  if (diff < 60 * 60 * 1000) return tt('{{count}}m ago', { count: Math.floor(diff / 60000) });
+  if (diff < 24 * 60 * 60 * 1000) return tt('{{count}}h ago', { count: Math.floor(diff / 3600000) });
+  return tt('{{count}}d ago', { count: Math.floor(diff / 86400000) });
 };
 
 const AiWidgetStatus: React.FC<{ loading?: boolean; error?: string | null; onRetry: () => void }> = ({ loading, error, onRetry }) => (
@@ -265,11 +268,13 @@ const Dashboard: React.FC = () => {
   const [showAddTask, setShowAddTask] = useState(false);
   const [viewProjectsMenuOpen, setViewProjectsMenuOpen] = useState(false);
   const shortcutBtnRef = useRef<HTMLDivElement | null>(null);
-  const [shortcutMenuPos, setShortcutMenuPos] = useState<{ top: number; right: number; minWidth: number } | null>(null);
+  const [shortcutMenuPos, setShortcutMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
   // The shortcut menu renders in a portal on document.body, positioned from
   // the split-button rect. The sticky header's backdrop-blur creates a
   // containing block that traps non-portalled layers, and a separate
   // click-away overlay can swallow item clicks — the portal sidesteps both.
+  // The dropdown is anchored to the button so its left/right edges match the
+  // button exactly (same width, no wider, no offset).
   useLayoutEffect(() => {
     if (!viewProjectsMenuOpen) { setShortcutMenuPos(null); return; }
     const update = () => {
@@ -278,8 +283,8 @@ const Dashboard: React.FC = () => {
       const rect = el.getBoundingClientRect();
       setShortcutMenuPos({
         top: rect.bottom + 6,
-        right: Math.max(8, window.innerWidth - rect.right),
-        minWidth: rect.width,
+        left: rect.left,
+        width: rect.width,
       });
     };
     update();
@@ -311,6 +316,8 @@ const Dashboard: React.FC = () => {
   }, [viewProjectsMenuOpen]);
   // "View X" shortcut target — defaults to Projects, persisted per user.
   // Every page except Dashboard can be picked from the arrow dropdown.
+  // Picking only changes the target (no navigation); the main button navigates.
+  const { t: tr } = useLanguage();
   const DASHBOARD_SHORTCUT_PAGES = useMemo(() => ([
     { label: 'Projects', path: '/projects' },
     { label: 'Tasks', path: '/tasks' },
@@ -321,13 +328,44 @@ const Dashboard: React.FC = () => {
     { label: 'Support', path: '/support' },
     { label: 'Settings', path: '/settings' },
   ]), []);
+  const VALID_SHORTCUT_PATHS = useMemo(() => new Set(DASHBOARD_SHORTCUT_PAGES.map(p => p.path)), [DASHBOARD_SHORTCUT_PAGES]);
   const [dashboardShortcut, setDashboardShortcut] = useState(() => {
     try { return localStorage.getItem('dashboard_shortcut_target') || '/projects'; } catch { return '/projects'; }
   });
+  // Load the saved target from the account (other devices + after refresh).
+  // Local storage is instant; the server value wins when it arrives.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings', { credentials: 'include' }).then(async r => {
+      if (!r.ok || cancelled) return;
+      try {
+        const data = await r.json();
+        const srv = typeof data?.dashboardShortcut === 'string' ? data.dashboardShortcut : null;
+        if (srv && VALID_SHORTCUT_PATHS.has(srv)) {
+          setDashboardShortcut(prev => {
+            if (prev !== srv) {
+              try { localStorage.setItem('dashboard_shortcut_target', srv); } catch {}
+              return srv;
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [VALID_SHORTCUT_PATHS, user?.id]);
   const dashboardShortcutLabel = DASHBOARD_SHORTCUT_PAGES.find(p => p.path === dashboardShortcut)?.label || 'Projects';
   const setShortcutTarget = (path: string) => {
+    if (!VALID_SHORTCUT_PATHS.has(path)) return;
     setDashboardShortcut(path);
     try { localStorage.setItem('dashboard_shortcut_target', path); } catch {}
+    // Persist to the account so it stays after refresh and on other devices.
+    fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ dashboardShortcut: path }),
+    }).catch(() => {});
     trackUsage('dashboard', 'view-shortcut-change');
   };
   const [deepFocusMinutes, setDeepFocusMinutes] = useState(0);
@@ -506,8 +544,8 @@ const Dashboard: React.FC = () => {
 
   const now = new Date();
   const hour = now.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const greeting = hour < 12 ? tr('Good morning') : hour < 17 ? tr('Good afternoon') : tr('Good evening');
+  const dateStr = formatFullDate(now);
 
   const energyAnalysis = useEnergyAnalysis();
   const energyEnabled = isEnergyTrackerEnabled();
@@ -1762,18 +1800,19 @@ style={{ background: 'hsl(var(--primary))' }}>
                   <button
                     type="button"
                     onClick={() => { trackUsage('dashboard', 'view-shortcut-go'); navigate(dashboardShortcut); }}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                    title={`Go to ${dashboardShortcutLabel}`}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-0"
+                    title={tr('Go to {{name}}', { name: tr(dashboardShortcutLabel) })}
                   >
-                    <FolderOpen className="w-4 h-4" /> View {dashboardShortcutLabel}
+                    <FolderOpen className="w-4 h-4 shrink-0" /> <span className="truncate">{tr('View {{name}}', { name: tr(dashboardShortcutLabel) })}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setViewProjectsMenuOpen(prev => !prev)}
-                    aria-label="Choose shortcut target"
+                    onClick={(e) => { e.stopPropagation(); setViewProjectsMenuOpen(prev => !prev); }}
+                    aria-label={tr('Choose shortcut target')}
                     aria-expanded={viewProjectsMenuOpen}
-                    title="Choose shortcut target"
-                    className="px-2 border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                    aria-haspopup="listbox"
+                    title={tr('Choose shortcut target')}
+                    className="px-2 border-l border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-all shrink-0"
                   >
                     <ChevronDown className={`w-4 h-4 transition-transform ${viewProjectsMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -1782,18 +1821,22 @@ style={{ background: 'hsl(var(--primary))' }}>
               {viewProjectsMenuOpen && shortcutMenuPos && typeof document !== 'undefined' && createPortal(
                 <div
                   data-shortcut-menu
-                  className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl p-1.5"
-                  style={{ top: shortcutMenuPos.top, right: shortcutMenuPos.right, minWidth: shortcutMenuPos.minWidth }}
+                  role="listbox"
+                  className="fixed z-[100] bg-card border border-border rounded-lg shadow-xl p-1 overflow-hidden"
+                  style={{ top: shortcutMenuPos.top, left: shortcutMenuPos.left, width: shortcutMenuPos.width }}
                   onClick={e => e.stopPropagation()}
                 >
                   {DASHBOARD_SHORTCUT_PAGES.map(item => (
                     <button
                       key={item.path}
                       type="button"
-                      onClick={() => { setShortcutTarget(item.path); navigate(item.path); setViewProjectsMenuOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-muted transition-all whitespace-nowrap ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground'}`}
+                      role="option"
+                      aria-selected={item.path === dashboardShortcut}
+                      onClick={() => { setShortcutTarget(item.path); setViewProjectsMenuOpen(false); }}
+                      title={tr(item.label)}
+                      className={`w-full flex items-center h-8 px-2 text-xs rounded-md transition-all truncate ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground hover:bg-muted'}`}
                     >
-                      {item.label}
+                      <span className="truncate">{tr(item.label)}</span>
                     </button>
                   ))}
                 </div>,

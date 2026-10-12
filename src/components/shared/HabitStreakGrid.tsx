@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 
@@ -20,7 +21,7 @@ export const HabitStreakGrid: React.FC<HabitStreakGridProps> = ({
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
     const isToday = i === 0;
-    const label = isToday ? t('Today') : d.toLocaleDateString('en-US', { weekday: 'narrow', month: 'numeric', day: 'numeric' });
+    const label = isToday ? t('Today') : d.toLocaleDateString(dateLocale(), { weekday: 'narrow', month: 'numeric', day: 'numeric' });
     dates.push({
       dateStr,
       label,

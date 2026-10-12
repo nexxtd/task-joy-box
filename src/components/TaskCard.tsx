@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React from 'react';
 import { Task, LABEL_COLORS, PRIORITY_CONFIG } from '@/types/board';
 import { Calendar, CheckSquare, AlertTriangle, Brain, CheckCircle2 } from 'lucide-react';
@@ -86,7 +87,7 @@ const TaskCard: React.FC<TaskCardProps> = React.memo(({ task, onClick, isDraggin
         {task.dueDate && (
           <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
             <Calendar className="w-3 h-3" />
-            {new Date(task.dueDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+            {new Date(task.dueDate).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}
             {task.dueTime && <span className="ml-0.5">{task.dueTime}</span>}
           </span>
         )}

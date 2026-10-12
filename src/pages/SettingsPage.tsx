@@ -1,3 +1,4 @@
+import { dateLocale } from '@/i18n/format';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
@@ -336,40 +337,24 @@ const SettingsPage: React.FC = () => {
           setAccentColor(hex);
           applyAccentHsl(hsl);
         }
-        // Language persistence: localStorage is the source of truth for the
-        // just-picked language. Only adopt the server value when there is no
-        // local choice; otherwise keep the local pick and push it to the server
-        // so leaving/returning never reverts to a stale value.
+        // Language: the account is the source of truth (other devices,
+        // refresh, post-logout). Adopt the server value when present so a
+        // saved pick never reverts to a stale local value.
         try {
           const { canonicalLanguageName: canon } = await import('@/i18n/translations');
-          const localRaw = localStorage.getItem('language');
           if (data.language) {
-            if (!localRaw) {
-              setLanguage(data.language);
-              try { localStorage.setItem('language', canon(data.language)); } catch {}
-            } else {
-              const localCanon = canon(localRaw);
-              const serverCanon = canon(data.language);
-              if (localCanon !== serverCanon) {
-                // Keep user's pick, sync it up in the background.
-                setLanguage(localCanon);
-                fetch('/api/settings', {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                  body: JSON.stringify({ language: localCanon }),
-                }).catch(() => {});
-              } else {
-                setLanguage(localCanon);
-              }
-            }
-          } else if (localRaw) {
-            setLanguage(canon(localRaw));
+            const serverCanon = canon(data.language);
+            setLanguage(serverCanon);
+            try { localStorage.setItem('language', serverCanon); } catch {}
+          } else {
+            try {
+              const localRaw = localStorage.getItem('language');
+              if (localRaw) setLanguage(canon(localRaw));
+            } catch {}
           }
         } catch {
           if (data.language) {
-            const localRaw = (() => { try { return localStorage.getItem('language'); } catch { return null; } })();
-            if (!localRaw) setLanguage(data.language);
+            try { setLanguage(data.language); } catch {}
           }
         }
         setSmartAlerts(data.smartAlerts !== false);
@@ -917,22 +902,10 @@ const SettingsPage: React.FC = () => {
                   onValueChange={async (newLanguage) => {
                     const canon = canonicalLanguageName(newLanguage);
                     trackUsage('settings', 'change-language');
-                    // Update UI instantly everywhere, persist locally first so
-                    // leaving/returning to Settings never reverts the pick.
+                    // setLanguage applies straight away (no refresh) and saves
+                    // to the account the moment it is picked.
                     setLanguage(canon);
-                    try { localStorage.setItem('language', canon); } catch {}
-                    try {
-                      const res = await fetch('/api/settings', {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ language: canon }),
-                      });
-                      if (!res.ok) throw new Error(`save failed: ${res.status}`);
-                      showSaved();
-                    } catch (error) {
-                      console.error('Error saving language:', error);
-                    }
+                    showSaved();
                   }}
                 >
                   <SelectTrigger className="w-full bg-muted/30 border border-border rounded-lg p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer h-10">
@@ -1546,7 +1519,7 @@ const SettingsPage: React.FC = () => {
                           <span className="text-sm font-medium truncate">{ticket.subject}</span>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                          <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ''}</span>
+                          <span className="text-xs text-muted-foreground">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString(dateLocale()) : ''}</span>
                           {ticketTab === 'open' ? (
                             <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Open</span>
                           ) : (

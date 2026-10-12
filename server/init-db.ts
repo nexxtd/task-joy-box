@@ -211,6 +211,7 @@ export async function initDatabase() {
 
     // User settings table new columns
     await addColumnIfNotExists('user_settings', 'energy_tracker_enabled', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'dashboard_shortcut', "TEXT DEFAULT '/projects'");
     await addColumnIfNotExists('user_settings', 'font_size', "TEXT DEFAULT 'medium'");
     await addColumnIfNotExists('user_settings', 'location', "TEXT DEFAULT 'United States'");
     await addColumnIfNotExists('user_settings', 'do_not_disturb_enabled', 'BOOLEAN DEFAULT FALSE');
