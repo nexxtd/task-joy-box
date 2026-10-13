@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { dateLocale } from '@/i18n/format';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import {
@@ -10,8 +10,20 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import TicketConversation from '@/components/TicketConversation';
-import UserDetailView from '@/components/UserDetailView';
+import {
+  addAdminEntry,
+  deleteAdminEntry,
+  fetchServerChangelog,
+  getCombinedChangelog,
+  readAdminChangelog,
+  readServerChangelogCache,
+  subscribeChangelog,
+  type ChangelogEntry,
+} from '@/lib/appVersion';
+// Heavy, rarely-needed views load after first paint so the admin shell (header
+// + tabs) paints instantly. Each usage is wrapped in Suspense with a skeleton.
+const TicketConversation = lazy(() => import('@/components/TicketConversation'));
+const UserDetailView = lazy(() => import('@/components/UserDetailView'));
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -333,7 +345,7 @@ const AUTO_MSG_TEMPLATES: Record<string, (v: { userName: string; ticketType: str
 };
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'users' | 'tickets' | 'settings' | 'emails'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'coupons' | 'users' | 'tickets' | 'settings' | 'emails' | 'updates'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [couponGroups, setCouponGroups] = useState<CouponGroup[]>([]);
@@ -747,6 +759,52 @@ const AdminDashboard = () => {
   const [bResult, setBResult] = useState<any | null>(null);
   const [bHistory, setBHistory] = useState<any[]>([]);
 
+  // Update Log (admin-added updates shown in Support + What's New).
+  const [adminUpdates, setAdminUpdates] = useState<ChangelogEntry[]>(() => getCombinedChangelog());
+  const [newUpdateVersion, setNewUpdateVersion] = useState('');
+  const [newUpdateChanges, setNewUpdateChanges] = useState('');
+  const [savingUpdate, setSavingUpdate] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchServerChangelog().then((server) => {
+      if (cancelled) return;
+      setAdminUpdates(getCombinedChangelog(readAdminChangelog(), server.length ? server : readServerChangelogCache()));
+    });
+    const unsub = subscribeChangelog(() => setAdminUpdates(getCombinedChangelog()));
+    return () => { cancelled = true; unsub(); };
+  }, []);
+
+  const handleAddUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    const version = newUpdateVersion.trim();
+    const changes = newUpdateChanges.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (!version || changes.length === 0) {
+      toast({ title: 'Error', description: 'Version and at least one change are required', variant: 'destructive' });
+      return;
+    }
+    setSavingUpdate(true);
+    try {
+      if (addAdminEntry({ version, changes })) {
+        toast({ title: 'Success', description: 'Update added to the Update Log' });
+        setNewUpdateVersion('');
+        setNewUpdateChanges('');
+        setAdminUpdates(getCombinedChangelog());
+      } else {
+        toast({ title: 'Error', description: 'Failed to add update', variant: 'destructive' });
+      }
+    } finally {
+      setSavingUpdate(false);
+    }
+  };
+
+  const handleDeleteUpdate = (version: string) => {
+    if (!confirm(`Delete update "${version}" from the Update Log?`)) return;
+    deleteAdminEntry(version);
+    setAdminUpdates(getCombinedChangelog());
+    toast({ title: 'Success', description: 'Update deleted' });
+  };
+
   const fetchAudience = async () => {
     setBAudienceLoading(true);
     try {
@@ -946,17 +1004,9 @@ const AdminDashboard = () => {
     support: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   };
 
-if (loading && !stats) {
-    return (
-      <div className="h-full flex items-center justify-center p-8">
-        <div className="text-center">
-          <Activity className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-lg font-medium">Loading admin dashboard...</p>
-          <p className="text-muted-foreground mt-2">Verifying admin permissions</p>
-        </div>
-      </div>
-    );
-  }
+  // No full-screen loading block: the header + tabs shell below renders
+  // straight away and each tab shows its own skeleton while fetchData()
+  // resolves (stale-while-revalidate pattern, same as Projects/Tasks).
 
   if (error) {
     return (
@@ -981,6 +1031,7 @@ if (loading && !stats) {
   }
 
   const layout = draftLayout || buildLayout();
+  const adminAddedVersions = new Set(readAdminChangelog().map((a) => a.version.toLowerCase()));
 
   const renderCouponRow = (coupon: Coupon) => {
     const isExpired = (coupon.expiresAt && new Date(coupon.expiresAt) < new Date()) || (!coupon.active);
@@ -1150,7 +1201,7 @@ if (loading && !stats) {
           </div>
         </div>
         <div className="flex items-center gap-1 bg-muted p-1 rounded-xl flex-shrink-0 overflow-x-auto scrollbar-none max-w-[60vw] sm:max-w-none">
-          {(['overview', 'coupons', 'users', 'tickets', 'emails', 'settings'] as const).map(tab => (
+          {(['overview', 'coupons', 'users', 'tickets', 'emails', 'updates', 'settings'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1439,11 +1490,13 @@ if (loading && !stats) {
             {activeUserView ? (
               <div className="rounded-2xl bg-card border border-border overflow-hidden">
                 <div className="h-[calc(100vh-160px)] min-h-[420px]">
-                  <UserDetailView
-                    details={activeUserView}
-                    onBack={() => setActiveUserView(null)}
-                    onUpdated={() => { handleViewUserData(activeUserView.user?.id, false); fetchData(); }}
-                  />
+                  <Suspense fallback={<div className="p-6 space-y-3"><Skeleton className="h-8 w-48" /><Skeleton className="h-4 w-full" /><Skeleton className="h-40 w-full rounded-xl" /></div>}>
+                    <UserDetailView
+                      details={activeUserView}
+                      onBack={() => setActiveUserView(null)}
+                      onUpdated={() => { handleViewUserData(activeUserView.user?.id, false); fetchData(); }}
+                    />
+                  </Suspense>
                 </div>
               </div>
             ) : (
@@ -1833,6 +1886,86 @@ if (loading && !stats) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'updates' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="rounded-2xl bg-card border border-border p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
+                  <Sparkles className="w-4 h-4" style={{ color: 'hsl(var(--label-purple))' }} />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold">Update Log</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">New updates appear in Support and on What's New. Changes apply within a few seconds.</p>
+                </div>
+              </div>
+              <form onSubmit={handleAddUpdate} className="mt-4 grid grid-cols-1 lg:grid-cols-[200px_1fr_auto] gap-3 items-start">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Version</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 0.7.3"
+                    value={newUpdateVersion}
+                    onChange={e => setNewUpdateVersion(e.target.value)}
+                    className="w-full mt-1 bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground">Changes (one per line)</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Faster dashboard loading"
+                    value={newUpdateChanges}
+                    onChange={e => setNewUpdateChanges(e.target.value)}
+                    className="w-full mt-1 bg-background border border-input rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-y"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={savingUpdate}
+                  className="lg:mt-6 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all disabled:opacity-50"
+                >
+                  {savingUpdate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add Update
+                </button>
+              </form>
+            </div>
+
+            <div className="rounded-2xl bg-card border border-border overflow-hidden">
+              <div className="px-6 py-4 border-b border-border"><h3 className="text-sm font-bold">Recent updates</h3></div>
+              <div className="divide-y divide-border">
+                {adminUpdates.map((u) => {
+                  const isAdminAdded = adminAddedVersions.has(u.version.toLowerCase());
+                  return (
+                    <div key={u.version} className="px-6 py-3 flex items-start gap-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">v{u.version} <span className="font-normal text-muted-foreground">· {u.date}</span></p>
+                        <ul className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          {u.changes.slice(0, 4).map((c, i) => (
+                            <li key={i} className="truncate">· {c}</li>
+                          ))}
+                          {u.changes.length > 4 && <li>+{u.changes.length - 4} more</li>}
+                        </ul>
+                      </div>
+                      {isAdminAdded && (
+                        <button
+                          onClick={() => handleDeleteUpdate(u.version)}
+                          className="p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors flex-shrink-0"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {adminUpdates.length === 0 && (
+                  <p className="px-6 py-12 text-center text-sm text-muted-foreground">No updates yet.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -2464,7 +2597,8 @@ if (loading && !stats) {
 
 {/* Ticket Conversation (admin side) with Guide / Auto Messages / User Profile panel */}
       {activePanelTicket && (
-        <TicketConversation
+        <Suspense fallback={null}>
+          <TicketConversation
           ticket={activePanelTicket}
           messages={panelMessages}
           viewAs="admin"
@@ -2648,10 +2782,12 @@ if (loading && !stats) {
                         <Loader2 className="w-5 h-5 animate-spin text-primary" />
                       </div>
                     ) : (
-                      <UserDetailView
-                        details={userFullDetails}
-                        onUpdated={refetchPanelUser}
-                      />
+                      <Suspense fallback={<div className="p-4"><Loader2 className="w-5 h-5 animate-spin text-primary mx-auto" /></div>}>
+                        <UserDetailView
+                          details={userFullDetails}
+                          onUpdated={refetchPanelUser}
+                        />
+                      </Suspense>
                     )}
                   </div>
                 )}
@@ -2659,6 +2795,7 @@ if (loading && !stats) {
             </div>
           }
         />
+        </Suspense>
       )}
 
     </div>

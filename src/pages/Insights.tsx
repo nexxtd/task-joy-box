@@ -1,5 +1,5 @@
 import { useLanguage } from '@/context/LanguageContext';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, BarChart3, Battery, Bot, CalendarClock, CalendarDays, Clock, Crown, FileText,
@@ -18,13 +18,30 @@ import {
   CompletionOverviewBody, ActiveVsOverdueBody, TasksByPriorityBody,
   WeeklyActivityBody, ProjectBreakdownBody, TagsOverviewBody, NotesOverviewBody,
 } from '@/components/insights/InsightWidgets';
-import {
-  CompletionTrendBody, AvgCompletionTimeBody, BusiestDaysBody, MultiProjectBody,
-  SubtaskHealthBody, CustomReportBody, AiBottlenecksBody, AiScoreBody,
+import type {
   AiWidgetsData, AiScoreData,
 } from '@/components/insights/InsightPremiumWidgets';
 import { GridWidgetDef, useWidgetGrid, cellStyle, WidgetTier } from '@/hooks/useWidgetGrid';
-import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
+// Premium/AI/energy bodies parse only when actually placed on the board —
+// never part of first paint. Same chunk, loaded once on first use.
+const CompletionTrendBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.CompletionTrendBody })));
+const AvgCompletionTimeBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.AvgCompletionTimeBody })));
+const BusiestDaysBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.BusiestDaysBody })));
+const MultiProjectBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.MultiProjectBody })));
+const SubtaskHealthBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.SubtaskHealthBody })));
+const CustomReportBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.CustomReportBody })));
+const AiBottlenecksBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.AiBottlenecksBody })));
+const AiScoreBody = lazy(() => import('@/components/insights/InsightPremiumWidgets').then(m => ({ default: m.AiScoreBody })));
+const EnergyInsightsBody = lazy(() => import('@/components/insights/EnergyInsightsWidget').then(m => ({ default: m.EnergyInsightsBody })));
+
+/** Short skeleton matching the widget body layout while a lazy body loads. */
+const WidgetBodySkeleton = () => (
+  <div className="space-y-2 py-2" aria-busy="true">
+    <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
+    <div className="h-16 w-full rounded bg-muted animate-pulse" />
+    <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+  </div>
+);
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
@@ -379,26 +396,26 @@ const Insights: React.FC = () => {
       case 'notes-overview':
         return <NotesOverviewBody />;
       case 'completion-trend':
-        return <CompletionTrendBody tasks={tasks} ctx={ctx} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><CompletionTrendBody tasks={tasks} ctx={ctx} /></Suspense>;
       case 'avg-completion-time':
-        return <AvgCompletionTimeBody tasks={tasks} ctx={ctx} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><AvgCompletionTimeBody tasks={tasks} ctx={ctx} /></Suspense>;
       case 'busiest-days-times':
-        return <BusiestDaysBody tasks={tasks} ctx={ctx} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><BusiestDaysBody tasks={tasks} ctx={ctx} /></Suspense>;
       case 'multi-project-comparison':
-        return <MultiProjectBody tasks={tasks} columns={columns} ctx={ctx} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><MultiProjectBody tasks={tasks} columns={columns} ctx={ctx} /></Suspense>;
       case 'subtask-checklist-health':
-        return <SubtaskHealthBody tasks={tasks} ctx={ctx} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><SubtaskHealthBody tasks={tasks} ctx={ctx} /></Suspense>;
       case 'custom-report':
-        return <CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} /></Suspense>;
       case 'energy-insights':
         if (!canAccessTier('premium')) return <LockedAiWidget label="Premium" onUpgrade={() => navigate('/pricing')} />;
-        return <EnergyInsightsBody />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><EnergyInsightsBody /></Suspense>;
       case 'ai-bottlenecks':
         if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
-        return <AiBottlenecksBody tasks={tasks} aiData={aiWidgetsData} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><AiBottlenecksBody tasks={tasks} aiData={aiWidgetsData} /></Suspense>;
       case 'ai-score':
         if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
-        return <AiScoreBody scoreData={aiScoreData} />;
+        return <Suspense fallback={<WidgetBodySkeleton />}><AiScoreBody scoreData={aiScoreData} /></Suspense>;
     }
   };
 

@@ -363,6 +363,26 @@ app.get('/api/status', async (_req, res) => {
   }
 });
 
+// Public admin-mirrored changelog (Update Log) - written by admins via
+// PATCH /api/admin/settings {key:'app_changelog_extra'}. Validated lightly;
+// clients merge it with the bundled CHANGELOG. Empty on any failure so the
+// Support page always has something to render.
+app.get('/api/updates', async (_req, res) => {
+  try {
+    const raw = await getSetting('app_changelog_extra', '[]');
+    let list: unknown = [];
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      list = [];
+    }
+    res.set('Cache-Control', 'private, max-age=30, must-revalidate');
+    res.json(Array.isArray(list) ? list.slice(0, 50) : []);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
 // Unknown API routes (dev + prod without dist) — avoids hanging / HTML fallback.
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API route not found' });

@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import { PageSkeleton, AppShellSkeleton } from "@/components/PageSkeleton";
+import { APP_VERSION, needsWhatsNew } from "@/lib/appVersion";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
 
 // LoginPage (incl. Google OAuth SDK) is only needed on /login, so it stays
@@ -132,8 +134,11 @@ const Notifier = () => {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      // Long cache windows so revisiting a page is instant (stale-while-
+      // revalidate: paint from cache, refresh in background). Pages that need
+      // fresher data set their own staleTime per query.
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
@@ -147,7 +152,11 @@ const queryClient = new QueryClient({
 function PublicLogin() {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader />;
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    // New app version: show What's New once per version before the dashboard.
+    if (needsWhatsNew(APP_VERSION, (user as any)?.id)) return <Navigate to="/whats-new" replace />;
+    return <Navigate to="/" replace />;
+  }
   return <Suspense fallback={<PageLoader />}><LoginPage /></Suspense>;
 }
 
@@ -196,11 +205,9 @@ function ProtectedRoutes() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    // Show the app layout straight away (sidebar + content placeholders)
+    // instead of a blank screen while the session resolves from cache.
+    return <AppShellSkeleton />;
   }
 
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
@@ -234,6 +241,12 @@ function ProtectedRoutes() {
         <p className="text-muted-foreground max-w-md">{maintenance.message || "We are currently performing scheduled maintenance. Please check back shortly."}</p>
       </div>
     );
+  }
+
+  // After login on a new version, show What's New once per version per user
+  // before the dashboard (email wall + maintenance keep precedence above).
+  if (needsWhatsNew(APP_VERSION, (user as any)?.id) && location.pathname !== '/whats-new') {
+    return <Navigate to="/whats-new" replace />;
   }
 
   // Check if tutorial should be shown
@@ -272,24 +285,22 @@ function ProtectedRoutes() {
 }
 
 const PageLoader = () => {
-  // Instant, minimal spinner — no artificial delay. The "stuck" hint appears
-  // quickly so slow networks get feedback instead of a blank wait.
+  // Layout-matching skeleton paints instantly; the "stuck" hint only appears
+  // on genuinely slow chunk loads so users get feedback instead of a wait.
   const [stuck, setStuck] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setStuck(true), 1500); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => setStuck(true), 2500); return () => clearTimeout(t); }, []);
   if (stuck) {
     return (
-      <div className="h-[60vh] flex flex-col items-center justify-center gap-3 bg-background">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-muted-foreground">Taking longer than expected…</p>
-        <button onClick={() => window.location.reload()} className="text-xs underline text-primary">Reload</button>
+      <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+        <PageSkeleton />
+        <div className="flex flex-col items-center justify-center gap-2 pb-8 -mt-2">
+          <p className="text-sm text-muted-foreground">Taking longer than expected…</p>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-primary">Reload</button>
+        </div>
       </div>
     );
   }
-  return (
-    <div className="h-[60vh] flex items-center justify-center bg-background">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return <PageSkeleton />;
 };
 
 const App = () => (

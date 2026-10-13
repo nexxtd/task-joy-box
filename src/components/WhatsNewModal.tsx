@@ -1,30 +1,36 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Sparkles, Check, X } from "lucide-react";
-import { CHANGELOG, APP_VERSION } from "@/lib/appVersion";
+import { APP_VERSION, getCombinedChangelog, getWhatsNewPending, hasSeenVersion, markWhatsNewSeen, subscribeChangelog } from "@/lib/appVersion";
 import { useAuth } from "@/context/AuthContext";
 
 const WhatsNewModal: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
+  // Live list so an admin-added update is what the modal shows, with no refresh.
+  const [entries, setEntries] = useState(() => getCombinedChangelog());
+  useEffect(() => subscribeChangelog(() => setEntries(getCombinedChangelog())), []);
 
   useEffect(() => {
     if (!user) return;
+    // The full /whats-new page covers this route — never stack the modal on it.
+    if (location.pathname === "/whats-new") { setOpen(false); return; }
     try {
-      const pending = localStorage.getItem("whats_new_pending");
-      const seen = localStorage.getItem("whats_new_seen");
-      if (pending && pending === APP_VERSION && seen !== APP_VERSION) {
+      const userId = (user as any)?.id;
+      const pending = getWhatsNewPending(userId);
+      if (pending && !hasSeenVersion(pending, userId)) {
         setOpen(true);
       }
     } catch {}
-  }, [user]);
+  }, [user, location.pathname]);
 
   if (!open || !user) return null;
-  const latest = CHANGELOG[0];
+  const latest = entries[0] || { version: APP_VERSION, date: "", title: "What's New", changes: [] as string[] };
 
   const dismiss = (goToPage = false) => {
-    try { localStorage.removeItem("whats_new_pending"); localStorage.setItem("whats_new_seen", APP_VERSION); } catch {}
+    try { markWhatsNewSeen(latest.version, (user as any)?.id); } catch {}
     setOpen(false);
     if (goToPage) navigate("/whats-new");
   };

@@ -126,7 +126,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
     {preview && createPortal(
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80" onClick={() => setPreview(null)}>
         <div className="relative max-w-[90vw] max-h-[85vh]" onClick={e => e.stopPropagation()}>
-          <img src={getImageSrc(preview)} alt={preview.fileName} className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain bg-black" />
+          <img src={getImageSrc(preview)} alt={preview.fileName} loading="lazy" decoding="async" className="max-w-[90vw] max-h-[85vh] rounded-xl object-contain bg-black" />
           <div className="mt-2 text-center">
             <p className="text-sm text-white/90 truncate max-w-[90vw]">{preview.fileName}</p>
           </div>

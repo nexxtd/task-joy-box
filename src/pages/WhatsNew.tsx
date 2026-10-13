@@ -1,16 +1,24 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Check, X } from "lucide-react";
-import { CHANGELOG, APP_VERSION } from "@/lib/appVersion";
+import { APP_VERSION, getCombinedChangelog, markWhatsNewSeen, subscribeChangelog, type ChangelogEntry } from "@/lib/appVersion";
+import { useAuth } from "@/context/AuthContext";
 
 const WhatsNew: React.FC = () => {
   const navigate = useNavigate();
-  const latest = CHANGELOG[0];
+  const { user } = useAuth();
+  const userId = (user as any)?.id as number | undefined;
+  // Live list so admin-added updates show with no refresh.
+  const [entries, setEntries] = useState<ChangelogEntry[]>(() => getCombinedChangelog());
+  useEffect(() => subscribeChangelog(() => setEntries(getCombinedChangelog())), []);
+  const latest = entries[0];
 
-  const dismiss = () => {
-    try { localStorage.removeItem("whats_new_pending"); localStorage.setItem("whats_new_seen", APP_VERSION); } catch {}
-    navigate("/");
+  const dismiss = (to?: string) => {
+    try { markWhatsNewSeen(latest?.version || APP_VERSION, userId); } catch {}
+    navigate(to || "/");
   };
+
+  if (!latest) return null;
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-background flex p-4">
@@ -23,7 +31,7 @@ const WhatsNew: React.FC = () => {
             <h1 className="text-lg font-bold text-foreground">What's New</h1>
             <p className="text-xs text-muted-foreground">Version {latest.version} · {latest.date}</p>
           </div>
-          <button onClick={dismiss} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => dismiss()} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -39,11 +47,11 @@ const WhatsNew: React.FC = () => {
               </li>
             ))}
           </ul>
-          {CHANGELOG.length > 1 && (
+          {entries.length > 1 && (
             <details className="text-xs text-muted-foreground border-t border-border pt-4">
               <summary className="cursor-pointer font-medium text-foreground">Previous updates</summary>
               <div className="mt-3 space-y-3">
-                {CHANGELOG.slice(1).map((e) => (
+                {entries.slice(1).map((e) => (
                   <div key={e.version}>
                     <p className="font-medium text-foreground">{e.version} · {e.date}</p>
                     <ul className="list-disc list-inside mt-1 space-y-0.5">
@@ -55,8 +63,14 @@ const WhatsNew: React.FC = () => {
             </details>
           )}
         </div>
-        <div className="px-6 py-4 bg-muted/20 border-t border-border flex justify-end">
-          <button onClick={dismiss} className="px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-colors">
+        <div className="px-6 py-4 bg-muted/20 border-t border-border flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+          <button
+            onClick={() => dismiss("/support?view=updates")}
+            className="px-5 py-2.5 text-sm font-medium rounded-xl border border-border text-foreground hover:bg-muted transition-colors"
+          >
+            View Update Log
+          </button>
+          <button onClick={() => dismiss()} className="px-5 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-xl hover:bg-primary/90 transition-colors">
             Continue to app
           </button>
         </div>

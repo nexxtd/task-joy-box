@@ -2,18 +2,19 @@ import { useLanguage } from '@/context/LanguageContext';
 import React, { useState, useEffect } from 'react';
 import {
   LifeBuoy, BookOpen, FileText, Send, X, ChevronRight,
-  ChevronDown, ChevronUp, Loader2, CheckCircle
+  ChevronDown, ChevronUp, Loader2, CheckCircle, History
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import { FAQS, RESOURCES } from '@/data/supportContent';
 import SupportContent from '@/components/SupportContent';
+import UpdateLogSection from '@/components/UpdateLogSection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { useAuth } from '@/context/AuthContext';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 
-type View = 'main' | 'faqs' | 'resources' | 'submit' | 'tickets';
+type View = 'main' | 'faqs' | 'resources' | 'submit' | 'tickets' | 'updates';
 
 const TYPE_TOASTS: Record<string, string> = {
   suggestion: 'Thank you for your suggestion! We really appreciate your feedback.',
@@ -147,8 +148,30 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
   );
 };
 
-const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { user } = useAuth();
+const UpdatesView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+            <History className="w-4 h-4 text-primary" />
+          </div>
+          <h1 className="text-lg font-bold text-foreground">Update Log</h1>
+        </div>
+        <button onClick={onClose} className="p-2 hover:bg-muted rounded-xl transition-colors">
+          <X className="w-5 h-5 text-muted-foreground" />
+        </button>
+      </header>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-2xl mx-auto">
+          <UpdateLogSection />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {  const { user } = useAuth();
   const [tickets, setTickets] = useState<TicketData[]>([]);
   const [selected, setSelected] = useState<TicketData | null>(null);
   const [messages, setMessages] = useState<TicketMessage[]>([]);
@@ -402,7 +425,7 @@ const Support: React.FC = () => {
   const urlGuide = searchParams.get('guide');
 
   const [view, setView] = useState<View>(() =>
-    urlView === 'faqs' || urlView === 'resources' || urlView === 'submit' ? urlView : 'main'
+    urlView === 'faqs' || urlView === 'resources' || urlView === 'submit' || urlView === 'updates' ? urlView : 'main'
   );
   const [initialFaqId, setInitialFaqId] = useState<string | undefined>(() =>
     urlView === 'faqs' && urlFaq && FAQS.some(f => f.id === urlFaq) ? urlFaq : undefined
@@ -443,6 +466,7 @@ const Support: React.FC = () => {
   if (view === 'resources') return <ResourcesView onClose={() => setView('main')} initialCatId={initialCatId} initialGuideId={initialGuideId} />;
   if (view === 'submit') return <SubmitView onClose={() => setView('main')} />;
   if (view === 'tickets') return <MyTicketsView onClose={() => setView('main')} />;
+  if (view === 'updates') return <UpdatesView onClose={() => setView('main')} />;
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
@@ -470,6 +494,7 @@ const Support: React.FC = () => {
           onOpenSubmit={openSubmit}
           onOpenTickets={openTickets}
         />
+        <UpdateLogSection />
       </div>
     </div>
   );

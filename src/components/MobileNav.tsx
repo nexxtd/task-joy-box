@@ -78,7 +78,7 @@ const MobileNav: React.FC = () => {
           className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0 overflow-hidden"
         >
           {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+            <img src={user.avatarUrl} alt={user.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           ) : (
             <span className="text-[11px] font-bold text-primary-foreground">{initials}</span>
           )}

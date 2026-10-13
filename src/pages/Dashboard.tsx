@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect, lazy, Suspense } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { useEnergyAnalysis, isEnergyTrackerEnabled, ENERGY_SLOTS } from '@/utils/energyStats';
-import EnergyTaskRecommendations from '@/components/EnergyTaskRecommendations';
 import {
   CheckSquare, Clock, Plus, ArrowRight, ChevronDown,
   TrendingUp, TrendingDown, Calendar, Zap, X,
@@ -16,8 +15,10 @@ import {
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority, Task, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import CreateTaskModal from '@/components/CreateTaskModal';
-import TagsModal from '@/components/shared/TagsModal';
+import { Skeleton } from '@/components/ui/skeleton';
+// Heavy overlays parse only when opened — never part of first paint.
+const CreateTaskModal = lazy(() => import('@/components/CreateTaskModal'));
+const TagsModal = lazy(() => import('@/components/shared/TagsModal'));
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
@@ -499,6 +500,36 @@ const Dashboard: React.FC = () => {
 
   const layoutKey = `dash_widgets_v2_${user?.id ?? 'anon'}`;
 
+  // First-paint deferral: the header (greeting + actions, fed by cached board
+  // data) paints instantly; the heavy widget grid renders right after via an
+  // idle callback (safety timeout so the skeleton can never stick).
+  const [firstPaintDone, setFirstPaintDone] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const done = () => { if (!cancelled) setFirstPaintDone(true); };
+    let ricId: number | null = null;
+    let rafId = 0;
+    const fallback = setTimeout(done, 800);
+    try {
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof ric === 'function') {
+        ricId = ric(done, { timeout: 600 });
+      } else {
+        rafId = requestAnimationFrame(() => { setTimeout(done, 0); });
+      }
+    } catch {
+      rafId = requestAnimationFrame(() => { setTimeout(done, 0); });
+    }
+    return () => {
+      cancelled = true;
+      clearTimeout(fallback);
+      if (ricId !== null) {
+        try { (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(ricId); } catch {}
+      }
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const reportedRef = useRef(false);
   useEffect(() => {
     if (!user || reportedRef.current || layout.length === 0) return;
@@ -844,8 +875,8 @@ const Dashboard: React.FC = () => {
   }, [board.tasks, doneColIds]);
 
   useEffect(() => {
-    if (hasAiWidget) loadAiWidgets();
-  }, [hasAiWidget, loadAiWidgets]);
+    if (hasAiWidget && firstPaintDone) loadAiWidgets();
+  }, [hasAiWidget, firstPaintDone, loadAiWidgets]);
 
   const stats = [
     { label: 'Tasks Active', value: activeTasks.length, icon: CheckSquare, accent: 'label-purple' },
@@ -1873,7 +1904,21 @@ style={{ background: 'hsl(var(--primary))' }}>
         </header>
 
         <div className="p-4 sm:p-6">
-          {layout.length === 0 && !previewLayout ? (
+          {!firstPaintDone ? (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="md:col-span-4 rounded-2xl bg-card border border-border p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Skeleton className="w-6 h-6 rounded-md" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                  <Skeleton className="h-8 w-24 mb-2" />
+                  <Skeleton className="h-3 w-full mb-1.5" />
+                  <Skeleton className="h-3 w-4/5" />
+                </div>
+              ))}
+            </div>
+          ) : layout.length === 0 && !previewLayout ? (
             <div className="text-center py-20">
               <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
               <p className="text-base font-semibold text-foreground">Your dashboard is empty</p>
@@ -2127,19 +2172,21 @@ style={{ background: 'hsl(var(--primary))' }}>
       )}
 
       {tagsModalOpen && (
-        <TagsModal
-          open={tagsModalOpen}
-          onClose={() => setTagsModalOpen(false)}
-          title="Tags"
-          tags={allTags}
-          selectedIds={[]}
-          onToggle={() => {}}
-          onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
-          onDelete={deleteTagEverywhere}
-          onRename={renameTagEverywhere}
-          onColorChange={changeTagColorEverywhere}
-          emptyText="No tags yet. Create one below."
-        />
+        <Suspense fallback={null}>
+          <TagsModal
+            open={tagsModalOpen}
+            onClose={() => setTagsModalOpen(false)}
+            title="Tags"
+            tags={allTags}
+            selectedIds={[]}
+            onToggle={() => {}}
+            onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
+            onDelete={deleteTagEverywhere}
+            onRename={renameTagEverywhere}
+            onColorChange={changeTagColorEverywhere}
+            emptyText="No tags yet. Create one below."
+          />
+        </Suspense>
       )}
 
       {showTaskPicker && (
@@ -2213,7 +2260,9 @@ style={{ background: 'hsl(var(--primary))' }}>
       )}
 
       {showAddTask && (
-        <CreateTaskModal open={showAddTask} onClose={() => setShowAddTask(false)} />
+        <Suspense fallback={null}>
+          <CreateTaskModal open={showAddTask} onClose={() => setShowAddTask(false)} />
+        </Suspense>
       )}
     </>
   );

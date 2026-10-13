@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { APP_VERSION } from '@/lib/appVersion';
+import { APP_VERSION, hasSeenVersion, setWhatsNewPending } from '@/lib/appVersion';
+import { consumeVersionSessionCleared } from '@/lib/versionGate';
 
 interface AuthUser {
   id: number;
@@ -71,6 +72,28 @@ async function apiFetch(path: string, options?: RequestInit, timeoutMs = 8000) {
   return data;
 }
 
+// After a successful login, flag What's New exactly once per version per
+// user: returning users whose seen-version is older get `whats_new_pending`
+// so the router shows /whats-new before the dashboard. First-time logins on
+// this browser are marked seen silently (no prompt for brand-new accounts).
+function markLoginVersion(userId?: number | string | null) {
+  try {
+    if (hasSeenVersion(APP_VERSION, userId)) return;
+    const legacySeen = localStorage.getItem('whats_new_seen');
+    const perUserSeen = userId !== undefined && userId !== null
+      ? localStorage.getItem(`whats_new_seen_${userId}`)
+      : null;
+    if (legacySeen === null && perUserSeen === null) {
+      localStorage.setItem('whats_new_seen', APP_VERSION);
+      if (userId !== undefined && userId !== null) {
+        localStorage.setItem(`whats_new_seen_${userId}`, APP_VERSION);
+      }
+      return;
+    }
+    setWhatsNewPending(APP_VERSION, userId);
+  } catch {}
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(() => {
     try { const c = localStorage.getItem('auth_user_cache'); return c ? JSON.parse(c) : null; } catch { return null; }
@@ -115,6 +138,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
+    // Fast path: the boot version gate (main.tsx) already cleared a stale
+    // post-update session and stamped the new version. Skip the /me
+    // round-trip entirely so the app lands on Login within 1-2s.
+    try {
+      if (consumeVersionSessionCleared()) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+    } catch {}
     try {
       const stored = localStorage.getItem('app_version');
       if (stored !== APP_VERSION) {
@@ -161,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data.user);
       try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
       try { window.dispatchEvent(new Event('language-refresh')); } catch {}
+      markLoginVersion((data.user as any)?.id);
     }
     return data;
   }, []);
@@ -176,6 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(data.user);
       try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
       try { window.dispatchEvent(new Event('language-refresh')); } catch {}
+      markLoginVersion((data.user as any)?.id);
     }
     return data;
   }, []);
@@ -192,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
     try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     try { window.dispatchEvent(new Event('language-refresh')); } catch {}
+    markLoginVersion((data.user as any)?.id);
     return data;
   }, []);
 
@@ -245,6 +281,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
     try { localStorage.setItem('auth_user_cache', JSON.stringify(data.user)); } catch {}
     try { window.dispatchEvent(new Event('language-refresh')); } catch {}
+    markLoginVersion((data.user as any)?.id);
     return data;
   }, []);
 
