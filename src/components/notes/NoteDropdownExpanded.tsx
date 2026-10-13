@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Tag, ChevronDown, ChevronUp, GripVertical, Trash2, Flag } from 'lucide-react';
-import { Task, Label, LabelColor, LABEL_COLORS, ChecklistItem, Priority, PRIORITY_CONFIG } from '@/types/board';
-import TagsModal from '@/components/shared/TagsModal';
+import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react';
+import { Task, Label, LabelColor, ChecklistItem } from '@/types/board';
 import TaskMediaSections from '@/components/shared/TaskMediaSections';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { useAuth } from '@/context/AuthContext';
@@ -50,7 +49,6 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
   onColorChangeTag,
 }) => {
   const [description, setDescription] = useState(note.description || '');
-  const [showTags, setShowTags] = useState(false);
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
@@ -203,14 +201,6 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
     setPerChecklistInput(prev => ({ ...prev, [checklistId]: '' }));
   };
 
-  const PRIORITY_OPTIONS: Array<{ value: Priority; label: string }> = [
-    { value: 'urgent', label: 'Urgent' },
-    { value: 'high', label: 'High' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'low', label: 'Low' },
-    { value: 'none', label: 'None' },
-  ];
-
   return (
     <div className="space-y-4">
       {/* Description */}
@@ -224,73 +214,6 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
           rows={3}
           className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[72px]"
         />
-      </div>
-
-      {/* Urgency (Priority) — same as tasks, no dates */}
-      <div>
-        <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-          <Flag className="w-3.5 h-3.5" /> Urgency
-        </h4>
-        <div className="flex flex-wrap gap-1.5">
-          {PRIORITY_OPTIONS.map(opt => {
-            const isActive = (note.priority || 'none') === opt.value;
-            const cfg = opt.value !== 'none' ? PRIORITY_CONFIG[opt.value as Exclude<Priority, 'none'>] : null;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => onUpdateNote(note.id, { priority: opt.value })}
-                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-all flex-shrink-0 ${
-                  isActive
-                    ? cfg
-                      ? `${cfg.className} text-primary-foreground`
-                      : 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tags */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Tag className="w-3.5 h-3.5" /> Tags
-          </h4>
-          <button
-            onClick={() => setShowTags(v => !v)}
-            className="text-[11px] font-semibold text-primary hover:underline"
-          >
-            {showTags ? 'Close' : 'Edit tags'}
-          </button>
-        </div>
-        {note.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {note.labels.map(l => (
-              <span key={l.id} className={`${LABEL_COLORS[l.color]} text-[11px] font-medium px-2.5 py-1 rounded-full text-primary-foreground`}>
-                {l.name}
-              </span>
-            ))}
-          </div>
-        )}
-        {showTags && (
-          <TagsModal
-            open={showTags}
-            onClose={() => setShowTags(false)}
-            title="Tags"
-            tags={allTags}
-            selectedIds={note.labels.map(l => l.id)}
-            onToggle={onToggleTag}
-            onCreate={onCreateTag}
-            onDelete={onDeleteTag}
-            onRename={onRenameTag}
-            onColorChange={onColorChangeTag}
-            emptyText="No tags yet. Create one below."
-          />
-        )}
       </div>
 
       {/* Checklists — same logic as the task dropdown: edit / delete / hide / move lists, edit / move / delete items */}

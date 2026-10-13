@@ -1845,7 +1845,8 @@ const Tasks: React.FC = () => {
     const isExpanded = expandedTaskIds.includes(task.id);
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
-    const taskTags = task.labels.slice(0, 3);
+    const taskTags = task.labels.slice(0, 2);
+    const extraTagCount = task.labels.length - taskTags.length;
     return (
       <div
         key={task.id}
@@ -1868,7 +1869,7 @@ const Tasks: React.FC = () => {
               : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1.5 px-3 py-3 min-w-0">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
@@ -1887,69 +1888,43 @@ const Tasks: React.FC = () => {
               className="w-4 h-4 rounded border-border accent-destructive flex-shrink-0 cursor-pointer"
             />
           ) : (
-            <div onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}>
+            <div onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }} className="flex-shrink-0">
               <CircleToggle
-                completed={isTaskCompleted(task)}
+                completed={false}
                 onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
                 size="md"
                 title="Mark complete"
               />
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
-                <PriorityBadge
-                  task={task}
-                  onUpdate={(priority) => updateTask(task.id, { priority })}
-                  isOpen={priorityEditTaskId === task.id}
-                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
-                />
-              )}
-              {checklistTotal > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {checklistDone}/{checklistTotal} checklist
-                </span>
-              )}
-              {taskTags.map(label => (
-                <span
-                  key={label.id}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                </span>
-              ))}
-              {task.labels.length > taskTags.length && (
-                <button
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  +{task.labels.length - taskTags.length}
-                </button>
-              )}
-              {(task.images?.length || 0) > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex-shrink-0">
-                  {task.images!.length} image{task.images!.length === 1 ? '' : 's'}
-                </span>
-              )}
-              {(task.attachments?.length || 0) > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {task.attachments!.length} file{task.attachments!.length === 1 ? '' : 's'}
-                </span>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  tagPopupTaskId === task.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                }`}
+          <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">{task.title || 'Untitled note'}</span>
+          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-hidden whitespace-nowrap">
+            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+              <PriorityBadge
+                task={task}
+                onUpdate={(priority) => updateTask(task.id, { priority })}
+                isOpen={priorityEditTaskId === task.id}
+                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+              />
+            )}
+            {checklistTotal > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                {checklistDone}/{checklistTotal} checklist
+              </span>
+            )}
+            {taskTags.map(label => (
+              <span
+                key={label.id}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
               >
-                <Tag className="w-2.5 h-2.5" />
-                {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
-              </button>
-            </div>
+                {label.name}
+              </span>
+            ))}
+            {extraTagCount > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                +{extraTagCount}
+              </span>
+            )}
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">

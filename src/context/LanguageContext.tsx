@@ -101,9 +101,13 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Re-sync from the account after login/logout (other devices, post-logout).
   // Auth flows dispatch `language-refresh`; we also re-check on focus.
+  // Every fetch here has a timeout so a hanging request can never brick the UI.
   const refetchFromServer = useCallback(async () => {
     try {
-      const res = await fetch('/api/settings', { credentials: 'include' });
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      const res = await fetch('/api/settings', { credentials: 'include', signal: ctrl.signal });
+      clearTimeout(tid);
       if (!res.ok) return;
       const data = await res.json().catch(() => ({}));
       if (data && typeof data.language === 'string' && data.language.trim()) {
@@ -185,16 +189,36 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   //   run, logged-out, no cache). Never overwrites a saved pick afterwards.
   useEffect(() => {
     let cancelled = false;
+    // Safety net: a hanging settings request or dictionary chunk must never
+    // leave the app on the boot spinner forever. Force-ready with the local
+    // language if boot hasn't finished in time.
+    const safety = setTimeout(() => {
+      if (!cancelled && !readyRef.current) {
+        try {
+          const fallback = readStoredLanguage();
+          const code: LangCode = LANGUAGE_MAP[fallback] || 'en';
+          setCurrentLanguage(code);
+          setLanguageState(fallback);
+          document.documentElement.lang = code;
+          document.documentElement.dir = RTL_LANGUAGES.includes(code) ? 'rtl' : 'ltr';
+        } catch {}
+        readyRef.current = true;
+        setReady(true);
+      }
+    }, 8000);
     (async () => {
       const finish = async (finalLang: string) => {
         if (cancelled) return;
+        clearTimeout(safety);
         const canonical = canonicalLanguageName(finalLang);
         setLanguageState(canonical);
         try { localStorage.setItem('language', canonical); } catch {}
         const code: LangCode = LANGUAGE_MAP[canonical] || 'en';
         setCurrentLanguage(code);
         if (code !== 'en') {
-          try { await loadLanguage(code); } catch {}
+          // Never let a slow dictionary chunk delay first paint: race it so
+          // boot always finishes, then swap in real strings when it lands.
+          try { await Promise.race([loadLanguage(code), new Promise(r => setTimeout(r, 5000))]); } catch {}
           if (cancelled) return;
           setCurrentLanguage(code);
           setDictVersion(v => v + 1);
@@ -215,7 +239,10 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrency(detectedCurrency);
 
       try {
-        const res = await fetch('/api/settings', { credentials: 'include' });
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 5000);
+        const res = await fetch('/api/settings', { credentials: 'include', signal: ctrl.signal });
+        clearTimeout(tid);
         if (!cancelled && res.ok) {
           const data = await res.json().catch(() => ({}));
           if (data && typeof data.language === 'string' && data.language.trim()) {
@@ -271,7 +298,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Fallback: English, but never overwrite a future saved value.
       await finish('English');
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(safety); };
   }, []);
 
   // Keep currency/timezone fresh without ever touching the language again.

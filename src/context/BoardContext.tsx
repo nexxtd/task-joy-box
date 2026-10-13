@@ -87,20 +87,25 @@ async function loadBoard(userId: number): Promise<Board> {
     } catch {}
   }
 
-  void (async () => {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
-      const res = await fetch('/api/boards/snapshot', { credentials: 'include', signal: ctrl.signal });
-      clearTimeout(tid);
-      if (res.status === 403 || res.status === 400) return;
-      if (res.ok) {
-        const data = await res.json();
-        const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
-        if (board) localStorage.setItem(getBoardKey(userId), JSON.stringify(board));
+  // No usable cache — fetch the server snapshot and use it when it's real,
+  // so a fresh device loads the actual board instead of empty defaults.
+  // (Never POST defaults here: pushing an empty board before reading would
+  // wipe the user's real server data on every new device/login.)
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 10000);
+    const res = await fetch('/api/boards/snapshot', { credentials: 'include', signal: ctrl.signal });
+    clearTimeout(tid);
+    if (res.status === 403 || res.status === 400) return { ...emptyBoard };
+    if (res.ok) {
+      const data = await res.json();
+      const board = data?.board ?? (data && typeof data === 'object' && 'columns' in data ? data : null);
+      if (board?.columns) {
+        try { localStorage.setItem(getBoardKey(userId), JSON.stringify(board)); } catch {}
+        return board as Board;
       }
-    } catch {}
-  })();
+    }
+  } catch {}
   return { ...emptyBoard };
 }
 
@@ -185,13 +190,17 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           else { setLoading(false); }
         } else {
           const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          setBoard(def); boardRef.current = def; setLoading(false); saveBoard(user.id, def);
+          // No local cache — render defaults locally but NEVER push them to
+          // the server yet; loadBoard below adopts the real server board when
+          // one exists, so a fresh device can't wipe server tasks.
+          setBoard(def); boardRef.current = def; setLoading(false);
         }
       } catch { setLoading(false); }
       loadBoard(user.id).then(loaded => {
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          saveBoard(user.id, loaded);
+          // Don't POST here: if the fetch failed offline this would wipe the
+          // server board with defaults. First real edit flushes via dirtyRef.
         }
         // Don't overwrite local pending changes (e.g. just-deleted image) with stale server snapshot.
         // If we have dirty pending saves, keep local and push it; server will be updated on next flush.

@@ -540,7 +540,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     const taskDurFmt = formatDuration(task.duration || 0);
-    const taskTags = task.labels.slice(0, 3);
+    const taskTags = task.labels.slice(0, 2);
     return (
       <div
         key={task.id}
@@ -553,7 +553,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
               : 'border-border hover:border-border/80 hover:shadow-sm'
         } ${task.completed ? 'opacity-60' : ''}`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1.5 px-3 py-3 min-w-0 overflow-hidden flex-nowrap">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
@@ -567,13 +567,10 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
               title="Mark complete"
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className={`text-sm font-medium text-left text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+          <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
+              <span className={`flex-1 min-w-[40px] text-sm font-medium text-left text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                 {task.title}
               </span>
-            </div>
-              <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -658,7 +655,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                 <Tag className="w-2.5 h-2.5" />
                 {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
-            </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -771,6 +767,9 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
   const renderNoteRow = (note: Task, dragHandleProps?: any, isDraggingRow?: boolean) => {
     const isExpanded = expandedTaskIds.includes(note.id);
     const noteTags = note.labels.slice(0, 2);
+    const extraTagCount = note.labels.length - noteTags.length;
+    const checklistTotal = (note.checklists || []).reduce((s, l) => s + l.items.length, 0);
+    const checklistDone = (note.checklists || []).reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     return (
       <div
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note as any); }}
@@ -780,60 +779,50 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1.5 px-3 py-3 min-w-0">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </div>
           )}
-          <div onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}>
+          <div onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }} className="flex-shrink-0">
             <CircleToggle
-              completed={isTaskCompleted(note)}
+              completed={false}
               onClick={e => { e.stopPropagation(); toggleNoteCompletion(note); }}
               size="md"
               title="Mark complete"
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-left text-foreground truncate">
-                {note.title || 'Untitled note'}
+          <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">
+            {note.title || 'Untitled note'}
+          </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-hidden whitespace-nowrap">
+            {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
+              <PriorityBadge
+                task={note}
+                onUpdate={(priority) => notesCtx.updateTask(note.id, { priority })}
+                isOpen={priorityEditTaskId === note.id}
+                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === note.id ? null : note.id)}
+              />
+            )}
+            {checklistTotal > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                {checklistDone}/{checklistTotal} checklist
               </span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-nowrap mt-0.5 overflow-x-auto">
-              {noteTags.map(label => (
-                <span
-                  key={label.id}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                </span>
-              ))}
-              {note.labels.length > noteTags.length && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  +{note.labels.length - noteTags.length}
-                </span>
-              )}
-              {note.images && note.images.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary-foreground flex-shrink-0">
-                  {note.images.length} image
-                </span>
-              )}
-              {note.attachments && note.attachments.length > 0 && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                  {note.attachments.length} file
-                </span>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === note.id ? null : note.id); }}
-                className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
-                  tagPopupTaskId === note.id ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-                }`}
+            )}
+            {noteTags.map(label => (
+              <span
+                key={label.id}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
               >
-                <Tag className="w-2.5 h-2.5" />
-                {tagPopupTaskId === note.id ? 'Close' : 'Tags'}
-              </button>
-            </div>
+                {label.name}
+              </span>
+            ))}
+            {extraTagCount > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                +{extraTagCount}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button

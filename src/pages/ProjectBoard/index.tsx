@@ -206,85 +206,95 @@ const ProjectBoard = () => {
               </div>
               
               <div className="column-tasks">
-                {tasksInColumn.map((task) => (
+                {tasksInColumn.map((task) => {
+                  const stTotal = (task.subtasks || []).length;
+                  const stDone = (task.subtasks || []).filter(s => s.completed).length;
+                  const clTotal = task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0;
+                  const clDone = task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0;
+                  const durFmt = formatDuration(task.duration || 0);
+                  const taskTags = (task.labels || []).slice(0, 2);
+                  const extraTags = (task.labels || []).length - taskTags.length;
+                  const overdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
+                  return (
                   <div
                     key={task.id}
                     onClick={() => handleViewTask(task)}
-                    className="task-card group rounded-lg bg-card p-3 cursor-pointer border border-border hover:bg-muted transition-all duration-150"
+                    className="task-card group rounded-lg bg-card px-3 py-3 cursor-pointer border border-border hover:bg-muted transition-all duration-150"
                   >
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
+                      <span className="text-muted-foreground/30 flex-shrink-0">
+                        <GripIcon className="w-4 h-4" />
+                      </span>
                       <CircleToggle
                         completed={task.completed || false}
                         onClick={e => { e.stopPropagation(); updateTask(task.id, { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : undefined }); }}
                         size="sm"
                       />
-                      {task.color && (
-                        <div className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" style={{ backgroundColor: task.color }} />
+                      <p className={`flex-1 min-w-[40px] text-sm font-medium text-left truncate ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</p>
+                      {task.priority !== 'none' && (
+                        <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex items-center gap-1 flex-shrink-0`}>
+                          {task.priority === 'urgent' && <AlertTriangleIcon className="w-3 h-3" />}
+                          {PRIORITY_CONFIG[task.priority].label}
+                        </span>
                       )}
-                      <p className={`text-sm font-bold leading-snug truncate ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</p>
+                      {durFmt && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                          {durFmt}
+                        </span>
+                      )}
+                      <span className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 bg-muted text-muted-foreground">
+                        <CalendarIcon className="w-2.5 h-2.5" />
+                        {task.startDate ? `${new Date(task.startDate).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}${task.startTime ? ` ${task.startTime}` : ''}` : 'Add start date'}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${task.dueDate ? (overdue ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground') : 'bg-muted text-muted-foreground'}`}>
+                        <CalendarIcon className="w-2.5 h-2.5" />
+                        {task.dueDate ? `${new Date(task.dueDate).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}${task.dueTime ? ` ${task.dueTime}` : ''}` : 'Add due date'}
+                      </span>
+                      {clTotal > 0 && (
+                        <span className={`flex items-center gap-1 text-[11px] flex-shrink-0 ${clDone === clTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <CheckSquareIcon className="w-3 h-3" />
+                          {clDone}/{clTotal} checklist
+                        </span>
+                      )}
+                      {stTotal > 0 && (
+                        <span className={`flex items-center gap-1 text-[11px] flex-shrink-0 ${stDone === stTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          {stDone}/{stTotal} sub task
+                        </span>
+                      )}
+                      {taskTags.map(label => (
+                        <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[10px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0`}>
+                          {label.name}
+                        </span>
+                      ))}
+                      {extraTags > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                          +{extraTags}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewTask(task);
+                        }}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground flex-shrink-0"
+                        title="Expand"
+                      >
+                        <ChevronDownIcon className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeepFocusClick(task);
                         }}
-                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-blue-100 rounded text-muted-foreground hover:text-blue-600"
+                        className="p-1.5 rounded-md hover:bg-blue-100 text-muted-foreground hover:text-blue-600 flex-shrink-0"
                         title="Start Deep Focus"
                       >
                         <BrainIcon className="w-3.5 h-3.5" />
                       </button>
-                      {task.icon && <span className="text-xs opacity-70">{task.icon}</span>}
-                    </div>
-
-                    {(task.subject || task.labels.length > 0) && (
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {task.subject && (
-                          <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
-                            {task.subject}
-                          </span>
-                        )}
-                        {task.labels.map(label => (
-                          <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[10px] font-semibold px-2 py-0.5 rounded-full text-white`}>
-                            {label.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {task.priority !== 'none' && (
-                        <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex items-center gap-1`}>
-                          {task.priority === 'urgent' && <AlertTriangleIcon className="w-3 h-3" />}
-                          {PRIORITY_CONFIG[task.priority].label}
-                        </span>
-                      )}
-                      {task.dueDate && (
-                        <span className={`flex items-center gap-1 text-[11px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-muted-foreground'}`}>
-                          <CalendarIcon className="w-3 h-3" />
-                          {new Date(task.dueDate).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })}
-                        </span>
-                      )}
-                      {(task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0) > 0 && (() => {
-                        const clTotal = task.checklists?.reduce((s, c) => s + c.items.length, 0) || 0;
-                        const clDone = task.checklists?.reduce((s, c) => s + c.items.filter(i => i.completed).length, 0) || 0;
-                        return (
-                          <span className={`flex items-center gap-1 text-[11px] ${clDone === clTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            <CheckSquareIcon className="w-3 h-3" />
-                            {clDone}/{clTotal} checklist
-                          </span>
-                        );
-                      })()}
-                      {((task.subtasks || []).length > 0) && (() => {
-                        const stTotal = (task.subtasks || []).length;
-                        const stDone = (task.subtasks || []).filter(s => s.completed).length;
-                        return (
-                          <span className={`flex items-center gap-1 text-[11px] ${stDone === stTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
-                            {stDone}/{stTotal} sub task
-                          </span>
-                        );
-                      })()}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               
               {isFree ? (

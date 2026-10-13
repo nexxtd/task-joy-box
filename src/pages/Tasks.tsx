@@ -1941,7 +1941,7 @@ const Tasks: React.FC = () => {
     const checklistTotal = task.checklists.reduce((s, l) => s + l.items.length, 0);
     const checklistDone = task.checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     const taskDurFmt = formatDuration(task.duration || 0);
-    const taskTags = task.labels.slice(0, 3);
+    const taskTags = task.labels.slice(0, 2);
     return (
       <div
         key={task.id}
@@ -1964,7 +1964,7 @@ const Tasks: React.FC = () => {
               : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1 px-3 py-3">
+        <div className="flex items-center gap-1.5 px-3 py-3 min-w-0 overflow-hidden flex-nowrap">
           {dragHandleProps && (
             <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
@@ -1992,11 +1992,8 @@ const Tasks: React.FC = () => {
               />
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-left text-foreground truncate">{task.title}</span>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+          <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
+              <span className="flex-1 min-w-[40px] text-sm font-medium text-left text-foreground truncate">{task.title}</span>
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -2084,7 +2081,6 @@ const Tasks: React.FC = () => {
                 <Tag className="w-2.5 h-2.5" />
                 {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
-            </div>
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
