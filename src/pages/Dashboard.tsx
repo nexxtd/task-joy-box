@@ -329,13 +329,32 @@ const Dashboard: React.FC = () => {
     { label: 'Settings', path: '/settings' },
   ]), []);
   const VALID_SHORTCUT_PATHS = useMemo(() => new Set(DASHBOARD_SHORTCUT_PAGES.map(p => p.path)), [DASHBOARD_SHORTCUT_PAGES]);
+  const shortcutStorageKey = `dashboard_shortcut_target_${user?.id ?? 'anon'}`;
   const [dashboardShortcut, setDashboardShortcut] = useState(() => {
-    try { return localStorage.getItem('dashboard_shortcut_target') || '/projects'; } catch { return '/projects'; }
+    try {
+      const perUser = localStorage.getItem(`dashboard_shortcut_target_${user?.id ?? 'anon'}`);
+      if (perUser) return perUser;
+      // Migrate the legacy global key so existing picks are kept.
+      const legacy = localStorage.getItem('dashboard_shortcut_target');
+      if (legacy) {
+        try { localStorage.setItem(`dashboard_shortcut_target_${user?.id ?? 'anon'}`, legacy); } catch {}
+        return legacy;
+      }
+      return '/projects';
+    } catch { return '/projects'; }
   });
   // Load the saved target from the account (other devices + after refresh).
   // Local storage is instant; the server value wins when it arrives.
   useEffect(() => {
     let cancelled = false;
+    // Re-read the per-user key once the user id is known (covers account
+    // switches on the same browser without flashing another user's pick).
+    try {
+      const stored = localStorage.getItem(shortcutStorageKey);
+      if (stored && VALID_SHORTCUT_PATHS.has(stored)) {
+        setDashboardShortcut(stored);
+      }
+    } catch {}
     fetch('/api/settings', { credentials: 'include' }).then(async r => {
       if (!r.ok || cancelled) return;
       try {
@@ -344,6 +363,7 @@ const Dashboard: React.FC = () => {
         if (srv && VALID_SHORTCUT_PATHS.has(srv)) {
           setDashboardShortcut(prev => {
             if (prev !== srv) {
+              try { localStorage.setItem(shortcutStorageKey, srv); } catch {}
               try { localStorage.setItem('dashboard_shortcut_target', srv); } catch {}
               return srv;
             }
@@ -353,11 +373,12 @@ const Dashboard: React.FC = () => {
       } catch {}
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [VALID_SHORTCUT_PATHS, user?.id]);
+  }, [VALID_SHORTCUT_PATHS, user?.id, shortcutStorageKey]);
   const dashboardShortcutLabel = DASHBOARD_SHORTCUT_PAGES.find(p => p.path === dashboardShortcut)?.label || 'Projects';
   const setShortcutTarget = (path: string) => {
     if (!VALID_SHORTCUT_PATHS.has(path)) return;
     setDashboardShortcut(path);
+    try { localStorage.setItem(shortcutStorageKey, path); } catch {}
     try { localStorage.setItem('dashboard_shortcut_target', path); } catch {}
     // Persist to the account so it stays after refresh and on other devices.
     fetch('/api/settings', {
@@ -1803,7 +1824,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                     className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all min-w-0"
                     title={tr('Go to {{name}}', { name: tr(dashboardShortcutLabel) })}
                   >
-                    <FolderOpen className="w-4 h-4 shrink-0" /> <span className="truncate">{tr('View {{name}}', { name: tr(dashboardShortcutLabel) })}</span>
+                    <FolderOpen className="w-4 h-4 shrink-0" /> <span className="truncate min-w-0">{tr('View {{name}}', { name: tr(dashboardShortcutLabel) })}</span>
                   </button>
                   <button
                     type="button"
@@ -1834,9 +1855,9 @@ style={{ background: 'hsl(var(--primary))' }}>
                       aria-selected={item.path === dashboardShortcut}
                       onClick={() => { setShortcutTarget(item.path); setViewProjectsMenuOpen(false); }}
                       title={tr(item.label)}
-                      className={`w-full flex items-center h-8 px-2 text-xs rounded-md transition-all truncate ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground hover:bg-muted'}`}
+                      className={`w-full flex items-center h-8 px-2 text-xs rounded-md transition-all truncate min-w-0 ${item.path === dashboardShortcut ? 'text-primary font-bold bg-primary/10' : 'text-foreground hover:bg-muted'}`}
                     >
-                      <span className="truncate">{tr(item.label)}</span>
+                      <span className="truncate min-w-0 flex-1 text-left">{tr(item.label)}</span>
                     </button>
                   ))}
                 </div>,
