@@ -11,6 +11,14 @@ import { useDeepFocus } from '@/hooks/useDeepFocus';
 import { CircleToggle } from '@/components/ToggleComponents';
 import { Select as RadixSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+const formatDuration = (minutes: number) => {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
 const ProjectBoard = () => {
   const { board, addTask, updateTask, deleteTask, addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem } = useBoardContext();
   const { user } = useAuth();
@@ -923,6 +931,18 @@ const AlertTriangleIcon = ({ className }: { className?: string }) => (
 const BrainIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9c0 1.105 3.134 2 7 2s7-.895 7-2M3 9c0-1.105 3.134-2 7-2s7 .895 7 2M3 9v6c0 1.105 3.134 2 7 2s7-.895 7-2V9M10 15c0-.552-.448-1-1-1s-1 .448-1 1 .448 1 1 1 1-.448 1-1z" />
+  </svg>
+);
+
+const GripIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
   </svg>
 );
 
