@@ -51,41 +51,12 @@ function getBoardKey(userId: number) {
   return `board_${userId}`;
 }
 
-async function loadBoard(userId: number): Promise<Board> {
-  // 1) Return cached board IMMEDIATELY if present (instant load)
-  const cached = localStorage.getItem(getBoardKey(userId));
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (parsed?.columns) {
-        // 2) Revalidate in background (don't block UI) - but NEVER overwrite
-        // localStorage with stale server data before it has been flushed.
-        // The BoardProvider effect will reconcile with dirtyRef awareness.
-        void (async () => {
-          try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 4000);
-            const res = await fetch('/api/boards/snapshot', { 
-              credentials: 'include', 
-              signal: ctrl.signal 
-            });
-            clearTimeout(tid);
-            
-            // Fast-path 403/400 (free tier restrictions)
-            if (res.status === 403 || res.status === 400) return;
-            
-            // Do NOT blindly overwrite localStorage here; that would resurrect
-            // images/files just deleted locally but not yet flushed to server
-            // (delete -> 800ms debounce -> refresh before flush).
-            // The main BoardProvider load effect handles reconciliation with
-            // dirtyRef checks.
-          } catch {}
-        })();
-        
-        return parsed as Board;
-      }
-    } catch {}
-  }
+async function loadBoard(userId: number, cachedBoard: Board | null): Promise<Board> {
+  // 1) Return the cached board IMMEDIATELY if present (instant load).
+  //    The cache is parsed by the caller and handed in, so a board (which can
+  //    be megabytes — images are inlined as data URLs) is only JSON.parsed
+  //    ONCE per boot instead of twice.
+  if (cachedBoard?.columns) return cachedBoard;
 
   // No usable cache — fetch the server snapshot and use it when it's real,
   // so a fresh device loads the actual board instead of empty defaults.
@@ -182,21 +153,31 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (user) {
+      // Parse the cache ONCE here and hand the parsed board to loadBoard.
+      // The old flow re-read and re-parsed the same localStorage key inside
+      // loadBoard, then stringified both boards to diff them — 2 parses and
+      // 2 stringifies of a possibly multi-MB payload on every app boot.
+      let cached: Board | null = null;
+      let hadCache = false;
       try {
-        const cached = localStorage.getItem(getBoardKey(user.id));
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed?.columns) { setBoard(parsed); boardRef.current = parsed; setLoading(false); setLastSyncTime(new Date()); }
-          else { setLoading(false); }
-        } else {
-          const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          // No local cache — render defaults locally but NEVER push them to
-          // the server yet; loadBoard below adopts the real server board when
-          // one exists, so a fresh device can't wipe server tasks.
-          setBoard(def); boardRef.current = def; setLoading(false);
+        const raw = localStorage.getItem(getBoardKey(user.id));
+        hadCache = !!raw;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.columns) cached = parsed as Board;
         }
-      } catch { setLoading(false); }
-      loadBoard(user.id).then(loaded => {
+      } catch { cached = null; hadCache = false; }
+
+      if (cached) {
+        setBoard(cached); boardRef.current = cached; setLoading(false); setLastSyncTime(new Date());
+      } else {
+        const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
+        // No local cache — render defaults locally but NEVER push them to
+        // the server yet; loadBoard below adopts the real server board when
+        // one exists, so a fresh device can't wipe server tasks.
+        setBoard(def); boardRef.current = def; setLoading(false);
+      }
+      loadBoard(user.id, cached).then(loaded => {
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
           // Don't POST here: if the fetch failed offline this would wipe the
@@ -210,6 +191,12 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setLoading(false);
           return;
         }
+        // Same object reference => the board came from the cache we already
+        // rendered, so there is nothing to diff (and nothing to stringify).
+        if (loaded === boardRef.current) {
+          setLoading(false);
+          return;
+        }
         const cur = JSON.stringify(boardRef.current);
         const nxt = JSON.stringify(loaded);
         // Only adopt server board if local is empty default or server is meaningfully newer.
@@ -220,7 +207,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return b.tasks.length === 0 && b.columns.length <= 3;
           } catch { return false; }
         })();
-        if (cur !== nxt && (isLocalDefaultEmpty || !localStorage.getItem(getBoardKey(user.id)))) {
+        if (cur !== nxt && (isLocalDefaultEmpty || !hadCache)) {
           setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date());
           try { localStorage.setItem(getBoardKey(user.id), JSON.stringify(loaded)); } catch {}
         } else if (cur !== nxt && !isLocalDefaultEmpty) {

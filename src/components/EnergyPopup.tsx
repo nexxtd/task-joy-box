@@ -82,7 +82,9 @@ const EnergyPopup: React.FC = () => {
     const deferred = localStorage.getItem(DEFER_KEY_PREFIX + localDayKey()) === 'true';
     const queue: Slot[] = [];
     if (!completed.has('morning')) queue.push('morning');
-    if (!completed.has('midday')) {
+    // The midday check must not fire before its own slot (12:00). Queueing it
+    // from 08:00 made the "Midday Energy Check" pop up in the morning.
+    if (!completed.has('midday') && h >= 12) {
       if (!deferred) queue.push('midday');
       else if (h >= 16) queue.push('midday');
     }

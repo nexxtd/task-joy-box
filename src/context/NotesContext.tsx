@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Board, Task, TaskActivity, Column, Checklist, ChecklistItem } from '@/types/board';
 import { emptyBoard } from '@/data/initialBoard';
 import { useAuth } from '@/context/AuthContext';
@@ -33,6 +33,8 @@ interface NotesContextType {
   // Sync status
   lastSyncTime: Date | null;
   syncStatus: 'synced' | 'syncing' | 'offline';
+  // True while the board is still being resolved (cold start, no cache).
+  loading: boolean;
 }
 
 const NotesContext = createContext<NotesContextType | null>(null);
@@ -49,35 +51,12 @@ function getBoardKey(userId: number) {
   return `note_board_${userId}`;
 }
 
-async function loadBoard(userId: number): Promise<Board> {
-  // 1) Return cached board IMMEDIATELY if present (instant load)
-  const cached = localStorage.getItem(getBoardKey(userId));
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (parsed?.columns) {
-        // 2) Revalidate in background (don't block UI) - but NEVER overwrite
-        // localStorage with stale server data before it has been flushed.
-        void (async () => {
-          try {
-            const ctrl = new AbortController();
-            const tid = setTimeout(() => ctrl.abort(), 30000);
-            const res = await fetch('/api/note-boards/snapshot', { 
-              credentials: 'include', 
-              signal: ctrl.signal 
-            });
-            clearTimeout(tid);
-            
-            // Fast-path 403/400 (free tier restrictions)
-            if (res.status === 403 || res.status === 400) return;
-            // Do NOT blindly overwrite localStorage with server data here.
-          } catch {}
-        })();
-        
-        return parsed as Board;
-      }
-    } catch {}
-  }
+async function loadBoard(userId: number, cachedBoard: Board | null): Promise<Board> {
+  // 1) Return the cached board IMMEDIATELY if present (instant load).
+  //    The cache is parsed by the caller and handed in, so a notes board
+  //    (which can be megabytes — images are inlined as data URLs) is only
+  //    JSON.parsed ONCE per boot instead of twice.
+  if (cachedBoard?.columns) return cachedBoard;
 
   // No usable cache — fetch the server snapshot and use it when it's real,
   // so a fresh device loads the actual notes instead of empty defaults.
@@ -154,10 +133,19 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // writing would clobber real cached notes with the empty initial state and
   // every reload would show "No notes found" with no Completed sections.
   const hydratedRef = useRef(false);
+  // The localStorage mirror used to JSON.stringify + setItem the whole board
+  // on EVERY board change (i.e. on every keystroke). Debounced so a burst of
+  // edits costs one serialization instead of one per edit.
+  const mirrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     boardRef.current = board;
     if (!hydratedRef.current) return;
-    try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(board)); } catch {}
+    if (mirrorTimerRef.current) { clearTimeout(mirrorTimerRef.current); mirrorTimerRef.current = null; }
+    mirrorTimerRef.current = setTimeout(() => {
+      mirrorTimerRef.current = null;
+      try { if (user) localStorage.setItem(getBoardKey(user.id), JSON.stringify(board)); } catch {}
+    }, 400);
+    return () => { if (mirrorTimerRef.current) { clearTimeout(mirrorTimerRef.current); mirrorTimerRef.current = null; } };
   }, [board, user?.id]);
   const flushBoardSave = useCallback(() => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
@@ -173,21 +161,29 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     hydratedRef.current = false;
     if (user) {
+      // Parse the cache ONCE here and hand the parsed board to loadBoard.
+      // The old flow re-read and re-parsed the same localStorage key inside
+      // loadBoard, then stringified both boards to diff them — 2 parses and
+      // 2 stringifies of a possibly multi-MB payload on every app boot.
+      let cached: Board | null = null;
       try {
-        const cached = localStorage.getItem(getBoardKey(user.id));
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed?.columns) { setBoard(parsed); boardRef.current = parsed; setLoading(false); setLastSyncTime(new Date()); }
-          else setLoading(false);
-        } else {
-          const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
-          // No local cache — render defaults locally but NEVER push them to
-          // the server yet; loadBoard below adopts the real server board when
-          // one exists, so a fresh device can't wipe server notes.
-          setBoard(def); boardRef.current = def; setLoading(false);
+        const raw = localStorage.getItem(getBoardKey(user.id));
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.columns) cached = parsed as Board;
         }
-      } catch { setLoading(false); }
-      loadBoard(user.id).then(loaded => {
+      } catch { cached = null; }
+
+      if (cached) {
+        setBoard(cached); boardRef.current = cached; setLoading(false); setLastSyncTime(new Date());
+      } else {
+        const def = { ...emptyBoard, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
+        // No local cache — render defaults locally but NEVER push them to
+        // the server yet; loadBoard below adopts the real server board when
+        // one exists, so a fresh device can't wipe server notes.
+        setBoard(def); boardRef.current = def; setLoading(false);
+      }
+      loadBoard(user.id, cached).then(loaded => {
         if (loaded.columns.length === 0) {
           loaded = { ...loaded, columns: [{ id: 'col-to-do', title: 'To Do', order: 0, projectId: null, color: '' }, { id: 'col-in-progress', title: 'In Progress', order: 1, projectId: null, color: '' }, { id: 'col-done', title: 'Done', order: 2, projectId: null, color: '' }] };
         }
@@ -198,9 +194,13 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           hydratedRef.current = true;
           return;
         }
-        const cur = JSON.stringify(boardRef.current);
-        const nxt = JSON.stringify(loaded);
-        if (cur !== nxt) { setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date()); }
+        // Same object reference => the board came from the cache we already
+        // rendered, so there is nothing to diff (and nothing to stringify).
+        if (loaded !== boardRef.current) {
+          const cur = JSON.stringify(boardRef.current);
+          const nxt = JSON.stringify(loaded);
+          if (cur !== nxt) { setBoard(loaded); boardRef.current = loaded; setLastSyncTime(new Date()); }
+        }
         setLoading(false);
         hydratedRef.current = true;
       }).catch(() => { setLoading(false); hydratedRef.current = true; });
@@ -683,15 +683,26 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [persist]);
 
+  // Keep the context object identity stable so consumers don't re-render
+  // every time the provider re-renders for an unrelated reason.
+  const contextValue = useMemo<NotesContextType>(() => ({
+    board, addTask, updateTask, deleteTask, moveTask,
+    addColumn, updateColumn, deleteColumn, reorderColumns,
+    addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
+    findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
+    moveCrossSection,
+    lastSyncTime, syncStatus, loading,
+  }), [
+    board, addTask, updateTask, deleteTask, moveTask,
+    addColumn, updateColumn, deleteColumn, reorderColumns,
+    addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
+    findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
+    moveCrossSection,
+    lastSyncTime, syncStatus, loading,
+  ]);
+
   return (
-    <NotesContext.Provider value={{
-      board, addTask, updateTask, deleteTask, moveTask,
-      addColumn, updateColumn, deleteColumn, reorderColumns,
-      addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
-      findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
-      moveCrossSection,
-      lastSyncTime, syncStatus,
-    }}>
+    <NotesContext.Provider value={contextValue}>
       {children}
     </NotesContext.Provider>
   );

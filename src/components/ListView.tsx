@@ -568,6 +568,26 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             />
           </div>
           <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
+              {taskTags.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {taskTags.map(label => (
+                    <span
+                      key={label.id}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                    >
+                      {label.name}
+                    </span>
+                  ))}
+                  {task.labels.length > taskTags.length && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                    >
+                      +{task.labels.length - taskTags.length}
+                    </button>
+                  )}
+                </div>
+              )}
               <span className={`flex-1 min-w-[40px] text-sm font-medium text-left text-foreground truncate ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                 {task.title}
               </span>
@@ -629,22 +649,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                   {subtaskDone}/{subtaskCount} sub task
                 </span>
-              )}
-              {taskTags.map(label => (
-                <span
-                  key={label.id}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                </span>
-              ))}
-              {task.labels.length > taskTags.length && (
-                <button
-                  onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  +{task.labels.length - taskTags.length}
-                </button>
               )}
               <button
                 onClick={e => { e.stopPropagation(); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
@@ -793,6 +797,23 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
               title="Mark complete"
             />
           </div>
+          {noteTags.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {noteTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {extraTagCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{extraTagCount}
+                </span>
+              )}
+            </div>
+          )}
           <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">
             {note.title || 'Untitled note'}
           </span>
@@ -808,19 +829,6 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             {checklistTotal > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                 {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
-            {noteTags.map(label => (
-              <span
-                key={label.id}
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-              >
-                {label.name}
-              </span>
-            ))}
-            {extraTagCount > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                +{extraTagCount}
               </span>
             )}
           </div>

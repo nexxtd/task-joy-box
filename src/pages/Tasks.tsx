@@ -1993,6 +1993,26 @@ const Tasks: React.FC = () => {
             </div>
           )}
           <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
+              {taskTags.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {taskTags.map(label => (
+                    <span
+                      key={label.id}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                    >
+                      {label.name}
+                    </span>
+                  ))}
+                  {task.labels.length > taskTags.length && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                    >
+                      +{task.labels.length - taskTags.length}
+                    </button>
+                  )}
+                </div>
+              )}
               <span className="flex-1 min-w-[40px] text-sm font-medium text-left text-foreground truncate">{task.title}</span>
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
@@ -2056,22 +2076,6 @@ const Tasks: React.FC = () => {
                   </span>
                 );
               })()}
-              {taskTags.map(label => (
-                <span
-                  key={label.id}
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                >
-                  {label.name}
-                </span>
-              ))}
-              {task.labels.length > taskTags.length && (
-                <button
-                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                >
-                  +{task.labels.length - taskTags.length}
-                </button>
-              )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${

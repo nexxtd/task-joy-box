@@ -922,6 +922,13 @@ const Tasks: React.FC = () => {
     [filtered.active]
   );
 
+  // Precomputed so the render body doesn't re-filter the whole completed list
+  // on every render.
+  const myNotesCompleted = useMemo(() =>
+    filtered.completed.filter(t => !t.projectId),
+    [filtered.completed]
+  );
+
   const projectTaskGroups = useMemo(() => {
     return projects.map(project => {
       const tasks = filtered.active.filter(t => t.projectId === project.id);
@@ -1897,6 +1904,23 @@ const Tasks: React.FC = () => {
               />
             </div>
           )}
+          {taskTags.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {taskTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {extraTagCount > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  +{extraTagCount}
+                </span>
+              )}
+            </div>
+          )}
           <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">{task.title || 'Untitled note'}</span>
           <div className="flex items-center gap-1.5 flex-shrink-0 overflow-hidden whitespace-nowrap">
             {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
@@ -1910,19 +1934,6 @@ const Tasks: React.FC = () => {
             {checklistTotal > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                 {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
-            {taskTags.map(label => (
-              <span
-                key={label.id}
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-              >
-                {label.name}
-              </span>
-            ))}
-            {extraTagCount > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                +{extraTagCount}
               </span>
             )}
           </div>
@@ -2416,7 +2427,7 @@ const Tasks: React.FC = () => {
                   </div>
                 )}
               </Droppable>
-              {!myTasksCollapsed && renderCompletedSection('my-notes', filtered.completed.filter(t => !t.projectId))}
+              {!myTasksCollapsed && renderCompletedSection('my-notes', myNotesCompleted)}
             </div>
           )}
 
@@ -2442,7 +2453,7 @@ const Tasks: React.FC = () => {
                   <span className="text-[10px] text-muted-foreground/50 ml-1">({tasks.length})</span>
                 </button>
                 <div className="pl-4 space-y-2">
-                    {columnGroups.map(({ column, tasks: colTasks }, colIdx) => {
+                    {columnGroups.map(({ column, tasks: colTasks, completed: colCompleted }, colIdx) => {
                       const isColumnCollapsed = collapsedColumns.includes(column.id);
                       return (
                         <div key={column.id}>
@@ -2490,7 +2501,7 @@ const Tasks: React.FC = () => {
                           </Droppable>
                           {!isColumnCollapsed && (
                             <div className="pl-3">
-                              {renderCompletedSection('col-' + column.id, filtered.completed.filter(t => t.projectId === project.id && t.columnId === column.id))}
+                              {renderCompletedSection('col-' + column.id, colCompleted)}
                             </div>
                           )}
                         </div>

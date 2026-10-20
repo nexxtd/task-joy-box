@@ -172,6 +172,9 @@ function ProtectedRoutes() {
     const preload = () => {
       void import("@/pages/Tasks");
       void import("@/pages/Projects");
+      // The Notes page is a ~110 KB chunk and is NOT pulled in by Tasks or
+      // Projects, so navigating to it used to pay a cold chunk fetch.
+      void import("@/pages/Notes");
     };
     try {
       const conn = (navigator as any)?.connection;
