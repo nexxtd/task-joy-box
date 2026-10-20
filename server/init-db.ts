@@ -769,6 +769,16 @@ export async function initDatabase() {
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
       );
     `);
+    // Attachments + task/note links on chat messages. Added as separate
+    // ALTERs so existing installs pick the columns up without a wipe.
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS attachment_name TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS attachment_type TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS attachment_size INTEGER;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS attachment_data TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS linked_type TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS linked_id TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS linked_title TEXT;`);
+    await pool.query(`ALTER TABLE project_chat_messages ADD COLUMN IF NOT EXISTS linked_column TEXT;`);
     await pool.query(`CREATE INDEX IF NOT EXISTS project_chat_messages_project_id_idx ON project_chat_messages(project_id);`);
     console.log('Project chat messages table verified');
 

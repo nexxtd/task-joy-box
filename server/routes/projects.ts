@@ -1,11 +1,46 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { getSettingNumber } from '../lib/settings.js';
 import { projectJoinRequests, projectMembers, projects, users } from '../../shared/schema.js';
 
 const router = Router();
+
+// --- Project chat uploads -------------------------------------------------
+const CHAT_MIMES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'application/pdf', 'text/plain', 'text/csv', 'text/markdown', 'text/x-markdown',
+  'application/zip', 'application/x-zip-compressed',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.oasis.opendocument.text', 'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/octet-stream',
+];
+const CHAT_EXT = /\.(jpe?g|png|gif|webp|svg|pdf|txt|csv|md|zip|docx?|odt|xlsx?)$/i;
+
+// memoryStorage: bytes go into project_chat_messages.attachment_data. uploads/
+// is ephemeral on Render/Vercel, so a disk-only copy shows a broken image after
+// a restart. multer needs a static cap; the real limit is enforced per request
+// from the max_attachment_mb setting.
+const uploadChatFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (CHAT_MIMES.includes(file.mimetype) || CHAT_EXT.test(file.originalname)) cb(null, true);
+    else cb(new Error('File type not allowed'));
+  },
+});
+
+function sanitizeChatFilename(name: string): string {
+  return String(name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+}
+
+const INLINE_MIME_PREFIXES = ['image/', 'application/pdf', 'text/'];
 
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
   free: 5,
@@ -559,7 +594,10 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
     if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
 
     const result = await pool.query(
-      `SELECT pcm.id, pcm.user_id as "userId", pcm.message, pcm.created_at as "createdAt", u.name as "authorName"
+      `SELECT pcm.id, pcm.user_id as "userId", pcm.message, pcm.created_at as "createdAt", u.name as "authorName",
+              pcm.attachment_name as "attachmentName", pcm.attachment_type as "attachmentType",
+              pcm.attachment_size as "attachmentSize", pcm.linked_type as "linkedType",
+              pcm.linked_id as "linkedId", pcm.linked_title as "linkedTitle", pcm.linked_column as "linkedColumn"
        FROM project_chat_messages pcm
        INNER JOIN users u ON u.id = pcm.user_id
        WHERE pcm.project_id = $1
@@ -567,15 +605,55 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
        LIMIT 200`,
       [projectId]
     );
-    res.json({ messages: result.rows });
+    // attachment_data stays in the DB — expose an authenticated URL instead so
+    // the message list never ships megabytes of base64.
+    res.json({
+      messages: result.rows.map((row: any) => ({
+        ...row,
+        attachmentUrl: row.attachmentName ? `/api/projects/${projectId}/chat/message/${row.id}/attachment` : null,
+      })),
+    });
   } catch (error) {
     console.error('Get project chat error:', error);
     res.status(500).json({ error: 'Failed to get messages' });
   }
 });
 
-// Project chat - send a message
-router.post('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Response) => {
+// Project chat - download an attachment
+router.get('/:projectId/chat/message/:messageId/attachment', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    const messageId = parseInt(req.params.messageId, 10);
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
+
+    const result = await pool.query(
+      `SELECT attachment_name, attachment_type, attachment_data
+       FROM project_chat_messages
+       WHERE id = $1 AND project_id = $2`,
+      [messageId, projectId]
+    );
+    const row = result.rows[0];
+    if (!row || !row.attachment_data) return res.status(404).json({ error: 'Attachment not found' });
+
+    const mimeType = row.attachment_type || 'application/octet-stream';
+    const fileName = sanitizeChatFilename(row.attachment_name || 'file');
+    const isInline = INLINE_MIME_PREFIXES.some(prefix => mimeType.startsWith(prefix));
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `${isInline ? 'inline' : 'attachment'}; filename="${fileName}"`);
+    res.setHeader('Cache-Control', 'private, max-age=604800');
+    res.end(Buffer.from(row.attachment_data, 'base64'));
+  } catch (error) {
+    console.error('Download project chat attachment error:', error);
+    res.status(500).json({ error: 'Failed to get attachment' });
+  }
+});
+
+// Project chat - send a message (multipart so a file/image can ride along)
+router.post('/:projectId/chat', requireAuth, uploadChatFile.single('file'), async (req: any, res: Response) => {
   try {
     const projectId = parseInt(req.params.projectId, 10);
     const membership = await db
@@ -584,19 +662,74 @@ router.post('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respo
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
     if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
 
-    const { message } = req.body;
-    if (!message || String(message).trim().length === 0) {
+    const text = String(req.body?.message ?? '').trim();
+    const file = req.file as Express.Multer.File | undefined;
+    if (!text && !file) {
       return res.status(400).json({ error: 'Message is required' });
     }
+    if (file) {
+      const maxMb = await getSettingNumber('max_attachment_mb', 25);
+      if (file.size > Math.max(1, maxMb) * 1024 * 1024) {
+        return res.status(413).json({
+          error: 'FILE_TOO_LARGE',
+          message: `Attachment exceeds the ${maxMb} MB limit`,
+          limitMb: maxMb,
+        });
+      }
+    }
+
+    const linkedTypeRaw = String(req.body?.linkedType ?? '').trim();
+    const linkedType = linkedTypeRaw === 'task' || linkedTypeRaw === 'note' ? linkedTypeRaw : null;
+    const linkedId = linkedType ? String(req.body?.linkedId ?? '').trim() : '';
+    const linkedTitle = linkedType ? String(req.body?.linkedTitle ?? '').trim().slice(0, 300) : null;
+    const linkedColumn = linkedType ? String(req.body?.linkedColumn ?? '').trim().slice(0, 120) || null : null;
+    // Without an id there is nothing to link to.
+    const useLink = Boolean(linkedType && linkedId);
+
     const result = await pool.query(
-      `INSERT INTO project_chat_messages (project_id, user_id, message)
-       VALUES ($1, $2, $3)
-       RETURNING id, user_id as "userId", message, created_at as "createdAt"`,
-      [projectId, req.userId!, String(message).trim()]
+      `INSERT INTO project_chat_messages
+         (project_id, user_id, message, attachment_name, attachment_type, attachment_size, attachment_data,
+          linked_type, linked_id, linked_title, linked_column)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, user_id as "userId", message, created_at as "createdAt",
+                 attachment_name as "attachmentName", attachment_type as "attachmentType",
+                 attachment_size as "attachmentSize", linked_type as "linkedType",
+                 linked_id as "linkedId", linked_title as "linkedTitle", linked_column as "linkedColumn"`,
+      [
+        projectId,
+        req.userId!,
+        text || (file ? file.originalname : ''),
+        file ? sanitizeChatFilename(file.originalname) : null,
+        file ? file.mimetype : null,
+        file ? file.size : null,
+        file ? file.buffer.toString('base64') : null,
+        useLink ? linkedType : null,
+        useLink ? linkedId : null,
+        useLink ? linkedTitle : null,
+        useLink ? linkedColumn : null,
+      ]
     );
-    const msg = result.rows[0];
+    const msg: any = result.rows[0];
+    if (file) {
+      // Best-effort disk copy for parity with ticket uploads; the DB copy above
+      // is what actually gets served.
+      try {
+        const dir = process.env.VERCEL === '1'
+          ? path.join('/tmp', 'uploads', 'project-chat')
+          : path.join(process.cwd(), 'uploads', 'project-chat');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        const ext = path.extname(sanitizeChatFilename(file.originalname)).replace(/[^a-zA-Z0-9.]/g, '');
+        fs.writeFileSync(path.join(dir, `${msg.id}${ext}`), file.buffer);
+      } catch { /* DB copy is the source of truth */ }
+    }
     const userResult = await pool.query(`SELECT name FROM users WHERE id = $1`, [req.userId!]);
-    res.json({ message: { ...msg, authorName: userResult.rows[0]?.name || 'Unknown' } });
+    res.json({
+      message: {
+        ...msg,
+        authorName: userResult.rows[0]?.name || 'Unknown',
+        attachmentUrl: msg.attachmentName ? `/api/projects/${projectId}/chat/message/${msg.id}/attachment` : null,
+      },
+    });
   } catch (error) {
     console.error('Send project chat error:', error);
     res.status(500).json({ error: 'Failed to send message' });

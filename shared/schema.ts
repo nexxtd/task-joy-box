@@ -475,6 +475,19 @@ export const projectChatMessages = pgTable('project_chat_messages', {
   projectId: integer('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   message: text('message').notNull(),
+  // Optional file/image shared in the conversation. Bytes live in
+  // attachment_data (base64) because uploads/ is ephemeral on Render/Vercel,
+  // which turned shared images white after a refresh.
+  attachmentName: text('attachment_name'),
+  attachmentType: text('attachment_type'),
+  attachmentSize: integer('attachment_size'),
+  attachmentData: text('attachment_data'),
+  // Optional task/note this message refers to. linked_title/linked_column are
+  // denormalised so the bubble still renders a label after the item is gone.
+  linkedType: text('linked_type'),
+  linkedId: text('linked_id'),
+  linkedTitle: text('linked_title'),
+  linkedColumn: text('linked_column'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
