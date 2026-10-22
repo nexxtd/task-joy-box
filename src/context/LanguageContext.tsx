@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import t, { LangCode, Translations, LANGUAGE_MAP, RTL_LANGUAGES, canonicalLanguageName, setCurrentLanguage, interpolate, tt, getTranslations, getCurrentLang, loadLanguage } from '@/i18n/translations';
+import { LangCode, Translations, RTL_LANGUAGES, canonicalLanguageCode, languageDisplayName, resolveLanguageCode, setCurrentLanguage, tt, getTranslations, getCurrentLang, loadLanguage } from '@/i18n/translations';
 import { detectCurrency, detectLanguageFromBrowser, detectTimezone } from '@/lib/location';
 
 type TranslateFn = (phrase: string, vars?: Record<string, string | number>) => string;
@@ -26,16 +26,45 @@ export const useLanguage = () => {
 const FIRST_VISIT_KEY = 'first_visit_done';
 const LOCATION_KEY = 'user_location';
 
-function readStoredLanguage(): string {
+/**
+ * Header values must be ISO-8859-1 (all char codes <= 0xFF); anything else
+ * makes Headers.set() THROW ("String contains non ISO-8859-1 code point"),
+ * which used to break every request (blank app) when a display name like
+ * "中文" was stored as the language. Never let a bad value take down a
+ * request: drop the header instead.
+ */
+export const isHeaderValueSafe = (value: string): boolean => {
+  for (let i = 0; i < value.length; i++) {
+    if (value.charCodeAt(i) > 0xff) return false;
+  }
+  return true;
+};
+
+// Always persist language CODES (en, zh, ...) — never display names ("中文").
+// Display names can contain non ISO-8859-1 characters, which used to break
+// the fetch wrapper's request headers and blank out the whole app.
+function readStoredLanguageCode(): LangCode {
   try {
-    return canonicalLanguageName(localStorage.getItem('language'));
+    const raw = localStorage.getItem('language');
+    const code = resolveLanguageCode(raw);
+    if (code === null) {
+      // Missing/invalid value: fall back to English and clear the bad value.
+      if (raw !== null) { try { localStorage.removeItem('language'); } catch {} }
+      return 'en';
+    }
+    // Migrate legacy display-name values ("中文" -> "zh") in place.
+    if (code !== raw) { try { localStorage.setItem('language', code); } catch {} }
+    return code;
   } catch {
-    return 'English';
+    return 'en';
   }
 }
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState(() => readStoredLanguage());
+  // Internal state is always a language CODE (en, zh, ...). The display name
+  // is derived for the UI only and is never persisted or sent in headers.
+  const [langCode, setLangCode] = useState<LangCode>(() => readStoredLanguageCode());
+  const language = languageDisplayName(langCode);
   const [currency, setCurrency] = useState(() => {
     try {
       const loc = localStorage.getItem(LOCATION_KEY);
@@ -49,9 +78,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [ready, setReady] = useState(false);
   const readyRef = useRef(false);
 
-  const getLangCode = (lang: string): LangCode => LANGUAGE_MAP[lang] || 'en';
-
-  const lang = getLangCode(language);
+  const lang = langCode;
   const [dictVersion, setDictVersion] = useState(0);
   useEffect(() => {
     if (lang === 'en') {
@@ -77,13 +104,13 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [lang, isRTL]);
 
   const setLanguage = useCallback((newLang: string) => {
-    const canonical = canonicalLanguageName(newLang);
+    // Accepts a code ("zh") or a legacy display name ("中文"); persists the code.
+    const code: LangCode = canonicalLanguageCode(newLang);
     // Apply straight away everywhere with no refresh needed.
-    setLanguageState(canonical);
-    try { localStorage.setItem('language', canonical); } catch {}
+    setLangCode(code);
+    try { localStorage.setItem('language', code); } catch {}
     // Keep <html> in sync instantly so dates/dir switch without a flash.
     try {
-      const code: LangCode = LANGUAGE_MAP[canonical] || 'en';
       setCurrentLanguage(code);
       document.documentElement.lang = code;
       document.documentElement.dir = RTL_LANGUAGES.includes(code) ? 'rtl' : 'ltr';
@@ -93,7 +120,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ language: canonical }),
+      body: JSON.stringify({ language: code }),
     }).catch(() => {});
   }, []);
 
@@ -111,23 +138,35 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!res.ok) return;
       const data = await res.json().catch(() => ({}));
       if (data && typeof data.language === 'string' && data.language.trim()) {
-        const serverCanon = canonicalLanguageName(data.language);
-        setLanguageState(prev => {
-          if (prev !== serverCanon) {
-            try { localStorage.setItem('language', serverCanon); } catch {}
-            const code: LangCode = LANGUAGE_MAP[serverCanon] || 'en';
-            setCurrentLanguage(code);
-            if (code !== 'en') {
-              loadLanguage(code).then(() => {
-                setCurrentLanguage(code);
+        const serverCode = resolveLanguageCode(data.language);
+        if (serverCode === null) {
+          // Invalid value saved on the account (e.g. a mojibake display name):
+          // fall back to English and repair the account so other devices recover.
+          setLangCode(prev => (prev === 'en' ? prev : 'en'));
+          try { localStorage.setItem('language', 'en'); } catch {}
+          fetch('/api/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ language: 'en' }),
+          }).catch(() => {});
+          return;
+        }
+        setLangCode(prev => {
+          if (prev !== serverCode) {
+            try { localStorage.setItem('language', serverCode); } catch {}
+            setCurrentLanguage(serverCode);
+            if (serverCode !== 'en') {
+              loadLanguage(serverCode).then(() => {
+                setCurrentLanguage(serverCode);
                 setDictVersion(v => v + 1);
               }).catch(() => {});
             }
             try {
-              document.documentElement.lang = code;
-              document.documentElement.dir = RTL_LANGUAGES.includes(code) ? 'rtl' : 'ltr';
+              document.documentElement.lang = serverCode;
+              document.documentElement.dir = RTL_LANGUAGES.includes(serverCode) ? 'rtl' : 'ltr';
             } catch {}
-            return serverCanon;
+            return serverCode;
           }
           return prev;
         });
@@ -140,8 +179,9 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const onFocus = () => { void refetchFromServer(); };
     const onStorage = (e: StorageEvent) => {
       if (e.key === 'language' && e.newValue) {
-        const canon = canonicalLanguageName(e.newValue);
-        setLanguageState(canon);
+        // Another tab changed it — normalize to a code before adopting.
+        const code = resolveLanguageCode(e.newValue) ?? 'en';
+        setLangCode(code);
       }
     };
     window.addEventListener('language-refresh', onRefresh);
@@ -156,31 +196,39 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     const orig = window.fetch.bind(window);
+    const safeSet = (h: Headers, key: string, value: string) => {
+      if (isHeaderValueSafe(value)) h.set(key, value);
+    };
     window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-      const headers = new Headers(init?.headers);
-      if (!headers.has('Accept-Language')) headers.set('Accept-Language', lang);
-      headers.set('X-UI-Language', language);
-      const nextInit: RequestInit = { ...init, headers, credentials: init?.credentials ?? 'include' };
+      try {
+        const headers = new Headers(init?.headers);
+        if (!headers.has('Accept-Language')) safeSet(headers, 'Accept-Language', lang);
+        safeSet(headers, 'X-UI-Language', lang);
+        const nextInit: RequestInit = { ...init, headers, credentials: init?.credentials ?? 'include' };
 
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes('/api/ai') && typeof nextInit.body === 'string') {
-        try {
-          const json = JSON.parse(nextInit.body);
-          if (json && typeof json === 'object' && !Array.isArray(json) && json.language == null) {
-            json.language = language;
-            json.languageCode = lang;
-            nextInit.body = JSON.stringify(json);
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/api/ai') && typeof nextInit.body === 'string') {
+          try {
+            const json = JSON.parse(nextInit.body);
+            if (json && typeof json === 'object' && !Array.isArray(json) && json.language == null) {
+              json.language = lang;
+              json.languageCode = lang;
+              nextInit.body = JSON.stringify(json);
+            }
+          } catch {
+            // body is not JSON
           }
-        } catch {
-          // body is not JSON
         }
+        return orig(input, nextInit);
+      } catch {
+        // Defensive: header handling must never swallow the request itself.
+        return orig(input, init);
       }
-      return orig(input, nextInit);
     };
     return () => {
       window.fetch = orig;
     };
-  }, [lang, language]);
+  }, [lang]);
 
   // Boot: server is the source of truth. Fetch it before showing the page.
   // - If the account has a saved language, it wins over localStorage and
@@ -195,25 +243,28 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const safety = setTimeout(() => {
       if (!cancelled && !readyRef.current) {
         try {
-          const fallback = readStoredLanguage();
-          const code: LangCode = LANGUAGE_MAP[fallback] || 'en';
-          setCurrentLanguage(code);
-          setLanguageState(fallback);
-          document.documentElement.lang = code;
-          document.documentElement.dir = RTL_LANGUAGES.includes(code) ? 'rtl' : 'ltr';
+          const fallback = readStoredLanguageCode();
+          setCurrentLanguage(fallback);
+          setLangCode(fallback);
+          document.documentElement.lang = fallback;
+          document.documentElement.dir = RTL_LANGUAGES.includes(fallback) ? 'rtl' : 'ltr';
         } catch {}
         readyRef.current = true;
         setReady(true);
       }
     }, 8000);
+    // When the account holds an unrecognizable language value, the final
+    // chosen language is PATCHed back so the bad account value gets repaired.
+    let serverLanguageInvalid = false;
     (async () => {
       const finish = async (finalLang: string) => {
         if (cancelled) return;
         clearTimeout(safety);
-        const canonical = canonicalLanguageName(finalLang);
-        setLanguageState(canonical);
-        try { localStorage.setItem('language', canonical); } catch {}
-        const code: LangCode = LANGUAGE_MAP[canonical] || 'en';
+        // Normalizes codes AND legacy display names ("中文" -> "zh");
+        // unknown values fall back to English.
+        const code: LangCode = canonicalLanguageCode(finalLang);
+        setLangCode(code);
+        try { localStorage.setItem('language', code); } catch {}
         setCurrentLanguage(code);
         if (code !== 'en') {
           // Never let a slow dictionary chunk delay first paint: race it so
@@ -227,6 +278,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           document.documentElement.lang = code;
           document.documentElement.dir = RTL_LANGUAGES.includes(code) ? 'rtl' : 'ltr';
         } catch {}
+        if (serverLanguageInvalid) {
+          // Repair the account so every device (and the next boot) recovers.
+          fetch('/api/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ language: code }),
+          }).catch(() => {});
+        }
         if (!readyRef.current) {
           readyRef.current = true;
           setReady(true);
@@ -246,18 +306,25 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!cancelled && res.ok) {
           const data = await res.json().catch(() => ({}));
           if (data && typeof data.language === 'string' && data.language.trim()) {
-            const serverCanon = canonicalLanguageName(data.language);
-            // Server wins — adopt it locally so refresh/other devices match.
-            try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
-            try {
-              const raw = localStorage.getItem(LOCATION_KEY);
-              const loc = raw ? JSON.parse(raw) : {};
-              localStorage.setItem(LOCATION_KEY, JSON.stringify({ ...loc, lang: serverCanon, currency: detectedCurrency, tz: detectedTz }));
-            } catch {
-              try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: serverCanon, currency: detectedCurrency, tz: detectedTz })); } catch {}
+            const serverCode = resolveLanguageCode(data.language);
+            if (serverCode === null) {
+              // Invalid saved value on the account: don't adopt it. Flag it
+              // for repair and fall through to the local pick / auto-detect
+              // so the user still lands in a working language.
+              serverLanguageInvalid = true;
+            } else {
+              // Server wins — adopt it locally so refresh/other devices match.
+              try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
+              try {
+                const raw = localStorage.getItem(LOCATION_KEY);
+                const loc = raw ? JSON.parse(raw) : {};
+                localStorage.setItem(LOCATION_KEY, JSON.stringify({ ...loc, lang: serverCode, currency: detectedCurrency, tz: detectedTz }));
+              } catch {
+                try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: serverCode, currency: detectedCurrency, tz: detectedTz })); } catch {}
+              }
+              await finish(serverCode);
+              return;
             }
-            await finish(serverCanon);
-            return;
           }
         }
       } catch {
@@ -269,34 +336,40 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       let localRaw: string | null = null;
       try { localRaw = localStorage.getItem('language'); } catch {}
       if (localRaw) {
-        const canonical = canonicalLanguageName(localRaw);
-        if (canonical !== localRaw) {
-          try { localStorage.setItem('language', canonical); } catch {}
+        const localCode = resolveLanguageCode(localRaw);
+        if (localCode === null) {
+          // Unrecognized local value: clear it and fall through to auto-detect.
+          try { localStorage.removeItem('language'); } catch {}
+        } else {
+          // Migrate legacy display-name values ("中文" -> "zh") in place.
+          if (localCode !== localRaw) {
+            try { localStorage.setItem('language', localCode); } catch {}
+          }
+          await finish(localCode);
+          return;
         }
-        await finish(canonical);
-        return;
       }
 
       // True first run: auto-detect once, then persist everywhere.
       const firstVisit = (() => { try { return localStorage.getItem(FIRST_VISIT_KEY) !== 'true'; } catch { return true; } })();
       if (firstVisit) {
         const detected = detectLanguageFromBrowser();
-        const canonical = canonicalLanguageName(detected);
+        const code = canonicalLanguageCode(detected);
         try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
-        try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: canonical, currency: detectedCurrency, tz: detectedTz })); } catch {}
-        try { localStorage.setItem('language', canonical); } catch {}
+        try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: code, currency: detectedCurrency, tz: detectedTz })); } catch {}
+        try { localStorage.setItem('language', code); } catch {}
         fetch('/api/settings', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ language: canonical, currency: detectedCurrency }),
+          body: JSON.stringify({ language: code, currency: detectedCurrency }),
         }).catch(() => {});
-        await finish(canonical);
+        await finish(code);
         return;
       }
 
       // Fallback: English, but never overwrite a future saved value.
-      await finish('English');
+      await finish('en');
     })();
     return () => { cancelled = true; clearTimeout(safety); };
   }, []);

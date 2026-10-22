@@ -63,6 +63,12 @@
             'nl': 'nl', 'tr': 'tr', 'vi': 'vi', 'en': 'en'
           };
           if (m[langRaw]) code = m[langRaw];
+          // Startup migration: older builds stored display names ("中文").
+          // Rewrite as the code (or clear garbage as "en") right away, so
+          // nothing downstream ever sees a non ISO-8859-1 language value.
+          if (code !== langRaw) {
+            try { localStorage.setItem('language', code); } catch (e) {}
+          }
         }
         rtl = (code === 'ar' || code === 'he');
         document.documentElement.lang = code;

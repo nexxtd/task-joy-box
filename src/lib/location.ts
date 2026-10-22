@@ -1,4 +1,4 @@
-import { LANG_CODES, LANGUAGE_MAP } from '@/i18n/translations';
+import { LANG_CODES } from '@/i18n/translations';
 
 export const detectTimezone = (): string => {
   try {
@@ -49,25 +49,17 @@ export const detectCurrency = (): string => {
   return match ? match[1] : 'USD';
 };
 
-const CODE_TO_LANG: Record<string, string> = LANG_CODES.reduce(
-  (acc, code) => {
-    const name = Object.keys(LANGUAGE_MAP).find(k => LANGUAGE_MAP[k] === code);
-    if (name) acc[code] = name;
-    return acc;
-  },
-  {} as Record<string, string>,
-);
-
+// Detects the browser language as a CODE (en, zh, ...) — never a display
+// name, so non-Latin names can't leak into storage or request headers.
 export const detectLanguageFromBrowser = (): string => {
   try {
     const raw = navigator.language || '';
     const base = raw.split('-')[0].toLowerCase();
-    if (base === 'pt' && raw.toLowerCase().startsWith('pt-br')) return 'Português';
     for (const code of LANG_CODES) {
-      if (code === base) return CODE_TO_LANG[code] || 'English';
+      if (code === base) return code;
     }
   } catch {
     // Ignore — defaults to English.
   }
-  return 'English';
+  return 'en';
 };

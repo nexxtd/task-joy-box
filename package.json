@@ -8,6 +8,7 @@
     "lint": "eslint \"{src,server,shared}/**/*.{ts,tsx}\"",
     "preview": "vite preview",
     "test": "vitest",
+    "test:i18n": "vitest run --config vitest.lang.config.ts",
     "coverage": "vitest run --coverage",
     "dev:server": "npx nodemon --ignore uploads/ --exec npx tsx server/index.ts",
     "dev:client": "vite",

@@ -64,11 +64,61 @@ export const LANGUAGE_MAP: Record<string, LangCode> = {
 
 export const RTL_LANGUAGES: LangCode[] = ['ar', 'he'];
 
+const VALID_CODES = new Set<string>(LANG_CODES);
+
+// Case-insensitive lookup for display names ("español", "English", ...).
+const LOWER_NAME_TO_CODE: Record<string, LangCode> = Object.fromEntries(
+  Object.entries(LANGUAGE_MAP).map(([name, code]) => [name.toLowerCase(), code]),
+);
+
+/**
+ * Resolves ANY stored/stale language value (code, native display name,
+ * English name, mojibake) to a language code, or null when it cannot be
+ * recognized. Use this — not raw values — for storage and request headers:
+ * header values must be ISO-8859-1, so display names like "中文" must never
+ * end up in one.
+ */
+export const resolveLanguageCode = (value: string | null | undefined): LangCode | null => {
+  const raw = (value ?? '').trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (VALID_CODES.has(lower)) return lower as LangCode;
+  const code = LANGUAGE_MAP[raw] ?? LOWER_NAME_TO_CODE[lower];
+  return code ?? null;
+};
+
+/** Like resolveLanguageCode, but falls back to English for unknown values. */
+export const canonicalLanguageCode = (value: string | null | undefined): LangCode =>
+  resolveLanguageCode(value) ?? 'en';
+
+/** Native display name for a language code (dropdown labels, UI display). */
+export const languageDisplayName = (code: LangCode | null | undefined): string =>
+  LANGUAGES.find(l => l.code === code)?.native ?? 'English';
+
 /** Returns the canonical native display name for a stored/stale language value. */
-export const canonicalLanguageName = (value: string | null | undefined): string => {
-  const code = LANGUAGE_MAP[value ?? ''];
-  const def = code ? LANGUAGES.find(l => l.code === code) : undefined;
-  return def?.native ?? 'English';
+export const canonicalLanguageName = (value: string | null | undefined): string =>
+  languageDisplayName(canonicalLanguageCode(value));
+
+/**
+ * Startup migration: older builds stored the display name ("中文") in
+ * localStorage, which broke the fetch wrapper (non ISO-8859-1 header values).
+ * Convert legacy values to their codes and drop unrecognized ones so
+ * already-affected users recover on their next load.
+ */
+export const migrateStoredLanguage = (): void => {
+  try {
+    const raw = localStorage.getItem('language');
+    if (raw === null) return;
+    const code = resolveLanguageCode(raw);
+    if (code === null) {
+      // Unrecognized/garbage value: fall back to English and clear it.
+      localStorage.removeItem('language');
+    } else if (code !== raw) {
+      localStorage.setItem('language', code);
+    }
+  } catch {
+    // Storage unavailable — nothing to migrate.
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -266,8 +316,9 @@ export default t;
 // Start fetching the user's stored language immediately (before first render)
 // so non-English users get their translations with minimal fallback flash.
 try {
+  migrateStoredLanguage();
   const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('language') : null;
-  const code = stored ? LANGUAGE_MAP[stored] : undefined;
+  const code = resolveLanguageCode(stored);
   if (code && code !== 'en') void loadLanguage(code);
 } catch {
   // Storage unavailable — English fallback stays in place.

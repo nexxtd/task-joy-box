@@ -11,11 +11,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
 import { sendEmail, verificationEmailHtml, resetEmailHtml } from '../lib/email.js';
-
-const LANGUAGE_NAMES: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch' };
-function languageNameFromCode(code: string): string {
-  return LANGUAGE_NAMES[code] || 'English';
-}
+import { normalizeLanguageCode } from '../lib/language.js';
 
 const router = Router();
 
@@ -254,7 +250,7 @@ router.post('/google', async (req: Request, res: Response) => {
       }
       // Create new user if doesn't exist
       const trialDays = await getSettingNumber('trial_days', 0);
-      const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
+      const defaultLanguage = normalizeLanguageCode(await getSetting('default_language', 'en'));
       const googleInsert: Record<string, any> = { name, email, googleId, avatarUrl, emailVerified: true };
       if (trialDays > 0) googleInsert.subscriptionStatus = 'trialing';
       [user] = await db.insert(users).values(googleInsert as any).returning();
@@ -428,7 +424,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
         return res.json({ message: 'Email already verified. Please log in.' });
       }
       const trialDays = await getSettingNumber('trial_days', 0);
-      const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
+      const defaultLanguage = normalizeLanguageCode(await getSetting('default_language', 'en'));
       const insertValues: Record<string, any> = { name: pending.name, email: pending.email, passwordHash: pending.passwordHash, emailVerified: true };
       if (trialDays > 0) insertValues.subscriptionStatus = 'trialing';
       const [user] = await db.insert(users).values(insertValues as any).returning();
@@ -457,7 +453,7 @@ router.get('/verify-email', async (req: Request, res: Response) => {
       return res.redirect(`${frontend2.replace(/\/$/, '')}/verify-email?success=1`);
     }
     const trialDays = await getSettingNumber('trial_days', 0);
-    const defaultLanguage = languageNameFromCode(await getSetting('default_language', 'en'));
+    const defaultLanguage = normalizeLanguageCode(await getSetting('default_language', 'en'));
     const insertValues: Record<string, any> = { name: pending.name, email: pending.email, passwordHash: pending.passwordHash, emailVerified: true };
     if (trialDays > 0) insertValues.subscriptionStatus = 'trialing';
     const [user] = await db.insert(users).values(insertValues as any).returning();

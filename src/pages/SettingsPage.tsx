@@ -14,7 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
 import { useLanguage } from '@/context/LanguageContext';
-import { LANGUAGES, canonicalLanguageName } from '@/i18n/translations';
+import { LANGUAGES, canonicalLanguageCode, resolveLanguageCode } from '@/i18n/translations';
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
@@ -87,7 +87,7 @@ const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { board, addTask } = useBoardContext();
-  const { language, setLanguage } = useLanguage(); // Use language context
+  const { lang, setLanguage } = useLanguage(); // Use language context
   const [activeSection, setActiveSection] = useState('appearance');
   const [selectedTheme, setSelectedTheme] = useState(theme);
   const [font, setFont] = useState(() => localStorage.getItem('font') || 'Inter');
@@ -339,17 +339,22 @@ const SettingsPage: React.FC = () => {
         }
         // Language: the account is the source of truth (other devices,
         // refresh, post-logout). Adopt the server value when present so a
-        // saved pick never reverts to a stale local value.
+        // saved pick never reverts to a stale local value. Only language
+        // CODES (en, zh, ...) are stored — legacy display names ("中文")
+        // from old accounts are normalized on read.
         try {
-          const { canonicalLanguageName: canon } = await import('@/i18n/translations');
           if (data.language) {
-            const serverCanon = canon(data.language);
-            setLanguage(serverCanon);
-            try { localStorage.setItem('language', serverCanon); } catch {}
+            const serverCode = resolveLanguageCode(data.language);
+            if (serverCode === null) {
+              // Invalid account value: fall back to English and repair it.
+              setLanguage('en');
+            } else {
+              setLanguage(serverCode);
+            }
           } else {
             try {
               const localRaw = localStorage.getItem('language');
-              if (localRaw) setLanguage(canon(localRaw));
+              if (localRaw) setLanguage(canonicalLanguageCode(localRaw));
             } catch {}
           }
         } catch {
@@ -665,7 +670,7 @@ const SettingsPage: React.FC = () => {
     setSmartAlerts(true);
     setEmailNotifs(true);
     setEnergyTrackerEnabled(true);
-    setLanguage('English');
+    setLanguage('en');
     setFont('Inter');
     setAccentColor('#000000');
     setSelectedTheme('light');
@@ -686,7 +691,7 @@ const SettingsPage: React.FC = () => {
     localStorage.setItem('smartAlerts', 'true');
     localStorage.setItem('emailNotifs', 'true');
     localStorage.setItem('energyTrackerEnabled', 'true');
-    localStorage.setItem('language', 'English');
+    localStorage.setItem('language', 'en');
     localStorage.setItem('font', 'Inter');
     localStorage.setItem('accentColor', '#000000');
     localStorage.setItem('accentHsl', '0 0% 0%');
@@ -709,7 +714,7 @@ const SettingsPage: React.FC = () => {
           fontFamily: 'Inter',
           accentColor: '#000000',
           accentHsl: '0 0% 0%',
-          language: 'English',
+          language: 'en',
           smartAlerts: true,
           emailNotifs: true,
         }),
@@ -898,13 +903,16 @@ const SettingsPage: React.FC = () => {
               <div>
                 <h2 className="text-sm font-semibold text-foreground mb-3">Language</h2>
                 <Select
-                  value={language}
-                  onValueChange={async (newLanguage) => {
-                    const canon = canonicalLanguageName(newLanguage);
+                  value={lang}
+                  onValueChange={(newLanguage) => {
+                    // newLanguage is a language CODE (en, zh, ...). The labels
+                    // show the native display name ("中文"), but only the code
+                    // is ever stored (localStorage + account) or sent in
+                    // headers — display names break ISO-8859-1 header values.
                     trackUsage('settings', 'change-language');
                     // setLanguage applies straight away (no refresh) and saves
                     // to the account the moment it is picked.
-                    setLanguage(canon);
+                    setLanguage(newLanguage);
                     showSaved();
                   }}
                 >
@@ -913,7 +921,7 @@ const SettingsPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {LANGUAGES.map(l => (
-                      <SelectItem key={l.code} value={l.native}>{l.native}</SelectItem>
+                      <SelectItem key={l.code} value={l.code}>{l.native}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

@@ -5,6 +5,7 @@ import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { invalidateSettingCache, getSettingNumber } from '../lib/settings.js';
+import { normalizeLanguageCode } from '../lib/language.js';
 import { sendEmail } from '../lib/email.js';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
@@ -476,11 +477,12 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response) => {
     await db.update(users).set(updateData).where(eq(users.id, userId));
 
     if (language !== undefined) {
+      const languageCode = normalizeLanguageCode(language);
       const existing = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
       if (existing.length > 0) {
-        await db.update(userSettings).set({ language }).where(eq(userSettings.userId, userId));
+        await db.update(userSettings).set({ language: languageCode }).where(eq(userSettings.userId, userId));
       } else {
-        await db.insert(userSettings).values({ userId, language });
+        await db.insert(userSettings).values({ userId, language: languageCode });
       }
     }
 

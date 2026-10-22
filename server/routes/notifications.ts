@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { pendingUserChanges, userNotifications, users, userSettings } from '../../shared/schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { normalizeLanguageCode } from '../lib/language.js';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -30,11 +31,12 @@ async function applyPendingChange(pending: any) {
     await db.update(users).set(updateData).where(eq(users.id, userId));
   }
   if (payload.language !== undefined) {
+    const language = normalizeLanguageCode(payload.language);
     const existing = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
     if (existing.length > 0) {
-      await db.update(userSettings).set({ language: payload.language }).where(eq(userSettings.userId, userId));
+      await db.update(userSettings).set({ language }).where(eq(userSettings.userId, userId));
     } else {
-      await db.insert(userSettings).values({ userId, language: payload.language });
+      await db.insert(userSettings).values({ userId, language });
     }
   }
 }

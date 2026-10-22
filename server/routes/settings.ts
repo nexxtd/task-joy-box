@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { users, userSettings, type UpdateUserSettings } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
+import { normalizeLanguageCode } from '../lib/language.js';
 
 const router = Router();
 
@@ -33,6 +34,11 @@ router.patch('/', requireAuth, async (req, res) => {
     const userId = (req as any).userId;
     const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled } = req.body;
 
+    // Only language CODES (en, zh, ...) are stored on the account — never
+    // display names ("中文"), which broke non-Latin locales client-side.
+    // Legacy name values are normalized so old accounts self-heal.
+    const languageCode = language !== undefined ? normalizeLanguageCode(language) : undefined;
+
     const allowedAccents = new Set(['#000000', '#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#DB2777'].map(s => s.toLowerCase()));
     const isCustomAccent = accentColor !== undefined && !allowedAccents.has(String(accentColor).toLowerCase());
     const isCustomFont = fontFamily !== undefined && fontFamily !== 'Inter';
@@ -54,7 +60,7 @@ router.patch('/', requireAuth, async (req, res) => {
         ...(fontFamily !== undefined ? { fontFamily } : {}),
         ...(accentColor !== undefined ? { accentColor } : {}),
         ...(accentHsl !== undefined ? { accentHsl } : {}),
-        ...(language !== undefined ? { language } : {}),
+        ...(languageCode !== undefined ? { language: languageCode } : {}),
         ...(withShortcut && cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
         ...(smartAlerts !== undefined ? { smartAlerts } : {}),
         ...(emailNotifs !== undefined ? { emailNotifs } : {}),
@@ -92,7 +98,7 @@ router.patch('/', requireAuth, async (req, res) => {
           ...(fontFamily !== undefined ? { fontFamily } : {}),
           ...(accentColor !== undefined ? { accentColor } : {}),
           ...(accentHsl !== undefined ? { accentHsl } : {}),
-          ...(language !== undefined ? { language } : {}),
+          ...(languageCode !== undefined ? { language: languageCode } : {}),
           ...(cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
           ...(smartAlerts !== undefined ? { smartAlerts } : {}),
           ...(emailNotifs !== undefined ? { emailNotifs } : {}),
@@ -110,7 +116,7 @@ router.patch('/', requireAuth, async (req, res) => {
             ...(fontFamily !== undefined ? { fontFamily } : {}),
             ...(accentColor !== undefined ? { accentColor } : {}),
             ...(accentHsl !== undefined ? { accentHsl } : {}),
-            ...(language !== undefined ? { language } : {}),
+            ...(languageCode !== undefined ? { language: languageCode } : {}),
             ...(smartAlerts !== undefined ? { smartAlerts } : {}),
             ...(emailNotifs !== undefined ? { emailNotifs } : {}),
             ...(energyMorning !== undefined ? { energyMorning } : {}),
