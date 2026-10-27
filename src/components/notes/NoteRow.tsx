@@ -147,7 +147,7 @@ const NoteRow: React.FC<NoteRowProps> = ({
             value={expandedContentMap[note.id] ?? note.content ?? ''}
             onChange={e => onChangeExpandedContent(note.id, e.target.value)}
             rows={3}
-            className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20"
+            className="w-full bg-muted/20 border border-border rounded-xl p-3 text-sm text-foreground resize-y min-h-[80px] focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
           <div className="flex items-center gap-2 flex-wrap">
             {note.tags.slice(0, 5).map(tag => (

@@ -149,10 +149,19 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">No column</SelectItem>
-              {boardColumns
-                .filter(c => !note.projectId || String(c.projectId) === String(note.projectId))
-                .sort((a, b) => a.order - b.order)
-                .map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
+              {(() => {
+                const filtered = boardColumns
+                  .filter(c => !note.projectId || String(c.projectId) === String(note.projectId))
+                  .sort((a, b) => a.order - b.order);
+                if (note.projectId && filtered.length === 0) {
+                  return [
+                    { id: `col-proj-${note.projectId}-to-do`, title: 'To Do' },
+                    { id: `col-proj-${note.projectId}-in-progress`, title: 'In Progress' },
+                    { id: `col-proj-${note.projectId}-done`, title: 'Done' },
+                  ].map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>));
+                }
+                return filtered.map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>));
+              })()}
             </SelectContent>
           </Select>
         </div>
@@ -160,7 +169,7 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
         <div>
           <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
           <textarea value={note.content} onChange={e => onContentChange(e.target.value)} rows={8}
-            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[120px]" />
         </div>
 
         <div className="rounded-2xl border border-border bg-muted/20">

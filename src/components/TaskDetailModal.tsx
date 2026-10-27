@@ -496,7 +496,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               onChange={e => setDescription(e.target.value)}
               onBlur={saveDescription}
               placeholder="Add a description..."
-              className="w-full bg-muted border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-muted border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted-foreground resize-y focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px] disabled:opacity-60 disabled:cursor-not-allowed"
               rows={3}
               disabled={!canEdit}
             />

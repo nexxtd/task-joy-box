@@ -191,7 +191,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const aiBuilderTitle = isNote ? 'AI Note Builder' : 'AI Task Builder';
   const fetchTemplates = isNote ? fetchNoteTemplates : fetchTaskTemplates;
   const createTemplate = isNote ? createNoteTemplate : createTaskTemplate;
-  const { board, addTask, updateTask } = useBoardContext();
+  const { board, addTask, updateTask, ensureProjectColumns } = useBoardContext();
   const availableColumns = columnsOverride ?? board.columns;
   const createItem = onCreateItem ?? addTask;
   const existingTasks = tasksOverride ?? board.tasks;
@@ -216,6 +216,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [newTaskDuration, setNewTaskDuration] = useState<number>(60);
   const [newTaskColumnId, setNewTaskColumnId] = useState<string>('');
   const [newTaskProjectId, setNewTaskProjectId] = useState<number | ''>('');
+  const currentProjectColumns = useMemo(() => {
+    if (newTaskProjectId === '') return [];
+    const pid = Number(newTaskProjectId);
+    const existing = availableColumns
+      .filter(col => col.projectId === pid)
+      .sort((a, b) => a.order - b.order);
+    if (existing.length > 0) return existing;
+    return [
+      { id: `col-proj-${pid}-to-do`, title: 'To Do', order: 0, color: 'hsl(var(--muted-foreground))', projectId: pid },
+      { id: `col-proj-${pid}-in-progress`, title: 'In Progress', order: 1, color: 'hsl(var(--muted-foreground))', projectId: pid },
+      { id: `col-proj-${pid}-done`, title: 'Done', order: 2, color: 'hsl(var(--muted-foreground))', projectId: pid },
+    ];
+  }, [availableColumns, newTaskProjectId]);
 
   const [newTaskSubtasks, setNewTaskSubtasks] = useState<NewTaskSubtaskDraft[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -840,7 +853,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               )}
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1 block">Project</label>
-                <Select value={newTaskProjectId === '' ? personalBoardValue : String(newTaskProjectId)} onValueChange={v => { setNewTaskProjectId(v === personalBoardValue ? '' : Number(v)); setNewTaskColumnId(''); }}>
+                <Select value={newTaskProjectId === '' ? personalBoardValue : String(newTaskProjectId)} onValueChange={v => {
+                  if (v === personalBoardValue) {
+                    setNewTaskProjectId('');
+                    setNewTaskColumnId('');
+                  } else {
+                    const pid = Number(v);
+                    setNewTaskProjectId(pid);
+                    const cols = ensureProjectColumns ? ensureProjectColumns(pid) : [];
+                    const firstId = cols[0]?.id || `col-proj-${pid}-to-do`;
+                    setNewTaskColumnId(firstId);
+                  }
+                }}>
                   <SelectTrigger className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
@@ -860,9 +884,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       <SelectValue placeholder="Select column" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableColumns
-                        .filter(col => col.projectId === Number(newTaskProjectId))
-                        .sort((a, b) => a.order - b.order)
+                      {currentProjectColumns
                         .map(col => (
                           <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
                         ))}
@@ -927,7 +949,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 value={newTaskDescription}
                 onChange={e => setNewTaskDescription(e.target.value)}
                 rows={3}
-                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[80px]"
               />
             </div>
 

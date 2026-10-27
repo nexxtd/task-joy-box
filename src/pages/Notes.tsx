@@ -822,7 +822,13 @@ const Tasks: React.FC = () => {
         const response = await fetch('/api/projects', { credentials: 'include' });
         if (!response.ok) throw new Error(String(response.status));
         const data = await response.json().catch(() => ({}));
-        setProjects(Array.isArray(data.projects) ? data.projects : []);
+        const list = Array.isArray(data.projects) ? data.projects : [];
+        setProjects(list);
+        list.forEach((p: any) => {
+          if (p?.id && !tasksBoard.board.columns.some(c => c.projectId === p.id)) {
+            tasksBoard.ensureProjectColumns(p.id);
+          }
+        });
       } catch {
         setProjects([]);
       }
@@ -1904,8 +1910,24 @@ const Tasks: React.FC = () => {
               />
             </div>
           )}
-          {taskTags.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-left text-foreground truncate">{task.title || 'Untitled note'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+              {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
+                <PriorityBadge
+                  task={task}
+                  onUpdate={(priority) => updateTask(task.id, { priority })}
+                  isOpen={priorityEditTaskId === task.id}
+                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
+                />
+              )}
+              {checklistTotal > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {checklistDone}/{checklistTotal} checklist
+                </span>
+              )}
               {taskTags.map(label => (
                 <span
                   key={label.id}
@@ -1920,22 +1942,6 @@ const Tasks: React.FC = () => {
                 </span>
               )}
             </div>
-          )}
-          <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">{task.title || 'Untitled note'}</span>
-          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-hidden whitespace-nowrap">
-            {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
-              <PriorityBadge
-                task={task}
-                onUpdate={(priority) => updateTask(task.id, { priority })}
-                isOpen={priorityEditTaskId === task.id}
-                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === task.id ? null : task.id)}
-              />
-            )}
-            {checklistTotal > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
           </div>
           {!isDeleteMode && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -2696,7 +2702,7 @@ const Tasks: React.FC = () => {
                   value={newTaskDescription}
                   onChange={e => setNewTaskDescription(e.target.value)}
                   rows={3}
-                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+                  className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[72px]"
                 />
               </div>
 
@@ -4296,12 +4302,23 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <SelectValue placeholder="Column" />
                   </SelectTrigger>
                   <SelectContent>
-                    {boardColumns
-                      .filter(col => col.projectId === task.projectId)
-                      .sort((a, b) => a.order - b.order)
-                      .map(col => (
+                    {(() => {
+                      const cols = boardColumns
+                        .filter(col => col.projectId === task.projectId)
+                        .sort((a, b) => a.order - b.order);
+                      if (cols.length === 0) {
+                        return [
+                          { id: `col-proj-${task.projectId}-to-do`, title: 'To Do' },
+                          { id: `col-proj-${task.projectId}-in-progress`, title: 'In Progress' },
+                          { id: `col-proj-${task.projectId}-done`, title: 'Done' },
+                        ].map(col => (
+                          <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
+                        ));
+                      }
+                      return cols.map(col => (
                         <SelectItem key={col.id} value={col.id}>{col.title}</SelectItem>
-                      ))}
+                      ));
+                    })()}
                   </SelectContent>
                 </Select>
               </div>
@@ -4315,7 +4332,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
             value={task.description}
             onChange={e => onUpdateTask(task.id, { description: e.target.value })}
             rows={4}
-            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none"
+            className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[96px]"
           />
         </div>
 
@@ -4921,8 +4938,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 if (v === 'my-notes') {
                   singleUpdate.columnId = boardColumns[0]?.id || task.columnId;
                 } else if (newProjectId && (!task.projectId || task.projectId !== newProjectId)) {
-                  const firstCol = boardColumns.filter(c => c.projectId === newProjectId).sort((a, b) => a.order - b.order)[0];
-                  if (firstCol) singleUpdate.columnId = firstCol.id;
+                  let cols = boardColumns.filter(c => c.projectId === newProjectId).sort((a, b) => a.order - b.order);
+                  const firstCol = cols[0] || { id: `col-proj-${newProjectId}-to-do` };
+                  singleUpdate.columnId = firstCol.id;
                 }
                 onUpdateTask(task.id, singleUpdate);
                 setProjectChangeConfirm(null);
@@ -4958,7 +4976,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Description</label>
-                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none" />
+                <textarea value={editingTmplDesc} onChange={e => setEditingTmplDesc(e.target.value)} placeholder="Task description" rows={3} className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-y min-h-[72px]" />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Priority</label>

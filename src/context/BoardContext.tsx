@@ -12,6 +12,7 @@ interface BoardContextType {
   deleteTask: (taskId: string) => void;
   moveTask: (taskId: string, toColumnId: string, newOrder: number) => void;
   addColumn: (title: string, projectId?: number | null) => void;
+  ensureProjectColumns: (projectId: number) => Column[];
   updateColumn: (columnId: string, updates: Partial<Column>) => void;
   deleteColumn: (columnId: string) => void;
   reorderColumns: (startIndex: number, endIndex: number, projectId?: number | null) => void;
@@ -564,6 +565,28 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [persist]);
 
+  const ensureProjectColumns = useCallback((projectId: number): Column[] => {
+    let resultCols: Column[] = [];
+    persist(b => {
+      const existing = b.columns.filter(c => c.projectId === projectId).sort((a, b) => a.order - b.order);
+      if (existing.length > 0) {
+        resultCols = existing;
+        return b;
+      }
+      const defaultCols: Column[] = [
+        { id: `col-proj-${projectId}-to-do`, title: 'To Do', order: 0, color: 'hsl(var(--muted-foreground))', projectId },
+        { id: `col-proj-${projectId}-in-progress`, title: 'In Progress', order: 1, color: 'hsl(var(--muted-foreground))', projectId },
+        { id: `col-proj-${projectId}-done`, title: 'Done', order: 2, color: 'hsl(var(--muted-foreground))', projectId },
+      ];
+      resultCols = defaultCols;
+      return {
+        ...b,
+        columns: [...b.columns, ...defaultCols],
+      };
+    });
+    return resultCols;
+  }, [persist]);
+
   const updateColumn = useCallback((columnId: string, updates: Partial<Column>) => {
     persist(b => ({
       ...b,
@@ -767,7 +790,7 @@ export const BoardProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <BoardContext.Provider value={{
       board, addTask, updateTask, appendTaskImages, appendTaskAttachments, deleteTask, moveTask,
-      addColumn, updateColumn, deleteColumn, reorderColumns,
+      addColumn, ensureProjectColumns, updateColumn, deleteColumn, reorderColumns,
       addChecklist, toggleChecklistItem, addChecklistItem, deleteChecklistItem,
       findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, reorderTasks, reorderTasksInSection,
       moveCrossSection,

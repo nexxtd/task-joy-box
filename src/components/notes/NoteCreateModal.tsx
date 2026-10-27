@@ -90,10 +90,19 @@ const NoteCreateModal: React.FC<NoteCreateModalProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No column</SelectItem>
-                {boardColumns
-                  .filter(c => !projectId || String(c.projectId) === String(projectId))
-                  .sort((a, b) => a.order - b.order)
-                  .map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>))}
+                {(() => {
+                  const filtered = boardColumns
+                    .filter(c => !projectId || String(c.projectId) === String(projectId))
+                    .sort((a, b) => a.order - b.order);
+                  if (projectId && filtered.length === 0) {
+                    return [
+                      { id: `col-proj-${projectId}-to-do`, title: 'To Do' },
+                      { id: `col-proj-${projectId}-in-progress`, title: 'In Progress' },
+                      { id: `col-proj-${projectId}-done`, title: 'Done' },
+                    ].map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>));
+                  }
+                  return filtered.map(c => (<SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>));
+                })()}
               </SelectContent>
             </Select>
           </div>
@@ -142,7 +151,7 @@ const NoteCreateModal: React.FC<NoteCreateModalProps> = ({
           <div>
             <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
             <textarea value={content} onChange={e => setContent(e.target.value)} rows={4}
-              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-none" />
+              className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[96px]" />
           </div>
         </div>
         <div className="px-5 py-4 border-t border-border flex justify-end items-center gap-2">

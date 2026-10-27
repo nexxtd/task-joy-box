@@ -212,7 +212,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
           onBlur={saveDescription}
           placeholder="Write your note..."
           rows={3}
-          className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[72px]"
+          className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[80px]"
         />
       </div>
 

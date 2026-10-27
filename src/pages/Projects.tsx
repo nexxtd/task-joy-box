@@ -95,7 +95,7 @@ const ROLE_OPTIONS = [
 const Projects: React.FC = () => {
   // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
   useLanguage();
-  const { board, moveTask, reorderColumns, addColumn, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
+  const { board, moveTask, reorderColumns, addColumn, ensureProjectColumns, updateTask, toggleChecklistItem, addChecklistItem, deleteChecklistItem, deleteTask } = useBoardContext();
   const notesCtx = useNotesContext();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -874,6 +874,12 @@ const Projects: React.FC = () => {
     if (!selectedProjectId && projects[0]) setSelectedProjectId(projects[0].id);
   }, [projects, selectedProjectId]);
 
+  useEffect(() => {
+    if (selectedProjectId && !board.columns.some(c => c.projectId === selectedProjectId)) {
+      ensureProjectColumns(selectedProjectId);
+    }
+  }, [selectedProjectId, board.columns, ensureProjectColumns]);
+
   const sortProjects = (items: ProjectMeta[]) => {
     return [...items].sort((a, b) => {
       const idxA = projectOrder.indexOf(a.id);
@@ -934,6 +940,7 @@ const Projects: React.FC = () => {
     if (data.project) {
       setProjects(prev => [...prev, data.project]);
       setSelectedProjectId(data.project.id);
+      ensureProjectColumns(data.project.id);
     }
     setNewProjectName('');
     setNewProjectDescription('');

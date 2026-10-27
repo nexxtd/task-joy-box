@@ -333,28 +333,11 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               title="Mark complete"
             />
           </div>
-          <div className="flex flex-1 items-center gap-1.5 min-w-0 overflow-hidden flex-nowrap">
-              {taskTags.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {taskTags.map(label => (
-                    <span
-                      key={label.id}
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
-                    >
-                      {label.name}
-                    </span>
-                  ))}
-                  {task.labels.length > taskTags.length && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
-                      className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
-                    >
-                      +{task.labels.length - taskTags.length}
-                    </button>
-                  )}
-                </div>
-              )}
-              <span className="flex-1 min-w-[40px] text-sm font-medium text-left text-foreground truncate">{task.title}</span>
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-start gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground break-words whitespace-normal leading-snug min-w-0 flex-1">{task.title}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1 min-w-0">
               {(task.priority !== 'none' || priorityEditTaskId === task.id) && (
                 <PriorityBadge
                   task={task}
@@ -422,6 +405,22 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   </span>
                 );
               })()}
+              {taskTags.map(label => (
+                <span
+                  key={label.id}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${LABEL_COLORS[label.color]} text-primary-foreground`}
+                >
+                  {label.name}
+                </span>
+              ))}
+              {task.labels.length > taskTags.length && (
+                <button
+                  onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0"
+                >
+                  +{task.labels.length - taskTags.length}
+                </button>
+              )}
               <button
                 onClick={e => { e.stopPropagation(); setQuickEditTaskId(null); setQuickEditField(null); setDateEditTaskId(null); setDateEditField(null); setTagPopupTaskId(tagPopupTaskId === task.id ? null : task.id); }}
                 className={`text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1 ${
@@ -431,6 +430,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 <Tag className="w-2.5 h-2.5" />
                 {tagPopupTaskId === task.id ? 'Close' : 'Tags'}
               </button>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -575,8 +575,24 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
               title="Mark complete"
             />
           </div>
-          {noteTags.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-start gap-1.5 min-w-0">
+              <span className="text-sm font-medium text-left text-foreground break-words whitespace-normal leading-snug min-w-0 flex-1">{note.title || 'Untitled note'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-1 min-w-0">
+              {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
+                <PriorityBadge
+                  task={note}
+                  onUpdate={(priority) => notesCtx.updateTask(note.id, { priority })}
+                  isOpen={priorityEditTaskId === note.id}
+                  onToggle={() => setPriorityEditTaskId(priorityEditTaskId === note.id ? null : note.id)}
+                />
+              )}
+              {checklistTotal > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                  {checklistDone}/{checklistTotal} checklist
+                </span>
+              )}
               {noteTags.map(label => (
                 <span
                   key={label.id}
@@ -591,22 +607,6 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                 </span>
               )}
             </div>
-          )}
-          <span className="flex-1 min-w-0 truncate text-sm font-medium text-left text-foreground">{note.title || 'Untitled note'}</span>
-          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-hidden whitespace-nowrap min-w-0">
-            {(note.priority !== 'none' || priorityEditTaskId === note.id) && (
-              <PriorityBadge
-                task={note}
-                onUpdate={(priority) => notesCtx.updateTask(note.id, { priority })}
-                isOpen={priorityEditTaskId === note.id}
-                onToggle={() => setPriorityEditTaskId(priorityEditTaskId === note.id ? null : note.id)}
-              />
-            )}
-            {checklistTotal > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                {checklistDone}/{checklistTotal} checklist
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button

@@ -238,20 +238,6 @@ const ProjectBoard = () => {
                         onClick={e => { e.stopPropagation(); updateTask(task.id, { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : undefined }); }}
                         size="sm"
                       />
-                      {taskTags.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {taskTags.map(label => (
-                            <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[10px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0`}>
-                              {label.name}
-                            </span>
-                          ))}
-                          {extraTags > 0 && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                              +{extraTags}
-                            </span>
-                          )}
-                        </div>
-                      )}
                       <p className={`flex-1 min-w-[40px] text-sm font-medium text-left truncate ${task.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</p>
                       {task.priority !== 'none' && (
                         <span className={`${PRIORITY_CONFIG[task.priority].className} text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex items-center gap-1 flex-shrink-0`}>
@@ -281,6 +267,16 @@ const ProjectBoard = () => {
                       {stTotal > 0 && (
                         <span className={`flex items-center gap-1 text-[11px] flex-shrink-0 ${stDone === stTotal ? 'text-green-600' : 'text-muted-foreground'}`}>
                           {stDone}/{stTotal} sub task
+                        </span>
+                      )}
+                      {taskTags.map(label => (
+                        <span key={label.id} className={`${LABEL_COLORS[label.color]} text-[10px] font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0`}>
+                          {label.name}
+                        </span>
+                      ))}
+                      {extraTags > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                          +{extraTags}
                         </span>
                       )}
                       <button
