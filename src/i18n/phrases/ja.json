@@ -1645,5 +1645,13 @@
   "Your workspace": "ワークスペース",
   "Zoom & pan": "ズームとパン",
   "Zoom in": "ズームイン",
-  "Zoom out": "ズームアウト"
+  "Zoom out": "ズームアウト",
+  "Split screen": "分割画面",
+  "Drag left or right to split": "左右にドラッグして分割",
+  "Split screen on the left": "左に分割画面",
+  "Split screen on the right": "右に分割画面",
+  "Exit split screen": "分割画面を終了",
+  "Resize split screen": "分割画面のサイズを変更",
+  "Choose a page to open next to {{name}}.": "{{name}} の隣に開くページを選択してください。",
+  "This page": "このページ"
 }

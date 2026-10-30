@@ -12,24 +12,15 @@ import AppLayout from "@/components/AppLayout";
 import { PageSkeleton, AppShellSkeleton } from "@/components/PageSkeleton";
 import { APP_VERSION, needsWhatsNew } from "@/lib/appVersion";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
+import { APP_PAGES } from "@/lib/appPages";
 
 // LoginPage (incl. Google OAuth SDK) is only needed on /login, so it stays
 // out of the authenticated initial bundle.
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 
 // Route-level code splitting: each page becomes its own chunk so the
-// initial bundle only contains the login shell + layout.
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Projects = lazy(() => import("@/pages/Projects"));
-const Tasks = lazy(() => import("@/pages/Tasks"));
-const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
-const Insights = lazy(() => import("@/pages/Insights"));
-const Notes = lazy(() => import("@/pages/Notes"));
-const Collaboration = lazy(() => import("@/pages/Collaboration"));
-const Pricing = lazy(() => import("@/pages/Pricing"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const AIChat = lazy(() => import("@/pages/AIChat"));
-const Support = lazy(() => import("@/pages/Support"));
+// initial bundle only contains the login shell + layout. The page registry is
+// shared with the split-screen picker so pages are only declared once.
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 const Tutorial = lazy(() => import("@/pages/Tutorial"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -266,18 +257,17 @@ function ProtectedRoutes() {
             {isDeepFocusOpen && <Suspense fallback={null}><DeepFocusMode task={deepFocusTask} /></Suspense>}
             <Routes>
               <Route element={<AppLayout />}>
-                <Route path="/" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
-                <Route path="/projects" element={<Suspense fallback={<PageLoader />}><Projects /></Suspense>} />
-                <Route path="/tasks" element={<Suspense fallback={<PageLoader />}><Tasks /></Suspense>} />
-                <Route path="/calendar" element={<Suspense fallback={<PageLoader />}><CalendarPage /></Suspense>} />
-                <Route path="/insights" element={<Suspense fallback={<PageLoader />}><Insights /></Suspense>} />
-                <Route path="/notes" element={<Suspense fallback={<PageLoader />}><Notes /></Suspense>} />
+                {APP_PAGES.map(page => {
+                  const Page = page.component;
+                  return (
+                    <Route
+                      key={page.path}
+                      path={page.path}
+                      element={<Suspense fallback={<PageLoader />}><Page /></Suspense>}
+                    />
+                  );
+                })}
                 <Route path="/whats-new" element={<Suspense fallback={<PageLoader />}><WhatsNew /></Suspense>} />
-                <Route path="/support" element={<Suspense fallback={<PageLoader />}><Support /></Suspense>} />
-                <Route path="/collaboration" element={<Suspense fallback={<PageLoader />}><Collaboration /></Suspense>} />
-                <Route path="/ai-chat" element={<Suspense fallback={<PageLoader />}><AIChat /></Suspense>} />
-                <Route path="/pricing" element={<Suspense fallback={<PageLoader />}><Pricing /></Suspense>} />
-                <Route path="/settings" element={<Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>} />
                 <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
               </Route>
               <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />

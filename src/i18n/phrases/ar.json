@@ -1645,5 +1645,13 @@
   "Your workspace": "مساحة عملك",
   "Zoom & pan": "التكبير والتحريك",
   "Zoom in": "تكبير",
-  "Zoom out": "تصغير"
+  "Zoom out": "تصغير",
+  "Split screen": "شاشة مقسومة",
+  "Drag left or right to split": "اسحب لليسار أو لليمين للتقسيم",
+  "Split screen on the left": "شاشة مقسومة على اليسار",
+  "Split screen on the right": "شاشة مقسومة على اليمين",
+  "Exit split screen": "الخروج من الشاشة المقسومة",
+  "Resize split screen": "تغيير حجم الشاشة المقسومة",
+  "Choose a page to open next to {{name}}.": "اختر صفحة لفتحها بجانب {{name}}.",
+  "This page": "هذه الصفحة"
 }

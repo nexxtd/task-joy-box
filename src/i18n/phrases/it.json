@@ -1645,5 +1645,13 @@
   "Your workspace": "Il tuo workspace",
   "Zoom & pan": "Zoom e panoramica",
   "Zoom in": "Ingrandisci",
-  "Zoom out": "Riduci"
+  "Zoom out": "Riduci",
+  "Split screen": "Schermo diviso",
+  "Drag left or right to split": "Trascina a sinistra o a destra per dividere",
+  "Split screen on the left": "Schermo diviso a sinistra",
+  "Split screen on the right": "Schermo diviso a destra",
+  "Exit split screen": "Esci dallo schermo diviso",
+  "Resize split screen": "Ridimensiona schermo diviso",
+  "Choose a page to open next to {{name}}.": "Scegli una pagina da aprire accanto a {{name}}.",
+  "This page": "Questa pagina"
 }

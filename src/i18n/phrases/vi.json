@@ -1645,5 +1645,13 @@
   "Your workspace": "Không gian làm việc của bạn",
   "Zoom & pan": "Thu phóng & di chuyển",
   "Zoom in": "Phóng to",
-  "Zoom out": "Thu nhỏ"
+  "Zoom out": "Thu nhỏ",
+  "Split screen": "Chia đôi màn hình",
+  "Drag left or right to split": "Kéo sang trái hoặc phải để chia đôi",
+  "Split screen on the left": "Chia đôi màn hình bên trái",
+  "Split screen on the right": "Chia đôi màn hình bên phải",
+  "Exit split screen": "Thoát chia đôi màn hình",
+  "Resize split screen": "Thay đổi kích thước màn hình chia đôi",
+  "Choose a page to open next to {{name}}.": "Chọn một trang để mở bên cạnh {{name}}.",
+  "This page": "Trang này"
 }

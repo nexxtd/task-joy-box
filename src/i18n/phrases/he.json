@@ -1645,5 +1645,13 @@
   "Your workspace": "סביבת העבודה שלכם",
   "Zoom & pan": "זום וגלילה",
   "Zoom in": "הגדלה",
-  "Zoom out": "הקטנה"
+  "Zoom out": "הקטנה",
+  "Split screen": "מסך מפוצל",
+  "Drag left or right to split": "גררו שמאלה או ימינה כדי לפצל",
+  "Split screen on the left": "מסך מפוצל משמאל",
+  "Split screen on the right": "מסך מפוצל מימין",
+  "Exit split screen": "צא ממסך מפוצל",
+  "Resize split screen": "שנה גודל מסך מפוצל",
+  "Choose a page to open next to {{name}}.": "בחרו דף לפתיחה לצד {{name}}.",
+  "This page": "הדף הזה"
 }

@@ -1645,5 +1645,13 @@
   "Your workspace": "आपका कार्यक्षेत्र",
   "Zoom & pan": "ज़ूम और पैन",
   "Zoom in": "ज़ूम इन करें",
-  "Zoom out": "ज़ूम आउट करें"
+  "Zoom out": "ज़ूम आउट करें",
+  "Split screen": "विभाजित स्क्रीन",
+  "Drag left or right to split": "विभाजित करने के लिए बाएँ या दाएँ खींचें",
+  "Split screen on the left": "बाईं ओर विभाजित स्क्रीन",
+  "Split screen on the right": "दाईं ओर विभाजित स्क्रीन",
+  "Exit split screen": "विभाजित स्क्रीन से बाहर निकलें",
+  "Resize split screen": "विभाजित स्क्रीन का आकार बदलें",
+  "Choose a page to open next to {{name}}.": "{{name}} के बगल में खोलने के लिए एक पेज चुनें।",
+  "This page": "यह पेज"
 }

@@ -1645,5 +1645,13 @@
   "Your workspace": "내 워크스페이스",
   "Zoom & pan": "확대/축소 및 이동",
   "Zoom in": "확대",
-  "Zoom out": "축소"
+  "Zoom out": "축소",
+  "Split screen": "분할 화면",
+  "Drag left or right to split": "분할하려면 왼쪽이나 오른쪽으로 드래그하세요",
+  "Split screen on the left": "왼쪽 분할 화면",
+  "Split screen on the right": "오른쪽 분할 화면",
+  "Exit split screen": "분할 화면 종료",
+  "Resize split screen": "분할 화면 크기 조정",
+  "Choose a page to open next to {{name}}.": "{{name}} 옆에 열 페이지를 선택하세요.",
+  "This page": "이 페이지"
 }

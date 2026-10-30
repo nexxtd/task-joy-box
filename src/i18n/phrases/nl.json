@@ -1645,5 +1645,13 @@
   "Your workspace": "Je werkruimte",
   "Zoom & pan": "Zoomen & pannen",
   "Zoom in": "Inzoomen",
-  "Zoom out": "Uitzoomen"
+  "Zoom out": "Uitzoomen",
+  "Split screen": "Gesplitst scherm",
+  "Drag left or right to split": "Sleep naar links of rechts om te splitsen",
+  "Split screen on the left": "Gesplitst scherm links",
+  "Split screen on the right": "Gesplitst scherm rechts",
+  "Exit split screen": "Gesplitst scherm verlaten",
+  "Resize split screen": "Gesplitst scherm aanpassen",
+  "Choose a page to open next to {{name}}.": "Kies een pagina om naast {{name}} te openen.",
+  "This page": "Deze pagina"
 }

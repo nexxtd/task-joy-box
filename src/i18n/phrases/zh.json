@@ -1645,5 +1645,13 @@
   "Your workspace": "你的工作区",
   "Zoom & pan": "缩放与平移",
   "Zoom in": "放大",
-  "Zoom out": "缩小"
+  "Zoom out": "缩小",
+  "Split screen": "分屏",
+  "Drag left or right to split": "向左或向右拖动以分屏",
+  "Split screen on the left": "左侧分屏",
+  "Split screen on the right": "右侧分屏",
+  "Exit split screen": "退出分屏",
+  "Resize split screen": "调整分屏大小",
+  "Choose a page to open next to {{name}}.": "选择要在 {{name}} 旁边打开的页面。",
+  "This page": "此页面"
 }

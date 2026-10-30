@@ -1645,5 +1645,13 @@
   "Your workspace": "Çalışma alanınız",
   "Zoom & pan": "Yakınlaştır ve kaydır",
   "Zoom in": "Yakınlaştır",
-  "Zoom out": "Uzaklaştır"
+  "Zoom out": "Uzaklaştır",
+  "Split screen": "Bölünmüş ekran",
+  "Drag left or right to split": "Bölmek için sola veya sağa sürükleyin",
+  "Split screen on the left": "Solda bölünmüş ekran",
+  "Split screen on the right": "Sağda bölünmüş ekran",
+  "Exit split screen": "Bölünmüş ekrandan çık",
+  "Resize split screen": "Bölünmüş ekranı yeniden boyutlandır",
+  "Choose a page to open next to {{name}}.": "{{name}} yanında açmak için bir sayfa seçin.",
+  "This page": "Bu sayfa"
 }

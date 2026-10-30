@@ -1645,5 +1645,13 @@
   "Your workspace": "Ваша рабочая область",
   "Zoom & pan": "Масштаб и панорама",
   "Zoom in": "Приблизить",
-  "Zoom out": "Отдалить"
+  "Zoom out": "Отдалить",
+  "Split screen": "Разделенный экран",
+  "Drag left or right to split": "Перетащите влево или вправо, чтобы разделить",
+  "Split screen on the left": "Разделенный экран слева",
+  "Split screen on the right": "Разделенный экран справа",
+  "Exit split screen": "Выйти из разделенного экрана",
+  "Resize split screen": "Изменить размер разделенного экрана",
+  "Choose a page to open next to {{name}}.": "Выберите страницу, чтобы открыть рядом с {{name}}.",
+  "This page": "Эта страница"
 }

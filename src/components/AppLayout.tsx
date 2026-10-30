@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
 import MobileNav from './MobileNav';
+import SplitView from './SplitView';
 import { loadShortcuts, matchesAnyShortcut, runShortcutAction, isShortcutCapturing } from '@/lib/shortcuts';
 import { trackPageVisit } from '@/lib/usage';
 
@@ -13,6 +14,7 @@ const pathToPage = (pathname: string): string => {
   if (pathname.startsWith('/insights')) return 'insights';
   if (pathname.startsWith('/ai-chat')) return 'ai-assistant';
   if (pathname.startsWith('/notes')) return 'notes';
+  if (pathname.startsWith('/documents')) return 'documents';
   if (pathname.startsWith('/support')) return 'support';
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/collaboration')) return 'collaboration';
@@ -65,9 +67,9 @@ const AppLayout: React.FC = () => {
           room for the bottom tab bar on phones. */}
       <MobileNav />
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden pb-[64px] md:pb-0">
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <SplitView>
           <Outlet />
-        </div>
+        </SplitView>
       </main>
     </div>
   );
