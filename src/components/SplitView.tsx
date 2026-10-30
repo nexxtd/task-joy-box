@@ -14,11 +14,24 @@ import { useAdminPreview } from '@/hooks/useAdminPreview';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageSkeleton } from '@/components/PageSkeleton';
 
-/** How far (px) the handle must travel before the split is committed. */
-const DRAG_THRESHOLD = 64;
-/** The divider can never collapse a pane below 20% of the content area. */
-const MIN_RATIO = 0.2;
-const MAX_RATIO = 0.8;
+/**
+ * Split-screen behavior defaults.
+ *
+ * These values are intentionally plain constants (not `process.env` references)
+ * so the compiled bundle works in the browser. To customise them for your
+ * deployment, edit the numbers here or create a small config module that
+ * re‑exports adjusted values before the app mounts (e.g. in `src/main.tsx`).
+ *
+ *   DRAG_THRESHOLD = 64   // pixels the grip must move before split commits
+ *   MIN_RATIO    = 0.2    // minimum pane size as a fraction of the content area
+ *   MAX_RATIO    = 0.8    // maximum pane size as a fraction of the content area
+ */
+export const DRAG_THRESHOLD = 64;
+export const MIN_RATIO = 0.2;
+export const MAX_RATIO = 0.8;
+
+/** Minimum pixels from the top edge for the handle to become visible. */
+export const HANDLE_HOT_ZONE = 32;
 
 type Side = 'left' | 'right';
 
@@ -175,8 +188,14 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ratio, setRatio] = useState(0.5);
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState(0);
+  /** True when the mouse is inside the top hot‑zone (handle should be visible). */
+  const [isHoveringHandle, setIsHoveringHandle] = useState(false);
 
   const dragRef = useRef<{ startX: number; startY: number } | null>(null);
+  /** Track the maximum horizontal movement during the current drag. */
+  const maxDragXRef = useRef(0);
+  /** Track the direction of the drag: 'left', 'right', or null. */
+  const dragDirectionRef = useRef<'left' | 'right' | null>(null);
   const resizeRef = useRef(false);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const pathRef = useRef(location.pathname);
@@ -226,6 +245,13 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     dragRef.current = null;
     setDragging(false);
     setOffset(0);
+    // If the user dragged more than 30px horizontally, snap to the tracked
+    // direction; otherwise return to full‑page mode.
+    if (maxDragXRef.current > 30 && dragDirectionRef.current) {
+      setSide(dragDirectionRef.current);
+    } else {
+      setSide(null);
+    }
   };
 
   const onHandlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -237,6 +263,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       /* synthetic/unsupported pointer capture — drag still works */
     }
     dragRef.current = { startX: event.clientX, startY: event.clientY };
+    maxDragXRef.current = 0;
+    dragDirectionRef.current = null;
     setDragging(true);
     setOffset(0);
   };
@@ -250,16 +278,14 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     // never opens the picker by accident.
     if (Math.abs(dx) <= Math.abs(dy)) {
       setOffset(0);
+      maxDragXRef.current = 0;
+      dragDirectionRef.current = null;
       return;
     }
-    if (Math.abs(dx) >= DRAG_THRESHOLD) {
-      setSide(dx < 0 ? 'left' : 'right');
-      setSecondary(null);
-      dragRef.current = null;
-      setDragging(false);
-      setOffset(0);
-      return;
-    }
+    // Track the maximum horizontal movement during the drag.
+    maxDragXRef.current = Math.max(maxDragXRef.current, Math.abs(dx));
+    // Track drag direction based on the sign of the current dx.
+    dragDirectionRef.current = dx > 0 ? 'right' : 'left';
     setOffset(dx);
   };
 
@@ -393,7 +419,10 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dragDir: Side | null = offset < -6 ? 'left' : offset > 6 ? 'right' : null;
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
+      onMouseEnter={() => setIsHoveringHandle(true)}
+      onMouseLeave={() => setIsHoveringHandle(false)}
+    >
       {side === null ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {children}
@@ -446,6 +475,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onPointerMove={onHandlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
+          onMouseEnter={() => setIsHoveringHandle(true)}
+          onMouseLeave={() => setIsHoveringHandle(false)}
           onKeyDown={event => {
             if (event.key === 'ArrowLeft') {
               event.preventDefault();
@@ -455,7 +486,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               startSide('right');
             }
           }}
-          className={`group absolute left-1/2 top-0 z-40 hidden h-5 w-14 -translate-x-1/2 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:flex ${
+          className={`group absolute left-1/2 top-0 z-40 ${isHoveringHandle ? '' : 'hidden'} h-5 w-14 -translate-x-1/2 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:flex ${
             dragging ? 'cursor-grabbing bg-card text-foreground' : 'cursor-grab'
           }`}
         >
