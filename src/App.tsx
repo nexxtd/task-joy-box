@@ -36,6 +36,7 @@ const DeepFocusMode = lazy(() => import("@/components/DeepFocusMode"));
 import { useDeepFocus } from "@/hooks/useDeepFocus";
 import { applyAccentHsl, normalizeAccent } from "@/lib/accent";
 import { deviceNotify, formatOverdueDelta, markAlertSent, wasAlertSent } from "@/lib/notifications";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const AppearanceSync = () => {
   const { user } = useAuth();
@@ -311,6 +312,7 @@ const App = () => (
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </BrowserRouter>
+            <SpeedInsights />
           </TooltipProvider>
         </QueryClientProvider>
       </AuthProvider>
