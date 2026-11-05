@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { markTutorialCompleted } from '@/lib/tutorialProgress';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -27,6 +29,7 @@ const Tutorial: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [showTutorial, setShowTutorial] = useState(true);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const steps: TutorialStep[] = [
     {
@@ -93,14 +96,14 @@ const Tutorial: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   };
 
   const completeTutorial = () => {
-    localStorage.setItem('tutorial_completed', 'true');
+    if (user) markTutorialCompleted(user.id);
     setShowTutorial(false);
     onClose?.();
     navigate('/');
   };
 
   const skipTutorial = () => {
-    localStorage.setItem('tutorial_completed', 'true');
+    if (user) markTutorialCompleted(user.id);
     setShowTutorial(false);
     onClose?.();
     navigate('/');

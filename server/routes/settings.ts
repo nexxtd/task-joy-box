@@ -32,7 +32,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.patch('/', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled } = req.body;
+    const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled, tutorialCompleted } = req.body;
 
     // Only language CODES (en, zh, ...) are stored on the account — never
     // display names ("中文"), which broke non-Latin locales client-side.
@@ -68,6 +68,7 @@ router.patch('/', requireAuth, async (req, res) => {
         ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
         ...(energyEvening !== undefined ? { energyEvening } : {}),
         ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+        ...(tutorialCompleted === true ? { tutorialCompleted: true } : {}),
         updatedAt: new Date().toISOString(),
       } as UpdateUserSettings as any);
 
@@ -106,6 +107,7 @@ router.patch('/', requireAuth, async (req, res) => {
           ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
           ...(energyEvening !== undefined ? { energyEvening } : {}),
           ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+          ...(tutorialCompleted === true ? { tutorialCompleted: true } : {}),
         } as any).returning();
         return res.json(created);
       } catch (e: any) {
@@ -123,6 +125,7 @@ router.patch('/', requireAuth, async (req, res) => {
             ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
             ...(energyEvening !== undefined ? { energyEvening } : {}),
             ...(energyTrackerEnabled !== undefined ? { energyTrackerEnabled } : {}),
+            ...(tutorialCompleted === true ? { tutorialCompleted: true } : {}),
           } as any).returning();
           return res.json(created);
         }

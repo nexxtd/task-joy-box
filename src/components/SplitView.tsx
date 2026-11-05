@@ -214,8 +214,10 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       pendingPresetRef.current = null;
       setSide(pending.side === 'right' ? 'right' : 'left');
       setSecondary(pending.secondaryPath);
+      setRatio(0.5);
       return;
     }
+    pendingPresetRef.current = null;
     setSide(null);
     setSecondary(null);
   }, [location.pathname]);
@@ -229,8 +231,10 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (detail.primaryPath === detail.secondaryPath) return;
       const nextSide: Side = detail.side === 'right' ? 'right' : 'left';
       if (location.pathname === detail.primaryPath) {
+        pendingPresetRef.current = null;
         setSide(nextSide);
         setSecondary(detail.secondaryPath);
+        setRatio(0.5);
         return;
       }
       pendingPresetRef.current = { ...detail, side: nextSide };
@@ -282,9 +286,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       didDragRef.current = true;
       window.setTimeout(() => { didDragRef.current = false; }, 0);
     }
-    // If the user dragged more than 30px horizontally, snap to the tracked
-    // direction; otherwise return to full‑page mode.
-    if (maxDragXRef.current > 30 && dragDirectionRef.current) {
+    // Only commit after a deliberate horizontal drag.
+    if (maxDragXRef.current >= DRAG_THRESHOLD && dragDirectionRef.current) {
       setSide(dragDirectionRef.current);
     } else {
       setSide(null);
@@ -470,7 +473,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {side === null ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${dragging && dragDir ? 'invisible' : ''}`}>
           {children}
         </div>
       ) : (
@@ -542,25 +545,22 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </button>
       ) : null}
 
-      {dragging && side === null ? (
-        <div className="pointer-events-none absolute inset-0 z-30">
+      {dragging && dragDir && side === null ? (
+        <div className="pointer-events-none absolute inset-0 z-30 bg-background" aria-hidden="true">
+          <div className="absolute inset-y-0 left-0 w-1/2 border-r border-border" />
           <div
-            className={`absolute inset-y-0 left-0 w-1/2 transition-colors duration-150 ${
-              dragDir === 'left' ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''
-            }`}
+            className="absolute inset-y-0 w-1/2 bg-muted/40"
+            style={{ left: dragDir === 'left' ? 0 : '50%' }}
           />
           <div
-            className={`absolute inset-y-0 right-0 w-1/2 transition-colors duration-150 ${
-              dragDir === 'right' ? 'bg-primary/10 ring-2 ring-inset ring-primary/40' : ''
-            }`}
-          />
-          {dragDir ? (
-            <div className="absolute left-1/2 top-16 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground px-3 py-1.5 text-[11px] font-semibold text-background shadow-lg">
-              {dragDir === 'left'
-                ? t('Split screen on the left')
-                : t('Split screen on the right')}
-            </div>
-          ) : null}
+            className="absolute bottom-8 top-10 flex w-[min(44%,560px)] -translate-x-1/2 items-center justify-center rounded-xl border-2 border-primary bg-card shadow-lg"
+            style={{ left: `clamp(25%, calc(50% + ${offset}px), 75%)` }}
+          >
+            <span className="flex max-w-full items-center gap-2 px-4 text-center text-sm font-semibold text-foreground">
+              {primaryDef?.icon ? <primaryDef.icon className="h-4 w-4 flex-shrink-0" /> : null}
+              <span className="truncate">{primaryLabel}</span>
+            </span>
+          </div>
         </div>
       ) : null}
     </div>

@@ -325,7 +325,8 @@ export function runShortcutAction(action: ShortcutAction, navigate?: (path: stri
     // Preset split screens must announce themselves before navigation so the
     // split viewer can remember which pages to pair.
     if (action.splitPresetId) {
-      try { openSplitPreset(action.splitPresetId); } catch {}
+      openSplitPreset(action.splitPresetId);
+      return;
     }
     // Notify the live page first so already-mounted targets respond instantly.
     const domEvent = SHORTCUT_DOM_EVENTS[action.id];

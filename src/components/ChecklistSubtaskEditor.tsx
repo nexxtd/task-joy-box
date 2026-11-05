@@ -255,7 +255,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                               {editingSubtaskId === subtask.id ? (
                                 <AutoGrowTextarea
                                   autoFocus
-                                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                  className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                   value={editingSubtaskText}
                                   onChange={e => setEditingSubtaskText(e.target.value)}
                                   onBlur={() => saveSubtaskEdit(subtask.id)}
@@ -269,7 +269,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                               ) : (
                                 <span
                                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                  className={`min-w-0 text-sm cursor-text whitespace-pre-wrap break-words ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                 >
                                   {subtask.text}
                                 </span>
@@ -375,7 +375,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                       }}
                                     />
                                   ) : (
-                                    <span onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }} className="text-xs font-semibold text-foreground cursor-text">
+                                    <span onClick={(e) => { e.stopPropagation(); setEditingChecklistId(list.id); setEditingChecklistTitle(list.title); }} className="min-w-0 text-xs font-semibold text-foreground cursor-text whitespace-pre-wrap break-words">
                                       {list.title}
                                     </span>
                                   )}

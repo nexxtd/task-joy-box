@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { GripVertical } from 'lucide-react';
 import AttachmentRow from '@/components/AttachmentRow';
 import { useFreeReorderDrag } from '@/hooks/useFreeReorderDrag';
@@ -100,9 +101,9 @@ const DraftFileList: React.FC<DraftFileListProps> = ({
         ? (() => {
             const dragged = files.find(file => idForFile(file) === dragId);
             if (!dragged) return null;
-            return (
+            return createPortal(
               <div
-                className="fixed pointer-events-none z-50 rounded-xl shadow-2xl ring-2 ring-primary bg-card border opacity-95 scale-105 rotate-1 flex items-center gap-3 p-3 will-change-transform"
+                className="fixed pointer-events-none z-[100] rounded-xl shadow-2xl ring-2 ring-primary bg-card border opacity-95 scale-105 rotate-1 flex items-center gap-3 p-3 will-change-transform"
                 style={{
                   left: 0,
                   top: 0,
@@ -115,7 +116,8 @@ const DraftFileList: React.FC<DraftFileListProps> = ({
                   <GripVertical className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <span className="text-sm truncate flex-1">{dragged.name}</span>
-              </div>
+              </div>,
+              document.body,
             );
           })()
         : null}

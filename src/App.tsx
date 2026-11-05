@@ -13,6 +13,7 @@ import { PageSkeleton, AppShellSkeleton } from "@/components/PageSkeleton";
 import { APP_VERSION, needsWhatsNew } from "@/lib/appVersion";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
 import { APP_PAGES } from "@/lib/appPages";
+import { hasCompletedTutorialLocally, markTutorialCompleted } from "@/lib/tutorialProgress";
 
 // LoginPage (incl. Google OAuth SDK) is only needed on /login, so it stays
 // out of the authenticated initial bundle.
@@ -158,11 +159,39 @@ function ProtectedRoutes() {
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
   // Settings > Appearance can replay the tutorial without a page reload.
   const [tutorialRequested, setTutorialRequested] = useState(false);
+  const [tutorialStatus, setTutorialStatus] = useState<'loading' | 'new' | 'done'>('loading');
   useEffect(() => {
     const onOpenTutorial = () => setTutorialRequested(true);
     window.addEventListener('tutorial:open', onOpenTutorial);
     return () => window.removeEventListener('tutorial:open', onOpenTutorial);
   }, []);
+  useEffect(() => {
+    if (!user) {
+      setTutorialStatus('loading');
+      return;
+    }
+    const userId = user.id;
+    if (hasCompletedTutorialLocally(userId)) {
+      setTutorialStatus('done');
+      markTutorialCompleted(userId);
+      return;
+    }
+    let cancelled = false;
+    setTutorialStatus('loading');
+    fetch('/api/settings', { credentials: 'include' })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('Settings unavailable')))
+      .then(settings => {
+        if (cancelled) return;
+        if (settings.tutorialCompleted === true) {
+          markTutorialCompleted(userId);
+          setTutorialStatus('done');
+        } else {
+          setTutorialStatus('new');
+        }
+      })
+      .catch(() => { if (!cancelled) setTutorialStatus('new'); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
   // Preload the most likely next pages on idle so common navigation feels
   // instant — without downloading the whole app (antd/recharts/AI) on boot,
   // which saturated the network and made everything feel slow to load.
@@ -251,7 +280,7 @@ function ProtectedRoutes() {
   }
 
   // Check if tutorial should be shown
-  const shouldShowTutorial = !!user && (tutorialRequested || !localStorage.getItem('tutorial_completed'));
+  const shouldShowTutorial = !!user && (tutorialRequested || tutorialStatus === 'new');
 
   return (
     <BoardProvider>
@@ -260,7 +289,7 @@ function ProtectedRoutes() {
             <AppearanceSync />
             <Suspense fallback={null}><EnergyPopup /></Suspense>
             <Suspense fallback={null}><WhatsNewModal /></Suspense>
-            {shouldShowTutorial && <Suspense fallback={null}><Tutorial onClose={() => setTutorialRequested(false)} /></Suspense>}
+            {shouldShowTutorial && <Suspense fallback={null}><Tutorial onClose={() => { setTutorialRequested(false); setTutorialStatus('done'); }} /></Suspense>}
             {isDeepFocusOpen && <Suspense fallback={null}><DeepFocusMode task={deepFocusTask} /></Suspense>}
             <Routes>
               <Route element={<AppLayout />}>

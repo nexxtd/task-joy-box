@@ -66,7 +66,7 @@ export const RESOURCES: ResourceCategory[] = [
       {
         id: 'gs-welcome',
         title: 'Welcome to My Planner',
-        content: 'My Planner is your all-in-one productivity platform. It combines tasks, calendar, notes, tags, projects and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and notes sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial at any time from the Dashboard.',
+        content: 'My Planner is your all-in-one productivity platform. It combines tasks, calendar, notes, tags, projects and AI assistance in one place so you can manage everything from a single app.\n\nAfter signing up you will see the main dashboard. The left sidebar gives you access to every section. We recommend starting by creating your first task board, then exploring the calendar and notes sections.\n\nIf this is your first time, the tutorial will walk you through the core features step by step. You can replay the tutorial from Settings > Appearance using Redo Tutorial.',
       },
       {
         id: 'gs-profile',

@@ -92,7 +92,7 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
           >
             <div
               onPointerDown={(e) => onPointerDown(e, img.id)}
-              className="absolute top-1.5 left-1.5 p-1 rounded-lg bg-black/40 text-white/80 opacity-0 group-hover/img:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-20 touch-none"
+              className="absolute top-1.5 left-1.5 p-1 rounded-lg bg-black/50 text-white cursor-grab active:cursor-grabbing z-20 touch-none"
               title="Drag to reorder - drop anywhere"
             >
               <GripVertical className="w-3.5 h-3.5" />
@@ -115,11 +115,11 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
       {dragId && ghostPos && (() => {
         const dragged = images.find(i => i.id === dragId);
         if (!dragged) return null;
-        return (
-          <div className="fixed pointer-events-none z-50 rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}>
+        return createPortal(
+          <div className="fixed pointer-events-none z-[100] rounded-xl overflow-hidden shadow-2xl ring-2 ring-primary border-primary/50 opacity-95 scale-105 rotate-1 will-change-transform" style={{ left: 0, top: 0, transform: `translate3d(${ghostPos.x}px, ${ghostPos.y}px, 0)`, width: ghostPos.w, height: ghostPos.h }}>
             {dragged.fileUrl ? <ImageWithFallback img={dragged} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-muted"><Image className="w-8 h-8" /></div>}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2"><p className="text-xs text-white truncate">{dragged.fileName}</p></div>
-          </div>
+          </div>, document.body
         );
       })()}
     </div>

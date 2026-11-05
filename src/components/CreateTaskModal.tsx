@@ -1056,13 +1056,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                   </div>
                                   {editingDraftSubtaskId === subtask.id ? (
                                     <>
-                                      <input
+                                      <AutoGrowTextarea
                                         autoFocus
-                                        className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                        className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                         value={editingDraftSubtaskText}
                                         onChange={e => setEditingDraftSubtaskText(e.target.value)}
                                         onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                        onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
+                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
                                       />
                                       <input
                                         type="number"
@@ -1075,7 +1075,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                     <>
                                       <span
                                         onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                        className="text-sm text-foreground font-medium cursor-text truncate"
+                                        className="min-w-0 text-sm text-foreground font-medium cursor-text whitespace-pre-wrap break-words"
                                       >
                                         {subtask.text}
                                       </span>
@@ -1250,9 +1250,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         className="flex-1 flex items-center gap-2 text-left">
                                       <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                       {editingDraftChecklistId === list.id ? (
-                                          <input
+                                          <AutoGrowTextarea
                                             autoFocus
-                                            className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                            className="min-w-0 w-full text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                             value={editingDraftChecklistTitle}
                                             onChange={e => setEditingDraftChecklistTitle(e.target.value)}
                                             onClick={e => e.stopPropagation()}
@@ -1263,7 +1263,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               setEditingDraftChecklistId(null);
                                             }}
                                             onKeyDown={e => {
-                                              if (e.key === 'Enter') {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
                                                 if (editingDraftChecklistTitle.trim()) {
                                                   setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, title: editingDraftChecklistTitle.trim() } : l));
                                                 }
@@ -1272,7 +1273,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             }}
                                           />
                                         ) : (
-                                          <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
+                                          <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="min-w-0 text-sm font-semibold text-foreground cursor-text whitespace-pre-wrap break-words">
                                             {list.title}
                                           </span>
                                         )}

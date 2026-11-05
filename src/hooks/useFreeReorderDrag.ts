@@ -46,7 +46,7 @@ export function useFreeReorderDrag<T extends { id: string }>({
     if (draggedIdx === -1) return 0;
 
     // Read live rects for all items except dragged - ensures positions reflect current reflow
-    const liveRects: { id: string; centerX: number; centerY: number }[] = [];
+    const liveRects: { id: string; centerX: number; centerY: number; height: number }[] = [];
     for (const item of current) {
       if (item.id === draggedId) continue;
       const el = itemRefs.current.get(item.id);
@@ -56,12 +56,13 @@ export function useFreeReorderDrag<T extends { id: string }>({
         id: item.id,
         centerX: rect.left + rect.width / 2,
         centerY: rect.top + rect.height / 2,
+        height: rect.height,
       });
     }
 
     if (liveRects.length === 0) return draggedIdx;
 
-    let nearest: { id: string; centerX: number; centerY: number } | null = null;
+    let nearest: { id: string; centerX: number; centerY: number; height: number } | null = null;
     let bestDistance = Infinity;
 
     for (const rect of liveRects) {
@@ -76,8 +77,13 @@ export function useFreeReorderDrag<T extends { id: string }>({
 
     if (!nearest) return draggedIdx;
 
-    const horizontalIntent = Math.abs(clientX - nearest.centerX) > Math.abs(clientY - nearest.centerY);
-    const isAfter = horizontalIntent
+    const draggedRect = itemRefs.current.get(draggedId)?.getBoundingClientRect();
+    // A handle at the left edge is always far from a row's horizontal center.
+    // Compare row positions instead of pointer distance to decide the axis.
+    const sameRow = draggedRect && Math.abs(
+      draggedRect.top + draggedRect.height / 2 - nearest.centerY,
+    ) < Math.min(draggedRect.height, nearest.height) / 2;
+    const isAfter = sameRow
       ? clientX > nearest.centerX
       : clientY > nearest.centerY;
     const targetCurrentIdx = ids.indexOf(nearest.id);
@@ -159,7 +165,13 @@ export function useFreeReorderDrag<T extends { id: string }>({
     }
   }, [flushDragFrame]);
 
-  const endDrag = useCallback(() => {
+  const endDrag = useCallback((event?: PointerEvent) => {
+    if (event && dragIdRef.current) {
+      pendingPointerRef.current = { x: event.clientX, y: event.clientY };
+    }
+    // A quick release can arrive before the queued animation frame. Apply its
+    // final pointer position before committing the order.
+    if (pendingPointerRef.current) flushDragFrame();
     if (rafRef.current != null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -192,9 +204,9 @@ export function useFreeReorderDrag<T extends { id: string }>({
     hasMovedRef.current = false;
     setDragId(null);
     setGhostPos(null);
-  }, [items, onReorder]);
+  }, [flushDragFrame, items, onReorder]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!dragId) return undefined;
 
     window.addEventListener('pointermove', onPointerMove, { passive: true });

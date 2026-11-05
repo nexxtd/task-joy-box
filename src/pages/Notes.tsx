@@ -3009,7 +3009,7 @@ const Tasks: React.FC = () => {
                                           }}
                                         />
                                       ) : (
-                                        <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text truncate">
+                                        <span onClick={(e) => { e.stopPropagation(); setEditingDraftChecklistId(list.id); setEditingDraftChecklistTitle(list.title); }} className="text-sm font-semibold text-foreground cursor-text whitespace-pre-wrap break-words">
                                           {list.title}
                                         </span>
                                       )}
@@ -4078,7 +4078,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               ) : (
                 <span
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  className={`text-sm cursor-text whitespace-pre-wrap break-words ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                 >
                   {subtask.text}
                 </span>

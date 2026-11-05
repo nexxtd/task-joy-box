@@ -2,7 +2,7 @@ import React, { forwardRef, useCallback, useLayoutEffect, useRef } from 'react';
 
 export interface AutoGrowTextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  /** The textarea stops growing at this pixel height and scrolls instead. */
+  /** Optional height limit for fields that need one. */
   maxHeight?: number;
   /** Optional minimum pixel height. */
   minHeight?: number;
@@ -24,7 +24,7 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
       className = '',
       style,
       rows = 1,
-      maxHeight = 200,
+      maxHeight,
       minHeight,
       ...props
     },
@@ -48,14 +48,28 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
       if (!el) return;
       // Reset first so scrollHeight reflects the content at full height.
       el.style.height = 'auto';
-      const next = Math.max(minHeight ?? 0, Math.min(el.scrollHeight, maxHeight));
+      const next = Math.max(minHeight ?? 0, maxHeight == null ? el.scrollHeight : Math.min(el.scrollHeight, maxHeight));
       el.style.height = `${next}px`;
-      el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+      el.style.overflowY = maxHeight != null && el.scrollHeight > maxHeight ? 'auto' : 'hidden';
     }, [maxHeight, minHeight]);
 
     useLayoutEffect(() => {
       resize();
     }, [resize, value]);
+
+    useLayoutEffect(() => {
+      const el = innerRef.current;
+      if (!el || typeof ResizeObserver === 'undefined') return;
+      let width = el.clientWidth;
+      const observer = new ResizeObserver(() => {
+        if (el.clientWidth !== width) {
+          width = el.clientWidth;
+          resize();
+        }
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+    }, [resize]);
 
     return (
       <textarea
@@ -69,7 +83,7 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
           onInput?.(event);
         }}
         className={`resize-none overflow-x-hidden whitespace-pre-wrap break-words ${className}`}
-        style={{ ...style, maxHeight }}
+        style={{ minWidth: 0, ...style, ...(maxHeight == null ? {} : { maxHeight }) }}
       />
     );
   },

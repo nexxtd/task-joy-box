@@ -36,7 +36,7 @@ const AttachmentRow: React.FC<AttachmentRowProps> = ({ attachment, onDelete, dis
         </div>
       </a>
       {dragHandleProps && (
-        <div {...dragHandleProps} className="absolute top-1/2 -translate-y-1/2 left-1.5 p-1 rounded-md bg-background/80 border border-border text-muted-foreground cursor-grab active:cursor-grabbing opacity-0 group-hover/att:opacity-100 transition-all shadow-sm">
+        <div {...dragHandleProps} title={t('Drag to reorder')} aria-label={t('Drag to reorder')} className="absolute top-1/2 -translate-y-1/2 left-1.5 p-1 rounded-md bg-background/80 border border-border text-muted-foreground cursor-grab active:cursor-grabbing shadow-sm touch-none select-none">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
         </div>
       )}
