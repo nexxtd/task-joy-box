@@ -9,6 +9,7 @@ import {
 import { ArrowLeftRight, GripHorizontal, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { APP_PAGES, findAppPage } from '@/lib/appPages';
+import { SPLIT_OPEN_EVENT, type SplitOpenDetail } from '@/lib/splitPresets';
 import { useAuth } from '@/context/AuthContext';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import { useLanguage } from '@/context/LanguageContext';
@@ -188,10 +189,12 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ratio, setRatio] = useState(0.5);
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState(0);
-  /** True when the mouse is inside the top hot‑zone (handle should be visible). */
-  const [isHoveringHandle, setIsHoveringHandle] = useState(false);
 
   const dragRef = useRef<{ startX: number; startY: number } | null>(null);
+  /** Set when the grip was dragged, so the click that follows doesn't open the picker. */
+  const didDragRef = useRef(false);
+  /** A preset waiting for the router to finish navigating to its primary page. */
+  const pendingPresetRef = useRef<SplitOpenDetail | null>(null);
   /** Track the maximum horizontal movement during the current drag. */
   const maxDragXRef = useRef(0);
   /** Track the direction of the drag: 'left', 'right', or null. */
@@ -201,12 +204,41 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathRef = useRef(location.pathname);
 
   // Navigating anywhere else (sidebar, shortcut, in-page link) ends split mode.
+  // Exception: a preset split navigates to its primary page first; when that
+  // route arrives, finish opening the preset instead of closing the split.
   useEffect(() => {
     if (pathRef.current === location.pathname) return;
     pathRef.current = location.pathname;
+    const pending = pendingPresetRef.current;
+    if (pending && pending.primaryPath === location.pathname) {
+      pendingPresetRef.current = null;
+      setSide(pending.side === 'right' ? 'right' : 'left');
+      setSecondary(pending.secondaryPath);
+      return;
+    }
     setSide(null);
     setSecondary(null);
   }, [location.pathname]);
+
+  // Preset split screens (Settings > Shortcuts) announce themselves with an
+  // event so they work from any page without importing router internals.
+  useEffect(() => {
+    const onOpenPreset = (event: Event) => {
+      const detail = (event as CustomEvent<SplitOpenDetail>).detail;
+      if (!detail?.primaryPath || !detail?.secondaryPath) return;
+      if (detail.primaryPath === detail.secondaryPath) return;
+      const nextSide: Side = detail.side === 'right' ? 'right' : 'left';
+      if (location.pathname === detail.primaryPath) {
+        setSide(nextSide);
+        setSecondary(detail.secondaryPath);
+        return;
+      }
+      pendingPresetRef.current = { ...detail, side: nextSide };
+      navigate(detail.primaryPath);
+    };
+    window.addEventListener(SPLIT_OPEN_EVENT, onOpenPreset as EventListener);
+    return () => window.removeEventListener(SPLIT_OPEN_EVENT, onOpenPreset as EventListener);
+  }, [location.pathname, navigate]);
 
   // Escape cancels the page picker.
   useEffect(() => {
@@ -245,6 +277,11 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     dragRef.current = null;
     setDragging(false);
     setOffset(0);
+    // A real drag should not also count as a click (which opens the picker).
+    if (maxDragXRef.current > 6) {
+      didDragRef.current = true;
+      window.setTimeout(() => { didDragRef.current = false; }, 0);
+    }
     // If the user dragged more than 30px horizontally, snap to the tracked
     // direction; otherwise return to full‑page mode.
     if (maxDragXRef.current > 30 && dragDirectionRef.current) {
@@ -252,6 +289,16 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       setSide(null);
     }
+  };
+
+  const onHandleClick = () => {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
+    // Clicking the grip (rather than dragging it) opens the page picker on
+    // the right, which is easier than a precise drag on trackpads/touch.
+    startSide('left');
   };
 
   const onHandlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -262,6 +309,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } catch {
       /* synthetic/unsupported pointer capture — drag still works */
     }
+    didDragRef.current = false;
     dragRef.current = { startX: event.clientX, startY: event.clientY };
     maxDragXRef.current = 0;
     dragDirectionRef.current = null;
@@ -274,6 +322,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!drag) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) didDragRef.current = true;
     // Only a mostly-horizontal drag counts, so scrolling near the handle
     // never opens the picker by accident.
     if (Math.abs(dx) <= Math.abs(dy)) {
@@ -419,10 +468,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dragDir: Side | null = offset < -6 ? 'left' : offset > 6 ? 'right' : null;
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
-      onMouseEnter={() => setIsHoveringHandle(true)}
-      onMouseLeave={() => setIsHoveringHandle(false)}
-    >
+    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {side === null ? (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {children}
@@ -470,13 +516,12 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <button
           type="button"
           aria-label={t('Split screen')}
-          title={t('Drag left or right to split')}
+          title={t('Click to choose a page, or drag left or right to split')}
           onPointerDown={onHandlePointerDown}
           onPointerMove={onHandlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          onMouseEnter={() => setIsHoveringHandle(true)}
-          onMouseLeave={() => setIsHoveringHandle(false)}
+          onClick={onHandleClick}
           onKeyDown={event => {
             if (event.key === 'ArrowLeft') {
               event.preventDefault();
@@ -486,13 +531,13 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               startSide('right');
             }
           }}
-          className={`group absolute left-1/2 top-0 z-40 ${isHoveringHandle ? '' : 'hidden'} h-5 w-14 -translate-x-1/2 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:flex ${
+          className={`group absolute left-1/2 top-0 z-40 hidden h-5 w-14 -translate-x-1/2 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground opacity-80 shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:flex ${
             dragging ? 'cursor-grabbing bg-card text-foreground' : 'cursor-grab'
           }`}
         >
           <GripHorizontal className="h-4 w-4" />
           <span className="pointer-events-none absolute top-full mt-1 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            {t('Drag left or right to split')}
+            {t('Click to choose a page, or drag left or right to split')}
           </span>
         </button>
       ) : null}

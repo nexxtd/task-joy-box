@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { dashboardWidgetUsage } from '../../shared/schema.js';
+import { dashboardWidgetUsage, dashboardUsageEvents } from '../../shared/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
@@ -16,7 +16,7 @@ router.post('/widget-usage', requireAuth, async (req: AuthRequest, res: Response
       return res.status(400).json({ error: 'widgetTypes must be an array' });
     }
 
-    const uniqueTypes = [...new Set(widgetTypes.map((w: any) => String(w?.type || w)).filter(Boolean))];
+    const uniqueTypes = [...new Set(widgetTypes.map((w: any) => String(w?.type || w)).filter(Boolean))].slice(0, 100);
 
     for (const widgetType of uniqueTypes) {
       const existing = await db.select({ id: dashboardWidgetUsage.id })
@@ -31,6 +31,10 @@ router.post('/widget-usage', requireAuth, async (req: AuthRequest, res: Response
       } else {
         await db.insert(dashboardWidgetUsage).values({ userId, widgetType, count: 1 });
       }
+    }
+
+    if (uniqueTypes.length) {
+      await db.insert(dashboardUsageEvents).values(uniqueTypes.map(widgetType => ({ userId, widgetType })));
     }
 
     res.json({ success: true });

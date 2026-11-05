@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, GripVertical, Trash2 } from 'lucide-react';
 import { Task, Label, LabelColor, ChecklistItem } from '@/types/board';
 import TaskMediaSections from '@/components/shared/TaskMediaSections';
 import { SquareToggle } from '@/components/ToggleComponents';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import { useAuth } from '@/context/AuthContext';
 import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
 import {
@@ -261,7 +262,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                 >
                                   <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                   {editingChecklistId === list.id ? (
-                                    <input
+                                    <AutoGrowTextarea
                                       autoFocus
                                       className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0 flex-1"
                                       value={editingChecklistTitle}
@@ -269,7 +270,10 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                       onClick={e => e.stopPropagation()}
                                       onBlur={() => saveChecklistTitleEdit(list.id)}
                                       onKeyDown={e => {
-                                        if (e.key === 'Enter') saveChecklistTitleEdit(list.id);
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          saveChecklistTitleEdit(list.id);
+                                        }
                                         if (e.key === 'Escape') { setEditingChecklistId(null); setEditingChecklistTitle(''); }
                                       }}
                                     />
@@ -318,14 +322,17 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                                   size="md"
                                                 />
                                                 {editingChecklistItemId === item.id ? (
-                                                  <input
+                                                  <AutoGrowTextarea
                                                     autoFocus
                                                     className="flex-1 min-w-0 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}
                                                     onKeyDown={e => {
-                                                      if (e.key === 'Enter') saveChecklistItemEdit(list.id, item.id);
+                                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        saveChecklistItemEdit(list.id, item.id);
+                                                      }
                                                       if (e.key === 'Escape') { setEditingChecklistItemId(null); setEditingChecklistText(''); }
                                                     }}
                                                   />
@@ -354,10 +361,15 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                     )}
                                   </Droppable>
                                   <div className="flex gap-2 pt-1">
-                                    <input
+                                    <AutoGrowTextarea
                                       value={perChecklistInput[list.id] ?? ''}
                                       onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter') addItemToList(list.id); }}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          addItemToList(list.id);
+                                        }
+                                      }}
                                       placeholder="Add item..."
                                       className="flex-1 min-w-0 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                     />
@@ -376,10 +388,15 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
               </Droppable>
             </DragDropContext>
             <div className="flex gap-2">
-              <input
+              <AutoGrowTextarea
                 value={newChecklistTitle}
                 onChange={e => setNewChecklistTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAddChecklist(); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAddChecklist();
+                  }
+                }}
                 placeholder="New checklist name"
                 className="flex-1 min-w-0 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
               />

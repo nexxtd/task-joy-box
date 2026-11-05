@@ -9,6 +9,8 @@
  * - Legacy: Shortcut { id, title, combo, actionId }
  */
 
+import { SPLIT_PRESETS, openSplitPreset } from '@/lib/splitPresets';
+
 export type ShortcutCategory = 'pages' | 'create' | 'settings';
 
 export const SHORTCUT_CATEGORY_LABELS: Record<ShortcutCategory, string> = {
@@ -24,9 +26,11 @@ export interface ShortcutAction {
   path?: string;
   category: ShortcutCategory;
   description?: string;
+  /** When present, runShortcutAction also opens this preset split screen. */
+  splitPresetId?: string;
 }
 
-export const SHORTCUT_ACTIONS: ShortcutAction[] = [
+const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
   // ---- Pages ----
   { id: 'go-dashboard', label: 'Go to Dashboard', kind: 'navigate', path: '/', category: 'pages', description: 'Open your home dashboard' },
   { id: 'go-projects', label: 'Go to Projects', kind: 'navigate', path: '/projects', category: 'pages', description: 'Open the projects board' },
@@ -54,6 +58,22 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'settings-account', label: 'Settings: Account', kind: 'navigate', path: '/settings?section=account', category: 'settings', description: 'Profile and sign out' },
   { id: 'settings-security', label: 'Settings: Privacy', kind: 'navigate', path: '/settings?section=security', category: 'settings', description: 'Two-factor and security' },
   { id: 'settings-tickets', label: 'Settings: Tickets', kind: 'navigate', path: '/settings?section=tickets', category: 'settings', description: 'Your support tickets' },
+];
+
+/** Preset split screens are assignable shortcut actions too. */
+export const SPLIT_SHORTCUT_ACTIONS: ShortcutAction[] = SPLIT_PRESETS.map(preset => ({
+  id: `split-${preset.id}`,
+  label: `Split: ${preset.label}`,
+  kind: 'command',
+  path: preset.primaryPath,
+  category: 'pages',
+  description: preset.description,
+  splitPresetId: preset.id,
+}));
+
+export const SHORTCUT_ACTIONS: ShortcutAction[] = [
+  ...BASE_SHORTCUT_ACTIONS,
+  ...SPLIT_SHORTCUT_ACTIONS,
 ];
 
 export interface ShortcutDef {
@@ -302,6 +322,11 @@ export const SHORTCUT_DOM_EVENTS: Record<string, string> = {
 
 export function runShortcutAction(action: ShortcutAction, navigate?: (path: string) => void) {
   try {
+    // Preset split screens must announce themselves before navigation so the
+    // split viewer can remember which pages to pair.
+    if (action.splitPresetId) {
+      try { openSplitPreset(action.splitPresetId); } catch {}
+    }
     // Notify the live page first so already-mounted targets respond instantly.
     const domEvent = SHORTCUT_DOM_EVENTS[action.id];
     if (domEvent) {

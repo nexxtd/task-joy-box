@@ -19,6 +19,7 @@ import TagsModal from '@/components/shared/TagsModal';
 import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
 import { CompletedTaskRow } from '@/components/shared/CompletedTasks';
 import CenteredDragClone from '@/components/CenteredDragClone';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 
 const formatDuration = (minutes: number) => {
   if (!minutes || minutes <= 0) return null;
@@ -1035,10 +1036,15 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
                   ))}
                 </div>
                 <div className="flex gap-1">
-                  <input
+                  <AutoGrowTextarea
                     value={newSubtask}
                     onChange={e => setNewSubtask(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); } }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAddSubtask();
+                      }
+                    }}
                     placeholder="Add subtask..."
                     className="flex-1 bg-muted/30 border border-border rounded-lg p-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                   />

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, noteSnapshots, dashboardWidgetUsage, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts, projects, projectMembers } from '../../shared/schema.js';
-import { eq, sql, desc, and, inArray, count } from 'drizzle-orm';
+import { users, workspaces, transactions, coupons, couponGroups, couponRedemptions, systemSettings, tasks, goals, boards, habits, labels, taskAttachments, deepFocusSessions, whiteboards, whiteboardItems, aiRequests, checklists, supportTickets, ticketMessages, boardSnapshots, noteSnapshots, goalSnapshots, habitSnapshots, dashboardWidgetUsage, dashboardUsageEvents, userSettings, milestones, pendingUserChanges, userNotifications, emailBroadcasts, projects, projectMembers } from '../../shared/schema.js';
+import { eq, sql, desc, and, inArray, count, gte } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { invalidateSettingCache, getSettingNumber } from '../lib/settings.js';
@@ -776,9 +776,45 @@ router.patch('/tickets/:id/close', async (req: AuthRequest, res: Response) => {
 
 // ---- ENHANCED USER DETAILS ----
 
+type StatsPeriod = 'all' | '6m' | '3m' | '1m' | '1w' | '1d';
+const statsPeriods = new Set<StatsPeriod>(['all', '6m', '3m', '1m', '1w', '1d']);
+
+function statsPeriodStart(period: StatsPeriod): number | null {
+  if (period === 'all') return null;
+  const start = new Date();
+  if (period === '6m') start.setMonth(start.getMonth() - 6);
+  else if (period === '3m') start.setMonth(start.getMonth() - 3);
+  else if (period === '1m') start.setMonth(start.getMonth() - 1);
+  else if (period === '1w') start.setDate(start.getDate() - 7);
+  else start.setDate(start.getDate() - 1);
+  return start.getTime();
+}
+
+function snapshotItems(snapshot: string | undefined): any[] {
+  if (!snapshot) return [];
+  try {
+    const data = JSON.parse(snapshot);
+    return Array.isArray(data?.tasks) ? data.tasks : [];
+  } catch { return []; }
+}
+
+function inStatsPeriod(value: unknown, since: number | null): boolean {
+  if (since === null) return true;
+  if (!value) return false;
+  const time = new Date(String(value)).getTime();
+  return Number.isFinite(time) && time >= since && time <= Date.now();
+}
+
 router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) => {
   try {
     const userId = parseInt(req.params.id);
+    const requestedPeriod = String(req.query.period || 'all');
+    if (!statsPeriods.has(requestedPeriod as StatsPeriod)) {
+      return res.status(400).json({ error: 'Invalid statistics period' });
+    }
+    const period = requestedPeriod as StatsPeriod;
+    const since = statsPeriodStart(period);
+    const inPeriod = (value: unknown) => inStatsPeriod(value, since);
 
     const [userRow] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!userRow) return res.status(404).json({ error: 'User not found' });
@@ -790,31 +826,32 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
 
     // Projects live in their own tables (owned + member). Counting boards
     // here was wrong — it reported e.g. 1 project when the user had many.
-    const ownedProjects = await db.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, userId));
-    const memberRows = await db.select({ projectId: projectMembers.projectId }).from(projectMembers).where(eq(projectMembers.userId, userId));
+    const ownedProjects = await db.select({ id: projects.id, createdAt: projects.createdAt }).from(projects).where(eq(projects.ownerId, userId));
+    const memberRows = await db.select({ projectId: projectMembers.projectId, createdAt: projectMembers.createdAt }).from(projectMembers).where(eq(projectMembers.userId, userId));
     const projectIds = Array.from(new Set([
       ...ownedProjects.map(p => p.id),
       ...memberRows.map(m => m.projectId),
     ]));
-    const projectCount = projectIds.length;
+    const projectCount = new Set([
+      ...ownedProjects.filter(p => inPeriod(p.createdAt)).map(p => p.id),
+      ...memberRows.filter(m => inPeriod(m.createdAt)).map(m => m.projectId),
+    ]).size;
 
-    const taskRows = boardIds.length > 0
-      ? await db.select().from(tasks).where(inArray(tasks.boardId, boardIds))
-      : [];
+    // The current Tasks page persists its board in board_snapshots. The SQL
+    // tasks table belongs to an older flow and does not reflect current edits.
+    const [snapshotRow] = await db.select().from(boardSnapshots).where(eq(boardSnapshots.userId, userId)).orderBy(desc(boardSnapshots.updatedAt)).limit(1);
+    const taskRows = snapshotItems(snapshotRow?.snapshot).filter(t => inPeriod(t.createdAt));
 
-    const goalRows = await db.select().from(goals).where(eq(goals.userId, userId));
-    const habitRows = await db.select().from(habits).where(eq(habits.userId, userId));
+    const [goalSnapshotRow] = await db.select().from(goalSnapshots).where(eq(goalSnapshots.userId, userId)).orderBy(desc(goalSnapshots.updatedAt)).limit(1);
+    const [habitSnapshotRow] = await db.select().from(habitSnapshots).where(eq(habitSnapshots.userId, userId)).orderBy(desc(habitSnapshots.updatedAt)).limit(1);
+    const goalRows = (goalSnapshotRow ? snapshotItems(goalSnapshotRow.snapshot) : await db.select().from(goals).where(eq(goals.userId, userId))).filter(g => inPeriod(g.createdAt));
+    const allHabitRows = habitSnapshotRow ? snapshotItems(habitSnapshotRow.snapshot) : await db.select().from(habits).where(eq(habits.userId, userId));
+    const habitRows = allHabitRows.filter(h => inPeriod(h.createdAt));
     // Notes live in the note-board snapshot (same Task model as tasks: images,
     // attachments, checklists, subtasks, labels). The legacy `notes` table is
     // not written by the app, so all note stats must come from the snapshot.
     const [noteSnapshotRow] = await db.select().from(noteSnapshots).where(eq(noteSnapshots.userId, userId)).orderBy(desc(noteSnapshots.updatedAt)).limit(1);
-    let noteTasks: any[] = [];
-    if (noteSnapshotRow) {
-      try {
-        const parsed = JSON.parse(noteSnapshotRow.snapshot);
-        if (Array.isArray(parsed?.tasks)) noteTasks = parsed.tasks;
-      } catch { noteTasks = []; }
-    }
+    const noteTasks = snapshotItems(noteSnapshotRow?.snapshot).filter(t => inPeriod(t.createdAt));
     const noteStats = (() => {
       const total = noteTasks.length;
       const completed = noteTasks.filter(t => t.completed || t.status === 'completed').length;
@@ -862,73 +899,65 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
         withImages, withFiles, withChecklists, withSubtasks, withTags,
       };
     })();
-    const focusRows = await db.select().from(deepFocusSessions).where(eq(deepFocusSessions.userId, userId));
-    const whiteboardRows = await db.select().from(whiteboards).where(eq(whiteboards.userId, userId));
-    const aiRows = await db.select().from(aiRequests).where(eq(aiRequests.userId, userId));
+    const focusRows = (await db.select().from(deepFocusSessions).where(eq(deepFocusSessions.userId, userId))).filter(f => inPeriod(f.createdAt));
+    const allWhiteboardRows = await db.select().from(whiteboards).where(eq(whiteboards.userId, userId));
+    const whiteboardRows = allWhiteboardRows.filter(w => inPeriod(w.createdAt));
+    const aiRows = (await db.select().from(aiRequests).where(eq(aiRequests.userId, userId))).filter(a => inPeriod(a.createdAt));
     const milestoneRows = projectIds.length > 0
-      ? await db.select({ id: milestones.id }).from(milestones)
+      ? await db.select({ id: milestones.id, createdAt: milestones.createdAt }).from(milestones)
         .where(inArray(milestones.projectId, projectIds))
       : [];
-    const ticketRows = await db.select().from(supportTickets).where(eq(supportTickets.userId, userId));
-    const redemptions = await db.select({ couponId: couponRedemptions.couponId }).from(couponRedemptions).where(eq(couponRedemptions.userId, userId));
-    const userTransactions = await db.select().from(transactions).where(eq(transactions.userId, userId));
-    const widgetUsage = await db.select().from(dashboardWidgetUsage).where(eq(dashboardWidgetUsage.userId, userId));
+    const ticketRows = (await db.select().from(supportTickets).where(eq(supportTickets.userId, userId))).filter(t => inPeriod(t.createdAt));
+    const redemptions = (await db.select({ couponId: couponRedemptions.couponId, createdAt: couponRedemptions.createdAt }).from(couponRedemptions).where(eq(couponRedemptions.userId, userId))).filter(r => inPeriod(r.createdAt));
+    const userTransactions = (await db.select().from(transactions).where(eq(transactions.userId, userId))).filter(t => inPeriod(t.createdAt));
+    const widgetUsage = period === 'all'
+      ? await db.select().from(dashboardWidgetUsage).where(eq(dashboardWidgetUsage.userId, userId))
+      : await db.select({ widgetType: dashboardUsageEvents.widgetType, count: sql<number>`count(*)` })
+          .from(dashboardUsageEvents)
+          .where(and(eq(dashboardUsageEvents.userId, userId), gte(dashboardUsageEvents.createdAt, new Date(since!).toISOString())))
+          .groupBy(dashboardUsageEvents.widgetType);
 
-    const whiteboardIds = whiteboardRows.map(w => w.id);
+    const whiteboardIds = allWhiteboardRows.map(w => w.id);
     const wbItemRows = whiteboardIds.length > 0
-      ? await db.select({ type: whiteboardItems.type }).from(whiteboardItems).where(inArray(whiteboardItems.whiteboardId, whiteboardIds))
+      ? await db.select({ type: whiteboardItems.type, createdAt: whiteboardItems.createdAt }).from(whiteboardItems).where(inArray(whiteboardItems.whiteboardId, whiteboardIds))
       : [];
 
-    const taskIds = taskRows.map(t => t.id);
-    const checklistRows = taskIds.length > 0
-      ? await db.select({ id: checklists.id, checklistItems: sql<number>`(SELECT count(*) FROM checklist_items ci WHERE ci.checklist_id = checklists.id)` }).from(checklists).where(inArray(checklists.taskId, taskIds))
-      : [];
-    const attachmentRows = taskIds.length > 0
-      ? await db.select({ id: taskAttachments.id }).from(taskAttachments).where(inArray(taskAttachments.taskId, taskIds.map(String) as any))
-      : [];
-    const labelRows = taskIds.length > 0
-      ? await db.select({ id: labels.id }).from(labels).where(inArray(labels.taskId, taskIds))
-      : [];
-
-    const completedGoals = goalRows.filter(g => g.completed).length;
-    const totalHabitCompletions = habitRows.reduce((sum, h) => {
-      try { return sum + (JSON.parse(h.completedDays as string) as any[]).length; } catch { return sum; }
+    const completedGoals = goalRows.filter(g => g.completed || g.status === 'completed').length;
+    const totalHabitCompletions = allHabitRows.reduce((sum, h) => {
+      try {
+        const days = Array.isArray(h.completedDays) ? h.completedDays : JSON.parse(String(h.completedDays || '[]'));
+        return sum + (Array.isArray(days) ? days.filter(inPeriod).length : 0);
+      } catch { return sum; }
     }, 0);
     const maxStreak = habitRows.reduce((max, h) => Math.max(max, h.streak || 0), 0);
 
     const wbCounts: Record<string, number> = {};
-    wbItemRows.forEach(item => { wbCounts[item.type] = (wbCounts[item.type] || 0) + 1; });
+    wbItemRows.filter(item => inPeriod(item.createdAt)).forEach(item => { wbCounts[item.type] = (wbCounts[item.type] || 0) + 1; });
 
     // Granular task content from the latest board snapshot (subtasks, checklists, images, attachments)
-    const [snapshotRow] = await db.select().from(boardSnapshots).where(eq(boardSnapshots.userId, userId)).orderBy(desc(boardSnapshots.updatedAt)).limit(1);
-    let snapshotCounts = { subtasks: 0, checklistLists: 0, checklistItems: 0, images: 0, attachments: 0, labels: 0 };
-    if (snapshotRow) {
-      try {
-        const board = JSON.parse(snapshotRow.snapshot);
-        const tasksArr = Array.isArray(board?.tasks) ? board.tasks : [];
-        tasksArr.forEach((t: any) => {
-          if (Array.isArray(t.subtasks)) snapshotCounts.subtasks += t.subtasks.length;
-          if (Array.isArray(t.checklists)) {
-            snapshotCounts.checklistLists += t.checklists.length;
-            t.checklists.forEach((cl: any) => {
-              if (Array.isArray(cl.items)) snapshotCounts.checklistItems += cl.items.length;
-            });
-          }
-          if (Array.isArray(t.images)) snapshotCounts.images += t.images.length;
-          if (Array.isArray(t.attachments)) snapshotCounts.attachments += t.attachments.length;
-          if (Array.isArray(t.labels)) snapshotCounts.labels += t.labels.length;
-        });
-      } catch { /* snapshot parse failed - leave defaults */ }
-    }
+    let snapshotCounts = { subtasks: 0, checklistLists: 0, checklistItems: 0, images: 0, attachments: 0, labels: 0, overdue: 0 };
+    taskRows.forEach((t: any) => {
+      if (!t.completed && t.status !== 'completed' && t.dueDate && new Date(String(t.dueDate)).getTime() < Date.now()) snapshotCounts.overdue += 1;
+      const lists = Array.isArray(t.checklists) ? t.checklists : [];
+      const legacy = lists.find((l: any) => String(l?.title || '').trim().toLowerCase() === 'subtasks');
+      const realLists = lists.filter((l: any) => l !== legacy);
+      snapshotCounts.subtasks += Array.isArray(t.subtasks) && t.subtasks.length ? t.subtasks.length : (Array.isArray(legacy?.items) ? legacy.items.length : 0);
+      snapshotCounts.checklistLists += realLists.length;
+      realLists.forEach((cl: any) => { snapshotCounts.checklistItems += Array.isArray(cl.items) ? cl.items.length : 0; });
+      snapshotCounts.images += Array.isArray(t.images) ? t.images.length : 0;
+      snapshotCounts.attachments += Array.isArray(t.attachments) ? t.attachments.length : 0;
+      snapshotCounts.labels += Array.isArray(t.labels) ? t.labels.length : 0;
+    });
 
     const totalFocusMinutes = focusRows.reduce((sum, f) => sum + (f.durationMinutes || 0), 0);
     const completedFocus = focusRows.filter(f => f.completed).length;
-    const checklistItemCount = checklistRows.reduce((sum, c) => sum + (Number(c.checklistItems) || 0), 0);
     const totalSpentCents = userTransactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0);
     const openUserTickets = ticketRows.filter(t => t.status !== 'closed').length;
 
     const widgetUsageMap: Record<string, number> = {};
-    widgetUsage.forEach(w => { widgetUsageMap[w.widgetType] = w.count; });
+    widgetUsage.forEach(w => {
+      if (!w.widgetType.startsWith('ui:')) widgetUsageMap[w.widgetType] = (widgetUsageMap[w.widgetType] || 0) + (Number(w.count) || 0);
+    });
 
     // Per-button UI usage: widgetType `ui:<page>:<feature>` -> {page: {feature: count}}.
     // Tracked per button press (not just per page visit) via src/lib/usage.ts.
@@ -960,7 +989,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
       },
       stats: {
         tasks: taskRows.length,
-        completedTasks: taskRows.filter(t => t.completed).length,
+        completedTasks: taskRows.filter(t => t.completed || t.status === 'completed').length,
         goals: goalRows.length,
         completedGoals,
         habits: habitRows.length,
@@ -969,7 +998,8 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
       featureUsage: {
         tasks: {
           total: taskRows.length,
-          completed: taskRows.filter(t => t.completed).length,
+          completed: taskRows.filter(t => t.completed || t.status === 'completed').length,
+          overdue: snapshotCounts.overdue,
           subtasks: snapshotCounts.subtasks,
           checklists: snapshotCounts.checklistLists,
           checklistItems: snapshotCounts.checklistItems,
@@ -980,7 +1010,7 @@ router.get('/users/:id/full-details', async (req: AuthRequest, res: Response) =>
         },
         projects: {
           boards: projectCount,
-          milestones: milestoneRows.length,
+          milestones: milestoneRows.filter(m => inPeriod(m.createdAt)).length,
           whiteboards: whiteboardRows.length,
         },
         goals: {

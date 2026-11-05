@@ -13,6 +13,7 @@ import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import {
   ArrowDown,
   ArrowUp,
@@ -4601,13 +4602,18 @@ export const TaskDropdownExpanded: React.FC<{
                 size="sm"
               />
               {editingSubtaskId === subtask.id ? (
-                <input
+                <AutoGrowTextarea
                   autoFocus
                   className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                   value={editingSubtaskText}
                   onChange={e => setEditingSubtaskText(e.target.value)}
                   onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      saveSubtaskEdit(subtask.id);
+                    }
+                  }}
                 />
               ) : (
                 <span
@@ -4703,10 +4709,15 @@ export const TaskDropdownExpanded: React.FC<{
             </DragDropContext>
 
             <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-              <input
+              <AutoGrowTextarea
                 value={newSubtaskText}
                 onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    addSubtask();
+                  }
+                }}
                 placeholder="Add sub-task"
                 className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
               />
@@ -4775,9 +4786,9 @@ export const TaskDropdownExpanded: React.FC<{
                                 >
                                   <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                    {editingChecklistId === list.id ? (
-                                    <input
+                                    <AutoGrowTextarea
                                       autoFocus
-                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                      className="flex-1 min-w-0 text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                       value={editingChecklistTitle}
                                       onChange={e => setEditingChecklistTitle(e.target.value)}
                                       onClick={e => e.stopPropagation()}
@@ -4789,7 +4800,8 @@ export const TaskDropdownExpanded: React.FC<{
                                         setEditingChecklistTitle('');
                                       }}
                                       onKeyDown={e => {
-                                        if (e.key === 'Enter') {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
                                           if (editingChecklistTitle.trim()) {
                                             onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
                                           }
@@ -4844,13 +4856,18 @@ export const TaskDropdownExpanded: React.FC<{
                                                   size="md"
                                                 />
                                                 {editingChecklistItemId === item.id ? (
-                                                  <input
+                                                  <AutoGrowTextarea
                                                     autoFocus
                                                     className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                    onKeyDown={e => {
+                                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        saveChecklistItemEdit(list.id, item.id);
+                                                      }
+                                                    }}
                                                   />
                                                 ) : (
                                                   <span
@@ -4875,10 +4892,19 @@ export const TaskDropdownExpanded: React.FC<{
                                     )}
                                   </Droppable>
                                   <div className="flex gap-2 pt-1">
-                                    <input
+                                    <AutoGrowTextarea
                                       value={perChecklistInput[list.id] ?? ''}
                                       onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                      onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
+                                          const text = perChecklistInput[list.id] ?? '';
+                                          if (text.trim()) {
+                                            onAddChecklistItem(task.id, list.id, text.trim());
+                                            setPerChecklistInput(prev => ({ ...prev, [list.id]: '' }));
+                                          }
+                                        }
+                                      }}
                                       placeholder="Add checklist item"
                                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                     />
@@ -4897,10 +4923,16 @@ export const TaskDropdownExpanded: React.FC<{
               </Droppable>
             </DragDropContext>
             <div className="flex gap-2">
-              <input
+              <AutoGrowTextarea
                 value={newChecklistTitle}
                 onChange={e => setNewChecklistTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey && newChecklistTitle.trim()) {
+                    e.preventDefault();
+                    onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] });
+                    setNewChecklistTitle('');
+                  }
+                }}
                 placeholder="New checklist name"
                 className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
               />
@@ -5267,13 +5299,18 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 size="sm"
               />
               {editingSubtaskId === subtask.id ? (
-                <input
+                <AutoGrowTextarea
                   autoFocus
                   className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                   value={editingSubtaskText}
                   onChange={e => setEditingSubtaskText(e.target.value)}
                   onBlur={() => saveSubtaskEdit(subtask.id)}
-                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      saveSubtaskEdit(subtask.id);
+                    }
+                  }}
                 />
               ) : (
                 <span
@@ -5778,10 +5815,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </DragDropContext>
 
               <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                <input
+                <AutoGrowTextarea
                   value={newSubtaskText}
                   onChange={e => setNewSubtaskText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      addSubtask();
+                    }
+                  }}
                   placeholder="Add sub-task"
                   className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                 />
@@ -5849,9 +5891,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   >
                                     <span className="text-xs text-muted-foreground shrink-0">({list.items.length})</span>
                                    {editingChecklistId === list.id ? (
-                                      <input
+                                      <AutoGrowTextarea
                                         autoFocus
-                                        className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                        className="flex-1 min-w-0 text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                         value={editingChecklistTitle}
                                         onChange={e => setEditingChecklistTitle(e.target.value)}
                                         onClick={e => e.stopPropagation()}
@@ -5863,7 +5905,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                           setEditingChecklistTitle('');
                                         }}
                                         onKeyDown={e => {
-                                          if (e.key === 'Enter') {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
                                             if (editingChecklistTitle.trim()) {
                                               onUpdateTask(task.id, { checklists: task.checklists.map(cl => cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl) });
                                             }
@@ -5918,13 +5961,18 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                       size="md"
                                                     />
                                                     {editingChecklistItemId === item.id ? (
-                                                      <input
+                                                      <AutoGrowTextarea
                                                         autoFocus
                                                         className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                         value={editingChecklistText}
                                                         onChange={e => setEditingChecklistText(e.target.value)}
                                                         onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                        onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                        onKeyDown={e => {
+                                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                                            e.preventDefault();
+                                                            saveChecklistItemEdit(list.id, item.id);
+                                                          }
+                                                        }}
                                                       />
                                                     ) : (
                                                       <span
@@ -5949,10 +5997,19 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                         )}
                                       </Droppable>
                                     <div className="flex gap-2 pt-1">
-                                      <input
+                                      <AutoGrowTextarea
                                         value={perChecklistInput[list.id] ?? ''}
                                         onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                        onKeyDown={e => { if (e.key === 'Enter') { const text = perChecklistInput[list.id] ?? ''; if (text.trim()) { onAddChecklistItem(task.id, list.id, text.trim()); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); } } }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            const text = perChecklistInput[list.id] ?? '';
+                                            if (text.trim()) {
+                                              onAddChecklistItem(task.id, list.id, text.trim());
+                                              setPerChecklistInput(prev => ({ ...prev, [list.id]: '' }));
+                                            }
+                                          }
+                                        }}
                                         placeholder="Add checklist item"
                                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                       />
@@ -5971,10 +6028,16 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </Droppable>
               </DragDropContext>
               <div className="flex gap-2">
-                <input
+                <AutoGrowTextarea
                   value={newChecklistTitle}
                   onChange={e => setNewChecklistTitle(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] }); setNewChecklistTitle(''); } }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey && newChecklistTitle.trim()) {
+                      e.preventDefault();
+                      onUpdateTask(task.id, { checklists: [...task.checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }] });
+                      setNewChecklistTitle('');
+                    }
+                  }}
                   placeholder="New checklist name"
                   className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                 />

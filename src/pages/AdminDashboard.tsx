@@ -987,7 +987,7 @@ const AdminDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         setUserFullDetails(data);
-        if (asFullPage) setActiveUserView(data);
+        if (asFullPage || activeUserView?.user?.id === userId) setActiveUserView(data);
       }
     } catch {}
   };

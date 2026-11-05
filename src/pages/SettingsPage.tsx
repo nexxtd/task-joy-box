@@ -7,9 +7,11 @@ import {
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
   History, Brain, CheckCircle2, X, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
-  Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine
+  Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine,
+  ArrowLeftRight, PlayCircle
 } from 'lucide-react';
 import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
+import { SPLIT_PRESETS, openSplitPreset } from '@/lib/splitPresets';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -680,12 +682,15 @@ const SettingsPage: React.FC = () => {
       token: localStorage.getItem('token'),
       session: localStorage.getItem('session'),
     };
-    
+    // Never replay the onboarding tutorial just because settings were reset.
+    const tutorialCompleted = localStorage.getItem('tutorial_completed');
+
     localStorage.clear();
-    
+
     // Restore essential auth data
     if (authData.token) localStorage.setItem('token', authData.token);
     if (authData.session) localStorage.setItem('session', authData.session);
+    if (tutorialCompleted) localStorage.setItem('tutorial_completed', tutorialCompleted);
     
     // Apply default settings to localStorage
     localStorage.setItem('smartAlerts', 'true');
@@ -927,7 +932,7 @@ const SettingsPage: React.FC = () => {
                 </Select>
               </div>
               
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap items-center gap-2">
                 <button
                   onClick={resetDefaults}
                   data-testid="button-reset-defaults-appearance"
@@ -935,6 +940,17 @@ const SettingsPage: React.FC = () => {
                 >
                   <RefreshCw className="w-4 h-4" />
                   Reset All to Defaults
+                </button>
+                <button
+                  onClick={() => {
+                    trackUsage('settings', 'redo-tutorial');
+                    window.dispatchEvent(new CustomEvent('tutorial:open'));
+                  }}
+                  data-testid="button-redo-tutorial"
+                  className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  <PlayCircle className="w-4 h-4" />
+                  Redo Tutorial
                 </button>
               </div>
             </div>
@@ -1242,6 +1258,43 @@ const SettingsPage: React.FC = () => {
               {rebindError && (
                 <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2" role="alert">{rebindError}</p>
               )}
+
+              <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Preset split screens</h3>
+                    <p className="text-[11px] text-muted-foreground">Open two pages side by side in one click.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {SPLIT_PRESETS.map(preset => (
+                    <div
+                      key={preset.id}
+                      className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{preset.label}</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">{preset.description}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          trackUsage('settings', 'open-split-preset');
+                          openSplitPreset(preset);
+                        }}
+                        className="mt-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                      >
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                        Open split
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 {shortcuts.map(s => {
                   const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;

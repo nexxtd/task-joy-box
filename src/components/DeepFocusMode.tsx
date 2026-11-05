@@ -6,6 +6,7 @@ import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import {
   DragDropContext,
   Droppable,
@@ -949,10 +950,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                               )}
                                             </Droppable>
                                             <div className="flex gap-2 pt-1">
-                                              <input
+                                              <AutoGrowTextarea
                                                 value={perChecklistInput[list.id] ?? ''}
                                                 onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
+                                                onKeyDown={e => {
+                                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    addNamedChecklistItem(list.id);
+                                                  }
+                                                }}
                                                 placeholder="Add item"
                                                 className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                                               />
@@ -987,13 +993,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                         size="md"
                                       />
                                       {editingChecklistItemId === item.id ? (
-                                        <input
+                                        <AutoGrowTextarea
                                           autoFocus
                                           className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                           value={editingChecklistItemText}
                                           onChange={e => setEditingChecklistItemText(e.target.value)}
                                           onBlur={() => saveChecklistItemEdit(item.checklistId, item.id)}
-                                          onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(item.checklistId, item.id)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              saveChecklistItemEdit(item.checklistId, item.id);
+                                            }
+                                          }}
                                         />
                                       ) : (
                                         <span
@@ -1021,10 +1032,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     </DragDropContext>
                   )}
                   <div className="flex gap-2">
-                    <input
+                    <AutoGrowTextarea
                       value={newChecklistTitle}
                       onChange={e => setNewChecklistTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey && newChecklistTitle.trim()) {
+                          e.preventDefault();
+                          addNamedChecklist();
+                        }
+                      }}
                       placeholder="New checklist name"
                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     />
@@ -1270,13 +1286,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                         size="md"
                                       />
                                       {editingSubtaskId === subtask.id ? (
-                                        <input
+                                        <AutoGrowTextarea
                                           autoFocus
                                           className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                           value={editingSubtaskText}
                                           onChange={e => setEditingSubtaskText(e.target.value)}
                                           onBlur={() => saveSubtaskEdit(subtask.id)}
-                                          onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault();
+                                              saveSubtaskEdit(subtask.id);
+                                            }
+                                          }}
                                         />
                                       ) : (
                                         <span
@@ -1303,10 +1324,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       </DragDropContext>
                     )}
                     <div className="flex gap-2">
-                      <input
+                      <AutoGrowTextarea
                         value={newSubtaskText}
                         onChange={e => setNewSubtaskText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubtask(); } }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            addSubtask();
+                          }
+                        }}
                         placeholder="Add sub-task"
                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                       />
@@ -1446,10 +1472,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                 )}
                                               </Droppable>
                                               <div className="flex gap-2 pt-1">
-                                                <input
+                                                <AutoGrowTextarea
                                                   value={perChecklistInput[list.id] ?? ''}
                                                   onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNamedChecklistItem(list.id); } }}
+                                                  onKeyDown={e => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                      e.preventDefault();
+                                                      addNamedChecklistItem(list.id);
+                                                    }
+                                                  }}
                                                   placeholder="Add item"
                                                   className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                                                 />
@@ -1484,13 +1515,18 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                           size="md"
                                         />
                                         {editingChecklistItemId === item.id ? (
-                                          <input
+                                          <AutoGrowTextarea
                                             autoFocus
                                             className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                             value={editingChecklistItemText}
                                             onChange={e => setEditingChecklistItemText(e.target.value)}
                                             onBlur={() => saveChecklistItemEdit(item.checklistId, item.id)}
-                                            onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(item.checklistId, item.id)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                saveChecklistItemEdit(item.checklistId, item.id);
+                                              }
+                                            }}
                                           />
                                         ) : (
                                           <span
@@ -1518,10 +1554,15 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                       </DragDropContext>
                     )}
                     <div className="flex gap-2">
-                      <input
+                      <AutoGrowTextarea
                         value={newChecklistTitle}
                         onChange={e => setNewChecklistTitle(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addNamedChecklist(); } }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey && newChecklistTitle.trim()) {
+                            e.preventDefault();
+                            addNamedChecklist();
+                          }
+                        }}
                         placeholder="New checklist name"
                         className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                       />

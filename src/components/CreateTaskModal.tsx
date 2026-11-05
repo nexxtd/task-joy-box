@@ -25,7 +25,8 @@ import { fetchNoteTemplates, createNoteTemplate } from '@/services/noteTemplateS
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
-import AttachmentRow from '@/components/AttachmentRow';
+import DraftFileList from '@/components/shared/DraftFileList';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 type NewTaskSubtaskDraft = {
@@ -509,6 +510,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     if (!newChecklistText.trim()) return;
     setNewChecklistItems(prev => [...prev, { id: crypto.randomUUID(), text: newChecklistText.trim() }]);
     setNewChecklistText('');
+  };
+
+  const removeNewFile = (file: File) => {
+    setNewFiles(prev => {
+      const index = prev.indexOf(file);
+      if (index === -1) return prev;
+      const next = [...prev];
+      next.splice(index, 1);
+      return next;
+    });
   };
 
   const addDraftChecklist = () => {
@@ -1099,10 +1110,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </Droppable>
                   </DragDropContext>
                   <div className="grid grid-cols-[1fr_120px_auto] gap-2">
-                    <input
+                    <AutoGrowTextarea
                       value={newSubtaskText}
                       onChange={e => setNewSubtaskText(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addSubtaskDraft()}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          addSubtaskDraft();
+                        }
+                      }}
                       placeholder="New sub-task"
                       className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     />
@@ -1158,7 +1174,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                           <GripVertical className="w-4 h-4" />
                                         </div>
                                         {editingDraftChecklistIndex === index ? (
-                                          <input
+                                          <AutoGrowTextarea
                                             autoFocus
                                             className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                             value={editingDraftChecklistText}
@@ -1170,7 +1186,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               setEditingDraftChecklistIndex(null);
                                             }}
                                             onKeyDown={e => {
-                                              if (e.key === 'Enter') {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
                                                 if (editingDraftChecklistText.trim()) {
                                                   setNewChecklistItems(prev => prev.map((it, i) => i === index ? { ...it, text: editingDraftChecklistText.trim() } : it));
                                                 }
@@ -1198,10 +1215,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                             )}
                           </Droppable>
                           <div className="flex gap-2 pt-1">
-                            <input
+                            <AutoGrowTextarea
                               value={newChecklistText}
                               onChange={e => setNewChecklistText(e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && addChecklistDraft()}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  addChecklistDraft();
+                                }
+                              }}
                               placeholder="Add checklist item"
                               className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                             />
@@ -1277,7 +1299,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>
                                                       {editingDraftChecklistItemKey?.listId === list.id && editingDraftChecklistItemKey?.itemId === item.id ? (
-                                                        <input
+                                                        <AutoGrowTextarea
                                                           autoFocus
                                                           className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                           value={editingDraftChecklistText}
@@ -1289,7 +1311,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                                             setEditingDraftChecklistItemKey(null);
                                                           }}
                                                           onKeyDown={e => {
-                                                            if (e.key === 'Enter') {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                              e.preventDefault();
                                                               if (editingDraftChecklistText.trim()) {
                                                                 setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.map(it => it.id === item.id ? { ...it, text: editingDraftChecklistText.trim() } : it) } : l));
                                                               }
@@ -1317,10 +1340,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                           )}
                                         </Droppable>
                                         <div className="flex gap-2 pt-1">
-                                          <input
+                                          <AutoGrowTextarea
                                             value={perChecklistInput[list.id] ?? ''}
                                             onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
-                                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraftChecklistItem(list.id); } }}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                addDraftChecklistItem(list.id);
+                                              }
+                                            }}
                                             placeholder="Add checklist item"
                                             className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
                                           />
@@ -1339,10 +1367,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </Droppable>
                   </DragDropContext>
                   <div className="flex gap-2">
-                    <input
+                    <AutoGrowTextarea
                       value={newChecklistTitle}
                       onChange={e => setNewChecklistTitle(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newChecklistTitle.trim()) { addDraftChecklist(); } }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (newChecklistTitle.trim()) addDraftChecklist();
+                        }
+                      }}
                       placeholder="New checklist name"
                       className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
                     />
@@ -1398,23 +1431,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         />
                       </label>
                       {newFiles.length > 0 && (
-                        <div className="space-y-2">
-                          {newFiles.map((file, fileIdx) => (
-                            <AttachmentRow
-                              key={`${file.name}-${fileIdx}`}
-                              attachment={{
-                                id: `draft-${fileIdx}`,
-                                fileName: file.name,
-                                fileSize: file.size,
-                                fileType: file.type,
-                                fileUrl: '',
-                              }}
-                              taskId="draft"
-                              onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))}
-                              disabledInBuilder
-                            />
-                          ))}
-                        </div>
+                        <DraftFileList
+                          files={newFiles}
+                          onChange={setNewFiles}
+                          onRemove={removeNewFile}
+                        />
                       )}
                     </>
                   )}
@@ -1764,25 +1785,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   {!aiBuilderFilesCollapsed && (
                     <div className="border-t border-border/60 px-4 py-3 space-y-3">
                       {newFiles.length === 0 ? <p className="text-xs text-muted-foreground">No files yet. Add a file to get started.</p> : (
-                        <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(newFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setNewFiles(items); }}>
-                          <Droppable droppableId="ai-builder-files">
-                            {provided => (
-                              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
-                                {newFiles.map((file, fileIdx) => (
-                                  <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-file-${fileIdx}-${file.name}`} index={fileIdx}>
-                                    {provided => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2">
-                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
-                                        <div className="flex-1"><AttachmentRow attachment={{ id: `builder-${fileIdx}`, fileName: file.name, fileSize: file.size, fileType: file.type, fileUrl: '' }} taskId="builder" onDelete={() => setNewFiles(prev => prev.filter((_, idx) => idx !== fileIdx))} disabledInBuilder /></div>
-                                      </div>
-                                    )}
-                                  </Draggable>
-                                ))}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
-                        </DragDropContext>
+                        <DraftFileList
+                          files={newFiles}
+                          onChange={setNewFiles}
+                          onRemove={removeNewFile}
+                        />
                       )}
                     </div>
                   )}

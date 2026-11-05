@@ -156,6 +156,13 @@ function ProtectedRoutes() {
   const location = useLocation();
   const { isOpen: isDeepFocusOpen, task: deepFocusTask } = useDeepFocus();
   const [maintenance, setMaintenance] = useState<{ maintenance_mode: boolean; message: string | null }>({ maintenance_mode: false, message: null });
+  // Settings > Appearance can replay the tutorial without a page reload.
+  const [tutorialRequested, setTutorialRequested] = useState(false);
+  useEffect(() => {
+    const onOpenTutorial = () => setTutorialRequested(true);
+    window.addEventListener('tutorial:open', onOpenTutorial);
+    return () => window.removeEventListener('tutorial:open', onOpenTutorial);
+  }, []);
   // Preload the most likely next pages on idle so common navigation feels
   // instant — without downloading the whole app (antd/recharts/AI) on boot,
   // which saturated the network and made everything feel slow to load.
@@ -244,7 +251,7 @@ function ProtectedRoutes() {
   }
 
   // Check if tutorial should be shown
-  const shouldShowTutorial = user && !localStorage.getItem('tutorial_completed');
+  const shouldShowTutorial = !!user && (tutorialRequested || !localStorage.getItem('tutorial_completed'));
 
   return (
     <BoardProvider>
@@ -253,7 +260,7 @@ function ProtectedRoutes() {
             <AppearanceSync />
             <Suspense fallback={null}><EnergyPopup /></Suspense>
             <Suspense fallback={null}><WhatsNewModal /></Suspense>
-            {shouldShowTutorial && <Suspense fallback={null}><Tutorial /></Suspense>}
+            {shouldShowTutorial && <Suspense fallback={null}><Tutorial onClose={() => setTutorialRequested(false)} /></Suspense>}
             {isDeepFocusOpen && <Suspense fallback={null}><DeepFocusMode task={deepFocusTask} /></Suspense>}
             <Routes>
               <Route element={<AppLayout />}>

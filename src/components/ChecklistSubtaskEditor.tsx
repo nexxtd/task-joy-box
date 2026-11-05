@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { GripVertical, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import type { Checklist, ChecklistItem, Subtask, TaskStatus } from '@/types/board';
 
 export const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string; className: string }> = [
@@ -252,13 +253,18 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                               </div>
                               <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" />
                               {editingSubtaskId === subtask.id ? (
-                                <input
+                                <AutoGrowTextarea
                                   autoFocus
                                   className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                   value={editingSubtaskText}
                                   onChange={e => setEditingSubtaskText(e.target.value)}
                                   onBlur={() => saveSubtaskEdit(subtask.id)}
-                                  onKeyDown={e => e.key === 'Enter' && saveSubtaskEdit(subtask.id)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      saveSubtaskEdit(subtask.id);
+                                    }
+                                  }}
                                 />
                               ) : (
                                 <span
@@ -282,10 +288,15 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
               </Droppable>
             </DragDropContext>
             <div className="flex gap-2">
-              <input
+              <AutoGrowTextarea
                 value={newSubtaskText}
                 onChange={e => setNewSubtaskText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    addSubtask();
+                  }
+                }}
                 placeholder="Add sub-task"
                 className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
               />
@@ -339,9 +350,9 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                   className="flex-1 flex items-center gap-2 text-left"
                                 >
                                   {editingChecklistId === list.id ? (
-                                    <input
+                                    <AutoGrowTextarea
                                       autoFocus
-                                      className="text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
+                                      className="flex-1 min-w-0 text-xs font-semibold text-foreground bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                       value={editingChecklistTitle}
                                       onChange={e => setEditingChecklistTitle(e.target.value)}
                                       onClick={e => e.stopPropagation()}
@@ -353,7 +364,8 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         setEditingChecklistTitle('');
                                       }}
                                       onKeyDown={e => {
-                                        if (e.key === 'Enter') {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
                                           if (editingChecklistTitle.trim()) {
                                             onChecklistsChange(checklists.map(cl => (cl.id === list.id ? { ...cl, title: editingChecklistTitle.trim() } : cl)));
                                           }
@@ -401,13 +413,18 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                                 </div>
                                                 <SquareToggle completed={item.completed} onClick={() => toggleChecklistItem(list.id, item.id)} size="md" />
                                                 {editingChecklistItemId === item.id ? (
-                                                  <input
+                                                  <AutoGrowTextarea
                                                     autoFocus
                                                     className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                    onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                    onKeyDown={e => {
+                                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        saveChecklistItemEdit(list.id, item.id);
+                                                      }
+                                                    }}
                                                   />
                                                 ) : (
                                                   <span
@@ -429,11 +446,12 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                     )}
                                   </Droppable>
                                   <div className="flex gap-2 pt-1">
-                                    <input
+                                    <AutoGrowTextarea
                                       value={perChecklistInput[list.id] ?? ''}
                                       onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
                                       onKeyDown={e => {
-                                        if (e.key === 'Enter') {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                          e.preventDefault();
                                           const text = perChecklistInput[list.id] ?? '';
                                           if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
                                         }
@@ -464,11 +482,12 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
               </Droppable>
             </DragDropContext>
             <div className="flex gap-2">
-              <input
+              <AutoGrowTextarea
                 value={newChecklistTitle}
                 onChange={e => setNewChecklistTitle(e.target.value)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter' && newChecklistTitle.trim()) {
+                  if (e.key === 'Enter' && !e.shiftKey && newChecklistTitle.trim()) {
+                    e.preventDefault();
                     onChecklistsChange([...checklists, { id: crypto.randomUUID(), title: newChecklistTitle.trim(), items: [] }]);
                     setNewChecklistTitle('');
                   }

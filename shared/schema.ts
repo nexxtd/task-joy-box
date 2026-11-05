@@ -619,6 +619,13 @@ export const dashboardWidgetUsage = pgTable('dashboard_widget_usage', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
+export const dashboardUsageEvents = pgTable('dashboard_usage_events', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  widgetType: text('widget_type').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const supportTickets = pgTable('support_tickets', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id).notNull(),

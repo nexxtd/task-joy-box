@@ -24,6 +24,14 @@ const PAGES: { id: string; label: string; icon: any }[] = [
 ];
 
 const LANGUAGES = ['en', 'fr', 'es', 'de'];
+const STATS_PERIODS = [
+  { id: 'all', label: 'All time' },
+  { id: '6m', label: '6 months' },
+  { id: '3m', label: '3 months' },
+  { id: '1m', label: '1 month' },
+  { id: '1w', label: '1 week' },
+  { id: '1d', label: '1 day' },
+] as const;
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', fr: 'Français', es: 'Español', de: 'Deutsch' };
 
 const WIDGET_LABELS: Record<string, string> = {
@@ -63,6 +71,30 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
   const [editingPassword, setEditingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<(typeof STATS_PERIODS)[number]['id']>('all');
+  const [periodDetails, setPeriodDetails] = useState<any>(null);
+  const [periodLoading, setPeriodLoading] = useState(false);
+
+  useEffect(() => {
+    setStatsPeriod('all');
+    setPeriodDetails(null);
+  }, [details?.user?.id]);
+
+  useEffect(() => {
+    if (statsPeriod === 'all' || !details?.user?.id) return;
+    const controller = new AbortController();
+    setPeriodLoading(true);
+    setPeriodDetails(null);
+    fetch(`/api/admin/users/${details.user.id}/full-details?period=${statsPeriod}`, {
+      credentials: 'include', signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) throw new Error('Failed to load user statistics');
+      return response.json();
+    }).then(setPeriodDetails).catch(error => {
+      if (error.name !== 'AbortError') toast({ title: 'Could not load statistics', variant: 'destructive' });
+    }).finally(() => { if (!controller.signal.aborted) setPeriodLoading(false); });
+    return () => controller.abort();
+  }, [statsPeriod, details]);
 
   useEffect(() => {
     const u = details?.user;
@@ -73,7 +105,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
   }, [details?.user?.id]);
 
   const user = details?.user || {};
-  const fu = details?.featureUsage || {};
+  const fu = (statsPeriod === 'all' ? details : periodDetails)?.featureUsage || {};
 
   const dirty = form && (
     form.name !== (user.name || '') || form.email !== (user.email || '') || form.tier !== (user.tier || 'free') ||
@@ -232,7 +264,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
     ui['ai'] = { ...(ui['ai-assistant'] || {}), ...(ui['ai'] || {}) };
     const buttonSection = (pageKey: string, pageLabel: string, icon?: any) => {
       const key = String(pageKey).toLowerCase();
-      const entries: [string, number][] = Object.entries(ui[key] || {}).map(([k, v]) => [k, Number(v) || 0]);
+      const entries: [string, number][] = Object.entries(ui[key] || {}).filter(([k]) => k !== 'page-visit').map(([k, v]) => [k, Number(v) || 0]);
       entries.sort((a, b) => b[1] - a[1]);
       const total = entries.reduce((a, [, b]) => a + b, 0);
       const top = entries.length ? entries[0] : null;
@@ -241,6 +273,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         { title: `${pageLabel} — Button Usage`, icon, rows: entries.length ? entries.map(([k, v]) => ({ label: friendly(k), value: v })) : [{ label: 'No button activity yet', value: '—' }] },
         { title: `${pageLabel} — Button Activity`, rows: [
           { label: 'Total button presses', value: total },
+          { label: 'Page visits', value: Number(ui[key]?.['page-visit']) || 0 },
           { label: 'Distinct features used', value: entries.length },
           { label: 'Most used feature', value: top ? `${friendly(top[0])} (${top[1]})` : '—' },
           { label: 'Avg presses per feature', value: entries.length ? (total / entries.length).toFixed(1) : '—' },
@@ -289,7 +322,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           { label: 'Total created', value: t.total },
           { label: 'Completed', value: t.completed },
           { label: 'Active / Pending', value: activeTasks },
-          { label: 'Overdue (tracked)', value: (t as any).overdue ?? 0 },
+          { label: 'Overdue', value: (t as any).overdue ?? 0 },
           { label: 'Completion rate', value: completionRate },
           { label: 'Avg checklists per task', value: t.total ? (Number(t.checklists || 0) / Number(t.total)).toFixed(2) : '—' },
         ]},
@@ -303,9 +336,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         { title: 'Organization & Templates', icon: FileText, rows: [
           { label: 'Labels / Tags applied', value: t.labels },
           { label: 'Tags per task', value: t.total ? (Number(t.labels || 0) / Number(t.total)).toFixed(2) : '—' },
-          { label: 'Template usage', value: (t as any).templatesUsed ?? (t as any).templateUsage ?? 0 },
-          { label: 'Templates per task', value: t.total ? ((Number((t as any).templatesUsed) || 0) / Number(t.total)).toFixed(2) : '—' },
-          { label: 'Deep Focus sessions linked', value: t.deepFocusSessions },
+          { label: 'Deep Focus sessions', value: t.deepFocusSessions },
         ]},
         { title: 'Media & Attachments', rows: [
           { label: 'Images attached', value: t.images },
@@ -325,7 +356,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ]},
         { title: 'Per-Widget Insights Usage', rows: widgetEntries.length ? widgetEntries.map(([k, v]: any) => ({ label: WIDGET_LABELS[k] || k.replace(/-/g, ' '), value: v })) : [{ label: 'No insights widgets used', value: '—' }] },
         { title: 'Advanced', rows: [
-          { label: 'AI messages informing insights', value: ai.totalMessages },
+          { label: 'AI messages', value: ai.totalMessages },
           { label: 'Dashboard events', value: totalWidgets },
         ]},
       ],
@@ -392,13 +423,13 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
         ...buttonSection('settings', 'Settings', User),
         { title: 'Settings — Preferences', icon: User, rows: [
           { label: 'Language', value: (details?.user?.language || 'English') },
-          { label: 'Settings button presses', value: Object.values((ui['settings'] || {}) as Record<string, number>).reduce((a: number, b: any) => a + (Number(b) || 0), 0) },
-          { label: 'Distinct settings features used', value: Object.keys(ui['settings'] || {}).length },
+          { label: 'Settings button presses', value: Object.entries((ui['settings'] || {}) as Record<string, number>).filter(([key]) => key !== 'page-visit').reduce((a: number, [, count]) => a + (Number(count) || 0), 0) },
+          { label: 'Distinct settings features used', value: Object.keys(ui['settings'] || {}).filter(key => key !== 'page-visit').length },
         ]},
       ],
     };
     return s;
-  }, [details, user]);
+  }, [details, user, fu]);
 
   const activePageMeta = PAGES.find(p => p.id === page);
   const isPersonal = page === 'personal';
@@ -458,6 +489,24 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           <h2 className="text-sm font-bold text-foreground">{isPersonal ? 'Personal' : activePageMeta?.label}</h2>
           <span className="text-xs text-muted-foreground">— {user.name || user.email || 'User'}</span>
         </div>
+
+        {!isPersonal && (
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Statistics time range">
+            {STATS_PERIODS.map(option => (
+              <button key={option.id} type="button" onClick={() => setStatsPeriod(option.id)}
+                aria-pressed={statsPeriod === option.id}
+                className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${statsPeriod === option.id ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-muted'}`}>
+                {option.label}
+              </button>
+            ))}
+            {periodLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-1" aria-label="Loading statistics" />}
+          </div>
+        )}
+        {!isPersonal && statsPeriod !== 'all' && (
+          <p className="text-[11px] text-muted-foreground">
+            Showing current items created in this period and activity recorded in this period. Button activity history begins with this update.
+          </p>
+        )}
 
         {isPersonal && (
           <div className="space-y-4">
@@ -627,7 +676,7 @@ export const UserDetailView: React.FC<UserDetailViewProps> = ({ details, onBack,
           </div>
         )}
 
-        {!isPersonal && (
+        {!isPersonal && (!periodLoading || statsPeriod === 'all') && (
           <div className="space-y-4">
             {pageSections.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">No data available for this section yet.</p>

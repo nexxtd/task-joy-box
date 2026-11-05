@@ -23,7 +23,7 @@ interface TutorialStep {
   highlight?: string;
 }
 
-const Tutorial: React.FC = () => {
+const Tutorial: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [showTutorial, setShowTutorial] = useState(true);
   const navigate = useNavigate();
@@ -95,12 +95,14 @@ const Tutorial: React.FC = () => {
   const completeTutorial = () => {
     localStorage.setItem('tutorial_completed', 'true');
     setShowTutorial(false);
+    onClose?.();
     navigate('/');
   };
 
   const skipTutorial = () => {
     localStorage.setItem('tutorial_completed', 'true');
     setShowTutorial(false);
+    onClose?.();
     navigate('/');
   };
 

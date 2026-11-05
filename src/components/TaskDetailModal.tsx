@@ -10,6 +10,7 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
+import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
@@ -571,11 +572,16 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
 
             {addingChecklist && (
               <div className="flex gap-2 mb-3 animate-fade-in">
-                <input
+                <AutoGrowTextarea
                   autoFocus
                   value={newChecklistTitle}
                   onChange={e => setNewChecklistTitle(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddChecklist()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleAddChecklist();
+                    }
+                  }}
                   placeholder="Checklist name..."
                   className="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 />
@@ -636,13 +642,18 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                                 size="sm"
                                               />
                                               {editingChecklistItemId === item.id ? (
-                                                <input
+                                                <AutoGrowTextarea
                                                   autoFocus
                                                   className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                   value={editingChecklistItemText}
                                                   onChange={e => setEditingChecklistItemText(e.target.value)}
                                                   onBlur={() => saveChecklistItemEdit(cl.id, item.id)}
-                                                  onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(cl.id, item.id)}
+                                                  onKeyDown={e => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                      e.preventDefault();
+                                                      saveChecklistItemEdit(cl.id, item.id);
+                                                    }
+                                                  }}
                                                 />
                                               ) : (
                                                 <span
@@ -667,10 +678,15 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                   )}
                                 </Droppable>
                                 <div className="flex gap-2 px-3 pb-2">
-                                  <input
+                                  <AutoGrowTextarea
                                     value={newItemTexts[cl.id] || ''}
                                     onChange={e => setNewItemTexts(p => ({ ...p, [cl.id]: e.target.value }))}
-                                    onKeyDown={e => e.key === 'Enter' && handleAddItem(cl.id)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleAddItem(cl.id);
+                                      }
+                                    }}
                                     placeholder="Add item..."
                                     className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-1.5 text-xs"
                                   />
