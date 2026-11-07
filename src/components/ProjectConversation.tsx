@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   Link2,
   Loader2,
+  Maximize2,
   MessageCircle,
   PanelRightClose,
   PanelRightOpen,
@@ -401,7 +402,18 @@ export const ProjectConversation: React.FC<Props> = ({
       )}
       onPointerDown={isFloating ? event => startDrag('move', event) : undefined}
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
+        {isFloating && pos ? (
+          <button
+            type="button"
+            onPointerDown={event => startDrag('se', event)}
+            title="Drag to resize"
+            aria-label="Drag to resize chat window"
+            className="flex h-7 w-7 flex-shrink-0 cursor-nwse-resize touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
           <MessageCircle className="w-4 h-4 text-primary" />
         </div>

@@ -208,7 +208,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('none');
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
   const [newTaskStartDate, setNewTaskStartDate] = useState('');
   const [newTaskStartTime, setNewTaskStartTime] = useState('');
@@ -393,7 +393,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const resetTaskDraft = () => {
     setNewTaskTitle('');
     setNewTaskDescription('');
-    setNewTaskPriority('medium');
+    setNewTaskPriority('none');
     setNewTaskStatus('to_do');
     setNewTaskStartDate('');
     setNewTaskStartTime('');
@@ -748,7 +748,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
       setNewTaskTitle(data.title || '');
       setNewTaskDescription(data.description || '');
-      setNewTaskPriority((data.priority as Priority) || 'medium');
+      setNewTaskPriority((data.priority as Priority) || 'none');
       setNewTaskStatus((data.status as TaskStatus) || 'to_do');
       setNewTaskStartDate(data.startDate || '');
       setNewTaskStartTime(data.startTime || '');
@@ -1619,7 +1619,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       name: templateName.trim(),
                       title: newTaskTitle || '',
                       description: newTaskDescription || '',
-                      priority: newTaskPriority || 'medium',
+                      priority: newTaskPriority || 'none',
                       duration: newTaskDuration || 0,
                       startDate: newTaskStartDate || undefined,
                       startTime: newTaskStartTime || undefined,
@@ -1689,7 +1689,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         onClick={() => {
                           setNewTaskTitle(tmpl.title || '');
                           setNewTaskDescription(tmpl.description || '');
-                          setNewTaskPriority(tmpl.priority || 'medium');
+                          setNewTaskPriority(tmpl.priority || 'none');
                           setNewTaskDuration(tmpl.duration || 0);
                           setNewTaskStartDate(tmpl.startDate || '');
                           setNewTaskStartTime(tmpl.startTime || '');

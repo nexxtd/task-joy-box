@@ -981,6 +981,11 @@ const AdminDashboard = () => {
   };
 
   const handleViewUserData = async (userId: number, asFullPage = false) => {
+    // Fall back to the row we already have so clicking a user always opens a
+    // profile, even if the detailed endpoint is temporarily unavailable.
+    const row = users.find(item => item.id === userId);
+    const fallback = row ? { user: { ...row }, featureUsage: {} } : null;
+
     try {
       setUserFullDetails(null);
       const res = await fetch(`/api/admin/users/${userId}/full-details`, { credentials: 'include' });
@@ -988,8 +993,18 @@ const AdminDashboard = () => {
         const data = await res.json();
         setUserFullDetails(data);
         if (asFullPage || activeUserView?.user?.id === userId) setActiveUserView(data);
+        return;
       }
-    } catch {}
+      if (fallback) {
+        setUserFullDetails(fallback);
+        if (asFullPage || activeUserView?.user?.id === userId) setActiveUserView(fallback);
+      }
+    } catch {
+      if (fallback) {
+        setUserFullDetails(fallback);
+        if (asFullPage || activeUserView?.user?.id === userId) setActiveUserView(fallback);
+      }
+    }
   };
 
   const refetchPanelUser = async () => {
@@ -1539,9 +1554,13 @@ const AdminDashboard = () => {
                           </tr>
                         ))
                       ) : users.map((u) => (
-                        <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                        <tr
+                          key={u.id}
+                          onClick={() => handleViewUserData(u.id, true)}
+                          className="cursor-pointer hover:bg-muted/30 transition-colors"
+                        >
                           <td className="px-6 py-3 font-medium">
-                            <button onClick={() => handleViewUserData(u.id, true)} className="hover:text-primary transition-colors flex items-center gap-1 text-sm">
+                            <button onClick={event => { event.stopPropagation(); handleViewUserData(u.id, true); }} className="hover:text-primary transition-colors flex items-center gap-1 text-sm">
                               {u.name || '—'}
                               <Eye className="w-3 h-3 opacity-50" />
                             </button>
@@ -1572,7 +1591,7 @@ const AdminDashboard = () => {
                           </td>
                           <td className="p-4 text-muted-foreground hidden lg:table-cell">{u.location || '—'}</td>
                           <td className="p-4 text-right pr-8">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-2" onClick={event => event.stopPropagation()}>
                               <button
                                 onClick={() => handleViewUserData(u.id, true)}
                                 className="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors"

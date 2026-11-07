@@ -9,7 +9,7 @@
  * - Legacy: Shortcut { id, title, combo, actionId }
  */
 
-import { SPLIT_PRESETS, openSplitPreset } from '@/lib/splitPresets';
+import { openSplitPair } from '@/lib/splitPresets';
 
 export type ShortcutCategory = 'pages' | 'create' | 'settings';
 
@@ -26,8 +26,6 @@ export interface ShortcutAction {
   path?: string;
   category: ShortcutCategory;
   description?: string;
-  /** When present, runShortcutAction also opens this preset split screen. */
-  splitPresetId?: string;
 }
 
 const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
@@ -51,7 +49,6 @@ const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
   // ---- Settings sections ----
   { id: 'settings-appearance', label: 'Settings: Appearance', kind: 'navigate', path: '/settings?section=appearance', category: 'settings', description: 'Theme, colour, font and language' },
   { id: 'settings-notifications', label: 'Settings: Notifications', kind: 'navigate', path: '/settings?section=notifications', category: 'settings', description: 'Smart alerts and emails' },
-  { id: 'settings-calendar', label: 'Settings: Calendar', kind: 'navigate', path: '/settings?section=calendar', category: 'settings', description: 'Calendar connection' },
   { id: 'settings-energy', label: 'Settings: Energy', kind: 'navigate', path: '/settings?section=energy', category: 'settings', description: 'Energy tracker and insights' },
   { id: 'settings-history', label: 'Settings: History', kind: 'navigate', path: '/settings?section=history', category: 'settings', description: 'Energy and focus history' },
   { id: 'settings-shortcuts', label: 'Settings: Shortcuts', kind: 'navigate', path: '/settings?section=shortcuts', category: 'settings', description: 'Manage keyboard shortcuts' },
@@ -60,20 +57,24 @@ const BASE_SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'settings-tickets', label: 'Settings: Tickets', kind: 'navigate', path: '/settings?section=tickets', category: 'settings', description: 'Your support tickets' },
 ];
 
-/** Preset split screens are assignable shortcut actions too. */
-export const SPLIT_SHORTCUT_ACTIONS: ShortcutAction[] = SPLIT_PRESETS.map(preset => ({
-  id: `split-${preset.id}`,
-  label: `Split: ${preset.label}`,
-  kind: 'command',
-  path: preset.primaryPath,
-  category: 'pages',
-  description: preset.description,
-  splitPresetId: preset.id,
-}));
+/** The one split-screen action available in the Add Shortcut picker. */
+export const CREATE_SPLIT_SCREEN_ACTION_ID = 'create-split-screen';
 
+export const CREATE_SPLIT_SCREEN_ACTION: ShortcutAction = {
+  id: CREATE_SPLIT_SCREEN_ACTION_ID,
+  label: 'Create split screen',
+  kind: 'command',
+  category: 'pages',
+  description: 'Open two chosen pages side by side',
+};
+
+/**
+ * Preset split commands are no longer offered. Users create their own pair
+ * with the "Create split screen" action at the bottom of this list.
+ */
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   ...BASE_SHORTCUT_ACTIONS,
-  ...SPLIT_SHORTCUT_ACTIONS,
+  CREATE_SPLIT_SCREEN_ACTION,
 ];
 
 export interface ShortcutDef {
@@ -82,6 +83,9 @@ export interface ShortcutDef {
   keys: string;
   action: string;
   enabled?: boolean;
+  /** For "Create split screen" shortcuts: the two pages to open. */
+  splitLeft?: string;
+  splitRight?: string;
 }
 
 /** Legacy alias. */
@@ -127,8 +131,10 @@ function normalizeStored(raw: any): ShortcutDef | null {
   const keys = String((raw as any).keys ?? (raw as any).combo ?? '');
   const action = String((raw as any).action ?? (raw as any).actionId ?? '');
   const enabled = (raw as any).enabled;
+  const splitLeft = typeof (raw as any).splitLeft === 'string' ? (raw as any).splitLeft : undefined;
+  const splitRight = typeof (raw as any).splitRight === 'string' ? (raw as any).splitRight : undefined;
   if (!id || !title || !keys || !action) return null;
-  return { id, title, keys, action, enabled: enabled !== false };
+  return { id, title, keys, action, enabled: enabled !== false, ...(splitLeft && splitRight ? { splitLeft, splitRight } : {}) };
 }
 
 export function loadShortcuts(): ShortcutDef[] {
@@ -144,6 +150,9 @@ export function loadShortcuts(): ShortcutDef[] {
     for (const item of parsed) {
       const n = normalizeStored(item);
       if (n) {
+        // Drop shortcuts that point at actions this version no longer ships
+        // (for example the old preset split-screen commands).
+        if (!SHORTCUT_ACTIONS.some(action => action.id === n.action)) continue;
         // Ensure enabled field exists
         n.enabled = n.enabled !== false;
         byId.set(n.id, n);
@@ -320,12 +329,17 @@ export const SHORTCUT_DOM_EVENTS: Record<string, string> = {
   'new-ai-chat': 'shortcut:new-ai-chat',
 };
 
-export function runShortcutAction(action: ShortcutAction, navigate?: (path: string) => void) {
+export function runShortcutAction(
+  action: ShortcutAction,
+  navigate?: (path: string) => void,
+  shortcut?: AnyShortcut,
+) {
   try {
-    // Preset split screens must announce themselves before navigation so the
-    // split viewer can remember which pages to pair.
-    if (action.splitPresetId) {
-      openSplitPreset(action.splitPresetId);
+    // A "Create split screen" shortcut carries its own pair of pages.
+    if (action.id === CREATE_SPLIT_SCREEN_ACTION_ID) {
+      const left = String((shortcut as ShortcutDef)?.splitLeft || '');
+      const right = String((shortcut as ShortcutDef)?.splitRight || '');
+      if (left && right && left !== right) openSplitPair(left, right);
       return;
     }
     // Notify the live page first so already-mounted targets respond instantly.

@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
-import { ArrowLeftRight, GripHorizontal, X } from 'lucide-react';
+import { ArrowLeftRight, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { APP_PAGES, findAppPage } from '@/lib/appPages';
 import { SPLIT_OPEN_EVENT, type SplitOpenDetail } from '@/lib/splitPresets';
@@ -16,22 +16,15 @@ import { useLanguage } from '@/context/LanguageContext';
 import { PageSkeleton } from '@/components/PageSkeleton';
 
 /**
- * Split-screen behavior defaults.
- *
- * These values are intentionally plain constants (not `process.env` references)
- * so the compiled bundle works in the browser. To customise them for your
- * deployment, edit the numbers here or create a small config module that
- * re‑exports adjusted values before the app mounts (e.g. in `src/main.tsx`).
- *
- *   DRAG_THRESHOLD = 64   // pixels the grip must move before split commits
- *   MIN_RATIO    = 0.2    // minimum pane size as a fraction of the content area
- *   MAX_RATIO    = 0.8    // maximum pane size as a fraction of the content area
+ * Split-screen sizing limits. The divider can be dragged between these
+ * fractions of the content area.
  */
-export const DRAG_THRESHOLD = 64;
 export const MIN_RATIO = 0.2;
 export const MAX_RATIO = 0.8;
 
-/** Minimum pixels from the top edge for the handle to become visible. */
+/** @deprecated Drag-to-split was replaced by the split-screen button. */
+export const DRAG_THRESHOLD = 64;
+/** @deprecated Drag-to-split was replaced by the split-screen button. */
 export const HANDLE_HOT_ZONE = 32;
 
 type Side = 'left' | 'right';
@@ -144,12 +137,17 @@ const SplitPage: React.FC<{ path: string }> = ({ path }) => {
 };
 
 const PaneHeader: React.FC<{
+  side: Side;
   icon?: LucideIcon;
   label: string;
   onClose: () => void;
   closeTitle: string;
-}> = ({ icon: Icon, label, onClose, closeTitle }) => (
-  <div className="flex h-8 flex-shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 px-2">
+}> = ({ side, icon: Icon, label, onClose, closeTitle }) => (
+  <div
+    className={`flex h-8 flex-shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 ${
+      side === 'left' ? 'pl-2 pr-9' : 'pl-9 pr-2'
+    }`}
+  >
     {Icon ? <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" /> : null}
     <span className="min-w-0 truncate text-[11px] font-semibold text-foreground">{label}</span>
     <button
@@ -167,10 +165,11 @@ const PaneHeader: React.FC<{
 /**
  * Split-screen shell.
  *
- * The current route is rendered as `children`. Dragging the grip at the top
- * centre of the content area (left or right) parks the current page on that
- * side and opens a page picker on the opposite side. Picking a page turns the
- * picker into the second pane. The divider between panes is resizable.
+ * The current route is rendered as `children`. A small button at the top of
+ * every page opens a two-rectangle popover: choosing a half parks the current
+ * page there and opens a page picker on the other half. The same button can
+ * be used later to change either half. The divider between panes is
+ * resizable.
  */
 const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
@@ -183,177 +182,182 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isPaid = !!user?.subscriptionTier && user.subscriptionTier !== 'free';
 
   /** Which half the current page occupies. null = not split. */
-  const [side, setSide] = useState<Side | null>(null);
-  /** Path of the second page. null while the picker is open. */
-  const [secondary, setSecondary] = useState<string | null>(null);
+  const [primarySide, setPrimarySide] = useState<Side | null>(null);
+  /** Path of the other page. null while nothing has been chosen yet. */
+  const [secondaryPath, setSecondaryPath] = useState<string | null>(null);
+  /** Half currently showing the page picker, if any. */
+  const [pickerSide, setPickerSide] = useState<Side | null>(null);
   const [ratio, setRatio] = useState(0.5);
-  const [dragging, setDragging] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
-  const dragRef = useRef<{ startX: number; startY: number } | null>(null);
-  /** Set when the grip was dragged, so the click that follows doesn't open the picker. */
-  const didDragRef = useRef(false);
-  /** A preset waiting for the router to finish navigating to its primary page. */
-  const pendingPresetRef = useRef<SplitOpenDetail | null>(null);
-  /** Track the maximum horizontal movement during the current drag. */
-  const maxDragXRef = useRef(0);
-  /** Track the direction of the drag: 'left', 'right', or null. */
-  const dragDirectionRef = useRef<'left' | 'right' | null>(null);
+  /** A shortcut/preset waiting for the router to finish navigating. */
+  const pendingSplitRef = useRef<SplitOpenDetail | null>(null);
+  /** Navigating to a replacement page for the half that owns the URL. */
+  const pendingPrimaryRef = useRef<{ path: string; side: Side } | null>(null);
   const resizeRef = useRef(false);
   const splitRef = useRef<HTMLDivElement | null>(null);
+  const splitButtonRef = useRef<HTMLDivElement | null>(null);
   const pathRef = useRef(location.pathname);
 
-  // Navigating anywhere else (sidebar, shortcut, in-page link) ends split mode.
-  // Exception: a preset split navigates to its primary page first; when that
-  // route arrives, finish opening the preset instead of closing the split.
-  useEffect(() => {
-    if (pathRef.current === location.pathname) return;
-    pathRef.current = location.pathname;
-    const pending = pendingPresetRef.current;
-    if (pending && pending.primaryPath === location.pathname) {
-      pendingPresetRef.current = null;
-      setSide(pending.side === 'right' ? 'right' : 'left');
-      setSecondary(pending.secondaryPath);
+  const closeSplit = useCallback(() => {
+    setPrimarySide(null);
+    setSecondaryPath(null);
+    setPickerSide(null);
+    setPopoverOpen(false);
+  }, []);
+
+  const cancelPicker = useCallback(() => {
+    setPickerSide(null);
+    // No second page chosen yet: leaving the picker also leaves split mode.
+    if (!secondaryPath) setPrimarySide(null);
+  }, [secondaryPath]);
+
+  const chooseSide = (side: Side) => {
+    setPopoverOpen(false);
+    if (primarySide === null) {
+      // Move the current page to the chosen half and offer pages on the other.
+      setPrimarySide(side);
+      setSecondaryPath(null);
+      setPickerSide(side === 'left' ? 'right' : 'left');
       setRatio(0.5);
       return;
     }
-    pendingPresetRef.current = null;
-    setSide(null);
-    setSecondary(null);
+    // Already split: change the page on the chosen half.
+    setPickerSide(side);
+  };
+
+  // Navigating anywhere else (sidebar, shortcut, in-page link) ends split mode.
+  // Exceptions finish a pending split or replace the page on the URL-owning
+  // half without dropping the second pane.
+  useEffect(() => {
+    if (pathRef.current === location.pathname) return;
+    pathRef.current = location.pathname;
+
+    const replacement = pendingPrimaryRef.current;
+    if (replacement && replacement.path === location.pathname) {
+      pendingPrimaryRef.current = null;
+      pendingSplitRef.current = null;
+      setPrimarySide(replacement.side);
+      setPickerSide(null);
+      return;
+    }
+    pendingPrimaryRef.current = null;
+
+    const pending = pendingSplitRef.current;
+    if (pending && pending.primaryPath === location.pathname) {
+      pendingSplitRef.current = null;
+      setPrimarySide(pending.side === 'right' ? 'right' : 'left');
+      setSecondaryPath(pending.secondaryPath);
+      setPickerSide(null);
+      setRatio(0.5);
+      return;
+    }
+    pendingSplitRef.current = null;
+
+    setPrimarySide(null);
+    setSecondaryPath(null);
+    setPickerSide(null);
   }, [location.pathname]);
 
-  // Preset split screens (Settings > Shortcuts) announce themselves with an
-  // event so they work from any page without importing router internals.
+  // Split-screen shortcuts announce themselves with an event so they work
+  // from any page without importing router internals.
   useEffect(() => {
-    const onOpenPreset = (event: Event) => {
+    const onOpenSplit = (event: Event) => {
       const detail = (event as CustomEvent<SplitOpenDetail>).detail;
       if (!detail?.primaryPath || !detail?.secondaryPath) return;
       if (detail.primaryPath === detail.secondaryPath) return;
       const nextSide: Side = detail.side === 'right' ? 'right' : 'left';
       if (location.pathname === detail.primaryPath) {
-        pendingPresetRef.current = null;
-        setSide(nextSide);
-        setSecondary(detail.secondaryPath);
+        pendingSplitRef.current = null;
+        setPrimarySide(nextSide);
+        setSecondaryPath(detail.secondaryPath);
+        setPickerSide(null);
         setRatio(0.5);
+        setPopoverOpen(false);
         return;
       }
-      pendingPresetRef.current = { ...detail, side: nextSide };
+      pendingSplitRef.current = { ...detail, side: nextSide };
       navigate(detail.primaryPath);
     };
-    window.addEventListener(SPLIT_OPEN_EVENT, onOpenPreset as EventListener);
-    return () => window.removeEventListener(SPLIT_OPEN_EVENT, onOpenPreset as EventListener);
+    window.addEventListener(SPLIT_OPEN_EVENT, onOpenSplit as EventListener);
+    return () => window.removeEventListener(SPLIT_OPEN_EVENT, onOpenSplit as EventListener);
   }, [location.pathname, navigate]);
 
-  // Escape cancels the page picker.
+  // Escape closes the popover first, then cancels the page picker.
   useEffect(() => {
-    if (!side || secondary) return;
+    if (!popoverOpen && !pickerSide) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setSide(null);
-        setSecondary(null);
+      if (event.key !== 'Escape') return;
+      if (popoverOpen) {
+        setPopoverOpen(false);
+        return;
       }
+      cancelPicker();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [side, secondary]);
+  }, [popoverOpen, pickerSide, cancelPicker]);
+
+  // Touch/keyboard users have no hover-out, so tapping outside closes it.
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const root = splitButtonRef.current;
+      if (root && !root.contains(event.target as Node)) setPopoverOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [popoverOpen]);
 
   const primaryDef = findAppPage(location.pathname);
   const primaryLabel = primaryDef ? t(primaryDef.label) : t('This page');
 
+  const isComingSoon = (path: string) =>
+    path === '/documents' ||
+    (!isAdminView && (path === '/calendar' || path === '/collaboration'));
+
+  const currentIsComingSoon = isComingSoon(location.pathname);
+
+  // Pages offered in the picker, excluding the two panes already in use.
   const options = useMemo(
     () =>
       APP_PAGES.filter(
         page =>
           page.inSplitPicker &&
           page.path !== location.pathname &&
+          page.path !== secondaryPath &&
           (!page.paidOnly || isPaid),
       ),
-    [location.pathname, isPaid],
+    [location.pathname, secondaryPath, isPaid],
   );
 
-  // Calendar/Collaboration show a Coming Soon screen to non-admins; Documents
-  // is not implemented at all yet.
-  const isComingSoon = (path: string) =>
-    path === '/documents' ||
-    (!isAdminView && (path === '/calendar' || path === '/collaboration'));
+  const secondaryDef = secondaryPath ? findAppPage(secondaryPath) : undefined;
 
-  const endDrag = () => {
-    dragRef.current = null;
-    setDragging(false);
-    setOffset(0);
-    // A real drag should not also count as a click (which opens the picker).
-    if (maxDragXRef.current > 6) {
-      didDragRef.current = true;
-      window.setTimeout(() => { didDragRef.current = false; }, 0);
-    }
-    // Only commit after a deliberate horizontal drag.
-    if (maxDragXRef.current >= DRAG_THRESHOLD && dragDirectionRef.current) {
-      setSide(dragDirectionRef.current);
-    } else {
-      setSide(null);
-    }
+  /** Label shown for a pane (used in the popover and picker copy). */
+  const paneLabel = (side: Side): string => {
+    if (primarySide === side) return primaryLabel;
+    if (pickerSide === side) return t('Choose a page');
+    if (secondaryPath) return secondaryDef ? t(secondaryDef.label) : t('This page');
+    // Not split yet — both choices mean “move this page to that half”.
+    return primaryLabel;
   };
 
-  const onHandleClick = () => {
-    if (didDragRef.current) {
-      didDragRef.current = false;
+  const selectPage = (path: string) => {
+    const target: Side = pickerSide ?? 'right';
+    setPickerSide(null);
+    if (target === primarySide) {
+      // The page on the URL-owning half is being replaced, so navigate and
+      // keep the second pane alive.
+      if (path === location.pathname) return;
+      pendingPrimaryRef.current = { path, side: target };
+      navigate(path);
       return;
     }
-    // Clicking the grip (rather than dragging it) opens the page picker on
-    // the right, which is easier than a precise drag on trackpads/touch.
-    startSide('left');
+    setSecondaryPath(path);
   };
 
-  const onHandlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (side || event.button !== 0) return;
-    event.preventDefault();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      /* synthetic/unsupported pointer capture — drag still works */
-    }
-    didDragRef.current = false;
-    dragRef.current = { startX: event.clientX, startY: event.clientY };
-    maxDragXRef.current = 0;
-    dragDirectionRef.current = null;
-    setDragging(true);
-    setOffset(0);
-  };
-
-  const onHandlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = dragRef.current;
-    if (!drag) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) didDragRef.current = true;
-    // Only a mostly-horizontal drag counts, so scrolling near the handle
-    // never opens the picker by accident.
-    if (Math.abs(dx) <= Math.abs(dy)) {
-      setOffset(0);
-      maxDragXRef.current = 0;
-      dragDirectionRef.current = null;
-      return;
-    }
-    // Track the maximum horizontal movement during the drag.
-    maxDragXRef.current = Math.max(maxDragXRef.current, Math.abs(dx));
-    // Track drag direction based on the sign of the current dx.
-    dragDirectionRef.current = dx > 0 ? 'right' : 'left';
-    setOffset(dx);
-  };
-
-  const startSide = (next: Side) => {
-    setSide(next);
-    setSecondary(null);
-  };
-
-  const closeSplit = () => {
-    setSide(null);
-    setSecondary(null);
-  };
-
-  // Closing the pane that owns the URL hands the URL to the other page.
   const closePrimary = () => {
-    const next = secondary;
+    const next = secondaryPath;
     closeSplit();
     if (next) navigate(next);
   };
@@ -382,60 +386,74 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     resizeRef.current = false;
   };
 
-  const renderPicker = () => (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card/40">
-      <div className="flex h-8 flex-shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 px-2">
-        <ArrowLeftRight className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-        <span className="text-[11px] font-semibold text-foreground">{t('Split screen')}</span>
-        <button
-          type="button"
-          onClick={closeSplit}
-          className="ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+  const renderPicker = (side: Side) => {
+    const otherSide: Side = side === 'left' ? 'right' : 'left';
+    const otherLabel = paneLabel(otherSide);
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card/40">
+        <div
+          className={`flex h-8 flex-shrink-0 items-center gap-1.5 border-b border-border bg-muted/40 ${
+            side === 'left' ? 'pl-2 pr-9' : 'pl-9 pr-2'
+          }`}
         >
-          {t('Cancel')}
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3">
-        <p className="mb-3 text-xs text-muted-foreground">
-          {t('Choose a page to open next to {{name}}.', { name: primaryLabel })}
-        </p>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-          {options.map(page => {
-            const Icon = page.icon;
-            const soon = isComingSoon(page.path);
-            return (
-              <button
-                key={page.path}
-                type="button"
-                onClick={() => setSecondary(page.path)}
-                className="group flex items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-              >
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold text-foreground">
-                    {t(page.label)}
+          <ArrowLeftRight className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+          <span className="text-[11px] font-semibold text-foreground">{t('Split screen')}</span>
+          <button
+            type="button"
+            onClick={cancelPicker}
+            className="ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {t('Cancel')}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3">
+          <p className="mb-3 text-xs text-muted-foreground">
+            {t('Choose a page for the {{side}} half to open next to {{name}}.', {
+              side: t(side === 'left' ? 'left' : 'right'),
+              name: otherLabel,
+            })}
+          </p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {options.map(page => {
+              const Icon = page.icon;
+              const soon = isComingSoon(page.path);
+              return (
+                <button
+                  key={page.path}
+                  type="button"
+                  onClick={() => selectPage(page.path)}
+                  className="group flex items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                >
+                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-4 w-4" />
                   </span>
-                  {soon ? (
-                    <span className="block text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                      {t('Coming soon')}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold text-foreground">
+                      {t(page.label)}
                     </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
+                    {soon ? (
+                      <span className="block text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                        {t('Coming soon')}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const renderPane = (which: Side) => {
-    if (side === which) {
+  const renderPane = (side: Side) => {
+    if (pickerSide === side) return renderPicker(side);
+
+    if (primarySide === side) {
       return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PaneHeader
+            side="left"
             icon={primaryDef?.icon}
             label={primaryLabel}
             onClose={closePrimary}
@@ -448,32 +466,79 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       );
     }
 
-    if (secondary) {
-      const def = findAppPage(secondary);
+    if (secondaryPath) {
       return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PaneHeader
-            icon={def?.icon}
-            label={def ? t(def.label) : t('This page')}
+            side="right"
+            icon={secondaryDef?.icon}
+            label={secondaryDef ? t(secondaryDef.label) : t('This page')}
             onClose={closeSplit}
             closeTitle={t('Exit split screen')}
           />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <SplitPage key={secondary} path={secondary} />
+            <SplitPage key={secondaryPath} path={secondaryPath} />
           </div>
         </div>
       );
     }
 
-    return renderPicker();
+    return renderPicker(side);
   };
 
-  const dragDir: Side | null = offset < -6 ? 'left' : offset > 6 ? 'right' : null;
+  const splitButton = !currentIsComingSoon ? (
+    <div
+      ref={splitButtonRef}
+      className="absolute left-1/2 top-0 z-50 flex -translate-x-1/2 flex-col items-center"
+      onMouseEnter={() => setPopoverOpen(true)}
+      onMouseLeave={() => setPopoverOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label={t('Split screen')}
+        aria-haspopup="menu"
+        aria-expanded={popoverOpen}
+        title={t('Split screen')}
+        onClick={() => setPopoverOpen(true)}
+        onFocus={() => setPopoverOpen(true)}
+        className="group flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground opacity-80 shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        <ArrowLeftRight className="h-3.5 w-3.5" />
+      </button>
+
+      <div
+        className={`absolute left-1/2 top-full flex -translate-x-1/2 gap-2 transition-all ${
+          popoverOpen
+            ? 'visible translate-y-0 opacity-100'
+            : 'invisible -translate-y-1 opacity-0'
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => chooseSide('left')}
+          aria-label={primarySide === null ? t('Move this page to the left half') : t('Change the left page')}
+          title={primarySide === null ? t('Move this page to the left half') : t('Change the left page')}
+          className={`h-24 w-[72px] rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+            primarySide === 'left' ? 'border-primary/60 bg-primary/5' : 'border-border'
+          }`}
+        />
+        <button
+          type="button"
+          onClick={() => chooseSide('right')}
+          aria-label={primarySide === null ? t('Move this page to the right half') : t('Change the right page')}
+          title={primarySide === null ? t('Move this page to the right half') : t('Change the right page')}
+          className={`h-24 w-[72px] rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+            primarySide === 'right' ? 'border-primary/60 bg-primary/5' : 'border-border'
+          }`}
+        />
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-      {side === null ? (
-        <div className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${dragging && dragDir ? 'invisible' : ''}`}>
+      {primarySide === null ? (
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {children}
         </div>
       ) : (
@@ -515,54 +580,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
       )}
 
-      {side === null ? (
-        <button
-          type="button"
-          aria-label={t('Split screen')}
-          title={t('Click to choose a page, or drag left or right to split')}
-          onPointerDown={onHandlePointerDown}
-          onPointerMove={onHandlePointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          onClick={onHandleClick}
-          onKeyDown={event => {
-            if (event.key === 'ArrowLeft') {
-              event.preventDefault();
-              startSide('left');
-            } else if (event.key === 'ArrowRight') {
-              event.preventDefault();
-              startSide('right');
-            }
-          }}
-          className={`group absolute left-1/2 top-0 z-40 hidden h-5 w-14 -translate-x-1/2 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground opacity-80 shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:flex ${
-            dragging ? 'cursor-grabbing bg-card text-foreground' : 'cursor-grab'
-          }`}
-        >
-          <GripHorizontal className="h-4 w-4" />
-          <span className="pointer-events-none absolute top-full mt-1 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[10px] font-medium text-background opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            {t('Click to choose a page, or drag left or right to split')}
-          </span>
-        </button>
-      ) : null}
-
-      {dragging && dragDir && side === null ? (
-        <div className="pointer-events-none absolute inset-0 z-30 bg-background" aria-hidden="true">
-          <div className="absolute inset-y-0 left-0 w-1/2 border-r border-border" />
-          <div
-            className="absolute inset-y-0 w-1/2 bg-muted/40"
-            style={{ left: dragDir === 'left' ? 0 : '50%' }}
-          />
-          <div
-            className="absolute bottom-8 top-10 flex w-[min(44%,560px)] -translate-x-1/2 items-center justify-center rounded-xl border-2 border-primary bg-card shadow-lg"
-            style={{ left: `clamp(25%, calc(50% + ${offset}px), 75%)` }}
-          >
-            <span className="flex max-w-full items-center gap-2 px-4 text-center text-sm font-semibold text-foreground">
-              {primaryDef?.icon ? <primaryDef.icon className="h-4 w-4 flex-shrink-0" /> : null}
-              <span className="truncate">{primaryLabel}</span>
-            </span>
-          </div>
-        </div>
-      ) : null}
+      {splitButton}
     </div>
   );
 };

@@ -2,16 +2,16 @@ import { dateLocale } from '@/i18n/format';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  Palette, Bell, Globe, Calendar, Battery, Keyboard,
+  Palette, Bell, Globe, Battery, Keyboard,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
   Link2, Link2Off, RefreshCw, ExternalLink, Sparkles, Zap,
   History, Brain, CheckCircle2, X, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
   Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine,
-  ArrowLeftRight, PlayCircle
+  PlayCircle
 } from 'lucide-react';
-import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
-import { SPLIT_PRESETS, openSplitPreset } from '@/lib/splitPresets';
+import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, CREATE_SPLIT_SCREEN_ACTION_ID, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
+import { APP_PAGES, findAppPage } from '@/lib/appPages';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useBoardContext } from '@/context/BoardContext';
@@ -20,7 +20,6 @@ import { LANGUAGES, canonicalLanguageCode, resolveLanguageCode } from '@/i18n/tr
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
-import ComingSoon from '@/components/shared/ComingSoon';
 import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -89,7 +88,7 @@ const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { board, addTask } = useBoardContext();
-  const { lang, setLanguage } = useLanguage(); // Use language context
+  const { lang, setLanguage, t } = useLanguage(); // Use language context
   const [activeSection, setActiveSection] = useState('appearance');
   const [selectedTheme, setSelectedTheme] = useState(theme);
   const [font, setFont] = useState(() => localStorage.getItem('font') || 'Inter');
@@ -145,8 +144,14 @@ const SettingsPage: React.FC = () => {
   const [newShortcutTitle, setNewShortcutTitle] = useState('');
   const [newShortcutKeys, setNewShortcutKeys] = useState('');
   const [newShortcutAction, setNewShortcutAction] = useState(SHORTCUT_ACTIONS[0].id);
+  const [newShortcutSplitLeft, setNewShortcutSplitLeft] = useState('');
+  const [newShortcutSplitRight, setNewShortcutSplitRight] = useState('');
   const [capturingNewKeys, setCapturingNewKeys] = useState(false);
   const [newShortcutError, setNewShortcutError] = useState('');
+  const splitActionSelected = newShortcutAction === CREATE_SPLIT_SCREEN_ACTION_ID;
+  const splitPagesReady =
+    !splitActionSelected ||
+    (!!newShortcutSplitLeft && !!newShortcutSplitRight && newShortcutSplitLeft !== newShortcutSplitRight);
 
   const persistShortcuts = (next: ShortcutDef[]) => {
     setShortcuts(next);
@@ -232,7 +237,6 @@ const SettingsPage: React.FC = () => {
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'energy', label: 'Energy Levels', icon: Battery },
     { id: 'history', label: 'History', icon: History },
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
@@ -378,7 +382,6 @@ const SettingsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (activeSection === 'calendar') fetchCalendarStatus();
     if (activeSection === 'history' && historyTab === 'deepfocus') fetchDeepFocusSessions();
   }, [activeSection, historyTab]);
 
@@ -393,21 +396,6 @@ const SettingsPage: React.FC = () => {
     } catch {}
     finally { setDeepFocusLoading(false); }
   };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('calendarConnected') === 'true') {
-      setActiveSection('calendar');
-      fetchCalendarStatus();
-      window.history.replaceState({}, '', '/settings');
-    }
-    if (params.get('calendarError')) {
-      setSyncError(`Connection error: ${params.get('calendarError')}`);
-      setActiveSection('calendar');
-      fetchCalendarStatus();
-      window.history.replaceState({}, '', '/settings');
-    }
-  }, []);
 
   const fetchCalendarStatus = async () => {
     try {
@@ -1057,19 +1045,6 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {activeSection === 'calendar' && (
-            <div className="flex w-full min-h-[70vh] items-center justify-center p-8 bg-background">
-              <div className="max-w-lg">
-                <ComingSoon
-                  title="Calendar"
-                  accent="blue"
-                  description="Plan your tasks on a visual calendar with drag-and-drop scheduling, time-blocking and timeline views. Coming soon to organize your time like never before."
-                  onNotify={() => (window.location.href = '/pricing')}
-                />
-              </div>
-            </div>
-          )}
-
           {activeSection === 'energy' && (
             <div className="space-y-4">
               <div className="bg-card border border-border rounded-2xl p-6">
@@ -1247,7 +1222,7 @@ const SettingsPage: React.FC = () => {
                     );
                   })()}
                   <button
-                    onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setAddShortcutOpen(true); }}
+                    onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setNewShortcutSplitLeft(''); setNewShortcutSplitRight(''); setAddShortcutOpen(true); }}
                     className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Shortcut
@@ -1259,52 +1234,24 @@ const SettingsPage: React.FC = () => {
                 <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2" role="alert">{rebindError}</p>
               )}
 
-              <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <ArrowLeftRight className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Preset split screens</h3>
-                    <p className="text-[11px] text-muted-foreground">Open two pages side by side in one click.</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {SPLIT_PRESETS.map(preset => (
-                    <div
-                      key={preset.id}
-                      className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-foreground truncate">{preset.label}</p>
-                        <p className="text-[11px] text-muted-foreground leading-snug">{preset.description}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          trackUsage('settings', 'open-split-preset');
-                          openSplitPreset(preset);
-                        }}
-                        className="mt-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
-                      >
-                        <ArrowLeftRight className="w-3.5 h-3.5" />
-                        Open split
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               <div className="space-y-2">
                 {shortcuts.map(s => {
                   const actionLabel = SHORTCUT_ACTIONS.find(a => a.id === s.action)?.label || s.action;
+                  const splitLeftDef = s.splitLeft ? findAppPage(s.splitLeft) : undefined;
+                  const splitRightDef = s.splitRight ? findAppPage(s.splitRight) : undefined;
+                  const splitSummary =
+                    s.action === CREATE_SPLIT_SCREEN_ACTION_ID && splitLeftDef && splitRightDef
+                      ? `${t(splitLeftDef.label)} ↔ ${t(splitRightDef.label)}`
+                      : '';
                   const isRebinding = rebindingId === s.id;
                   const isDefault = DEFAULT_SHORTCUTS.some(d => d.id === s.id);
                   return (
                     <div key={s.id} className="flex items-center justify-between gap-3 p-3 bg-card border border-border rounded-xl">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{s.title}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{actionLabel}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {actionLabel}{splitSummary ? `: ${splitSummary}` : ''}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Rebind badge */}
@@ -1371,23 +1318,71 @@ const SettingsPage: React.FC = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    {splitActionSelected && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Left page</label>
+                          <Select value={newShortcutSplitLeft || undefined} onValueChange={setNewShortcutSplitLeft}>
+                            <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                              <SelectValue placeholder="Choose page" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {APP_PAGES.filter(page => page.inSplitPicker && page.path !== newShortcutSplitRight).map(page => (
+                                <SelectItem key={page.path} value={page.path}>{t(page.label)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-muted-foreground mb-1 block">Right page</label>
+                          <Select value={newShortcutSplitRight || undefined} onValueChange={setNewShortcutSplitRight}>
+                            <SelectTrigger className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm h-10">
+                              <SelectValue placeholder="Choose page" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {APP_PAGES.filter(page => page.inSplitPicker && page.path !== newShortcutSplitLeft).map(page => (
+                                <SelectItem key={page.path} value={page.path}>{t(page.label)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <p className="col-span-2 text-[11px] text-muted-foreground">
+                          The saved shortcut opens these two pages side by side.
+                        </p>
+                      </div>
+                    )}
                     <div className="flex justify-end gap-2 pt-1">
                       <button onClick={() => setAddShortcutOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
                       <button
                         onClick={() => {
                           if (!newShortcutTitle.trim() || !newShortcutKeys.trim()) return;
+                          if (!splitPagesReady) {
+                            setNewShortcutError('Choose a different page for each half.');
+                            return;
+                          }
                           const clash = findShortcutWithKeys(newShortcutKeys.trim());
                           if (clash) {
                             setNewShortcutError(`That keybind is already in use in shortcut "${clash.title}".`);
                             return;
                           }
                           trackUsage('settings', 'add-shortcut');
-                          const entry: ShortcutDef = { id: `sc-${Date.now().toString(36)}`, title: newShortcutTitle.trim(), keys: normalizeCombo(newShortcutKeys.trim()) || newShortcutKeys.trim(), action: newShortcutAction, enabled: true };
+                          const entry: ShortcutDef = {
+                            id: `sc-${Date.now().toString(36)}`,
+                            title: newShortcutTitle.trim(),
+                            keys: normalizeCombo(newShortcutKeys.trim()) || newShortcutKeys.trim(),
+                            action: newShortcutAction,
+                            enabled: true,
+                            ...(splitActionSelected
+                              ? { splitLeft: newShortcutSplitLeft, splitRight: newShortcutSplitRight }
+                              : {}),
+                          };
                           persistShortcuts([...shortcuts, entry]);
                           setAddShortcutOpen(false);
                           setNewShortcutError('');
+                          setNewShortcutSplitLeft('');
+                          setNewShortcutSplitRight('');
                         }}
-                        disabled={!newShortcutTitle.trim() || !newShortcutKeys.trim()}
+                        disabled={!newShortcutTitle.trim() || !newShortcutKeys.trim() || !splitPagesReady}
                         className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
                       >
                         Save Shortcut

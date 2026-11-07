@@ -51,7 +51,7 @@ const AppLayout: React.FC = () => {
         if (hit) {
           e.preventDefault();
           e.stopPropagation();
-          runShortcutAction(hit.action, (p: string) => navigate(p));
+          runShortcutAction(hit.action, (p: string) => navigate(p), hit.shortcut);
         }
       } catch {}
     };

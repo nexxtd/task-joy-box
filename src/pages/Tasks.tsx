@@ -744,7 +744,7 @@ const Tasks: React.FC = () => {
   }, []);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
-  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('medium');
+  const [newTaskPriority, setNewTaskPriority] = useState<Priority>('none');
   const [newTaskStatus, setNewTaskStatus] = useState<TaskStatus>('to_do');
   const [newTaskStartDate, setNewTaskStartDate] = useState('');
   const [newTaskStartTime, setNewTaskStartTime] = useState('');
@@ -1591,7 +1591,7 @@ const Tasks: React.FC = () => {
   const resetTaskDraft = () => {
     setNewTaskTitle('');
     setNewTaskDescription('');
-    setNewTaskPriority('medium');
+    setNewTaskPriority('none');
     setNewTaskStatus('to_do');
     setNewTaskStartDate('');
     setNewTaskStartTime('');
@@ -1735,7 +1735,7 @@ const Tasks: React.FC = () => {
 
       setNewTaskTitle(data.title || '');
       setNewTaskDescription(data.description || '');
-      setNewTaskPriority((data.priority as Priority) || 'medium');
+      setNewTaskPriority((data.priority as Priority) || 'none');
       setNewTaskStatus((data.status as TaskStatus) || 'to_do');
       setNewTaskStartDate(data.startDate || '');
       setNewTaskStartTime(data.startTime || '');
@@ -1759,7 +1759,7 @@ const Tasks: React.FC = () => {
       setAiTaskDraft({
         title: data.title || '',
         description: data.description || '',
-        priority: (data.priority as Priority) || 'medium',
+        priority: (data.priority as Priority) || 'none',
         status: (data.status as TaskStatus) || 'to_do',
         startDate: data.startDate || '',
         startTime: data.startTime || '',
@@ -2781,9 +2781,6 @@ const Tasks: React.FC = () => {
                         )}
                       </Droppable>
                     )}
-                      <div className="pl-3">
-                        {renderCompletedSection('uncat-' + project.id, uncategorizedCompleted)}
-                      </div>
                     </>
                   )}
                   </div>
@@ -3580,7 +3577,7 @@ const Tasks: React.FC = () => {
                       name: templateName.trim(),
                       title: newTaskTitle || '',
                       description: newTaskDescription || '',
-                      priority: newTaskPriority || 'medium',
+                      priority: newTaskPriority || 'none',
                       duration: newTaskDuration || 0,
                       startDate: newTaskStartDate || undefined,
                       startTime: newTaskStartTime || undefined,
@@ -3647,7 +3644,7 @@ const Tasks: React.FC = () => {
                         onClick={() => {
                           setNewTaskTitle(tmpl.title || '');
                           setNewTaskDescription(tmpl.description || '');
-                          setNewTaskPriority(tmpl.priority || 'medium');
+                          setNewTaskPriority(tmpl.priority || 'none');
                           setNewTaskDuration(tmpl.duration || 0);
                           setNewTaskStartDate(tmpl.startDate || '');
                           setNewTaskStartTime(tmpl.startTime || '');
@@ -3847,15 +3844,19 @@ const Tasks: React.FC = () => {
                                         <span className="text-foreground"><span className="font-medium">{fact.label}:</span> {fact.value}</span>
                                       </div>
                                     ))}
-                                    <button
-                                      onClick={() => {
-                                        setAnalysisPanelOpen(false);
-                                        setOpenTaskId(item.taskId);
-                                      }}
-                                      className="mt-1 text-xs font-semibold text-primary hover:underline"
-                                    >
-                                      Open task
-                                    </button>
+                                    <div className="mt-2 rounded-lg bg-primary/5 px-2.5 py-2 text-xs leading-relaxed text-foreground">
+                                      <span className="font-semibold text-primary">Next step: </span>
+                                      {item.suggestion || 'Open the task and decide whether to continue, reschedule, or close it.'}
+                                      <button
+                                        onClick={() => {
+                                          setAnalysisPanelOpen(false);
+                                          setOpenTaskId(item.taskId);
+                                        }}
+                                        className="mt-1 block text-xs font-semibold text-primary hover:underline"
+                                      >
+                                        Open task
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </div>

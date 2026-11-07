@@ -2173,25 +2173,6 @@ const conversationProps = {
                   </button>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      // The tab shows the same conversation full-width, so only
-                      // one chat surface should ever be visible at a time.
-                      if (chatSideOpen) setChatSideOpen(false);
-                      setCurrentTab(currentTab === 'chat' ? 'board' : 'chat');
-                    }}
-                    aria-pressed={currentTab === 'chat'}
-                    title="Open the project conversation"
-                    className={cn(
-                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
-                      currentTab === 'chat'
-                        ? 'border-transparent bg-foreground text-background'
-                        : 'border-border bg-card text-foreground hover:bg-muted',
-                    )}
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Conversation</span>
-                  </button>
                   {canManage && (
                     <button onClick={() => setShowInviteModal(true)} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors">
                       <Share2 className="h-3.5 w-3.5" />
