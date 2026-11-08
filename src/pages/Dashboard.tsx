@@ -24,6 +24,7 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
+import '@/pages/Dashboard.css';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '@/context/LanguageContext';
 import { dateLocale, formatFullDate } from '@/i18n/format';

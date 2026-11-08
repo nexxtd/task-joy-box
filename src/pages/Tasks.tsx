@@ -3070,7 +3070,7 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-start bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
@@ -4595,19 +4595,20 @@ export const TaskDropdownExpanded: React.FC<{
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
+                className="self-start"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
                   autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                  className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-1"
                   value={editingSubtaskText}
                   onChange={e => setEditingSubtaskText(e.target.value)}
                   onBlur={() => saveSubtaskEdit(subtask.id)}
@@ -4625,11 +4626,11 @@ export const TaskDropdownExpanded: React.FC<{
                   text={subtask.text}
                 />
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-16 shrink-0 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
                   value={subtask.durationMinutes || 0}
                   onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
                 />
@@ -5290,19 +5291,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
-              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
+                className="self-start"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
                   autoFocus
-                  className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                  className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-1"
                   value={editingSubtaskText}
                   onChange={e => setEditingSubtaskText(e.target.value)}
                   onBlur={() => saveSubtaskEdit(subtask.id)}
@@ -5320,11 +5322,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   text={subtask.text}
                 />
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
-                  className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  className="w-16 shrink-0 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
                   value={subtask.durationMinutes || 0}
                   onChange={e => updateSubtask(subtask.id, { durationMinutes: Math.max(0, Number(e.target.value) || 0) })}
                 />

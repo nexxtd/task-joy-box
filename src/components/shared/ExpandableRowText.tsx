@@ -7,13 +7,15 @@ interface ExpandableRowTextProps {
   onClick?: React.MouseEventHandler<HTMLSpanElement>;
   className?: string;
   textClassName?: string;
+  /** Start in the single-line view. Useful for list rows with trailing controls. */
+  defaultCollapsed?: boolean;
 }
 
 /** Readable row text with a local one-line view; collapsing never changes its value. */
 export default function ExpandableRowText({
-  text, onClick, className = '', textClassName = '',
+  text, onClick, className = '', textClassName = '', defaultCollapsed = false,
 }: ExpandableRowTextProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [overflows, setOverflows] = useState(false);
   const textRef = useRef<HTMLSpanElement>(null);
   const textId = useId();

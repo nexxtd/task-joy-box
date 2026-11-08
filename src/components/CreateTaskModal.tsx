@@ -1051,7 +1051,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           {newTaskSubtasks.map((subtask, index) => (
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -1072,11 +1072,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         textClassName="text-sm text-foreground font-medium cursor-text"
                                       />
                                   )}
-                                      <div className="self-start flex h-6 items-center gap-2">
+                                      <div className="self-start flex h-6 shrink-0 items-center gap-2 whitespace-nowrap">
                                         <input
                                           type="number"
                                           min={0}
-                                          className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                          className="w-16 shrink-0 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
                                           value={subtask.durationMinutes || 0}
                                           onChange={e => {
                                             const val = Math.max(0, Number(e.target.value) || 0);

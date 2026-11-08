@@ -40,6 +40,20 @@ describe('expanded row text', () => {
     expect(edit).toHaveBeenCalledOnce();
   });
 
+  it('can start in the single-line view for rows with trailing controls', () => {
+    vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(80);
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(120);
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(360);
+    const text = 's'.repeat(300);
+    act(() => root.render(<ExpandableRowText text={text} defaultCollapsed />));
+    const toggle = container.querySelector('button')!;
+    expect(container.querySelector('.expandable-row-text')?.getAttribute('data-collapsed')).toBe('true');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Show full text');
+    act(() => toggle.click());
+    expect(container.querySelector('.expandable-row-text')?.getAttribute('data-collapsed')).toBe('false');
+  });
+
   it('keeps one-line text free of an unnecessary collapse control', () => {
     act(() => root.render(<ExpandableRowText text="Short task" />));
     expect(container.querySelector('button')).toBeNull();

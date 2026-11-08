@@ -25,6 +25,7 @@ export function useFreeReorderDrag<T extends { id: string }>({
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const startPointerRef = useRef<{ x: number; y: number } | null>(null);
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const grabOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const rafRef = useRef<number | null>(null);
   const hasMovedRef = useRef(false);
 
@@ -101,8 +102,11 @@ export function useFreeReorderDrag<T extends { id: string }>({
     if (!did || !pointer || !previewRef.current) return;
 
     pendingPointerRef.current = null;
-    // Update ghost position via transform-friendly state (will be used with translate)
-    setGhostPos((prev) => prev ? { ...prev, x: pointer.x - prev.w / 2, y: pointer.y - prev.h / 2 } : null);
+    // Keep the ghost anchored to the exact point the user grabbed: the pointer
+    // stays where it clicked inside the row, rather than the row's center
+    // jumping under the cursor.
+    const grab = grabOffsetRef.current;
+    setGhostPos((prev) => prev ? { ...prev, x: pointer.x - grab.x, y: pointer.y - grab.y } : null);
 
     // Only reorder after threshold to prevent jitter on initial hold
     if (!hasMovedRef.current) {
@@ -137,10 +141,16 @@ export function useFreeReorderDrag<T extends { id: string }>({
     startPointerRef.current = startPos;
     pendingPointerRef.current = null;
     hasMovedRef.current = false;
+    // Remember where inside the item the pointer went down. The ghost keeps
+    // that same offset, so grabbing a left-edge handle does not re-center the
+    // item under the cursor.
+    const grabX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const grabY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    grabOffsetRef.current = { x: grabX, y: grabY };
 
     setDragId(id);
     setPreviewOrder([...items]);
-    setGhostPos({ x: e.clientX - rect.width / 2, y: e.clientY - rect.height / 2, w: rect.width, h: rect.height });
+    setGhostPos({ x: e.clientX - grabX, y: e.clientY - grabY, w: rect.width, h: rect.height });
     // Use setPointerCapture for reliable drag even outside element
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     e.preventDefault();
@@ -202,6 +212,7 @@ export function useFreeReorderDrag<T extends { id: string }>({
     startPointerRef.current = null;
     pendingPointerRef.current = null;
     hasMovedRef.current = false;
+    grabOffsetRef.current = { x: 0, y: 0 };
     setDragId(null);
     setGhostPos(null);
   }, [flushDragFrame, items, onReorder]);
