@@ -147,19 +147,22 @@
   }
 }
 
-/* Hover reveals the split control; clicking owns the popup state. */
+/* Resting state: a black-ish shadow notch so the split control is discoverable
+   before hover — the icon and card styling appear on hover / focus / open. */
 .split-screen-toggle {
-  opacity: 0;
+  border-color: transparent;
+  background: hsl(0 0% 0% / 0.45);
+  color: transparent;
+  box-shadow: 0 2px 10px hsl(0 0% 0% / 0.4);
 }
 
-.split-screen-trigger:hover > .split-screen-toggle,
+.split-screen-toggle:hover,
 .split-screen-trigger[data-open="true"] > .split-screen-toggle,
 .split-screen-toggle:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: none), (pointer: coarse) {
-  .split-screen-toggle { opacity: 1; }
+  border-color: hsl(var(--border));
+  background: hsl(var(--card) / 0.9);
+  color: hsl(var(--muted-foreground));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.08);
 }
 
 /* Pages respond to their own available width, including split-screen panes. */
