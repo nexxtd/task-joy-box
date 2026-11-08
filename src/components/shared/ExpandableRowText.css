@@ -1,0 +1,49 @@
+.detail-item-row {
+  align-items: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.detail-item-row > * {
+  min-width: 0;
+  align-self: start;
+}
+
+.detail-item-row > textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+.expandable-row-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.expandable-row-text > .row-text-value {
+  display: block;
+  flex: 1 1 0%;
+  min-width: 0;
+  padding: 0.125rem 0.25rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.expandable-row-text[data-collapsed="true"] > .row-text-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row-text-collapse {
+  display: flex;
+  flex: 0 0 1.5rem;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.125rem;
+}

@@ -114,7 +114,7 @@ const EnergyPopup: React.FC = () => {
   useEffect(() => {
     const tick = () => {
       if (!isEnabled()) {
-        setPendingSlots([]);
+        setPendingSlots(previous => previous.length === 0 ? previous : []);
         return;
       }
       const h = new Date().getHours();

@@ -3,6 +3,7 @@ import { GripVertical, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import type { Checklist, ChecklistItem, Subtask, TaskStatus } from '@/types/board';
 
 export const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string; className: string }> = [
@@ -247,7 +248,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                         {provided => (
                           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-                            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
+                            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
                               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                 <GripVertical className="w-4 h-4" />
                               </div>
@@ -267,12 +268,11 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                   }}
                                 />
                               ) : (
-                                <span
+                                <ExpandableRowText
+                                  text={subtask.text}
                                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                                  className={`min-w-0 text-sm cursor-text whitespace-pre-wrap break-words ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                >
-                                  {subtask.text}
-                                </span>
+                                  textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                />
                               )}
                               <button onClick={() => removeSubtask(subtask.id)} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-all">
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -407,7 +407,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {provided => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item checklist-item">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
@@ -427,12 +427,11 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                                     }}
                                                   />
                                                 ) : (
-                                                  <span
+                                                  <ExpandableRowText
+                                                    text={item.text}
                                                     onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                  >
-                                                    {item.text}
-                                                  </span>
+                                                    textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                  />
                                                 )}
                                                 <button onClick={() => deleteChecklistItem(list.id, item.id)} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-all">
                                                   <Trash2 className="w-3.5 h-3.5" />

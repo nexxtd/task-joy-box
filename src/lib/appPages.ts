@@ -33,6 +33,8 @@ export interface AppPageDef {
   inSplitPicker?: boolean;
   /** Only show in the picker for pro/premium accounts. */
   paidOnly?: boolean;
+  /** Minimum usable width in split view, including this page's own panels. */
+  minSplitWidth?: number;
 }
 
 export const APP_PAGES: AppPageDef[] = [
@@ -41,6 +43,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Dashboard',
     icon: LayoutDashboard,
     component: lazy(() => import('@/pages/Dashboard')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -48,6 +51,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Projects',
     icon: FolderKanban,
     component: lazy(() => import('@/pages/Projects')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -62,6 +66,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Calendar',
     icon: CalendarDays,
     component: lazy(() => import('@/pages/CalendarPage')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -69,6 +74,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Insights',
     icon: BarChart3,
     component: lazy(() => import('@/pages/Insights')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -76,6 +82,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'AI Assistant',
     icon: Wand2,
     component: lazy(() => import('@/pages/AIChat')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -97,6 +104,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Collaboration',
     icon: Users,
     component: lazy(() => import('@/pages/Collaboration')),
+    minSplitWidth: 560,
     inSplitPicker: true,
     paidOnly: true,
   },
@@ -105,6 +113,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Support',
     icon: LifeBuoy,
     component: lazy(() => import('@/pages/Support')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {

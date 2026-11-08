@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { compactWidgets, getWidgetGrab, moveWidgetFromGrab, normalizeWidget, resizeWidget, widgetsIntersect } from '@/lib/widgetGeometry';
 
 export type WidgetTier = 'free' | 'premium' | 'pro';
 
@@ -35,35 +36,8 @@ export const CELL_H = ROW_PX + GAP_PX;
 export const genKey = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export const intersects = (a: GridRect, b: GridRect) =>
-  !(a.col >= b.col + b.w || a.col + a.w <= b.col || a.row >= b.row + b.h || a.row + a.h <= b.row);
-
-export const packLayout = <T extends GridWidget>(widgets: T[]): T[] => {
-  const sorted = [...widgets].sort((a, b) => (a.row - b.row) || (a.col - b.col));
-  const result: T[] = [];
-  for (const w of sorted) {
-    const cur = { ...w };
-    let guard = 0;
-    // Pull the widget up to the highest free position so gaps above get filled.
-    while (guard < 200 && cur.row > 1) {
-      const up = { ...cur, row: cur.row - 1 };
-      if (result.some(o => intersects(up, o))) break;
-      cur.row = up.row;
-      guard += 1;
-    }
-    // Resolve any remaining overlap with already-placed widgets by pushing
-    // down below the blocker — this heals overlapping stored layouts too.
-    guard = 0;
-    while (guard < 200) {
-      const hit = result.find(o => intersects(cur, o));
-      if (!hit) break;
-      cur.row = hit.row + hit.h;
-      guard += 1;
-    }
-    result.push(cur);
-  }
-  return result;
-};
+export const intersects = widgetsIntersect;
+export const packLayout = compactWidgets;
 
 const GRID_GAP_TOTAL = (GRID_COLS - 1) * GAP_PX;
 
@@ -75,8 +49,8 @@ export const cellStyle = (r: GridRect): React.CSSProperties => ({
 });
 
 type Gesture<T extends string> =
-  | { mode: 'move' | 'resize'; w: GridWidget<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number }
-  | { mode: 'panel'; def: GridWidgetDef<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number };
+  | { mode: 'move' | 'resize'; w: GridWidget<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabX: number; grabY: number }
+  | { mode: 'panel'; def: GridWidgetDef<T>; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabX: number; grabY: number };
 
 export interface UseWidgetGridOptions<T extends string> {
   defs: GridWidgetDef<T>[];
@@ -98,6 +72,7 @@ export interface UseWidgetGridApi<T extends string> {
   scrollElRef: React.RefObject<HTMLDivElement | null>;
   bodyRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
   hasWidget: (type: T) => boolean;
+  addWidget: (definition: GridWidgetDef<T>) => void;
   removeWidget: (id: string) => void;
   updateWidget: (id: string, patch: Partial<GridWidget<T>> & Record<string, unknown>) => void;
   startGesture: (e: React.PointerEvent, widget: GridWidget<T>, mode: 'move' | 'resize') => void;
@@ -116,6 +91,7 @@ export function useWidgetGrid<T extends string>({
   tier,
 }: UseWidgetGridOptions<T>): UseWidgetGridApi<T> {
   const [layout, setLayout] = useState<GridWidget<T>[]>([]);
+  const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<GridRect | null>(null);
   const [previewLayout, setPreviewLayout] = useState<GridWidget<T>[] | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -129,7 +105,7 @@ export function useWidgetGrid<T extends string>({
   const solvedLayoutRef = useRef<GridWidget<T>[] | null>(null);
   const layoutRef = useRef<GridWidget<T>[]>([]);
   const bodyRefs = useRef(new Map<string, HTMLDivElement | null>());
-  const panelPendingRef = useRef<{ def: GridWidgetDef<T>; sx: number; sy: number } | null>(null);
+  const panelPendingRef = useRef<{ def: GridWidgetDef<T>; sx: number; sy: number; grabX: number; grabY: number } | null>(null);
   const autoScrollRaf = useRef(0);
 
   useEffect(() => {
@@ -137,42 +113,45 @@ export function useWidgetGrid<T extends string>({
       const raw = localStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw) as GridWidget<T>[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           const known = parsed.filter((w: GridWidget<T>) => defs.some(d => d.type === w.type));
-          if (known.length > 0) { setLayout(packLayout(known)); return; }
+          if (parsed.length === 0 || known.length > 0) {
+            setLayout(packLayout(known));
+            setLoadedStorageKey(storageKey);
+            return;
+          }
         }
       }
     } catch { /* ignore */ }
-    setLayout(defaultLayout());
+    setLayout(packLayout(defaultLayout()));
+    setLoadedStorageKey(storageKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   useEffect(() => {
-    if (layout.length > 0) {
-      layoutRef.current = layout;
+    layoutRef.current = layout;
+    if (loadedStorageKey === storageKey) {
       try { localStorage.setItem(storageKey, JSON.stringify(layout)); } catch { /* ignore */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout]);
+  }, [layout, loadedStorageKey, storageKey]);
 
   const TIER_RANK: Record<WidgetTier, number> = { free: 0, premium: 1, pro: 2 };
   const canAccessTier = useCallback((widgetTier: WidgetTier) => TIER_RANK[tier] >= TIER_RANK[widgetTier], [tier]);
 
-  const cellFromPoint = useCallback((clientX: number, clientY: number) => {
-    const el = gridRef.current;
-    if (!el) return { col: 1, row: 1 };
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return { col: 1, row: 1 };
-    const colW = rect.width / GRID_COLS;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top + (scrollElRef.current ? scrollElRef.current.scrollTop : 0);
-    return {
-      col: clamp(Math.floor(x / colW) + 1, 1, GRID_COLS),
-      row: Math.max(1, Math.floor(y / CELL_H) + 1),
-    };
-  }, []);
-
   const hasWidget = useCallback((type: T) => layout.some(w => w.type === type), [layout]);
+
+  const addWidget = useCallback((definition: GridWidgetDef<T>) => {
+    if (!canAccessTier(definition.tier)) return;
+    setLayout(previous => {
+      if (previous.some(widget => widget.type === definition.type)) return previous;
+      const row = previous.reduce((bottom, widget) => Math.max(bottom, widget.row + widget.h), 1);
+      return packLayout([...previous, {
+        id: genKey(), type: definition.type, title: definition.title,
+        col: 1, row, w: definition.w, h: definition.h,
+      }]);
+    });
+  }, [canAccessTier]);
 
   const removeWidget = useCallback((id: string) => {
     setLayout(prev => packLayout(prev.filter(w => w.id !== id)));
@@ -202,8 +181,11 @@ export function useWidgetGrid<T extends string>({
       }
       placed.push(cur);
     }
-    const solved = placed.find(o => o.id === active.id) ?? active;
-    return { widgets: placed, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
+    // A shorter module releases space immediately. Other modules rise into
+    // matching-width gaps while the module under the pointer keeps its anchor.
+    const widgets = g.mode === 'resize' ? packLayout(placed, active.id) : placed;
+    const solved = widgets.find(o => o.id === active.id) ?? active;
+    return { widgets, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
   }, []);
 
   const stopAutoScroll = useCallback(() => {
@@ -222,7 +204,10 @@ export function useWidgetGrid<T extends string>({
       let dy = 0;
       if (g.lastY < r.top + margin) dy = -((r.top + margin - g.lastY) / margin) * 22;
       else if (g.lastY > r.bottom - margin) dy = ((g.lastY - (r.bottom - margin)) / margin) * 22;
-      if (dy !== 0) el.scrollTop = clamp(el.scrollTop + dy, 0, Math.max(0, el.scrollHeight - el.clientHeight));
+      if (dy !== 0) {
+        el.scrollTop = clamp(el.scrollTop + dy, 0, Math.max(0, el.scrollHeight - el.clientHeight));
+        onGestureMove({ clientX: g.lastX, clientY: g.lastY } as PointerEvent);
+      }
       autoScrollRaf.current = requestAnimationFrame(tick);
     };
     autoScrollRaf.current = requestAnimationFrame(tick);
@@ -248,25 +233,13 @@ export function useWidgetGrid<T extends string>({
       cancelGesture();
       return;
     }
-    const cell = cellFromPoint(e.clientX, e.clientY);
     let rect: GridRect;
     if (g.mode === 'resize') {
-      const colW = bounds.width / GRID_COLS;
-      const dw = Math.round((e.clientX - g.sx) / colW);
-      const dh = Math.round((e.clientY - g.sy) / CELL_H);
-      rect = { col: g.col, row: g.row, w: clamp(g.ww + dw, 1, GRID_COLS - g.col + 1), h: clamp(g.hh + dh, 1, 30) };
-    } else if (g.mode === 'move') {
-      const colW = bounds.width / GRID_COLS;
-      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
-      const gx = (e.clientX - bounds.left) / colW + 1;
-      const gy = (e.clientY - bounds.top + scrollTop) / CELL_H + 1;
-      const col = clamp(Math.round(gx - g.grabCol), 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, Math.round(gy - g.grabRow));
-      rect = { col, row, w: g.ww, h: g.hh };
+      rect = resizeWidget({ col: g.col, row: g.row, w: g.ww, h: g.hh },
+        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width);
     } else {
-      const col = clamp(cell.col - Math.round((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, cell.row - Math.round((g.hh - 1) / 2));
-      rect = { col, row, w: g.ww, h: g.hh };
+      rect = moveWidgetFromGrab(e.clientX, e.clientY, bounds, { x: g.grabX, y: g.grabY },
+        { col: g.col, row: g.row, w: g.ww, h: g.hh });
     }
     const { widgets, activeRect } = solveLayout(g, rect);
     solvedLayoutRef.current = widgets;
@@ -274,14 +247,14 @@ export function useWidgetGrid<T extends string>({
     setDraft(activeRect);
     setPreviewLayout(widgets);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cellFromPoint, solveLayout]);
+  }, [solveLayout]);
 
   const cancelGesture = useCallback(() => {
     const g = gestureRef.current;
     if (!g) return;
     window.removeEventListener('pointermove', onGestureMove);
     window.removeEventListener('pointerup', onGestureEnd);
-    window.removeEventListener('pointercancel', onGestureEnd);
+    window.removeEventListener('pointercancel', cancelGesture);
     window.removeEventListener('keydown', onGestureKey);
     stopAutoScroll();
     gestureRef.current = null;
@@ -300,7 +273,7 @@ export function useWidgetGrid<T extends string>({
     const g = gestureRef.current;
     window.removeEventListener('pointermove', onGestureMove);
     window.removeEventListener('pointerup', onGestureEnd);
-    window.removeEventListener('pointercancel', onGestureEnd);
+    window.removeEventListener('pointercancel', cancelGesture);
     window.removeEventListener('keydown', onGestureKey);
     stopAutoScroll();
     const finalRect = draftRef.current;
@@ -314,8 +287,8 @@ export function useWidgetGrid<T extends string>({
     if (g && finalRect) {
       if (g.mode === 'panel') {
         const def = g.def;
-        const widget: GridWidget<T> = { id: genKey(), type: def.type, title: def.title, col: finalRect.col, row: finalRect.row, w: def.w, h: def.h };
-        setLayout(prev => packLayout([...prev, widget]));
+        const widget: GridWidget<T> = { ...finalRect, id: genKey(), type: def.type, title: def.title };
+        setLayout(prev => solved ? solved.map(item => item.id === '__dragging__' ? widget : item) : packLayout([...prev, widget]));
       } else if (solved) {
         // Commit exactly what the preview showed, so a move-up actually
         // swaps the widget instead of being re-derived (and undone) by packing.
@@ -333,26 +306,21 @@ export function useWidgetGrid<T extends string>({
     if (e.button !== 0) return;
     e.preventDefault();
     const el = gridRef.current;
-    let grabCol = (widget.w - 1) / 2;
-    let grabRow = (widget.h - 1) / 2;
-    if (el) {
-      const bounds = el.getBoundingClientRect();
-      const colW = bounds.width / GRID_COLS;
-      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
-      grabCol = (e.clientX - bounds.left) / colW + 1 - widget.col;
-      grabRow = (e.clientY - bounds.top + scrollTop) / CELL_H + 1 - widget.row;
-    }
-    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h, grabCol, grabRow };
+    if (!el || el.clientWidth <= 0) return;
+    const bounds = el.getBoundingClientRect();
+    const grab = getWidgetGrab(e.clientX, e.clientY, bounds, widget);
+    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY - bounds.top, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h, grabX: grab.x, grabY: grab.y };
     const start: GridRect = { col: widget.col, row: widget.row, w: widget.w, h: widget.h };
     draftRef.current = start;
     setDraft(start);
     setActiveDragId(widget.id);
     setSuppressMotion(false);
     const solved = solveLayout(gestureRef.current, start);
+    solvedLayoutRef.current = solved.widgets;
     setPreviewLayout(solved.widgets);
     window.addEventListener('pointermove', onGestureMove);
     window.addEventListener('pointerup', onGestureEnd);
-    window.addEventListener('pointercancel', onGestureEnd);
+    window.addEventListener('pointercancel', cancelGesture);
     window.addEventListener('keydown', onGestureKey);
     startAutoScroll();
   }, [onGestureEnd, onGestureKey, onGestureMove, solveLayout, startAutoScroll]);
@@ -362,7 +330,8 @@ export function useWidgetGrid<T extends string>({
     if (e.button !== 0) return;
     const sx = e.clientX;
     const sy = e.clientY;
-    panelPendingRef.current = { def, sx, sy };
+    const source = e.currentTarget.getBoundingClientRect();
+    panelPendingRef.current = { def, sx, sy, grabX: sx - source.left, grabY: sy - source.top };
     const onMove = (ev: PointerEvent) => {
       const p = panelPendingRef.current;
       if (!p) return;
@@ -373,11 +342,13 @@ export function useWidgetGrid<T extends string>({
       panelPendingRef.current = null;
       setPanelClosing(true);
       window.setTimeout(() => { setShowCustomize(false); setPanelClosing(false); }, 200);
-      const cell = cellFromPoint(ev.clientX, ev.clientY);
-      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: p.def.w, hh: p.def.h, grabCol: (p.def.w - 1) / 2, grabRow: (p.def.h - 1) / 2 };
+      const bounds = gridRef.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0) return;
+      const dimensions = normalizeWidget({ col: 1, row: 1, w: p.def.w, h: p.def.h });
+      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: dimensions.w, hh: dimensions.h, grabX: p.grabX, grabY: p.grabY };
       setActiveDragId('__dragging__');
       setSuppressMotion(false);
-      const rect: GridRect = { col: clamp(cell.col - Math.round((p.def.w - 1) / 2), 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row - Math.round((p.def.h - 1) / 2)), w: p.def.w, h: p.def.h };
+      const rect = moveWidgetFromGrab(ev.clientX, ev.clientY, bounds, { x: p.grabX, y: p.grabY }, dimensions);
       const solved = solveLayout(gestureRef.current, rect);
       solvedLayoutRef.current = solved.widgets;
       draftRef.current = solved.activeRect;
@@ -385,7 +356,7 @@ export function useWidgetGrid<T extends string>({
       setPreviewLayout(solved.widgets);
       window.addEventListener('pointermove', onGestureMove);
       window.addEventListener('pointerup', onGestureEnd);
-      window.addEventListener('pointercancel', onGestureEnd);
+      window.addEventListener('pointercancel', cancelGesture);
       window.addEventListener('keydown', onGestureKey);
       startAutoScroll();
     };
@@ -398,7 +369,7 @@ export function useWidgetGrid<T extends string>({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
-  }, [cellFromPoint, hasWidget, onGestureEnd, onGestureKey, onGestureMove, solveLayout, startAutoScroll]);
+  }, [hasWidget, onGestureEnd, onGestureKey, onGestureMove, solveLayout, startAutoScroll]);
 
   const displacedIds = (() => {
     if (!previewLayout) return new Set<string>();
@@ -419,7 +390,7 @@ export function useWidgetGrid<T extends string>({
   })();
 
   const resetToDefault = useCallback(() => {
-    setLayout(defaultLayout());
+    setLayout(packLayout(defaultLayout()));
     setShowCustomize(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -437,6 +408,7 @@ export function useWidgetGrid<T extends string>({
     scrollElRef,
     bodyRefs,
     hasWidget,
+    addWidget,
     removeWidget,
     updateWidget,
     startGesture,

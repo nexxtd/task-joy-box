@@ -175,8 +175,8 @@ const DayView: React.FC<DayViewProps> = ({ date, slots, onSlotsChange, onSlotCli
   const currentTop = topForTime(format(now, 'HH:mm'));
 
   return (
-    <div className="flex flex-col h-full overflow-hidden select-none">
-      <div className="flex-1 overflow-y-auto relative rounded-lg" ref={gridRef}
+    <div className="flex flex-col h-full min-h-0 min-w-0 overflow-hidden select-none">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain relative rounded-lg" ref={gridRef}
         onDragOver={handleGridDragOver}
         onDragLeave={handleGridDragLeave}
         onDrop={handleGridDrop}

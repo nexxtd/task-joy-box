@@ -1,3 +1,4 @@
+import '@/styles/pagePanels.css';
 import { dateLocale } from '@/i18n/format';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -726,7 +727,7 @@ const SettingsPage: React.FC = () => {
   const tasksWithDates = board.tasks.filter(t => t.dueDate).length;
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="min-w-0 flex-1 flex flex-col min-h-0 overflow-hidden">
       <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center justify-between gap-2 flex-shrink-0 bg-background">
         <h1 className="text-base font-bold text-foreground truncate">Settings</h1>
         {saved && (
@@ -736,9 +737,9 @@ const SettingsPage: React.FC = () => {
         )}
       </header>
 
-      <div className="flex flex-col sm:flex-row flex-1 min-h-0 overflow-hidden">
+      <div className="settings-panel-layout flex flex-1 min-h-0 overflow-hidden">
         {/* Section tabs — horizontal scroll chips on phones, sidebar on desktop */}
-        <div className="sm:hidden flex-shrink-0 border-b border-border px-3 py-2 flex gap-1.5 overflow-x-auto">
+        <div className="settings-section-chips min-w-0 flex-shrink-0 border-b border-border px-3 py-2 gap-1.5 overflow-x-auto overscroll-contain">
           {sections.map(s => (
             <button
               key={s.id}
@@ -755,7 +756,7 @@ const SettingsPage: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="hidden sm:block w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 overflow-y-auto">
+        <div className="settings-section-sidebar min-h-0 w-48 border-r border-border p-4 space-y-0.5 flex-shrink-0 overflow-y-auto">
           {sections.map(s => (
             <button
               key={s.id}
@@ -773,13 +774,13 @@ const SettingsPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="settings-panel-content flex-1 overflow-y-auto p-4">
           <div className="max-w-2xl">
           {activeSection === 'appearance' && (
             <div className="space-y-4">
               <div>
                 <h2 className="text-sm font-semibold text-foreground mb-3">Theme</h2>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   {THEMES.map(t => (
                     <button
                       key={t.id}

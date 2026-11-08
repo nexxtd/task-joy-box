@@ -6,9 +6,10 @@ import { ChevronDown, GripVertical, Clock, AlertCircle } from 'lucide-react';
 
 interface CalendarSidebarProps {
   onTaskClick: (task: Task) => void;
+  className?: string;
 }
 
-const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
+const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick, className }) => {
   const { board } = useBoardContext();
   const [tasksOpen, setTasksOpen] = useState(true);
 
@@ -24,7 +25,7 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ onTaskClick }) => {
   };
 
   return (
-    <div className="w-80 max-w-[85vw] shrink-0 flex flex-col h-full overflow-y-auto bg-gradient-to-b from-card/50 to-background border-r border-border/60">
+    <div className={cn("w-80 max-w-[85vw] min-h-0 shrink-0 flex flex-col h-full overflow-y-auto overscroll-contain bg-gradient-to-b from-card/50 to-background border-r border-border/60", className)}>
       <div className="p-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.02] to-transparent">
         <div className="flex items-center gap-2.5">
           <div className="w-2 h-2 rounded-full bg-primary/40" />

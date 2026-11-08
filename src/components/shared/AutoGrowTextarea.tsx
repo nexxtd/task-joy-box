@@ -48,9 +48,12 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
       if (!el) return;
       // Reset first so scrollHeight reflects the content at full height.
       el.style.height = 'auto';
-      const next = Math.max(minHeight ?? 0, maxHeight == null ? el.scrollHeight : Math.min(el.scrollHeight, maxHeight));
+      const computed = getComputedStyle(el);
+      const borders = (parseFloat(computed.borderTopWidth) || 0) + (parseFloat(computed.borderBottomWidth) || 0);
+      const contentHeight = el.scrollHeight + borders;
+      const next = Math.max(minHeight ?? 0, maxHeight == null ? contentHeight : Math.min(contentHeight, maxHeight));
       el.style.height = `${next}px`;
-      el.style.overflowY = maxHeight != null && el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+      el.style.overflowY = maxHeight != null && contentHeight > maxHeight ? 'auto' : 'hidden';
     }, [maxHeight, minHeight]);
 
     useLayoutEffect(() => {
@@ -83,7 +86,7 @@ const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextareaProps>(
           onInput?.(event);
         }}
         className={`resize-none overflow-x-hidden whitespace-pre-wrap break-words ${className}`}
-        style={{ minWidth: 0, ...style, ...(maxHeight == null ? {} : { maxHeight }) }}
+        style={{ minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', overflowWrap: 'anywhere', ...style, ...(maxHeight == null ? {} : { maxHeight }) }}
       />
     );
   },

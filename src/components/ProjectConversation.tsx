@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Download,
   FileText,
@@ -7,6 +8,7 @@ import {
   Loader2,
   Maximize2,
   MessageCircle,
+  Move,
   PanelRightClose,
   PanelRightOpen,
   Paperclip,
@@ -18,6 +20,8 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { changeChatWindow, fitChatWindow, type ChatResizeDirection, type ChatWindowAction, type ChatWindowRect } from '@/lib/projectChatWindow';
+import './ProjectConversation.css';
 
 export interface ConversationMessage {
   id: string;
@@ -58,17 +62,12 @@ interface Props {
   onOpenNote?: (noteId: string) => void;
 }
 
-const MIN_W = 320;
-const MIN_H = 360;
-const GAP = 12;
-const DEFAULT_SIZE = { w: 420, h: 600 };
 const WINDOW_KEY = 'project_chat_window_v1';
 
-type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
+const viewportSize = () => ({
+  width: typeof window !== 'undefined' ? window.innerWidth : 1200,
+  height: typeof window !== 'undefined' ? window.innerHeight : 800,
+});
 
 function formatBytes(size?: number | null) {
   if (!size) return '';
@@ -128,122 +127,84 @@ export const ProjectConversation: React.FC<Props> = ({
   const isFloating = mode === 'floating';
 
   // --- Window position / size (floating mode) -----------------------------
-  const [size, setSize] = useState(() => {
-    const stored = typeof window !== 'undefined' ? readStoredWindow() : null;
-    if (!stored?.w || !stored?.h) return DEFAULT_SIZE;
-    return { w: stored.w, h: stored.h };
-  });
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [windowRect, setWindowRect] = useState<ChatWindowRect>(() =>
+    fitChatWindow(typeof window !== 'undefined' ? readStoredWindow() : null, viewportSize()));
 
   const dragRef = useRef<{
-    kind: 'move' | ResizeDir;
+    kind: ChatWindowAction;
     startX: number;
     startY: number;
-    startPos: { x: number; y: number };
-    startSize: { w: number; h: number };
+    startRect: ChatWindowRect;
+    pointerId: number;
+    element: HTMLElement;
+    previousUserSelect: string;
   } | null>(null);
-
-  // Pin to the bottom-right corner the first time the panel opens.
-  useEffect(() => {
-    if (!isFloating || pos) return;
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
-    const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-    const w = Math.min(size.w, Math.max(MIN_W, vw - GAP * 2));
-    const h = Math.min(size.h, Math.max(MIN_H, vh - GAP * 2));
-    const stored = readStoredWindow();
-    setSize({ w, h });
-    setPos({
-      x: stored?.x != null ? clamp(stored.x, GAP, Math.max(GAP, vw - w - GAP)) : vw - w - GAP,
-      y: stored?.y != null ? clamp(stored.y, GAP, Math.max(GAP, vh - h - GAP)) : vh - h - GAP,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFloating]);
 
   // Keep the window reachable after a viewport resize.
   useEffect(() => {
-    if (!isFloating || !pos) return;
-    const handleResize = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      setSize(prev => {
-        const w = Math.min(prev.w, Math.max(MIN_W, vw - GAP * 2));
-        const h = Math.min(prev.h, Math.max(MIN_H, vh - GAP * 2));
-        setPos(current => (current
-          ? { x: clamp(current.x, GAP, Math.max(GAP, vw - w - GAP)), y: clamp(current.y, GAP, Math.max(GAP, vh - h - GAP)) }
-          : current));
-        return { w, h };
-      });
-    };
+    if (!isFloating) return;
+    const handleResize = () => setWindowRect(current => fitChatWindow(current, viewportSize()));
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isFloating, pos]);
+  }, [isFloating]);
 
   useEffect(() => {
     if (!isFloating) return;
-    try { localStorage.setItem(WINDOW_KEY, JSON.stringify({ ...pos, ...size })); } catch {}
-  }, [isFloating, pos, size]);
-
-  const endDrag = useCallback(() => {
-    dragRef.current = null;
-    try { window.removeEventListener('pointermove', onDragMove); } catch {}
-    try { window.removeEventListener('pointerup', endDrag); } catch {}
-    try { document.body.style.userSelect = ''; } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    try { localStorage.setItem(WINDOW_KEY, JSON.stringify(windowRect)); } catch {}
+  }, [isFloating, windowRect]);
 
   const onDragMove = useCallback((event: PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
-    const dx = event.clientX - drag.startX;
-    const dy = event.clientY - drag.startY;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    if (drag.kind === 'move') {
-      setPos({
-        x: clamp(drag.startPos.x + dx, GAP, Math.max(GAP, vw - drag.startSize.w - GAP)),
-        y: clamp(drag.startPos.y + dy, GAP, Math.max(GAP, vh - drag.startSize.h - GAP)),
-      });
-      return;
-    }
-
-    const dir = drag.kind;
-    const maxW = Math.min(980, Math.max(MIN_W, vw - GAP * 2));
-    const maxH = Math.min(920, Math.max(MIN_H, vh - GAP * 2));
-    let w = drag.startSize.w;
-    let h = drag.startSize.h;
-    if (dir.includes('e')) w = drag.startSize.w + dx;
-    if (dir.includes('s')) h = drag.startSize.h + dy;
-    if (dir.includes('w')) w = drag.startSize.w - dx;
-    if (dir.includes('n')) h = drag.startSize.h - dy;
-    w = clamp(w, MIN_W, maxW);
-    h = clamp(h, MIN_H, maxH);
-
-    // West/north drags move the origin so the opposite edge stays pinned.
-    let x = drag.startPos.x + (dir.includes('w') ? drag.startSize.w - w : 0);
-    let y = drag.startPos.y + (dir.includes('n') ? drag.startSize.h - h : 0);
-    x = clamp(x, GAP, Math.max(GAP, vw - w - GAP));
-    y = clamp(y, GAP, Math.max(GAP, vh - h - GAP));
-
-    setSize({ w, h });
-    setPos({ x, y });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (typeof event.pointerId === 'number' && event.pointerId !== drag.pointerId) return;
+    if (event.cancelable) event.preventDefault();
+    setWindowRect(changeChatWindow(drag.startRect, drag.kind,
+      event.clientX - drag.startX, event.clientY - drag.startY, viewportSize()));
   }, []);
 
-  const startDrag = useCallback((kind: 'move' | ResizeDir, event: React.PointerEvent) => {
+  const endDrag = useCallback((event?: PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (event && typeof event.pointerId === 'number' && event.pointerId !== drag.pointerId) return;
+    // Apply the release coordinates, even when a browser coalesces the last move.
+    if (event?.type === 'pointerup') onDragMove(event);
+    dragRef.current = null;
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', endDrag);
+    try { drag.element.releasePointerCapture(drag.pointerId); } catch {}
+    document.body.style.userSelect = drag.previousUserSelect;
+  }, [onDragMove]);
+
+  const startDrag = useCallback((kind: ChatWindowAction, event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!pos) return;
-    dragRef.current = { kind, startX: event.clientX, startY: event.clientY, startPos: pos, startSize: size };
-    try { document.body.style.userSelect = 'none'; } catch {}
+    endDrag();
+    dragRef.current = {
+      kind, startX: event.clientX, startY: event.clientY, startRect: windowRect,
+      pointerId: event.pointerId, element: event.currentTarget,
+      previousUserSelect: document.body.style.userSelect,
+    };
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch {}
+    document.body.style.userSelect = 'none';
     window.addEventListener('pointermove', onDragMove);
     window.addEventListener('pointerup', endDrag);
-  }, [pos, size, onDragMove, endDrag]);
+    window.addEventListener('pointercancel', endDrag);
+  }, [windowRect, onDragMove, endDrag]);
 
-  useEffect(() => () => {
-    try { window.removeEventListener('pointermove', onDragMove); } catch {}
-    try { window.removeEventListener('pointerup', endDrag); } catch {}
-  }, [onDragMove, endDrag]);
+  useEffect(() => () => endDrag(), [isFloating, endDrag]);
+
+  const adjustWindowWithKeyboard = (kind: ChatWindowAction, event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const step = event.shiftKey ? 40 : 10;
+    const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+    const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+    if (!dx && !dy) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setWindowRect(current => changeChatWindow(current, kind, dx, dy, viewportSize()));
+  };
 
   // --- Messages ------------------------------------------------------------
   useEffect(() => {
@@ -395,24 +356,33 @@ export const ProjectConversation: React.FC<Props> = ({
   };
 
   const header = (
-    <div
-      className={cn(
-        'flex items-center justify-between gap-2 px-4 py-3 border-b border-border flex-shrink-0',
-        isFloating && 'cursor-grab active:cursor-grabbing touch-none select-none',
-      )}
-      onPointerDown={isFloating ? event => startDrag('move', event) : undefined}
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {isFloating && pos ? (
-          <button
-            type="button"
-            onPointerDown={event => startDrag('se', event)}
-            title="Drag to resize"
-            aria-label="Drag to resize chat window"
-            className="flex h-7 w-7 flex-shrink-0 cursor-nwse-resize touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Maximize2 className="h-3.5 w-3.5" />
-          </button>
+    <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-border flex-shrink-0">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {isFloating ? (
+          <>
+            <button
+              type="button"
+              onPointerDown={event => startDrag('nw', event)}
+              onLostPointerCapture={event => endDrag(event.nativeEvent)}
+              onKeyDown={event => adjustWindowWithKeyboard('nw', event)}
+              title="Drag the top-left corner to resize; arrow keys adjust size"
+              aria-label="Resize chat from top left"
+              className="flex h-7 w-7 flex-shrink-0 cursor-nwse-resize touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onPointerDown={event => startDrag('move', event)}
+              onLostPointerCapture={event => endDrag(event.nativeEvent)}
+              onKeyDown={event => adjustWindowWithKeyboard('move', event)}
+              title="Drag to move; arrow keys adjust position"
+              aria-label="Move chat window"
+              className="flex h-7 w-7 flex-shrink-0 cursor-move touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Move className="h-3.5 w-3.5" />
+            </button>
+          </>
         ) : null}
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
           <MessageCircle className="w-4 h-4 text-primary" />
@@ -438,6 +408,7 @@ export const ProjectConversation: React.FC<Props> = ({
           <button
             onClick={() => onModeChange(mode === 'docked' ? 'floating' : 'docked')}
             title={mode === 'docked' ? 'Float the chat window' : 'Dock the chat to the side'}
+            aria-label={mode === 'docked' ? 'Float the chat window' : 'Dock the chat to the side'}
             className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             {mode === 'docked' ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -445,7 +416,7 @@ export const ProjectConversation: React.FC<Props> = ({
         )}
         {onClose && (
           <button onClick={onClose} title="Close chat" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-            <X className="w-4 w-4" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
@@ -508,7 +479,8 @@ export const ProjectConversation: React.FC<Props> = ({
                             // Eager on purpose: a lazy img inside this fixed/overflow-hidden
                             // panel is never intersected, so shared images silently never
                             // load. The chat caps at 200 messages, so the cost is small.
-                            className="min-h-[64px] min-w-[48px] max-w-[280px] max-h-[320px] rounded-xl border border-black/10 object-contain bg-black/5 cursor-zoom-in hover:opacity-90 transition-opacity"
+                            className="min-h-[64px] min-w-[48px] max-h-[320px] rounded-xl border border-black/10 object-contain bg-black/5 cursor-zoom-in hover:opacity-90 transition-opacity"
+                            style={{ maxWidth: 'min(280px, 100%)' }}
                           />
                         </button>
                         <span className="text-[11px] opacity-75 flex items-center gap-1 mt-1">
@@ -691,7 +663,7 @@ export const ProjectConversation: React.FC<Props> = ({
           }}
           placeholder="Type a message…"
           rows={1}
-          className="flex-1 bg-muted/50 border border-border rounded-2xl px-4 py-2.5 text-sm resize-none outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
+          className="min-w-0 flex-1 bg-muted/50 border border-border rounded-2xl px-4 py-2.5 text-sm resize-none outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-colors"
           style={{ minHeight: 40, maxHeight: 120 }}
         />
         <button
@@ -719,12 +691,14 @@ export const ProjectConversation: React.FC<Props> = ({
   ) : null;
 
   // Resize affordances for the floating window: corners + edges.
-  const resizeHandles = isFloating && pos ? (
+  const resizeHandles = isFloating ? (
     <>
-      {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as ResizeDir[]).map(dir => (
+      {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as ChatResizeDirection[]).map(dir => (
         <div
           key={dir}
+          aria-hidden="true"
           onPointerDown={event => startDrag(dir, event)}
+          onLostPointerCapture={event => endDrag(event.nativeEvent)}
           className={cn(
             'absolute z-10 touch-none',
             dir === 'n' && 'top-0 left-3 right-3 h-1.5 cursor-ns-resize',
@@ -742,16 +716,15 @@ export const ProjectConversation: React.FC<Props> = ({
   ) : null;
 
   if (mode === 'floating') {
-    return (
+    return createPortal(
       <>
         <div
-          className="fixed z-50 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden
-            max-md:!left-3 max-md:!right-3 max-md:!top-auto max-md:!bottom-3 max-md:!w-auto max-md:!h-[72vh]"
+          className="project-chat-window fixed z-50 min-w-0 min-h-0 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{
-            left: pos?.x ?? undefined,
-            top: pos?.y ?? undefined,
-            width: size.w,
-            height: size.h,
+            left: windowRect.x,
+            top: windowRect.y,
+            width: windowRect.w,
+            height: windowRect.h,
             maxWidth: 'calc(100vw - 24px)',
             maxHeight: 'calc(100vh - 24px)',
           }}
@@ -764,7 +737,8 @@ export const ProjectConversation: React.FC<Props> = ({
           {composer}
         </div>
         {lightboxOverlay}
-      </>
+      </>,
+      document.body,
     );
   }
 

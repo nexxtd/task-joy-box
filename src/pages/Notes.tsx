@@ -51,6 +51,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CenteredDragClone from '@/components/CenteredDragClone';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 
 const PRIORITY_FILTERS: Array<'all' | 'urgent' | 'high' | 'medium' | 'low'> = ['all', 'urgent', 'high', 'medium', 'low'];
@@ -744,7 +745,6 @@ const Tasks: React.FC = () => {
   const [dontAsk, setDontAsk] = useState(false);
   const [editingDraftSubtaskId, setEditingDraftSubtaskId] = useState<string | null>(null);
   const [editingDraftSubtaskText, setEditingDraftSubtaskText] = useState('');
-  const [editingDraftSubtaskDuration, setEditingDraftSubtaskDuration] = useState<number>(0);
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
@@ -2142,13 +2142,13 @@ const Tasks: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center justify-between gap-2 bg-card/30 flex-shrink-0">
-        <div className="flex items-baseline gap-2 min-w-0 flex-1">
+    <div className="relative h-full min-h-0 min-w-0 flex-1 flex flex-col overflow-hidden">
+      <header className="page-toolbar px-4 sm:px-6 py-2 min-h-16 border-b border-border flex items-center justify-between gap-2 bg-card/30 flex-shrink-0">
+        <div className="page-toolbar-title flex items-baseline gap-2 min-w-0 flex-1">
           <h1 className="text-base font-bold text-foreground truncate">All Notes</h1>
           <p className="hidden sm:block text-xs text-muted-foreground truncate">{matchingCount} notes matching filters</p>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        <div className="page-toolbar-actions flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 
           <button
             onClick={() => {
@@ -2272,9 +2272,9 @@ const Tasks: React.FC = () => {
         </div>
       </header>
 
-      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-card/10">
+      <div className="page-filters min-w-0 shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-card/10">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[220px] flex-1">
+          <div className="relative min-w-0 basis-56 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
@@ -2372,7 +2372,7 @@ const Tasks: React.FC = () => {
             )}
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="page-filter-actions ml-auto flex items-center gap-2">
             <button
               onClick={() => { setAnalysisPanelOpen(true); runTaskAnalysis(activeAnalysisTab); }}
               className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-xl border bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 transition-all"
@@ -2384,7 +2384,7 @@ const Tasks: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 relative" style={{ scrollbarGutter: 'stable' }}>
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 relative" style={{ scrollbarGutter: 'stable' }}>
         <DragDropContext onBeforeCapture={handleBeforeCapture} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="max-w-7xl mx-auto space-y-2 pb-24">
           {myTasksGroup.length === 0 && projectTaskGroups.length === 0 && filtered.completed.length === 0 && (
@@ -2543,16 +2543,16 @@ const Tasks: React.FC = () => {
           })}
         </div>
         </DragDropContext>
+      </div>
 
         {/* Floating AI Task button */}
         <button
           onClick={() => { trackUsage('notes', 'ai-builder'); setAiBuilderOpen(true); }}
-          className="fixed bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
+          className="absolute bottom-8 right-8 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200"
           title="AI Note Builder"
         >
           <Sparkles className="w-5 h-5" />
         </button>
-      </div>
 
       {addingTask && (
         <CreateTaskModal
@@ -2821,56 +2821,54 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-start bg-muted/20 px-3 py-2 rounded-lg border border-border/50 group/subtask min-w-0">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
                                     {editingDraftSubtaskId === subtask.id ? (
-                                      <>
-                                        <input
-                                          autoFocus
-                                          className="text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskText}
-                                          onChange={e => setEditingDraftSubtaskText(e.target.value)}
-                                          onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
-                                          onKeyDown={e => { if (e.key === 'Enter') { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
-                                        />
-                                        <input
-                                          type="number"
-                                          className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                          value={editingDraftSubtaskDuration}
-                                          onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                        />
-                                      </>
+                                      <AutoGrowTextarea
+                                        autoFocus
+                                        className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                        value={editingDraftSubtaskText}
+                                        onChange={e => setEditingDraftSubtaskText(e.target.value)}
+                                        onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText } : st)); setEditingDraftSubtaskId(null); }}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText } : st));
+                                            setEditingDraftSubtaskId(null);
+                                          }
+                                        }}
+                                      />
                                     ) : (
-                                      <>
-                                        <span
-                                          onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                          className="text-sm text-foreground font-medium cursor-text truncate"
-                                        >
-                                          {subtask.text}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                          <input
-                                            type="number"
-                                            min={0}
-                                            className="w-16 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                            value={subtask.durationMinutes || 0}
-                                            onChange={e => {
-                                              const val = Math.max(0, Number(e.target.value) || 0);
-                                              setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
-                                            }}
-                                          />
-                                          <span className="text-[10px] text-muted-foreground">min</span>
-                                          <button
-                                            onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
-                                            className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </>
+                                      <ExpandableRowText
+                                        onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); }}
+                                        textClassName="text-sm text-foreground font-medium cursor-text"
+                                        text={subtask.text}
+                                      />
                                     )}
+                                    <div className="flex items-center gap-2 shrink-0 self-start">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        aria-label="Sub-task duration in minutes"
+                                        className="w-16 shrink-0 text-xs bg-muted/40 border border-border rounded px-1.5 py-0.5 text-right focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                        value={subtask.durationMinutes || 0}
+                                        onChange={e => {
+                                          const val = Math.max(0, Number(e.target.value) || 0);
+                                          setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
+                                        }}
+                                      />
+                                      <span className="text-[10px] text-muted-foreground">min</span>
+                                      <button
+                                        type="button"
+                                        aria-label="Delete sub-task"
+                                        onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
+                                        className="p-1 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 focus-visible:opacity-100 transition-opacity duration-200"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </Draggable>
@@ -2934,11 +2932,13 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
-                                      <span className="flex-1">{item.text}</span>
+                                      <ExpandableRowText textClassName=""
+                                        text={item.text}
+                                      />
                                       <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
@@ -3026,11 +3026,13 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
-                                                    <span className="flex-1 text-foreground">{item.text}</span>
+                                                    <ExpandableRowText textClassName="text-foreground"
+                                                      text={item.text}
+                                                    />
                                                     <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -4051,7 +4053,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="grid grid-cols-[auto_auto_1fr_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
@@ -4075,12 +4077,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   }}
                 />
               ) : (
-                <span
+                <ExpandableRowText
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                  className={`text-sm cursor-text whitespace-pre-wrap break-words ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                >
-                  {subtask.text}
-                </span>
+                  textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  text={subtask.text}
+                />
               )}
               <div className="flex items-center gap-2">
                 <input
@@ -4587,7 +4588,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -4611,12 +4612,11 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                         }}
                                                       />
                                                     ) : (
-                                                      <span
+                                                      <ExpandableRowText
                                                         onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                        className={`flex-1 cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                      >
-                                                        {item.text}
-                                                      </span>
+                                                        textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                        text={item.text}
+                                                      />
                                                     )}
                                                     <button
                                                       onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}

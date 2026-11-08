@@ -1,0 +1,5 @@
+/* Keep rendered geometry in sync with the floating window's 12px edge gap.
+   The app's generic mobile dialog rule otherwise caps its width 8px earlier. */
+.project-chat-window[role="dialog"] {
+  max-width: calc(100vw - 24px) !important;
+}

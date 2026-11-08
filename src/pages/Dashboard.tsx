@@ -11,7 +11,8 @@ import {
   LayoutDashboard, GripVertical, FolderOpen, BarChart3, ListChecks, Sparkles,
   AlertTriangle, Flag, History, PieChart, Tags,
   StickyNote, FileText,
-  Flame, Crown, Lock, CheckCircle2, Pencil
+  Flame, Crown, Lock, CheckCircle2, Pencil, LineChart, SlidersHorizontal,
+  GitCompareArrows, Gauge, ListOrdered, Siren, MessageSquareText, RefreshCw
 } from 'lucide-react';
 import { PRIORITY_CONFIG, Priority, Task, Label, LabelColor, DEFAULT_LABELS } from '@/types/board';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,10 +23,12 @@ const TagsModal = lazy(() => import('@/components/shared/TagsModal'));
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
+import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '@/context/LanguageContext';
 import { dateLocale, formatFullDate } from '@/i18n/format';
 import { tt } from '@/i18n/translations';
+import { compactWidgets, getWidgetGrab, moveWidgetFromGrab, normalizeWidget, resizeWidget } from '@/lib/widgetGeometry';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -41,7 +44,9 @@ type DashboardWidgetType =
   | 'stats' | 'tasks' | 'projects' | 'project-tasks' | 'insights'
   | 'weekly'
   | 'overdue' | 'deadlines' | 'project-progress' | 'recently-completed' | 'priority-breakdown' | 'tags-overview'
-  | 'notes-overview' | 'recent-notes';
+  | 'notes-overview' | 'recent-notes'
+  | 'advanced-insights' | 'custom-report' | 'multi-project'
+  | 'ai-score' | 'ai-prioritize' | 'ai-bottlenecks' | 'ai-weekly';
 
 type DashboardWidgetTier = 'free' | 'premium' | 'pro';
 type ReportMetric = 'completed' | 'created' | 'checklist';
@@ -85,13 +90,15 @@ const WIDGET_DEFS: WidgetDef[] = [
   { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 4, h: 2, tier: 'free' },
   { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 4, h: 2, tier: 'free' },
   { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
+  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 4, h: 3, tier: 'premium' },
+  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 4, h: 3, tier: 'premium' },
+  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 4, h: 3, tier: 'premium' },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 4, h: 2, tier: 'pro' },
+  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 4, h: 3, tier: 'pro' },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 4, h: 3, tier: 'pro' },
+  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 8, h: 2, tier: 'pro' },
 ];
 
-const TIER_SECTIONS: { tier: DashboardWidgetTier; label: string }[] = [
-  { tier: 'free', label: 'Free' },
-  { tier: 'premium', label: 'Premium' },
-  { tier: 'pro', label: 'Pro' },
-];
 
 const GRID_COLS = 12;
 const ROW_PX = 112;
@@ -118,35 +125,7 @@ const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSP
   boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
 });
 
-const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
-  const sorted = [...widgets].sort((a, b) => (a.row - b.row) || (a.col - b.col));
-  const result: DashboardWidget[] = [];
-  for (const w of sorted) {
-    const cur = { ...w };
-    let guard = 0;
-    // Pull the widget up to the highest free position so gaps above get filled.
-    while (guard < 200) {
-      if (cur.row <= 1) break;
-      const up = { ...cur, row: cur.row - 1 };
-      if (result.some(o => intersects(up, o))) break;
-      cur.row = up.row;
-      guard += 1;
-    }
-    // If it still overlaps a previously placed (upper) widget — because it could
-    // not move up — push it down below that widget so nothing stacks on top of
-    // another. Without this, dropped/removed/loaded layouts can leave widgets
-    // overlapping ("hovering" on one another).
-    guard = 0;
-    while (guard < 200) {
-      const hit = result.find(o => intersects(cur, o));
-      if (!hit) break;
-      cur.row = hit.row + hit.h;
-      guard += 1;
-    }
-    result.push(cur);
-  }
-  return result;
-};
+const packLayout = compactWidgets<DashboardWidget>;
 
 // Guarantee no two widgets intersect. If a `movedId` is supplied the moved
 // widget keeps its target position and every colliding widget is pushed down
@@ -154,6 +133,7 @@ const packLayout = (widgets: DashboardWidget[]): DashboardWidget[] => {
 // This is the single source of truth for non-overlapping placement and is
 // applied to every layout-affecting operation and to the rendered layout.
 const resolveCollisions = (widgets: DashboardWidget[], movedId?: string): DashboardWidget[] => {
+  widgets = widgets.map(normalizeWidget);
   if (movedId) {
     const moved = widgets.find(w => w.id === movedId);
     if (!moved) return packLayout(widgets);
@@ -176,8 +156,8 @@ const resolveCollisions = (widgets: DashboardWidget[], movedId?: string): Dashbo
 };
 
 type Gesture =
-  | { mode: 'move' | 'resize'; w: DashboardWidget; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number }
-  | { mode: 'panel'; def: WidgetDef; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabCol: number; grabRow: number };
+  | { mode: 'move' | 'resize'; w: DashboardWidget; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabX: number; grabY: number }
+  | { mode: 'panel'; def: WidgetDef; sx: number; sy: number; lastX: number; lastY: number; col: number; row: number; ww: number; hh: number; grabX: number; grabY: number };
 
 const GRID_GAP_TOTAL = (GRID_COLS - 1) * GAP_PX;
 
@@ -484,6 +464,7 @@ const Dashboard: React.FC = () => {
 
   const [showCustomize, setShowCustomize] = useState(false);
   const [layout, setLayout] = useState<DashboardWidget[]>([]);
+  const [loadedLayoutKey, setLoadedLayoutKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Rect | null>(null);
   const [previewLayout, setPreviewLayout] = useState<DashboardWidget[] | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -495,7 +476,7 @@ const Dashboard: React.FC = () => {
   const draftRef = useRef<Rect | null>(null);
   const layoutRef = useRef<DashboardWidget[]>([]);
   const bodyRefs = useRef(new Map<string, HTMLDivElement | null>());
-  const panelPendingRef = useRef<{ def: WidgetDef; sx: number; sy: number } | null>(null);
+  const panelPendingRef = useRef<{ def: WidgetDef; sx: number; sy: number; grabX: number; grabY: number } | null>(null);
   const autoScrollRaf = useRef(0);
 
   const layoutKey = `dash_widgets_v2_${user?.id ?? 'anon'}`;
@@ -565,23 +546,28 @@ const Dashboard: React.FC = () => {
       const raw = localStorage.getItem(layoutKey);
       if (raw) {
         const parsed = JSON.parse(raw) as DashboardWidget[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           const known = parsed.filter((w: DashboardWidget) => WIDGET_DEFS.some(d => d.type === w.type));
-          if (known.length > 0) { setLayout(packLayout(known)); return; }
+          if (parsed.length === 0 || known.length > 0) {
+            setLayout(packLayout(known));
+            setLoadedLayoutKey(layoutKey);
+            return;
+          }
         }
       }
     } catch { }
-    setLayout(defaultLayout());
+    setLayout(packLayout(defaultLayout()));
+    setLoadedLayoutKey(layoutKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutKey]);
 
   useEffect(() => {
-    if (layout.length > 0) {
-      layoutRef.current = layout;
+    layoutRef.current = layout;
+    if (loadedLayoutKey === layoutKey) {
       try { localStorage.setItem(layoutKey, JSON.stringify(layout)); } catch { }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout]);
+  }, [layout, loadedLayoutKey, layoutKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -872,7 +858,7 @@ const Dashboard: React.FC = () => {
         error: err instanceof Error ? err.message : 'AI request failed. Please try again.',
       }));
     }
-  }, [board.tasks, doneColIds]);
+  }, [board.tasks, doneColIds, tier]);
 
   useEffect(() => {
     if (hasAiWidget && firstPaintDone) loadAiWidgets();
@@ -888,20 +874,6 @@ const Dashboard: React.FC = () => {
   const handleAddTask = () => {
     setShowAddTask(true);
   };
-
-  const cellFromPoint = useCallback((clientX: number, clientY: number) => {
-    const el = gridRef.current;
-    if (!el) return { col: 1, row: 1 };
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return { col: 1, row: 1 };
-    const colW = rect.width / GRID_COLS;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top + (scrollElRef.current ? scrollElRef.current.scrollTop : 0);
-    return {
-      col: clamp(Math.floor(x / colW) + 1, 1, GRID_COLS),
-      row: Math.max(1, Math.floor(y / CELL_H) + 1),
-    };
-  }, []);
 
   const hasWidget = (type: DashboardWidgetType) => layout.some(w => w.type === type);
 
@@ -929,8 +901,9 @@ const Dashboard: React.FC = () => {
       }
       placed.push(cur);
     }
-    const solved = placed.find(o => o.id === active.id) ?? active;
-    return { widgets: placed, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
+    const widgets = g.mode === 'resize' ? packLayout(placed, active.id) : placed;
+    const solved = widgets.find(o => o.id === active.id) ?? active;
+    return { widgets, activeRect: { col: solved.col, row: solved.row, w: solved.w, h: solved.h } };
   };
 
   const stopAutoScroll = () => {
@@ -949,7 +922,10 @@ const Dashboard: React.FC = () => {
       let dy = 0;
       if (g.lastY < r.top + margin) dy = -((r.top + margin - g.lastY) / margin) * 22;
       else if (g.lastY > r.bottom - margin) dy = ((g.lastY - (r.bottom - margin)) / margin) * 22;
-      if (dy !== 0) el.scrollTop = clamp(el.scrollTop + dy, 0, Math.max(0, el.scrollHeight - el.clientHeight));
+      if (dy !== 0) {
+        el.scrollTop = clamp(el.scrollTop + dy, 0, Math.max(0, el.scrollHeight - el.clientHeight));
+        onGestureMove({ clientX: g.lastX, clientY: g.lastY } as PointerEvent);
+      }
       autoScrollRaf.current = requestAnimationFrame(tick);
     };
     autoScrollRaf.current = requestAnimationFrame(tick);
@@ -965,30 +941,17 @@ const Dashboard: React.FC = () => {
     const tol = 24;
     // Allow dragging below the grid's bottom edge so widgets can be moved
     // beneath everything else (the grid grows as the drag goes further down).
-    if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol ||
-        e.clientY < bounds.top - tol) {
+    if (e.clientX < bounds.left - tol || e.clientX > bounds.right + tol) {
       cancelGesture();
       return;
     }
-    const cell = cellFromPoint(e.clientX, e.clientY);
     let rect: Rect;
     if (g.mode === 'resize') {
-      const colW = bounds.width / GRID_COLS;
-      const dw = Math.round((e.clientX - g.sx) / colW);
-      const dh = Math.round((e.clientY - g.sy) / CELL_H);
-      rect = { col: g.col, row: g.row, w: clamp(g.ww + dw, 1, GRID_COLS - g.col + 1), h: clamp(g.hh + dh, 1, 30) };
-    } else if (g.mode === 'move') {
-      const colW = bounds.width / GRID_COLS;
-      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
-      const gx = (e.clientX - bounds.left) / colW + 1;
-      const gy = (e.clientY - bounds.top + scrollTop) / CELL_H + 1;
-      const col = clamp(Math.round(gx - g.grabCol), 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, Math.round(gy - g.grabRow));
-      rect = { col, row, w: g.ww, h: g.hh };
+      rect = resizeWidget({ col: g.col, row: g.row, w: g.ww, h: g.hh },
+        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width);
     } else {
-      const col = clamp(cell.col - Math.round((g.ww - 1) / 2), 1, GRID_COLS - g.ww + 1);
-      const row = Math.max(1, cell.row - Math.round((g.hh - 1) / 2));
-      rect = { col, row, w: g.ww, h: g.hh };
+      rect = moveWidgetFromGrab(e.clientX, e.clientY, bounds, { x: g.grabX, y: g.grabY },
+        { col: g.col, row: g.row, w: g.ww, h: g.hh });
     }
     const { widgets, activeRect } = solveLayout(g, rect);
     draftRef.current = activeRect;
@@ -1000,7 +963,7 @@ const Dashboard: React.FC = () => {
     const g = gestureRef.current;
     window.removeEventListener('pointermove', onGestureMove);
     window.removeEventListener('pointerup', onGestureEnd);
-    window.removeEventListener('pointercancel', onGestureEnd);
+    window.removeEventListener('pointercancel', cancelGesture);
     window.removeEventListener('keydown', onGestureKey);
     stopAutoScroll();
     const finalRect = draftRef.current;
@@ -1010,14 +973,13 @@ const Dashboard: React.FC = () => {
     setPreviewLayout(null);
     setActiveDragId(null);
     if (g && finalRect) {
+      const solved = solveLayout(g, finalRect).widgets;
       if (g.mode === 'panel') {
         const def = g.def;
-        const widget: DashboardWidget = { id: genKey(), type: def.type, title: def.title, col: finalRect.col, row: finalRect.row, w: def.w, h: def.h };
-        setLayout(prev => resolveCollisions([...prev, widget], widget.id));
+        const widget: DashboardWidget = { ...finalRect, id: genKey(), type: def.type, title: def.title };
+        setLayout(solved.map(item => item.id === '__dragging__' ? widget : item));
       } else {
-        setLayout(prev => resolveCollisions(prev.map(wg => wg.id === g.w.id
-          ? { ...wg, col: finalRect.col, row: finalRect.row, w: finalRect.w, h: finalRect.h }
-          : wg), g.w.id));
+        setLayout(solved);
       }
     }
   };
@@ -1027,7 +989,7 @@ const Dashboard: React.FC = () => {
     if (!g) return;
     window.removeEventListener('pointermove', onGestureMove);
     window.removeEventListener('pointerup', onGestureEnd);
-    window.removeEventListener('pointercancel', onGestureEnd);
+    window.removeEventListener('pointercancel', cancelGesture);
     window.removeEventListener('keydown', onGestureKey);
     stopAutoScroll();
     gestureRef.current = null;
@@ -1048,16 +1010,10 @@ const Dashboard: React.FC = () => {
     if (e.button !== 0) return;
     e.preventDefault();
     const el = gridRef.current;
-    let grabCol = (widget.w - 1) / 2;
-    let grabRow = (widget.h - 1) / 2;
-    if (el) {
-      const bounds = el.getBoundingClientRect();
-      const colW = bounds.width / GRID_COLS;
-      const scrollTop = scrollElRef.current ? scrollElRef.current.scrollTop : 0;
-      grabCol = (e.clientX - bounds.left) / colW + 1 - widget.col;
-      grabRow = (e.clientY - bounds.top + scrollTop) / CELL_H + 1 - widget.row;
-    }
-    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h, grabCol, grabRow };
+    if (!el || el.clientWidth <= 0) return;
+    const bounds = el.getBoundingClientRect();
+    const grab = getWidgetGrab(e.clientX, e.clientY, bounds, widget);
+    gestureRef.current = { mode, w: widget, sx: e.clientX, sy: e.clientY - bounds.top, lastX: e.clientX, lastY: e.clientY, col: widget.col, row: widget.row, ww: widget.w, hh: widget.h, grabX: grab.x, grabY: grab.y };
     const start: Rect = { col: widget.col, row: widget.row, w: widget.w, h: widget.h };
     draftRef.current = start;
     setDraft(start);
@@ -1067,7 +1023,7 @@ const Dashboard: React.FC = () => {
     setPreviewLayout(solved.widgets);
     window.addEventListener('pointermove', onGestureMove);
     window.addEventListener('pointerup', onGestureEnd);
-    window.addEventListener('pointercancel', onGestureEnd);
+    window.addEventListener('pointercancel', cancelGesture);
     window.addEventListener('keydown', onGestureKey);
     startAutoScroll();
   };
@@ -1077,7 +1033,8 @@ const Dashboard: React.FC = () => {
     if (e.button !== 0) return;
     const sx = e.clientX;
     const sy = e.clientY;
-    panelPendingRef.current = { def, sx, sy };
+    const source = e.currentTarget.getBoundingClientRect();
+    panelPendingRef.current = { def, sx, sy, grabX: sx - source.left, grabY: sy - source.top };
     const onMove = (ev: PointerEvent) => {
       const p = panelPendingRef.current;
       if (!p) return;
@@ -1088,18 +1045,20 @@ const Dashboard: React.FC = () => {
       panelPendingRef.current = null;
       setPanelClosing(true);
       window.setTimeout(() => { setShowCustomize(false); setPanelClosing(false); }, 200);
-      const cell = cellFromPoint(ev.clientX, ev.clientY);
-      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: p.def.w, hh: p.def.h, grabCol: (p.def.w - 1) / 2, grabRow: (p.def.h - 1) / 2 };
+      const bounds = gridRef.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0) return;
+      const dimensions = normalizeWidget({ col: 1, row: 1, w: p.def.w, h: p.def.h });
+      gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: dimensions.w, hh: dimensions.h, grabX: p.grabX, grabY: p.grabY };
       setActiveDragId('__dragging__');
       setSuppressMotion(false);
-      const rect: Rect = { col: clamp(cell.col - Math.round((p.def.w - 1) / 2), 1, GRID_COLS - p.def.w + 1), row: Math.max(1, cell.row - Math.round((p.def.h - 1) / 2)), w: p.def.w, h: p.def.h };
+      const rect = moveWidgetFromGrab(ev.clientX, ev.clientY, bounds, { x: p.grabX, y: p.grabY }, dimensions);
       const solved = solveLayout(gestureRef.current, rect);
       draftRef.current = solved.activeRect;
       setDraft(solved.activeRect);
       setPreviewLayout(solved.widgets);
       window.addEventListener('pointermove', onGestureMove);
       window.addEventListener('pointerup', onGestureEnd);
-      window.addEventListener('pointercancel', onGestureEnd);
+      window.addEventListener('pointercancel', cancelGesture);
       window.addEventListener('keydown', onGestureKey);
       startAutoScroll();
     };
@@ -1117,6 +1076,7 @@ const Dashboard: React.FC = () => {
   const renderWidgetBody = (widget: DashboardWidget) => {
     const def = WIDGET_DEFS.find(d => d.type === widget.type);
     const accent = def?.accent || 'label-blue';
+    if (def && !canAccessTier(def.tier)) return <LockedWidget tierLabel={def.tier === 'pro' ? 'Pro' : 'Premium'} onUpgrade={() => navigate('/pricing')} />;
     switch (widget.type) {
       case 'stats': {
         const statsDetails: Record<string, { sub: string; trend: string; trendUp: boolean | null }> = {
@@ -1785,16 +1745,343 @@ style={{ background: 'hsl(var(--primary))' }}>
           </div>
         );
       }
+      case 'advanced-insights': {
+        const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
+        const avg = advancedInsights.avgHours;
+        const trendUp = total30 > 5 && avg != null && avg < 24;
+        return (
+          <div className="space-y-2.5 mt-1">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Avg completion</p>
+                <p className="text-base font-black text-foreground mt-0.5">
+                  {avg != null ? `${avg.toFixed(1)}h` : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1">{avg != null && avg < 10 ? 'Fast turnover' : avg != null && avg < 48 ? 'Moderate pace' : 'Slow cycle'}</p>
+              </div>
+              <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Busiest day</p>
+                <p className="text-base font-black text-foreground mt-0.5">{advancedInsights.busiestDay || '—'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">{advancedInsights.busiestDay ? `${total30} in 30 days` : 'No data yet'}</p>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">30-day trend</p>
+                <p className="text-[10px] font-semibold text-muted-foreground">{total30} completed · avg {(total30 / 30).toFixed(1)}/day</p>
+              </div>
+              <MiniBars values={advancedInsights.trend30} accent={accent} containerClass="h-12" />
+            </div>
+            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                <span className="font-bold text-foreground">Premium insight:</span> {total30 === 0 ? 'No completions in 30 days — the trend will form once you close tasks.' : trendUp ? `Activity is building — ${total30} in 30 days with ${advancedInsights.busiestDay} as peak. Keep the daily close rate above 1.` : `Long cycle at ${avg?.toFixed(1) || '—'}h avg — break large tasks to shorten completion time.`}
+              </p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">{trendUp ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{trendUp ? 'building' : 'needs lift'}</span>
+                <span className="ml-auto font-bold text-foreground">{total30} total</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      case 'custom-report': {
+        const metric = widget.metric || 'completed';
+        const range = widget.range || 14;
+        const series = buildReportSeries(metric, range);
+        const total = series.reduce((s, v) => s + v, 0);
+        const maxSeries = Math.max(...series, 1);
+        const avgPerDay = range > 0 ? (total / range).toFixed(1) : '0';
+        const metricLabel = metric === 'created' ? 'Created' : metric === 'checklist' ? 'Checklist items done' : 'Completed';
+        const peakIdx = series.indexOf(maxSeries);
+        return (
+          <div className="mt-1">
+            <div className="flex gap-2 mb-3">
+              <Select value={metric} onValueChange={v => updateWidget(widget.id, { metric: v as ReportMetric })}>
+                <SelectTrigger className="flex-1 rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="created">Created</SelectItem>
+                  <SelectItem value="checklist">Checklist items</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={String(range)} onValueChange={v => updateWidget(widget.id, { range: Number(v) })}>
+                <SelectTrigger className="rounded-lg px-2 py-1.5 text-xs font-medium text-foreground h-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                  <SelectItem value="30">30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {total === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground">No {metricLabel.toLowerCase()} in this range yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Switch metric or extend the range to surface a pattern.</p>
+              </div>
+            ) : (
+              <>
+                <MiniBars values={series} accent={accent} containerClass="h-14" />
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-[10px] font-bold text-foreground">{total} {metricLabel.toLowerCase()} · avg {avgPerDay}/day</p>
+                  <p className="text-[10px] text-muted-foreground">peak {maxSeries}/day on day {peakIdx + 1}</p>
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one {metricLabel.toLowerCase()} daily to lift the trend.`}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{total} total</span>
+                    <span>·</span>
+                    <span>peak {maxSeries}</span>
+                    <span className="ml-auto font-bold text-foreground">{avgPerDay}/day avg</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'multi-project': {
+        const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
+        const spread = projectsInfo.length > 1 ? Math.max(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) - Math.min(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) : 0;
+        return (
+          <div className="space-y-2.5 mt-1">
+            {projectsInfo.length === 0 ? (
+              <div className="text-center py-6">
+                <GitCompareArrows className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
+                <p className="text-sm text-muted-foreground">No projects yet</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Create at least two projects — comparison appears once you have more than one.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} projects · avg {avgPct}%</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${spread > 0.5 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{spread > 0.5 ? 'Wide spread' : 'Tight range'}</span>
+                </div>
+                {projectsInfo.slice(0, 6).map(p => {
+                  const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                  const vsAvg = pct - avgPct;
+                  return (
+                    <div key={p.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 min-w-0 text-xs font-medium text-foreground truncate">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                          {p.name}
+                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{p.done}/{p.total} · {pct}% <span className={vsAvg >= 0 ? 'text-emerald-600' : 'text-red-500'}>{vsAvg >= 0 ? `+${vsAvg}` : vsAvg}% vs avg</span></span>
+                      </div>
+                      <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                        <div className="rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vsAvg >= 0 ? 'hsl(var(--label-green))' : 'hsl(var(--label-orange))' }} />
+                        <div className="rounded-full flex-1 transition-all duration-500" style={{ background: `hsl(var(--${accent}) / 0.25)` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Premium comparison — avg {avgPct}% across {projectsInfo.length} projects{spread > 0.5 ? `, ${Math.round(spread * 100)}pt spread signals uneven progress — the lagging project needs the next deep-work block.` : ' with tight spread — progress is evenly distributed.'}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>Spread {Math.round(spread * 100)}pt</span>
+                    <span>·</span>
+                    <span>{projectsInfo.length} compared</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'ai-score': {
+        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
+        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
+        const score = aiState.data?.productivityScore;
+        return (
+          <div className="mt-1">
+            {score ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-4">
+                  <div className="relative w-20 h-20 flex-shrink-0">
+                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" style={{ stroke: `hsl(var(--${accent}) / 0.14)` }} />
+                      <circle cx="40" cy="40" r="32" fill="none" strokeWidth="9" strokeLinecap="round"
+                        strokeDasharray={`${Math.max(0, Math.min(100, score.score)) * 2.01} 201`} style={{ stroke: `hsl(var(--${accent}))` }} />
+                    </svg>
+                    <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-foreground">{score.score}</span>
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">AI Productivity Score</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{score.summary}</p>
+                    {score.focusAreas.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {score.focusAreas.map((f: string, i: number) => (
+                          <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full text-primary-foreground" style={{ background: 'hsl(var(--label-orange))' }}>
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors">
+                      <RefreshCw className="w-3 h-3" /> Refresh
+                    </button>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> Score {score.score}/100 — {score.score >= 70 ? 'health is strong; keep the overdue count at zero to hold it' : score.score >= 40 ? 'mid-range — overdue and high-priority open tasks are the drag' : 'critical — overdue tasks and stalled breakdowns dominate the penalty'}.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1">{score.score >= 70 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{score.score >= 50 ? 'trending stable' : 'needs lift'}</span>
+                    <span className="ml-auto font-bold text-foreground">{score.focusAreas.length} focus areas</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <AiWidgetStatus onRetry={loadAiWidgets} />
+            )}
+          </div>
+        );
+      }
+      case 'ai-prioritize': {
+        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
+        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
+        const nextTasks = Array.isArray(aiState.data?.nextTasks) ? aiState.data.nextTasks : null;
+        return (
+          <div className="mt-1">
+            {nextTasks === null ? (
+              <AiWidgetStatus onRetry={loadAiWidgets} />
+            ) : nextTasks.length === 0 ? (
+              <div className="text-center py-6">
+                <ListOrdered className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
+                <p className="text-sm text-muted-foreground">No tasks to prioritize right now</p>
+                <p className="text-[11px] text-muted-foreground mt-1">AI ranks by overdue, priority and project balance — add more tasks to get a ranked list.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{nextTasks.length} ranked · by urgency & impact</span>
+                  <span className="text-[10px] font-bold text-primary">Pro ranked</span>
+                </div>
+                <div className="space-y-1.5">
+                  {nextTasks.map((nt: { id: string; reason: string }, i: number) => {
+                    const task = board.tasks.find(t => String(t.id) === String(nt.id));
+                    const cfg = task && task.priority !== 'none' ? PRIORITY_CONFIG[task.priority] : null;
+                    return (
+                      <div key={nt.id} className="flex items-start gap-2 p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <span className="w-5 h-5 flex-shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white mt-0.5"
+                          style={{ background: `hsl(var(--${accent}))` }}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
+                            {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{nt.reason}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> Top 3 are chosen for deadline proximity and priority weight — {nextTasks.length > 1 ? `start with #1, then sequence through ${nextTasks.length} in order.` : 'clear it to lift the whole queue.'}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'ai-bottlenecks': {
+        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
+        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
+        const bottlenecks = Array.isArray(aiState.data?.bottlenecks) ? aiState.data.bottlenecks : null;
+        return (
+          <div className="mt-1">
+            {bottlenecks === null ? (
+              <AiWidgetStatus onRetry={loadAiWidgets} />
+            ) : bottlenecks.length === 0 ? (
+              <div className="text-center py-6">
+                <Siren className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
+                <p className="text-sm text-muted-foreground">No bottlenecks detected</p>
+                <p className="text-[11px] text-muted-foreground mt-1">AI sees no stalled work — your breakdowns are moving. Keep the daily close rate up.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] text-muted-foreground">{bottlenecks.length} stalled · needs attention</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Pro flagged</span>
+                </div>
+                <div className="space-y-1.5">
+                  {bottlenecks.map((bn: { id: string; reason: string }) => {
+                    const task = board.tasks.find(t => String(t.id) === String(bn.id));
+                    return (
+                      <div key={bn.id} className="p-2 rounded-lg"
+                        style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                        <div className="flex items-center gap-2">
+                          <Siren className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
+                          <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600">Stalled</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-snug mt-1 pl-5">{bn.reason}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro insight:</span> {bottlenecks.length} tasks are stalled — they have breakdown items untouched for 7+ days. Restart one today or cut it to clear the drag on completion.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      }
+      case 'ai-weekly': {
+        if (!canAccessTier('pro')) return <LockedWidget tierLabel="Pro" onUpgrade={() => navigate('/pricing')} />;
+        if (aiState.loading || aiState.error) return <AiWidgetStatus loading={aiState.loading} error={aiState.error} onRetry={loadAiWidgets} />;
+        const summary = aiState.data?.weeklySummary || null;
+        return (
+          <div className="mt-1">
+            {summary === null ? (
+              <AiWidgetStatus onRetry={loadAiWidgets} />
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2 p-3 rounded-lg"
+                  style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                  <MessageSquareText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: `hsl(var(--${accent}))` }} />
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{summary}</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <span className="font-bold text-foreground">Pro recap:</span> Week over week — {completedTasks.length} completed, {overdueTasks.length} still overdue, {streakDays}d streak. Next step: close the oldest overdue to tilt next week up.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+                    <span>{weeklyData.reduce((s, v) => s + v, 0)} this week</span>
+                    <span>·</span>
+                    <span>{completionRate}% completion</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
       default:
         return null;
     }
   };
 
-  // Final safety net: never render overlapping widgets, no matter how the
-  // layout state was produced (load, resize, move, remove, edit, or a stale
-  // persisted layout). Both previewLayout (during a gesture) and the committed
-  // layout are guaranteed collision-free here.
-  const safeLayout = useMemo(() => resolveCollisions(layout), [layout]);
+  // Loading and every layout mutation resolve collisions. Render that exact
+  // committed geometry so a dropped module cannot jump away from its preview.
+  const safeLayout = layout;
 
   const gridHeight = useMemo(() => {
     const src = previewLayout ?? safeLayout;
@@ -1919,7 +2206,7 @@ style={{ background: 'hsl(var(--primary))' }}>
               ))}
             </div>
           ) : layout.length === 0 && !previewLayout ? (
-            <div className="text-center py-20">
+            <div ref={gridRef} className="relative text-center py-20" style={{ height: Math.max(gridHeight, 320) }}>
               <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
               <p className="text-base font-semibold text-foreground">Your dashboard is empty</p>
               <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Dashboard to add widgets</p>
@@ -2067,108 +2354,28 @@ style={{ background: 'hsl(var(--primary))' }}>
       </div>
 
       {showCustomize && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className={panelClosing ? 'absolute inset-0 pointer-events-none' : 'absolute inset-0 bg-black/20 backdrop-blur-[2px]'}
-            onClick={() => setShowCustomize(false)}
-          />
-          <div className={`relative w-full max-w-sm h-full bg-card border-l border-border shadow-2xl overflow-y-auto ${panelClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'}`}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <LayoutDashboard className="w-4 h-4 text-primary" /> Customize Dashboard
-              </h2>
-              <button onClick={() => setShowCustomize(false)} aria-label="Close customize panel" title="Close customize panel" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-            <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
-              Drag a widget from the list onto the dashboard grid to place it — it snaps into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
-            </p>
-            <div className="p-3 space-y-4">
-              {TIER_SECTIONS.map(section => {
-                const defs = WIDGET_DEFS.filter(d => d.tier === section.tier);
-                const lockedCount = defs.filter(d => !canAccessTier(d.tier)).length;
-                return (
-                  <div key={section.tier}>
-                    <div className="flex items-center justify-between px-1 mb-1.5">
-                      <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{section.label}</p>
-                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{lockedCount} locked</span>}
-                    </div>
-                    <div className="space-y-2">
-                      {defs.map(def => {
-                        const placed = hasWidget(def.type);
-                        const unlocked = canAccessTier(def.tier);
-                        const Icon = def.icon;
-                        const tierClass = def.tier === 'pro'
-                          ? 'bg-label-purple/15 text-[hsl(268_60%_60%)]'
-                          : def.tier === 'premium'
-                            ? 'bg-label-yellow/15 text-[hsl(38_92%_50%)]'
-                            : 'bg-muted/60 text-muted-foreground';
-                        return (
-                          <div
-                            key={def.type}
-                            onClick={!placed && !unlocked ? () => navigate('/pricing') : undefined}
-                            onPointerDown={placed || !unlocked ? undefined : onPanelItemPointerDown(def)}
-                            className={placed
-                              ? 'p-3 rounded-2xl border opacity-60'
-                              : unlocked
-                                ? 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing touch-none select-none'
-                                : 'p-3 rounded-2xl border cursor-pointer select-none'}
-                            style={{
-                              borderColor: 'hsl(var(--border))',
-                              borderRadius: 16,
-                              background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                              boxShadow: unlocked ? '0 6px 18px -18px hsl(228 25% 25% / 0.4)' : 'none',
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: unlocked ? `hsl(var(--${def.accent}) / 0.12)` : 'hsl(var(--muted) / 0.6)' }}>
-                                {unlocked ? (
-                                  <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
-                                ) : (
-                                  <Lock className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-bold ${unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>{def.title}</p>
-                                <p className={`text-xs mt-0.5 ${unlocked ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>{def.desc}</p>
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                {(def.tier === 'premium' || def.tier === 'pro') && (
-                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${tierClass}`}>
-                                    <Crown className="w-2.5 h-2.5" /> {def.tier}
-                                  </span>
-                                )}
-                                {placed ? (
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
-                                ) : unlocked ? (
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
-                                    Drag to add
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold uppercase text-primary px-2 py-1 rounded-full bg-primary/10">Upgrade</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-3 pt-1">
-              <button
-                onClick={() => { setLayout(defaultLayout()); setShowCustomize(false); }}
-                className="w-full py-2.5 rounded-xl text-sm font-bold border transition-colors hover:bg-muted"
-                style={{ borderColor: 'hsl(var(--border))', color: 'hsl(228 14% 40%)' }}
-              >
-                Reset to default layout
-              </button>
-            </div>
-          </div>
-        </div>
+        <WidgetCatalog<WidgetDef>
+          definitions={WIDGET_DEFS}
+          surface="dashboard"
+          closing={panelClosing}
+          hasWidget={hasWidget}
+          canAccessTier={canAccessTier}
+          onStartDrag={onPanelItemPointerDown}
+          onAdd={definition => {
+            if (!canAccessTier(definition.tier)) return;
+            setLayout(previous => {
+              if (previous.some(widget => widget.type === definition.type)) return previous;
+              const row = previous.reduce((bottom, widget) => Math.max(bottom, widget.row + widget.h), 1);
+              return packLayout([...previous, {
+                id: genKey(), type: definition.type, title: definition.title,
+                col: 1, row, w: definition.w, h: definition.h,
+              }]);
+            });
+          }}
+          onClose={() => setShowCustomize(false)}
+          onUpgrade={() => navigate('/pricing')}
+          onReset={() => { setLayout(defaultLayout()); setShowCustomize(false); }}
+        />
       )}
 
       {tagsModalOpen && (

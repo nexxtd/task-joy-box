@@ -147,6 +147,75 @@
   }
 }
 
+/* Hover reveals the split control; clicking owns the popup state. */
+.split-screen-toggle {
+  opacity: 0;
+}
+
+.split-screen-trigger:hover > .split-screen-toggle,
+.split-screen-trigger[data-open="true"] > .split-screen-toggle,
+.split-screen-toggle:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .split-screen-toggle { opacity: 1; }
+}
+
+/* Pages respond to their own available width, including split-screen panes. */
+.app-page-viewport {
+  container: app-page / inline-size;
+  overscroll-behavior: contain;
+}
+
+.app-page-viewport > * {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+}
+
+.page-toolbar,
+.page-toolbar-actions,
+.page-filter-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.page-toolbar-title {
+  flex-basis: 8rem;
+}
+
+.page-toolbar-actions > button {
+  white-space: nowrap;
+}
+
+.calendar-sidebar-inline {
+  display: none;
+  width: clamp(15rem, 24cqw, 20rem);
+  flex-shrink: 0;
+}
+
+@container app-page (min-width: 960px) {
+  .calendar-sidebar-inline { display: block; }
+  .calendar-sidebar-trigger,
+  .calendar-sidebar-drawer { display: none; }
+}
+
+@container app-page (max-width: 640px) {
+  .app-page-viewport .page-toolbar,
+  .app-page-viewport .page-filters { padding-inline: 1rem; }
+  .app-page-viewport .page-toolbar-title { flex-basis: 100%; }
+  .app-page-viewport .page-toolbar-actions { width: 100%; }
+  .app-page-viewport .page-toolbar-actions > button,
+  .app-page-viewport .page-toolbar-actions > .relative > button {
+    min-height: 44px;
+    padding-inline: 0.625rem;
+  }
+  .app-page-viewport .page-filter-actions { margin-inline-start: 0; }
+  .calendar-view-label,
+  .calendar-drag-hint { display: none; }
+}
+
 /* Scrollbar (WebKit + Firefox) */
 * {
   scrollbar-width: thin;

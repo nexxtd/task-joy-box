@@ -7,6 +7,7 @@ import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import {
   DragDropContext,
   Droppable,
@@ -804,15 +805,16 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                 )}
                 {effectiveSubtasks.length === 0 && <p className="text-xs text-muted-foreground">No sub-tasks.</p>}
                 {effectiveSubtasks.map((subtask) => (
-                  <div key={subtask.id} className="flex items-center gap-2.5 text-sm group min-w-0">
+                  <div key={subtask.id} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                     <CircleToggle
                       completed={subtask.completed}
                       onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                       size="md"
                     />
-                    <span className={`flex-1 truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                      {subtask.text}
-                    </span>
+                    <ExpandableRowText
+                      text={subtask.text}
+                      textClassName={`${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -909,7 +911,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                   {list.items.map((item, idx) => (
                                                     <Draggable key={item.id} draggableId={item.id} index={idx}>
                                                       {(provided) => (
-                                                        <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                                        <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                                                           <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                             <GripVertical className="w-4 h-4" />
                                                           </div>
@@ -919,21 +921,20 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                             size="md"
                                                           />
                                                           {editingChecklistItemId === item.id ? (
-                                                            <input
+                                                            <AutoGrowTextarea maxHeight={240}
                                                               autoFocus
                                                               className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                               value={editingChecklistItemText}
                                                               onChange={e => setEditingChecklistItemText(e.target.value)}
                                                               onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                              onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveChecklistItemEdit(list.id, item.id); } }}
                                                             />
                                                           ) : (
-                                                            <span
+                                                            <ExpandableRowText
+                                                              text={item.text}
                                                               onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
-                                                              className={`flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                            >
-                                                              {item.text}
-                                                            </span>
+                                                              textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                            />
                                                           )}
                                                           <button
                                                             onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
@@ -983,7 +984,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                               {focusChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
@@ -1007,12 +1008,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                           }}
                                         />
                                       ) : (
-                                        <span
+                                        <ExpandableRowText
+                                          text={item.text}
                                           onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
-                                          className={`flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                        >
-                                          {item.text}
-                                        </span>
+                                          textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                        />
                                       )}
                                       <button
                                         onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}
@@ -1276,7 +1276,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                               {effectiveSubtasks.map((subtask, index) => (
                                 <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
@@ -1300,12 +1300,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                           }}
                                         />
                                       ) : (
-                                        <span
+                                        <ExpandableRowText
+                                          text={subtask.text}
                                           onClick={(e) => { e.stopPropagation(); setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
-                                          className={`flex-1 cursor-text truncate ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                        >
-                                          {subtask.text}
-                                        </span>
+                                          textClassName={`cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                        />
                                       )}
                                       <button
                                         onClick={() => removeSubtask(subtask.id)}
@@ -1431,7 +1430,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                     {list.items.map((item, idx) => (
                                                       <Draggable key={item.id} draggableId={item.id} index={idx}>
                                                         {(provided) => (
-                                                          <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                                          <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                                                             <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                               <GripVertical className="w-4 h-4" />
                                                             </div>
@@ -1441,21 +1440,20 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                                               size="md"
                                                             />
                                                             {editingChecklistItemId === item.id ? (
-                                                              <input
+                                                              <AutoGrowTextarea maxHeight={240}
                                                                 autoFocus
                                                                 className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
                                                                 value={editingChecklistItemText}
                                                                 onChange={e => setEditingChecklistItemText(e.target.value)}
                                                                 onBlur={() => saveChecklistItemEdit(list.id, item.id)}
-                                                                onKeyDown={e => e.key === 'Enter' && saveChecklistItemEdit(list.id, item.id)}
+                                                                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveChecklistItemEdit(list.id, item.id); } }}
                                                               />
                                                             ) : (
-                                                              <span
+                                                              <ExpandableRowText
+                                                                text={item.text}
                                                                 onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
-                                                                className={`flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                              >
-                                                                {item.text}
-                                                              </span>
+                                                                textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                              />
                                                             )}
                                                             <button
                                                               onClick={() => deleteChecklistItem(selectedTask.id, list.id, item.id)}
@@ -1505,7 +1503,7 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                 {focusChecklistItems.map((item, index) => (
                                   <Draggable key={item.id} draggableId={item.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group min-w-0">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group min-w-0">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
@@ -1529,12 +1527,11 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                                             }}
                                           />
                                         ) : (
-                                          <span
+                                          <ExpandableRowText
+                                            text={item.text}
                                             onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
-                                            className={`flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                          >
-                                            {item.text}
-                                          </span>
+                                            textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                          />
                                         )}
                                         <button
                                           onClick={() => deleteChecklistItem(selectedTask.id, item.checklistId, item.id)}

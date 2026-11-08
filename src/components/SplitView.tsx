@@ -14,13 +14,13 @@ import { useAuth } from '@/context/AuthContext';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import { useLanguage } from '@/context/LanguageContext';
 import { PageSkeleton } from '@/components/PageSkeleton';
+import { clampSplitRatio, getSplitBounds, MIN_PANE_WIDTH, SPLIT_DIVIDER_WIDTH } from '@/lib/splitSizing';
 
 /**
  * Split-screen sizing limits. The divider can be dragged between these
  * fractions of the content area.
  */
-export const MIN_RATIO = 0.2;
-export const MAX_RATIO = 0.8;
+export { MIN_RATIO, MAX_RATIO } from '@/lib/splitSizing';
 
 /** @deprecated Drag-to-split was replaced by the split-screen button. */
 export const DRAG_THRESHOLD = 64;
@@ -188,6 +188,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   /** Half currently showing the page picker, if any. */
   const [pickerSide, setPickerSide] = useState<Side | null>(null);
   const [ratio, setRatio] = useState(0.5);
+  const [splitWidth, setSplitWidth] = useState(0);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   /** A shortcut/preset waiting for the router to finish navigating. */
@@ -298,7 +299,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, [popoverOpen, pickerSide, cancelPicker]);
 
-  // Touch/keyboard users have no hover-out, so tapping outside closes it.
+  // The picker opens on click and stays open until dismissed or a side is chosen.
   useEffect(() => {
     if (!popoverOpen) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -332,6 +333,28 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   const secondaryDef = secondaryPath ? findAppPage(secondaryPath) : undefined;
+  const primaryMinimum = primaryDef?.minSplitWidth ?? MIN_PANE_WIDTH;
+  const secondaryMinimum = secondaryDef?.minSplitWidth ?? MIN_PANE_WIDTH;
+  const leftMinimum = primarySide === 'right' ? secondaryMinimum : primaryMinimum;
+  const rightMinimum = primarySide === 'right' ? primaryMinimum : secondaryMinimum;
+  const splitBounds = getSplitBounds(splitWidth, leftMinimum, rightMinimum);
+  const visibleRatio = clampSplitRatio(ratio, splitBounds);
+
+  // Observe the actual content area, including sidebar changes and window resizing.
+  // On smaller screens the split surface scrolls instead of crushing either page.
+  useEffect(() => {
+    const element = splitRef.current;
+    if (!primarySide || !element) return;
+    const measure = () => setSplitWidth(Math.max(0, element.clientWidth - SPLIT_DIVIDER_WIDTH));
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(element);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [primarySide]);
 
   /** Label shown for a pane (used in the popover and picker copy). */
   const paneLabel = (side: Side): string => {
@@ -363,6 +386,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   };
 
   const onResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.isPrimary === false) return;
     event.preventDefault();
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -378,13 +402,24 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     if (!rect.width) return;
-    const next = (event.clientX - rect.left) / rect.width;
-    setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, next)));
+    const next = (event.clientX - rect.left) / (rect.width - SPLIT_DIVIDER_WIDTH);
+    setRatio(clampSplitRatio(next, splitBounds));
   };
 
   const onResizeEnd = () => {
     resizeRef.current = false;
   };
+
+  useEffect(() => {
+    // Also end a drag if pointer capture is unsupported and release happens outside.
+    const endResize = () => { resizeRef.current = false; };
+    window.addEventListener('pointerup', endResize);
+    window.addEventListener('pointercancel', endResize);
+    return () => {
+      window.removeEventListener('pointerup', endResize);
+      window.removeEventListener('pointercancel', endResize);
+    };
+  }, []);
 
   const renderPicker = (side: Side) => {
     const otherSide: Side = side === 'left' ? 'right' : 'left';
@@ -453,13 +488,13 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PaneHeader
-            side="left"
+            side={side}
             icon={primaryDef?.icon}
             label={primaryLabel}
             onClose={closePrimary}
             closeTitle={t('Exit split screen')}
           />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="app-page-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
             {children}
           </div>
         </div>
@@ -470,13 +505,13 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <PaneHeader
-            side="right"
+            side={side}
             icon={secondaryDef?.icon}
             label={secondaryDef ? t(secondaryDef.label) : t('This page')}
             onClose={closeSplit}
             closeTitle={t('Exit split screen')}
           />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="app-page-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
             <SplitPage key={secondaryPath} path={secondaryPath} />
           </div>
         </div>
@@ -489,9 +524,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const splitButton = !currentIsComingSoon ? (
     <div
       ref={splitButtonRef}
-      className="absolute left-1/2 top-0 z-50 flex -translate-x-1/2 flex-col items-center"
-      onMouseEnter={() => setPopoverOpen(true)}
-      onMouseLeave={() => setPopoverOpen(false)}
+      data-open={popoverOpen}
+      className="split-screen-trigger absolute left-1/2 top-0 z-50 flex -translate-x-1/2 flex-col items-center"
     >
       <button
         type="button"
@@ -499,9 +533,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         aria-haspopup="menu"
         aria-expanded={popoverOpen}
         title={t('Split screen')}
-        onClick={() => setPopoverOpen(true)}
-        onFocus={() => setPopoverOpen(true)}
-        className="group flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground opacity-80 shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        onClick={() => setPopoverOpen(open => !open)}
+        className="split-screen-toggle flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <ArrowLeftRight className="h-3.5 w-3.5" />
       </button>
@@ -538,44 +571,56 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {primarySide === null ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="app-page-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
           {children}
         </div>
       ) : (
-        <div ref={splitRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain">
           <div
-            style={{ width: `${ratio * 100}%` }}
-            className="flex min-h-0 min-w-0 flex-shrink-0 flex-col overflow-hidden"
-          >
-            {renderPane('left')}
-          </div>
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label={t('Resize split screen')}
-            aria-valuemin={Math.round(MIN_RATIO * 100)}
-            aria-valuemax={Math.round(MAX_RATIO * 100)}
-            aria-valuenow={Math.round(ratio * 100)}
-            tabIndex={0}
-            onPointerDown={onResizeStart}
-            onPointerMove={onResizeMove}
-            onPointerUp={onResizeEnd}
-            onPointerCancel={onResizeEnd}
-            onKeyDown={event => {
-              if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                setRatio(value => Math.max(MIN_RATIO, value - 0.02));
-              } else if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                setRatio(value => Math.min(MAX_RATIO, value + 0.02));
-              }
+            ref={splitRef}
+            className="grid min-h-0 flex-1 overflow-hidden"
+            style={{
+              minWidth: leftMinimum + rightMinimum + SPLIT_DIVIDER_WIDTH,
+              gridTemplateColumns: `minmax(0, ${visibleRatio}fr) ${SPLIT_DIVIDER_WIDTH}px minmax(0, ${1 - visibleRatio}fr)`,
             }}
-            className="relative z-10 w-1.5 flex-shrink-0 cursor-col-resize touch-none bg-border/70 transition-colors hover:bg-primary/60 focus-visible:bg-primary focus-visible:outline-none"
           >
-            <div className="absolute inset-y-0 -left-1 -right-1" />
-          </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {renderPane('right')}
+            <div
+              className="flex min-h-0 min-w-0 flex-shrink-0 flex-col overflow-hidden"
+            >
+              {renderPane('left')}
+            </div>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t('Resize split screen')}
+              aria-valuemin={Math.round(splitBounds.min * 100)}
+              aria-valuemax={Math.round(splitBounds.max * 100)}
+              aria-valuenow={Math.round(visibleRatio * 100)}
+              tabIndex={0}
+              onPointerDown={onResizeStart}
+              onPointerMove={onResizeMove}
+              onPointerUp={onResizeEnd}
+              onPointerCancel={onResizeEnd}
+              onLostPointerCapture={onResizeEnd}
+              onKeyDown={event => {
+                if (event.key === 'ArrowLeft') {
+                  event.preventDefault();
+                  setRatio(clampSplitRatio(visibleRatio - 0.02, splitBounds));
+                } else if (event.key === 'ArrowRight') {
+                  event.preventDefault();
+                  setRatio(clampSplitRatio(visibleRatio + 0.02, splitBounds));
+                } else if (event.key === 'Home' || event.key === 'End') {
+                  event.preventDefault();
+                  setRatio(event.key === 'Home' ? splitBounds.min : splitBounds.max);
+                }
+              }}
+              className="relative z-10 w-1.5 flex-shrink-0 cursor-col-resize touch-none bg-border/70 transition-colors hover:bg-primary/60 focus-visible:bg-primary focus-visible:outline-none"
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1" />
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {renderPane('right')}
+            </div>
           </div>
         </div>
       )}

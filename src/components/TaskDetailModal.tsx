@@ -11,6 +11,7 @@ import TagsModal from '@/components/shared/TagsModal';
 import AttachmentRow from '@/components/AttachmentRow';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
@@ -632,7 +633,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                       {cl.items.map((item, idx) => (
                                         <Draggable key={item.id} draggableId={item.id} index={idx}>
                                           {(provided) => (
-                                             <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/item min-w-0 checklist-item">
+                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2 group/item min-w-0 checklist-item">
                                               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                 <GripVertical className="w-3.5 h-3.5" />
                                               </div>
@@ -656,12 +657,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                                   }}
                                                 />
                                               ) : (
-                                                <span
+                                                <ExpandableRowText
+                                                  text={item.text}
                                                   onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistItemText(item.text); }}
-                                                  className={`text-sm flex-1 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                                                >
-                                                  {item.text}
-                                                </span>
+                                                  textClassName={`text-sm cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                />
                                               )}
                                               <button
                                                 onClick={() => deleteChecklistItem(task.id, cl.id, item.id)}

@@ -43,6 +43,8 @@ const WidgetBodySkeleton = () => (
   </div>
 );
 import { trackUsage, trackPageVisit } from '@/lib/usage';
+import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
+import './Insights.css';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -62,6 +64,15 @@ const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
   { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 4, h: 3, tier: 'free' },
   { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 4, h: 3, tier: 'free' },
   { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
+  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 4, h: 4, tier: 'premium' },
+  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 4, h: 4, tier: 'premium' },
+  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
+  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 4, h: 4, tier: 'premium' },
+  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 4, h: 4, tier: 'premium' },
+  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 4, h: 4, tier: 'premium' },
+  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 4, h: 4, tier: 'pro' },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 4, h: 4, tier: 'pro' },
 ];
 
 const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
@@ -77,11 +88,6 @@ const defaultLayout = (): InsightWidget[] => [
   w('w7', 'notes-overview', 'Notes Overview', 1, 7, 4, 3),
 ];
 
-const TIER_SECTIONS: { tier: WidgetTier; label: string }[] = [
-  { tier: 'free', label: 'Free' },
-  { tier: 'premium', label: 'Premium' },
-  { tier: 'pro', label: 'Pro' },
-];
 
 const LockedAiWidget: React.FC<{ onUpgrade: () => void; label?: string }> = ({ onUpgrade, label = 'Pro' }) => (
   <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
@@ -137,7 +143,7 @@ const Insights: React.FC = () => {
 
   const {
     layout, previewLayout, draft, activeDragId, suppressMotion, displacedIds, gridHeight,
-    gridRef, scrollElRef, bodyRefs, hasWidget, removeWidget, updateWidget, startGesture,
+    gridRef, scrollElRef, bodyRefs, hasWidget, addWidget, removeWidget, updateWidget, startGesture,
     onPanelItemPointerDown, showCustomize, setShowCustomize, panelClosing, resetToDefault, canAccessTier,
   } = useWidgetGrid<InsightWidgetType>({
     defs: WIDGET_DEFS,
@@ -343,7 +349,12 @@ const Insights: React.FC = () => {
   }, []);
 
   const wantsAi = hasWidget('ai-bottlenecks') || hasWidget('ai-score');
+  const canUseAi = canAccessTier('pro');
   useEffect(() => {
+    if (!canUseAi) {
+      aiFetchedRef.current = false;
+      return;
+    }
     if (wantsAi && !aiFetchedRef.current) {
       aiFetchedRef.current = true;
       if (analysisInFlight) {
@@ -362,7 +373,7 @@ const Insights: React.FC = () => {
         runAi();
       }
     }
-  }, [wantsAi, runAi]);
+  }, [wantsAi, runAi, canUseAi]);
 
   const aiWidgetsData: AiWidgetsData = useMemo(() => ({
     loading: aiLoading,
@@ -380,6 +391,10 @@ const Insights: React.FC = () => {
   }), [aiLoading, scoreError, scoreData, runAi]);
 
   const renderBody = (widget: InsightWidget) => {
+    const definition = WIDGET_DEFS.find(def => def.type === widget.type);
+    if (definition && !canAccessTier(definition.tier)) {
+      return <LockedAiWidget label={definition.tier === 'pro' ? 'Pro' : 'Premium'} onUpgrade={() => navigate('/pricing')} />;
+    }
     switch (widget.type) {
       case 'completion-overview':
         return <CompletionOverviewBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} />;
@@ -420,13 +435,13 @@ const Insights: React.FC = () => {
   };
 
   return (
-    <div ref={scrollElRef} className="flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
-      <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
-        <div className="flex items-baseline gap-2 min-w-0 flex-1">
+    <div ref={scrollElRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
+      <header className="page-toolbar px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
+        <div className="page-toolbar-title flex items-baseline gap-2 min-w-0 flex-1">
           <h1 className="text-base font-bold text-foreground truncate">Insights &amp; Analytics</h1>
           <p className="hidden lg:block text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+        <div className="page-toolbar-actions flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <button
             onClick={() => { trackUsage('insights', 'run-ai-analysis'); runAi(); }}
             disabled={aiLoading}
@@ -476,9 +491,9 @@ const Insights: React.FC = () => {
         </div>
       )}
 
-      <div className="p-6">
+      <div className="insights-widgets p-4 sm:p-6">
         {layout.length === 0 && !previewLayout ? (
-          <div className="text-center py-20">
+          <div ref={gridRef} className="relative text-center py-20" style={{ height: Math.max(gridHeight, 320) }}>
             <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
             <p className="text-base font-semibold text-foreground">Your insights board is empty</p>
             <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Insights to add widgets</p>
@@ -490,7 +505,7 @@ const Insights: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div ref={gridRef} className="relative" style={{ height: gridHeight }}>
+          <div ref={gridRef} className="insights-widget-grid relative" style={{ height: gridHeight }}>
             {(previewLayout ?? layout).map(widget => {
               const def = WIDGET_DEFS.find(d => d.type === widget.type);
               const accent = def?.accent || 'label-blue';
@@ -498,7 +513,7 @@ const Insights: React.FC = () => {
               return (
                 <div
                   key={widget.id}
-                  className={`relative group/widget rounded-2xl overflow-hidden flex flex-col ${isDisplaced ? 'animate-widget-flash' : ''} ${activeDragId === widget.id ? 'z-10' : ''}`}
+                  className={`insights-widget relative group/widget rounded-2xl overflow-hidden flex flex-col ${isDisplaced ? 'animate-widget-flash' : ''} ${activeDragId === widget.id ? 'z-10' : ''}`}
                   style={{
                     position: 'absolute',
                     ...cellStyle(widget),
@@ -511,10 +526,10 @@ const Insights: React.FC = () => {
                   }}
                 >
                   <div className="flex items-center justify-between px-4 pt-3 pb-1 select-none shrink-0">
-                    <div className={`flex items-center gap-0.5 min-w-0 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                    <div className={`insights-widget-leading-actions flex items-center gap-0.5 min-w-0 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                       <button
                         onPointerDown={e => startGesture(e, widget, 'move')}
-                        className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
+                        className="insights-widget-move p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
                         title="Move"
                       >
                         <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -529,13 +544,13 @@ const Insights: React.FC = () => {
                         </button>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="insights-widget-heading flex items-center gap-2 min-w-0">
                       <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
                         {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
                       </div>
                       <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
                     </div>
-                    <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
+                    <div className={`insights-widget-actions flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                       <button
                         onClick={() => removeWidget(widget.id)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
@@ -558,13 +573,13 @@ const Insights: React.FC = () => {
                         el.scrollBy({ top: e.deltaY, behavior: 'auto' });
                       }
                     }}
-                    className="px-4 pb-4 overflow-y-auto min-h-0 flex-1"
+                    className="insights-widget-body px-4 pb-4 overflow-y-auto min-h-0 flex-1"
                   >
                     {renderBody(widget as InsightWidget)}
                   </div>
                   <div
                     onPointerDown={e => startGesture(e, widget, 'resize')}
-                    className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
+                    className="insights-widget-resize absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
                     style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
                     title="Resize"
                   />
@@ -576,108 +591,24 @@ const Insights: React.FC = () => {
       </div>
 
       {showCustomize && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className={panelClosing ? 'absolute inset-0 pointer-events-none' : 'absolute inset-0 bg-black/20 backdrop-blur-[2px]'}
-            onClick={() => setShowCustomize(false)}
-          />
-          <div className={`relative w-full max-w-sm h-full bg-card border-l border-border shadow-2xl overflow-y-auto ${panelClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'}`}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
-              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <LayoutDashboard className="w-4 h-4 text-primary" /> Customize Insights
-              </h2>
-              <button onClick={() => setShowCustomize(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="px-5 pt-3 text-xs text-muted-foreground leading-relaxed">
-              Drag a widget from the list onto the board to place it — it snaps into place automatically. Grab the grip to move a widget, drag its corner to resize, and use <span className="font-semibold">×</span> to remove it.
-            </p>
-            <div className="p-3 space-y-4">
-              {TIER_SECTIONS.map(section => {
-                const defs = WIDGET_DEFS.filter(d => d.tier === section.tier);
-                const lockedCount = defs.filter(d => !canAccessTier(d.tier)).length;
-                return (
-                  <div key={section.tier}>
-                    <div className="flex items-center justify-between px-1 mb-1.5">
-                      <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{section.label}</p>
-                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{lockedCount} locked</span>}
-                    </div>
-                    <div className="space-y-2">
-                      {defs.map(def => {
-                        const placed = hasWidget(def.type);
-                        const unlocked = canAccessTier(def.tier);
-                        const Icon = def.icon;
-                        const tierClass = def.tier === 'pro'
-                          ? 'bg-label-purple/15 text-[hsl(268_60%_60%)]'
-                          : def.tier === 'premium'
-                            ? 'bg-label-yellow/15 text-[hsl(38_92%_50%)]'
-                            : 'bg-muted/60 text-muted-foreground';
-                        return (
-                          <div
-                            key={def.type}
-                            onClick={!placed && !unlocked ? () => navigate('/pricing') : undefined}
-                            onPointerDown={placed || !unlocked ? undefined : onPanelItemPointerDown(def)}
-                            className={placed
-                              ? 'p-3 rounded-2xl border opacity-60'
-                              : unlocked
-                                ? 'p-3 rounded-2xl border cursor-grab active:cursor-grabbing touch-none select-none'
-                                : 'p-3 rounded-2xl border cursor-pointer select-none'}
-                            style={{
-                              borderColor: 'hsl(var(--border))',
-                              borderRadius: 16,
-                              background: placed ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                              boxShadow: unlocked ? '0 6px 18px -18px hsl(228 25% 25% / 0.4)' : 'none',
-                            }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center" style={{ background: unlocked ? `hsl(var(--${def.accent}) / 0.12)` : 'hsl(var(--muted) / 0.6)' }}>
-                                {unlocked ? (
-                                  <Icon className="w-4 h-4" style={{ color: `hsl(var(--${def.accent}))` }} />
-                                ) : (
-                                  <Lock className="w-4 h-4 text-muted-foreground" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-bold ${unlocked ? 'text-foreground' : 'text-muted-foreground'}`}>{def.title}</p>
-                                <p className={`text-xs mt-0.5 ${unlocked ? 'text-muted-foreground' : 'text-muted-foreground/70'}`}>{def.desc}</p>
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                {(def.tier === 'premium' || def.tier === 'pro') && (
-                                  <span className={`flex items-center gap-1 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${tierClass}`}>
-                                    <Crown className="w-2.5 h-2.5" /> {def.tier}
-                                  </span>
-                                )}
-                                {placed ? (
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground bg-black/5 px-2 py-1 rounded-full">On board</span>
-                                ) : unlocked ? (
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground px-2 py-1 rounded-full border" style={{ borderColor: 'hsl(var(--border))' }}>
-                                    Drag to add
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold uppercase text-primary px-2 py-1 rounded-full bg-primary/10">Upgrade</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="p-3 pt-1">
-              <button
-                onClick={() => { resetToDefault(); }}
-                className="w-full py-2.5 rounded-xl text-sm font-bold border transition-colors hover:bg-muted"
-                style={{ borderColor: 'hsl(var(--border))', color: 'hsl(228 14% 40%)' }}
-              >
-                Reset to default layout
-              </button>
-            </div>
-          </div>
-        </div>
+        <WidgetCatalog<GridWidgetDef<InsightWidgetType>>
+          definitions={WIDGET_DEFS}
+          surface="insights"
+          closing={panelClosing}
+          hasWidget={hasWidget}
+          canAccessTier={canAccessTier}
+          onStartDrag={definition => event => {
+            // Compact cards are a reading stack; use Add rather than interpreting
+            // their positions with the saved twelve-column desktop geometry.
+            const grid = gridRef.current;
+            if (grid && getComputedStyle(grid).display === 'flex') return;
+            onPanelItemPointerDown(definition)(event);
+          }}
+          onAdd={addWidget}
+          onClose={() => setShowCustomize(false)}
+          onUpgrade={() => navigate('/pricing')}
+          onReset={resetToDefault}
+        />
       )}
 
       {tagsModalOpen && (

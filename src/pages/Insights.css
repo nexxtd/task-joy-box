@@ -1,0 +1,57 @@
+/* Keep one mounted card tree so chart state and AI work survive width changes. */
+@container app-page (max-width: 960px) {
+  .insights-widget-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: auto !important;
+    min-width: 0;
+  }
+
+  .insights-widget-grid > .insights-widget {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0;
+    min-height: 15rem;
+    max-height: min(42rem, 80dvh);
+    flex-shrink: 0;
+    transition: none !important;
+  }
+
+  .insights-widget-move,
+  .insights-widget-resize {
+    display: none;
+  }
+
+  .insights-widget-leading-actions,
+  .insights-widget-actions {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    flex-shrink: 0;
+  }
+
+  .insights-widget-heading {
+    flex: 1;
+  }
+
+  .insights-widget-heading h3 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .insights-widget-actions > button,
+  .insights-widget-leading-actions > button:not(.insights-widget-move) {
+    display: flex;
+    min-width: 40px;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .insights-widget-body {
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
+  }
+}

@@ -1,0 +1,95 @@
+/* Internal sections use the page's width, including when it is in a split pane. */
+.ai-chat-page,
+.ai-chat-main,
+.ai-chat-sidebar,
+.support-page,
+.support-section-layout,
+.support-section-navigation,
+.support-section-content,
+.settings-panel-layout,
+.settings-panel-content {
+  min-width: 0;
+  min-height: 0;
+}
+
+.ai-chat-conversation,
+.support-section-content,
+.settings-panel-content {
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+.ai-upgrade-state {
+  overflow-y: auto;
+  justify-content: safe center;
+}
+
+.support-page > header {
+  flex-shrink: 0;
+}
+
+.settings-section-chips {
+  display: none;
+}
+
+.settings-panel-layout {
+  flex-direction: row;
+}
+
+.settings-section-sidebar {
+  display: block;
+}
+
+@container app-page (max-width: 800px) {
+  .ai-chat-page {
+    flex-direction: column;
+  }
+
+  .ai-chat-page .ai-chat-sidebar {
+    width: 100%;
+    max-height: 11rem;
+    border-right-width: 0;
+    border-bottom-width: 1px;
+  }
+
+  .ai-chat-sidebar > header {
+    height: auto;
+    padding-block: 0.5rem;
+  }
+
+  .ai-chat-page .ai-chat-subtitle,
+  .ai-chat-page .ai-chat-status {
+    display: none;
+  }
+
+  .ai-chat-page .ai-chat-padding {
+    padding-inline: 1rem;
+  }
+
+  .support-section-layout {
+    flex-direction: column;
+  }
+
+  .support-page .support-section-navigation {
+    width: 100%;
+    max-height: min(35%, 14rem);
+    border-right-width: 0;
+    border-bottom-width: 1px;
+  }
+
+  .support-page .support-section-content {
+    padding: 1rem;
+  }
+
+  .settings-panel-layout {
+    flex-direction: column;
+  }
+
+  .settings-panel-layout .settings-section-chips {
+    display: flex;
+  }
+
+  .settings-panel-layout .settings-section-sidebar {
+    display: none;
+  }
+}

@@ -2351,7 +2351,7 @@ const conversationProps = {
               </div>
 
               <div className="w-full text-left space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Permission Level</label>
+                <label id="member-permission-label" htmlFor="member-permission-trigger" className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">Permission Level</label>
                 <Select
                   value={selectedMember.role}
                   onValueChange={async (newRole) => {
@@ -2374,7 +2374,7 @@ const conversationProps = {
                   }}
                   disabled={selectedMember.id === selectedProject.ownerId}
                 >
-                  <SelectTrigger className="w-full h-12 bg-muted/40 border border-border rounded-xl px-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
+                  <SelectTrigger id="member-permission-trigger" aria-labelledby="member-permission-label" className="w-full h-12 bg-muted/40 border border-border rounded-xl px-3.5 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70">
                     {(() => {
                       const current = ROLE_OPTIONS.find(r => r.value === selectedMember.role);
                       return (
@@ -2387,14 +2387,24 @@ const conversationProps = {
                       );
                     })()}
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl p-1.5">
+                  <SelectContent
+                    align="start"
+                    sideOffset={4}
+                    collisionPadding={16}
+                    style={{
+                      width: 'var(--radix-select-trigger-width)',
+                      maxWidth: 'calc(100vw - 2rem)',
+                      maxHeight: 'min(24rem, var(--radix-select-content-available-height))',
+                    }}
+                    className="min-w-0 rounded-xl p-1 [&_[data-radix-select-viewport]]:h-auto [&_[data-radix-select-viewport]]:min-w-0 [&_[data-radix-select-viewport]]:w-full [&_[data-radix-select-viewport]]:p-0"
+                  >
                     {ROLE_OPTIONS.filter(option => option.value !== 'owner').map(option => (
-                      <SelectItem key={option.value} value={option.value} className="rounded-lg py-2.5 pl-9 pr-3 focus:bg-muted">
-                        <span className="flex items-start gap-2.5">
+                      <SelectItem key={option.value} value={option.value} className="items-start rounded-lg py-2.5 pl-2.5 pr-9 focus:bg-muted [&>span:first-child]:left-auto [&>span:first-child]:right-2.5 [&>span:first-child]:top-3 [&>span:last-child]:min-w-0 [&>span:last-child]:flex-1">
+                        <span className="flex min-w-0 items-start gap-2.5 whitespace-normal">
                           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: option.color }} />
-                          <span className="min-w-0">
+                          <span className="min-w-0 flex-1">
                             <span className="block text-[13px] font-semibold text-foreground leading-tight">{option.label}</span>
-                            <span className="block text-[11px] leading-snug text-muted-foreground mt-1 whitespace-normal">{option.description}</span>
+                            <span className="block text-[11px] leading-snug text-muted-foreground mt-1 whitespace-normal break-words">{option.description}</span>
                           </span>
                         </span>
                       </SelectItem>

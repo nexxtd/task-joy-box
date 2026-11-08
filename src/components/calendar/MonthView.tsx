@@ -45,8 +45,8 @@ const MonthView: React.FC<MonthViewProps> = ({ selectedDate, slots, onDateChange
   };
 
   return (
-    <div className="flex flex-col h-full overflow-auto rounded-xl border border-border/60 bg-card/50 shadow-sm">
-      <div className="grid grid-cols-7 border-b border-border/60 bg-gradient-to-r from-muted/30 via-muted/10 to-muted/30 min-w-[560px] sm:min-w-0">
+    <div className="flex flex-col h-full min-h-0 min-w-0 max-w-full overflow-auto overscroll-contain rounded-xl border border-border/60 bg-card/50 shadow-sm">
+      <div className="grid grid-cols-7 shrink-0 border-b border-border/60 bg-gradient-to-r from-muted/30 via-muted/10 to-muted/30 min-w-[560px]">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
           <div key={d} className={cn(
             "p-2 sm:p-3 text-center text-[10px] font-bold uppercase tracking-[0.15em]",
@@ -57,7 +57,7 @@ const MonthView: React.FC<MonthViewProps> = ({ selectedDate, slots, onDateChange
         ))}
       </div>
 
-      <div className="flex-1 grid grid-cols-7 overflow-y-auto min-w-[560px] sm:min-w-0">
+      <div className="min-h-0 flex-1 grid grid-cols-7 overflow-y-auto min-w-[560px]">
         {days.map((date, i) => {
           const daySlots = getSlotsForDay(date);
           const inMonth = isSameMonth(date, selectedDate);

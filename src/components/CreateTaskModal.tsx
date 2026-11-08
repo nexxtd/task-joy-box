@@ -27,6 +27,7 @@ import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import DraftFileList from '@/components/shared/DraftFileList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
 
 type NewTaskSubtaskDraft = {
@@ -1050,36 +1051,28 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           {newTaskSubtasks.map((subtask, index) => (
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center rounded-lg border border-border px-3 py-2 group/subtask">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-start rounded-lg border border-border px-3 py-2 group/subtask">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                   {editingDraftSubtaskId === subtask.id ? (
-                                    <>
                                       <AutoGrowTextarea
                                         autoFocus
+                                        maxHeight={240}
                                         className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                         value={editingDraftSubtaskText}
                                         onChange={e => setEditingDraftSubtaskText(e.target.value)}
                                         onBlur={() => { setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); }}
                                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, text: editingDraftSubtaskText, durationMinutes: editingDraftSubtaskDuration } : st)); setEditingDraftSubtaskId(null); } }}
                                       />
-                                      <input
-                                        type="number"
-                                        className="w-20 text-xs bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
-                                        value={editingDraftSubtaskDuration}
-                                        onChange={e => setEditingDraftSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
-                                      />
-                                    </>
                                   ) : (
-                                    <>
-                                      <span
+                                      <ExpandableRowText
+                                        text={subtask.text}
                                         onClick={() => { setEditingDraftSubtaskId(subtask.id); setEditingDraftSubtaskText(subtask.text); setEditingDraftSubtaskDuration(subtask.durationMinutes); }}
-                                        className="min-w-0 text-sm text-foreground font-medium cursor-text whitespace-pre-wrap break-words"
-                                      >
-                                        {subtask.text}
-                                      </span>
-                                      <div className="flex items-center gap-2">
+                                        textClassName="text-sm text-foreground font-medium cursor-text"
+                                      />
+                                  )}
+                                      <div className="self-start flex h-6 items-center gap-2">
                                         <input
                                           type="number"
                                           min={0}
@@ -1087,19 +1080,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                           value={subtask.durationMinutes || 0}
                                           onChange={e => {
                                             const val = Math.max(0, Number(e.target.value) || 0);
+                                            if (editingDraftSubtaskId === subtask.id) setEditingDraftSubtaskDuration(val);
                                             setNewTaskSubtasks(prev => prev.map(st => st.id === subtask.id ? { ...st, durationMinutes: val } : st));
                                           }}
                                         />
                                         <span className="text-[10px] text-muted-foreground">min</span>
                                         <button
+                                          type="button"
                                           onClick={() => setNewTaskSubtasks(prev => prev.filter(st => st.id !== subtask.id))}
                                           className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-opacity duration-200"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
-                                    </>
-                                  )}
                                 </div>
                               )}
                             </Draggable>
@@ -1109,7 +1102,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                       )}
                     </Droppable>
                   </DragDropContext>
-                  <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+                  <div className="detail-item-row grid grid-cols-[minmax(0,1fr)_minmax(4rem,7.5rem)_auto] gap-2">
                     <AutoGrowTextarea
                       value={newSubtaskText}
                       onChange={e => setNewSubtaskText(e.target.value)}
@@ -1169,7 +1162,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 {newChecklistItems.map((item, index) => (
                                   <Draggable key={item.id} draggableId={item.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
@@ -1196,12 +1189,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                             }}
                                           />
                                         ) : (
-                                          <span
+                                          <ExpandableRowText
+                                            text={item.text}
                                             onClick={() => { setEditingDraftChecklistIndex(index); setEditingDraftChecklistText(item.text); }}
-                                            className="flex-1 cursor-text"
-                                          >
-                                            {item.text}
-                                          </span>
+                                            textClassName="cursor-text"
+                                          />
                                         )}
                                         <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                           <Trash2 className="w-3.5 h-3.5" />
@@ -1295,7 +1287,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               {list.items.map((item, itemIndex) => (
                                                 <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                   {(provided) => (
-                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item">
+                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
                                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>
@@ -1322,12 +1314,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                                           }}
                                                         />
                                                       ) : (
-                                                        <span
+                                                        <ExpandableRowText
+                                                          text={item.text}
                                                           onClick={() => { setEditingDraftChecklistItemKey({ listId: list.id, itemId: item.id }); setEditingDraftChecklistText(item.text); }}
-                                                          className="flex-1 cursor-text text-foreground"
-                                                        >
-                                                          {item.text}
-                                                        </span>
+                                                          textClassName="cursor-text text-foreground"
+                                                        />
                                                       )}
                                                       <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                                         <Trash2 className="w-3.5 h-3.5" />

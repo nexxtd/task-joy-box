@@ -303,13 +303,13 @@ const CalendarPage: React.FC = () => {
   }
 
   return (
-    <div className="flex w-full h-full min-h-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">
-      {/* Left Sidebar — drawer on phones, side-by-side on desktop */}
-      <div className="hidden lg:block h-full min-h-0">
-        <CalendarSidebar onTaskClick={setSelectedTask} />
+    <div className="relative flex w-full h-full min-h-0 min-w-0 overflow-hidden bg-gradient-to-br from-background via-background to-muted/30">
+      {/* Inline only when this page, rather than the browser, has room. */}
+      <div className="calendar-sidebar-inline h-full min-h-0">
+        <CalendarSidebar onTaskClick={setSelectedTask} className="w-full max-w-full" />
       </div>
       {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label={t('Unscheduled tasks')}>
+        <div className="calendar-sidebar-drawer fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label={t('Unscheduled tasks')}>
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
           <div className="relative h-full">
             <CalendarSidebar onTaskClick={(task) => { setSelectedTask(task); setSidebarOpen(false); }} />
@@ -320,16 +320,16 @@ const CalendarPage: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background/80 backdrop-blur-sm relative">
         {/* Top Navigation Bar */}
-        <header className="px-4 sm:px-6 min-h-16 py-2 flex items-center justify-between gap-2 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+        <header className="px-4 sm:px-6 min-h-16 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-20 flex-shrink-0 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 basis-64 flex-1">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-card text-muted-foreground flex-shrink-0"
+              className="calendar-sidebar-trigger p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-card text-muted-foreground flex-shrink-0"
               aria-label={t('Unscheduled tasks')}
             >
               <ListChecks className="w-5 h-5" />
             </button>
-            <div className="flex items-baseline gap-2 min-w-0">
+            <div className="flex items-baseline gap-2 min-w-0 flex-1">
               <h1 className="text-base sm:text-lg font-bold text-foreground tracking-tight truncate">{headerTitle()}</h1>
               {viewMode === 'day' && (
                 <span className="hidden sm:inline text-[10px] font-medium text-muted-foreground flex-shrink-0">
@@ -337,7 +337,7 @@ const CalendarPage: React.FC = () => {
                 </span>
               )}
             </div>
-            <div className="hidden sm:flex items-center gap-0.5 bg-card p-0.5 rounded-xl border border-border/60 shadow-sm flex-shrink-0">
+            <div className="flex items-center gap-0.5 bg-card p-0.5 rounded-xl border border-border/60 shadow-sm flex-shrink-0">
               <button onClick={goPrev} aria-label="Previous" className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted rounded-lg transition-all text-muted-foreground hover:text-foreground">
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -346,18 +346,6 @@ const CalendarPage: React.FC = () => {
               </button>
               <button onClick={goNext} aria-label="Next" className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-muted rounded-lg transition-all text-muted-foreground hover:text-foreground">
                 <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            {/* Compact prev/today/next for phones */}
-            <div className="sm:hidden flex items-center gap-1 flex-shrink-0">
-              <button onClick={goPrev} aria-label="Previous" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground">
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button onClick={goToday} className="px-2 py-2 text-[11px] font-bold text-foreground hover:bg-muted rounded-lg">
-                {t('Today')}
-              </button>
-              <button onClick={goNext} aria-label="Next" className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center hover:bg-muted rounded-lg text-muted-foreground">
-                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -383,7 +371,7 @@ const CalendarPage: React.FC = () => {
                   )}
                 >
                   <v.icon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{v.label}</span>
+                  <span className="calendar-view-label">{v.label}</span>
                 </button>
               ))}
             </div>
@@ -408,11 +396,11 @@ const CalendarPage: React.FC = () => {
             <Coffee className="w-3.5 h-3.5" />
             Break
           </div>
-          <span className="hidden sm:inline text-[10px] text-muted-foreground/60 self-center ml-auto tracking-wide">Drag onto calendar grid</span>
+          <span className="calendar-drag-hint hidden sm:inline text-[10px] text-muted-foreground/60 self-center ml-auto tracking-wide">Drag onto calendar grid</span>
         </div>
 
         {/* Calendar Grid */}
-        <main className="flex-1 overflow-hidden">
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
           {viewMode === 'day' && (
             <DayView
               date={selectedDate}
@@ -461,11 +449,11 @@ const CalendarPage: React.FC = () => {
         </button>
       </div>
 
-      {/* AI Side Panel — overlay drawer on phones, side panel on desktop */}
+      {/* An overlay stays within the page and never takes width from the grid. */}
       {aiPanelOpen && (
         <>
-        <div className="lg:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setAiPanelOpen(false)} />
-        <div className="fixed lg:static inset-x-0 bottom-0 top-auto lg:inset-auto z-50 lg:z-40 w-full sm:w-[28rem] lg:w-[28rem] max-w-full sm:max-w-[calc(100vw-2rem)] shrink-0 border-t lg:border-t-0 lg:border-l border-border/60 bg-gradient-to-b from-card to-background flex flex-col overflow-hidden shadow-[-8px_0_40px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom lg:slide-in-from-right duration-300 max-h-[85dvh] lg:max-h-none rounded-t-2xl lg:rounded-none">
+        <div className="absolute inset-0 z-40 bg-black/40" onClick={() => setAiPanelOpen(false)} />
+        <div role="dialog" aria-modal="true" aria-label={t('AI Assistant')} className="absolute inset-y-0 right-0 z-50 w-full max-w-md min-h-0 min-w-0 border-l border-border/60 bg-gradient-to-b from-card to-background flex flex-col overflow-hidden shadow-[-8px_0_40px_rgba(0,0,0,0.06)] animate-in slide-in-from-right duration-300">
           <header className="flex items-center justify-between px-5 py-4 border-b border-border/60 bg-gradient-to-r from-primary/[0.02] to-transparent">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
@@ -478,7 +466,7 @@ const CalendarPage: React.FC = () => {
             </button>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 space-y-4">
             <div className="grid grid-cols-1 gap-3">
               <AIActionCard
                 icon={CalendarIcon}

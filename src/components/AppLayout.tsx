@@ -59,8 +59,8 @@ const AppLayout: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [navigate]);
   return (
-    <div className="h-dvh flex flex-col md:flex-row bg-background overflow-hidden">
-      <div className="hidden md:block">
+    <div className="h-dvh max-h-dvh w-full min-w-0 flex flex-col md:flex-row bg-background overflow-hidden">
+      <div className="hidden md:block shrink-0">
         <AppSidebar />
       </div>
       {/* Mobile top bar lives inside MobileNav (sticky). Main content leaves

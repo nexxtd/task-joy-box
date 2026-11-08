@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { useAuth } from '@/context/AuthContext';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
+import '@/styles/pagePanels.css';
 
 type View = 'main' | 'faqs' | 'resources' | 'submit' | 'tickets' | 'updates';
 
@@ -29,7 +30,7 @@ const FAQsView: React.FC<{ onClose: () => void; initialFaqId?: string }> = ({ on
   );
   const current = FAQS.find(f => f.id === selected)!;
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="support-page h-full flex-1 flex flex-col overflow-hidden">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -41,8 +42,8 @@ const FAQsView: React.FC<{ onClose: () => void; initialFaqId?: string }> = ({ on
           <X className="w-5 h-5 text-muted-foreground" />
         </button>
       </header>
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-72 border-r border-border overflow-y-auto flex-shrink-0">
+      <div className="support-section-layout flex flex-1 overflow-hidden">
+        <div className="support-section-navigation w-72 border-r border-border overflow-y-auto overscroll-contain flex-shrink-0">
           {FAQS.map(faq => (
             <button
               key={faq.id}
@@ -58,7 +59,7 @@ const FAQsView: React.FC<{ onClose: () => void; initialFaqId?: string }> = ({ on
             </button>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="support-section-content flex-1 overflow-y-auto p-8">
           <h2 className="text-xl font-bold text-foreground mb-4">{current.question}</h2>
           <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{current.answer}</p>
         </div>
@@ -91,7 +92,7 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
     : null;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="support-page h-full flex-1 flex flex-col overflow-hidden">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -103,8 +104,8 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
           <X className="w-5 h-5 text-muted-foreground" />
         </button>
       </header>
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-72 border-r border-border overflow-y-auto flex-shrink-0">
+      <div className="support-section-layout flex flex-1 overflow-hidden">
+        <div className="support-section-navigation w-72 border-r border-border overflow-y-auto overscroll-contain flex-shrink-0">
           {RESOURCES.map(cat => (
             <div key={cat.id}>
               <button
@@ -131,7 +132,7 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
             </div>
           ))}
         </div>
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="support-section-content flex-1 overflow-y-auto p-8">
           {currentGuide ? (
             <>
               <h2 className="text-xl font-bold text-foreground mb-4">{currentGuide.title}</h2>
@@ -150,7 +151,7 @@ const ResourcesView: React.FC<{ onClose: () => void; initialCatId?: string; init
 
 const UpdatesView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="support-page h-full flex-1 flex flex-col overflow-hidden">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -162,7 +163,7 @@ const UpdatesView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <X className="w-5 h-5 text-muted-foreground" />
         </button>
       </header>
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="support-section-content flex-1 overflow-y-auto p-8">
         <div className="max-w-2xl mx-auto">
           <UpdateLogSection />
         </div>
@@ -223,7 +224,7 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {  con
   const closeSelected = () => { setSelected(null); setMessages([]); fetchTickets(); };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="support-page h-full flex-1 flex flex-col overflow-hidden">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -235,7 +236,7 @@ const MyTicketsView: React.FC<{ onClose: () => void }> = ({ onClose }) => {  con
           <X className="w-5 h-5 text-muted-foreground" />
         </button>
       </header>
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="support-section-content flex-1 overflow-y-auto p-8">
         <div className="max-w-2xl mx-auto space-y-3">
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
@@ -318,7 +319,7 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="support-page h-full flex-1 flex flex-col overflow-hidden">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -330,7 +331,7 @@ const SubmitView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <X className="w-5 h-5 text-muted-foreground" />
         </button>
       </header>
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="support-section-content flex-1 overflow-y-auto p-8">
         <div className="max-w-lg mx-auto">
           {loading ? (
             <div className="flex justify-center py-12">
@@ -469,7 +470,7 @@ const Support: React.FC = () => {
   if (view === 'updates') return <UpdatesView onClose={() => setView('main')} />;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background/50">
+    <div className="support-page min-h-0 min-w-0 flex-1 overflow-y-auto bg-background/50">
       <header className="px-8 h-16 border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10 flex items-center">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -480,7 +481,7 @@ const Support: React.FC = () => {
       </header>
       <div className="p-8 max-w-3xl mx-auto">
         {supportEmail && (
-          <div className="mb-4 text-sm text-muted-foreground flex items-center gap-2">
+          <div className="mb-4 text-sm text-muted-foreground flex flex-wrap items-center gap-2 break-words">
             <span>Prefer email? Reach us directly at</span>
             <a href={`mailto:${supportEmail}`} className="text-primary font-medium hover:underline">
               {supportEmail}
