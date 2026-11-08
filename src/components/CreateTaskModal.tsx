@@ -1051,7 +1051,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           {newTaskSubtasks.map((subtask, index) => (
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -1072,7 +1072,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         textClassName="text-sm text-foreground font-medium cursor-text"
                                       />
                                   )}
-                                      <div className="self-start flex h-6 shrink-0 items-center gap-2 whitespace-nowrap">
+                                      <div className="self-center flex h-6 shrink-0 items-center gap-2 whitespace-nowrap">
                                         <input
                                           type="number"
                                           min={0}
@@ -1162,7 +1162,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 {newChecklistItems.map((item, index) => (
                                   <Draggable key={item.id} draggableId={item.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
@@ -1287,7 +1287,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               {list.items.map((item, itemIndex) => (
                                                 <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                   {(provided) => (
-                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
+                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item">
                                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>

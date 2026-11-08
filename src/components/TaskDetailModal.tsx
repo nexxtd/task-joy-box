@@ -633,7 +633,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                       {cl.items.map((item, idx) => (
                                         <Draggable key={item.id} draggableId={item.id} index={idx}>
                                           {(provided) => (
-                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2 group/item min-w-0 checklist-item">
+                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2 group/item min-w-0 checklist-item">
                                               <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                 <GripVertical className="w-3.5 h-3.5" />
                                               </div>

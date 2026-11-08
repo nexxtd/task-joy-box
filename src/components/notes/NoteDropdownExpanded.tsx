@@ -5,7 +5,7 @@ import TaskMediaSections from '@/components/shared/TaskMediaSections';
 import { SquareToggle } from '@/components/ToggleComponents';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import { useAuth } from '@/context/AuthContext';
-import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
+import { readTaskSections, writeTaskSections, readExpandedLists } from '@/lib/taskSectionState';
 import {
   DragDropContext,
   Droppable,
@@ -57,10 +57,10 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(
-    () => readTaskSections(note.id).checklists ?? false,
+    () => readTaskSections(note.id).checklists ?? true,
   );
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(
-    () => new Set(readTaskSections(note.id).collapsedLists ?? []),
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(
+    () => readExpandedLists(note.id, (note.checklists || []).map(c => c.id)),
   );
   const { user } = useAuth();
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
@@ -72,9 +72,9 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
     writeTaskSections(note.id, {
       ...prev,
       checklists: checklistsSectionCollapsed,
-      collapsedLists: [...collapsedChecklists],
+      expandedLists: [...expandedChecklists],
     });
-  }, [note.id, checklistsSectionCollapsed, collapsedChecklists]);
+  }, [note.id, checklistsSectionCollapsed, expandedChecklists]);
 
   const saveDescription = () => {
     if (description !== (note.description || '')) onUpdateNote(note.id, { description });
@@ -142,7 +142,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
   };
 
   const toggleListCollapsed = (listId: string) => {
-    setCollapsedChecklists(prev => {
+    setExpandedChecklists(prev => {
       const next = new Set(prev);
       if (next.has(listId)) next.delete(listId);
       else next.add(listId);
@@ -247,7 +247,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                     {checklistLists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
+                      const isCollapsed = !expandedChecklists.has(list.id);
                       return (
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {(provided) => (

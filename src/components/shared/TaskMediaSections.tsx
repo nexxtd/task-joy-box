@@ -21,8 +21,8 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
   const maxPlan = isMaxPlan(tier);
   const taskRef = useRef(task);
   taskRef.current = task;
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [previewDisabled] = useState(false);

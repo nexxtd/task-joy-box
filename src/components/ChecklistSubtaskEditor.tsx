@@ -55,7 +55,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
   hideSubtasks,
 }) => {
   const storageKey = `editor-section-collapsed-${entityId}`;
-  const readStored = (): { subtasks?: boolean; checklists?: boolean; collapsedLists?: string[] } => {
+  const readStored = (): { subtasks?: boolean; checklists?: boolean; collapsedLists?: string[]; expandedLists?: string[] } => {
     try {
       const raw = localStorage.getItem(storageKey);
       if (!raw) return {};
@@ -63,19 +63,27 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
       return parsed && typeof parsed === 'object' ? parsed : {};
     } catch { return {}; }
   };
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => !!readStored().subtasks);
-  const [checklistsCollapsed, setChecklistsCollapsed] = useState(() => !!readStored().checklists);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readStored().collapsedLists || []));
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readStored().subtasks ?? true);
+  const [checklistsCollapsed, setChecklistsCollapsed] = useState(() => readStored().checklists ?? true);
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(() => {
+    const stored = readStored();
+    if (Array.isArray(stored.expandedLists)) return new Set(stored.expandedLists);
+    if (Array.isArray(stored.collapsedLists)) {
+      const collapsed = new Set(stored.collapsedLists);
+      return new Set(checklists.filter(cl => !collapsed.has(cl.id)).map(cl => cl.id));
+    }
+    return new Set();
+  });
 
   React.useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify({
         subtasks: subtasksCollapsed,
         checklists: checklistsCollapsed,
-        collapsedLists: Array.from(collapsedChecklists),
+        expandedLists: Array.from(expandedChecklists),
       }));
     } catch {}
-  }, [storageKey, subtasksCollapsed, checklistsCollapsed, collapsedChecklists]);
+  }, [storageKey, subtasksCollapsed, checklistsCollapsed, expandedChecklists]);
 
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
@@ -248,11 +256,11 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                         {provided => (
                           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-                            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
+                              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                 <GripVertical className="w-4 h-4" />
                               </div>
-                              <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" className="self-start" />
+                              <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" className="self-center" />
                               {editingSubtaskId === subtask.id ? (
                                 <AutoGrowTextarea
                                   autoFocus
@@ -274,7 +282,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                   textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                 />
                               )}
-                              <button onClick={() => removeSubtask(subtask.id)} className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-all">
+                              <button onClick={() => removeSubtask(subtask.id)} className="shrink-0 self-center p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-all">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -332,7 +340,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                 {provided => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                     {checklists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
+                      const isCollapsed = !expandedChecklists.has(list.id);
                       return (
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {provided => (
@@ -343,9 +351,9 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                 </div>
                                 <button
                                   onClick={() => {
-                                    const next = new Set(collapsedChecklists);
-                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                    setCollapsedChecklists(next);
+                                    const next = new Set(expandedChecklists);
+                                    if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                    setExpandedChecklists(next);
                                   }}
                                   className="flex-1 flex items-center gap-2 text-left"
                                 >
@@ -389,9 +397,9 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                   </button>
                                   <button
                                     onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
+                                      const next = new Set(expandedChecklists);
+                                      if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                      setExpandedChecklists(next);
                                     }}
                                     className="p-1 text-muted-foreground hover:text-foreground"
                                   >
@@ -407,7 +415,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {provided => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item checklist-item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item checklist-item">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>

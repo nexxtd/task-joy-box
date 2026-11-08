@@ -4,7 +4,10 @@ export interface TaskSectionState {
   attachments?: boolean;
   images?: boolean;
   activity?: boolean;
+  /** Legacy: ids of collapsed lists. Kept only so old storage can be migrated. */
   collapsedLists?: string[];
+  /** Ids of checklist lists the user expanded. Absent ids default to collapsed. */
+  expandedLists?: string[];
 }
 
 const KEY = 'task-section-state-v1';
@@ -40,6 +43,26 @@ export function readTaskSections(taskId: string): TaskSectionState {
     return readAll()[String(taskId)] || {};
   } catch {
     return {};
+  }
+}
+
+/**
+ * Checklist lists default to collapsed. We persist the ids the user has
+ * EXPANDED; a list absent from the set stays closed until the user opens it.
+ * Old `collapsedLists` storage is migrated once: lists not in it are treated
+ * as expanded for backwards compatibility.
+ */
+export function readExpandedLists(taskId: string, currentListIds: string[]): Set<string> {
+  try {
+    const s = readTaskSections(taskId);
+    if (Array.isArray(s.expandedLists)) return new Set(s.expandedLists);
+    if (Array.isArray(s.collapsedLists)) {
+      const collapsed = new Set(s.collapsedLists);
+      return new Set(currentListIds.filter(id => !collapsed.has(id)));
+    }
+    return new Set();
+  } catch {
+    return new Set();
   }
 }
 

@@ -10,7 +10,7 @@ import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority,
 import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
-import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
+import { readTaskSections, writeTaskSections, readExpandedLists } from '@/lib/taskSectionState';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
@@ -3070,8 +3070,8 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-center">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
                                     {editingDraftSubtaskId === subtask.id ? (
@@ -3096,7 +3096,7 @@ const Tasks: React.FC = () => {
                                         text={subtask.text}
                                       />
                                     )}
-                                    <div className="flex items-center gap-2 shrink-0 self-start">
+                                    <div className="flex items-center gap-2 shrink-0 self-center">
                                       <input
                                         type="number"
                                         min={0}
@@ -3181,7 +3181,7 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
@@ -3275,7 +3275,7 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -4373,23 +4373,23 @@ export const TaskDropdownExpanded: React.FC<{
   const [newChecklistText, setNewChecklistText] = useState('');
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);
   const [editingChecklistText, setEditingChecklistText] = useState('');
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? true);
 
   // Added checklist states
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? true);
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(() => readExpandedLists(task.id, (task.checklists || []).map(c => c.id)));
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
 
   // Added attachments/images states
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
   useEffect(() => {
     const prev = readTaskSections(task.id);
-    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, collapsedLists: [...collapsedChecklists] });
-  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, collapsedChecklists]);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, expandedLists: [...expandedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, expandedChecklists]);
   const { uploading, showUploading, setUploading } = useDelayedUploading();
 
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
@@ -4595,15 +4595,15 @@ export const TaskDropdownExpanded: React.FC<{
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
-                className="self-start"
+                className="self-center"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
@@ -4626,7 +4626,7 @@ export const TaskDropdownExpanded: React.FC<{
                   text={subtask.text}
                 />
               )}
-              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-2 self-center whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
@@ -4770,7 +4770,7 @@ export const TaskDropdownExpanded: React.FC<{
                 {(provided) => (
                   <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                     {checklistLists.map((list, listIndex) => {
-                      const isCollapsed = collapsedChecklists.has(list.id);
+                      const isCollapsed = !expandedChecklists.has(list.id);
                       return (
                         <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                           {(provided) => (
@@ -4781,9 +4781,9 @@ export const TaskDropdownExpanded: React.FC<{
                                 </div>
                                 <button
                                   onClick={() => {
-                                    const next = new Set(collapsedChecklists);
-                                    if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                    setCollapsedChecklists(next);
+                                    const next = new Set(expandedChecklists);
+                                    if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                    setExpandedChecklists(next);
                                   }}
                                   className="flex-1 flex items-center gap-2 text-left"
                                 >
@@ -4831,9 +4831,9 @@ export const TaskDropdownExpanded: React.FC<{
                                   </button>
                                   <button
                                     onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
+                                      const next = new Set(expandedChecklists);
+                                      if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                      setExpandedChecklists(next);
                                     }}
                                     className="p-1 text-muted-foreground hover:text-foreground"
                                   >
@@ -4849,7 +4849,7 @@ export const TaskDropdownExpanded: React.FC<{
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
@@ -5166,20 +5166,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
-  const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? false);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
-  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? false);
+  const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? true);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? true);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
+  const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? true);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
   const [tagDeleteConfirm, setTagDeleteConfirm] = useState<string | null>(null);
   const [projectChangeConfirm, setProjectChangeConfirm] = useState<{ v: string; oldProjectId: number | null | undefined } | null>(null);
-  const [collapsedChecklists, setCollapsedChecklists] = useState<Set<string>>(() => new Set(readTaskSections(task.id).collapsedLists ?? []));
+  const [expandedChecklists, setExpandedChecklists] = useState<Set<string>>(() => readExpandedLists(task.id, (task.checklists || []).map(c => c.id)));
   useEffect(() => {
     const prev = readTaskSections(task.id);
-    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, collapsedLists: [...collapsedChecklists] });
-  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, collapsedChecklists]);
+    writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, activity: activityCollapsed, expandedLists: [...expandedChecklists] });
+  }, [task.id, subtasksCollapsed, checklistsSectionCollapsed, attachmentsCollapsed, imagesCollapsed, activityCollapsed, expandedChecklists]);
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const mediaLimit = isPro ? 20 : isPremium ? 10 : 5;
@@ -5291,15 +5291,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
-                className="self-start"
+                className="self-center"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
@@ -5322,7 +5322,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   text={subtask.text}
                 />
               )}
-              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-2 self-center whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
@@ -5874,7 +5874,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   {(provided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
                       {checklistLists.map((list, listIndex) => {
-                        const isCollapsed = collapsedChecklists.has(list.id);
+                        const isCollapsed = !expandedChecklists.has(list.id);
                         return (
                           <Draggable key={list.id} draggableId={`checklist-list-${list.id}`} index={listIndex}>
                             {(provided) => (
@@ -5885,9 +5885,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                   </div>
                                   <button
                                     onClick={() => {
-                                      const next = new Set(collapsedChecklists);
-                                      if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                      setCollapsedChecklists(next);
+                                      const next = new Set(expandedChecklists);
+                                      if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                      setExpandedChecklists(next);
                                     }}
                                     className="flex-1 flex items-center gap-2 text-left"
                                   >
@@ -5935,9 +5935,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                     </button>
                                     <button
                                       onClick={() => {
-                                        const next = new Set(collapsedChecklists);
-                                        if (isCollapsed) next.delete(list.id); else next.add(list.id);
-                                        setCollapsedChecklists(next);
+                                        const next = new Set(expandedChecklists);
+                                        if (isCollapsed) next.add(list.id); else next.delete(list.id);
+                                        setExpandedChecklists(next);
                                       }}
                                       className="p-1 text-muted-foreground hover:text-foreground"
                                     >
@@ -5953,7 +5953,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
