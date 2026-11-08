@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import AppLayout from "@/components/AppLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { PageSkeleton, AppShellSkeleton } from "@/components/PageSkeleton";
 import { APP_VERSION, needsWhatsNew } from "@/lib/appVersion";
 import { Suspense, lazy, useEffect, useState, useRef } from "react";
@@ -149,7 +150,7 @@ function PublicLogin() {
     if (needsWhatsNew(APP_VERSION, (user as any)?.id)) return <Navigate to="/whats-new" replace />;
     return <Navigate to="/" replace />;
   }
-  return <Suspense fallback={<PageLoader />}><LoginPage /></Suspense>;
+  return <Suspense fallback={<PageLoader />}><ErrorBoundary><LoginPage /></ErrorBoundary></Suspense>;
 }
 
 function ProtectedRoutes() {
@@ -299,14 +300,18 @@ function ProtectedRoutes() {
                     <Route
                       key={page.path}
                       path={page.path}
-                      element={<Suspense fallback={<PageLoader />}><Page /></Suspense>}
+                      element={
+                        <ErrorBoundary resetKey={location.pathname}>
+                          <Suspense fallback={<PageLoader />}><Page /></Suspense>
+                        </ErrorBoundary>
+                      }
                     />
                   );
                 })}
-                <Route path="/whats-new" element={<Suspense fallback={<PageLoader />}><WhatsNew /></Suspense>} />
-                <Route path="/admin" element={<Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense>} />
+                <Route path="/whats-new" element={<ErrorBoundary resetKey={location.pathname}><Suspense fallback={<PageLoader />}><WhatsNew /></Suspense></ErrorBoundary>} />
+                <Route path="/admin" element={<ErrorBoundary resetKey={location.pathname}><Suspense fallback={<PageLoader />}><AdminDashboard /></Suspense></ErrorBoundary>} />
               </Route>
-              <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
+              <Route path="*" element={<ErrorBoundary resetKey={location.pathname}><Suspense fallback={<PageLoader />}><NotFound /></Suspense></ErrorBoundary>} />
             </Routes>
       </NotesProvider>
     </BoardProvider>
@@ -342,7 +347,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmail /></Suspense>} />
+                <Route path="/verify-email" element={<ErrorBoundary variant="app"><Suspense fallback={<PageLoader />}><VerifyEmail /></Suspense></ErrorBoundary>} />
                 <Route path="/login" element={<PublicLogin />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
