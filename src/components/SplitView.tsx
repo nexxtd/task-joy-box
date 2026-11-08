@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom';
-import { ArrowLeftRight, X } from 'lucide-react';
+import { Columns2, PanelLeft, PanelRight, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { APP_PAGES, findAppPage } from '@/lib/appPages';
 import { SPLIT_OPEN_EVENT, type SplitOpenDetail } from '@/lib/splitPresets';
@@ -431,7 +431,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             side === 'left' ? 'pl-2 pr-9' : 'pl-9 pr-2'
           }`}
         >
-          <ArrowLeftRight className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+          <Columns2 className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
           <span className="text-[11px] font-semibold text-foreground">{t('Split screen')}</span>
           <button
             type="button"
@@ -536,7 +536,7 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         onClick={() => setPopoverOpen(open => !open)}
         className="split-screen-toggle flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
-        <ArrowLeftRight className="h-3.5 w-3.5" />
+        <Columns2 className="h-3.5 w-3.5" />
       </button>
 
       <div
@@ -551,19 +551,25 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           onClick={() => chooseSide('left')}
           aria-label={primarySide === null ? t('Move this page to the left half') : t('Change the left page')}
           title={primarySide === null ? t('Move this page to the left half') : t('Change the left page')}
-          className={`h-24 w-[72px] rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+          className={`group flex h-24 w-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
             primarySide === 'left' ? 'border-primary/60 bg-primary/5' : 'border-border'
           }`}
-        />
+        >
+          <PanelLeft className={`h-6 w-6 transition-colors ${primarySide === 'left' ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{t('Left')}</span>
+        </button>
         <button
           type="button"
           onClick={() => chooseSide('right')}
           aria-label={primarySide === null ? t('Move this page to the right half') : t('Change the right page')}
           title={primarySide === null ? t('Move this page to the right half') : t('Change the right page')}
-          className={`h-24 w-[72px] rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+          className={`group flex h-24 w-[72px] flex-col items-center justify-center gap-1.5 rounded-xl border-2 bg-card shadow-lg transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
             primarySide === 'right' ? 'border-primary/60 bg-primary/5' : 'border-border'
           }`}
-        />
+        >
+          <PanelRight className={`h-6 w-6 transition-colors ${primarySide === 'right' ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
+          <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{t('Right')}</span>
+        </button>
       </div>
     </div>
   ) : null;

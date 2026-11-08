@@ -59,6 +59,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Tasks',
     icon: CheckSquare,
     component: lazy(() => import('@/pages/Tasks')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {
@@ -90,6 +91,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Notes',
     icon: StickyNote,
     component: lazy(() => import('@/pages/Notes')),
+    minSplitWidth: 560,
     inSplitPicker: true,
   },
   {

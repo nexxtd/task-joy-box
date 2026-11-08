@@ -918,8 +918,9 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                     <span className="text-[10px] text-muted-foreground/40">({combinedActive.length})</span>
                   </button>
                 </div>
-                {!isColumnCollapsed && (
-                  <Droppable
+                {/* Stay mounted (collapsed or not) so a dragged card always has a
+                    drop target and a dashed hint. Mirrors the Tasks page. */}
+                <Droppable
                     droppableId={column.id}
                     renderClone={(cloneProvided, cloneSnapshot, rubric) => {
                       const task = board.tasks.find(t => t.id === rubric.draggableId);
@@ -953,7 +954,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                   >
                     {(dropProvided) => (
                       <div ref={dropProvided.innerRef} {...dropProvided.droppableProps} className="pl-3 space-y-1.5 min-h-[40px]">
-                        {combinedActive.map((entry, taskIndex) => (
+                        {!isColumnCollapsed && combinedActive.map((entry, taskIndex) => (
                           <Draggable key={entry.item.id} draggableId={entry.item.id} index={taskIndex}>
                             {(taskProvided, taskSnapshot) => (
                               <div ref={taskProvided.innerRef} {...taskProvided.draggableProps}>
@@ -964,12 +965,16 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
                             )}
                           </Draggable>
                         ))}
+                        {isColumnCollapsed && isDragging && (
+                          <div className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-center text-[11px] font-semibold text-primary/70">
+                            Drop here to move into {column.title}
+                          </div>
+                        )}
                         {dropProvided.placeholder}
                       </div>
                     )}
                   </Droppable>
-                )}
-                {!isColumnCollapsed && (columnCompleted.length > 0 || colNotesCompleted.length > 0 || isDragging) && (
+                {(!isColumnCollapsed || isDragging) && (columnCompleted.length > 0 || colNotesCompleted.length > 0 || isDragging) && (
                   <div className="pl-3 mt-1.5">
                     <Droppable droppableId={'completed-' + column.id}>
                       {(completedProvided, completedSnapshot) => (
