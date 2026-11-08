@@ -127,6 +127,10 @@ export interface TaskTemplate {
   checklists: Checklist[];
   images?: Attachment[];
   attachments?: Attachment[];
+  /** True when the template was published with a share code. */
+  isPublic?: boolean;
+  /** Code others can redeem to copy this template (public templates only). */
+  shareCode?: string | null;
   createdAt: string;
   updatedAt: string;
 }

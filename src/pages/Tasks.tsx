@@ -7,7 +7,8 @@ import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
 import { Attachment, ChecklistItem, DEFAULT_LABELS, Label, LabelColor, Priority, PRIORITY_CONFIG, Subtask, Task, TaskStatus, TaskTemplate, LABEL_COLORS } from '@/types/board';
-import { fetchTemplates, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import { fetchTemplates, fetchTemplateByCode, createTemplate, updateTemplate, deleteTemplate as deleteTemplateApi } from '@/services/taskTemplateService';
+import CopyShareCode from '@/components/CopyShareCode';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
 import { readTaskSections, writeTaskSections, readExpandedLists } from '@/lib/taskSectionState';
@@ -28,9 +29,12 @@ import {
   Clock,
   Clock3,
   Edit3,
+  Globe,
   GripVertical,
   FolderKanban,
   Image,
+  KeyRound,
+  Lock,
   Paperclip,
   Plus,
   Save,
@@ -851,6 +855,13 @@ const Tasks: React.FC = () => {
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
+  // Save-as-template: Public templates get a redeemable share code; Private do not.
+  const [templateVisibility, setTemplateVisibility] = useState<'public' | 'private'>('private');
+  const [savedShareCode, setSavedShareCode] = useState<string | null>(null);
+  // Load-template: redeem someone else's public share code.
+  const [templateCode, setTemplateCode] = useState('');
+  const [codeApplying, setCodeApplying] = useState(false);
+  const [codeError, setCodeError] = useState('');
   const [editingTemplateMeta, setEditingTemplateMeta] = useState<{ id: number; name: string; template: TaskTemplate } | null>(null);
   const [templateEditOverrides, setTemplateEditOverrides] = useState<Partial<Task> | null>(null);
   const [templateEditName, setTemplateEditName] = useState('');
@@ -1088,6 +1099,40 @@ const Tasks: React.FC = () => {
       console.error('Failed to save template:', err);
     }
   }, [editingTemplateMeta]);
+
+  // Apply a template to the new-task draft (shared by the template list and the share-code entry).
+  const applyTemplateDraft = (tmpl: TaskTemplate) => {
+    setNewTaskTitle(tmpl.title || '');
+    setNewTaskDescription(tmpl.description || '');
+    setNewTaskPriority(tmpl.priority || 'none');
+    setNewTaskDuration(tmpl.duration || 0);
+    setNewTaskStartDate(tmpl.startDate || '');
+    setNewTaskStartTime(tmpl.startTime || '');
+    setNewTaskDueDate(tmpl.dueDate || '');
+    setNewTaskDueTime(tmpl.dueTime || '');
+    setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
+    setNewTaskColumnId(tmpl.columnId || '');
+    setNewTaskLabels(tmpl.labels || []);
+    setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
+    setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
+  };
+
+  const applyTemplateByCode = async () => {
+    const code = templateCode.trim();
+    if (!code || codeApplying) return;
+    setCodeApplying(true);
+    setCodeError('');
+    try {
+      const tmpl = await fetchTemplateByCode(code);
+      applyTemplateDraft(tmpl);
+      setTemplateCode('');
+      setLoadTemplateOpen(false);
+    } catch (err: any) {
+      setCodeError(err?.message || 'No task template found for that code.');
+    } finally {
+      setCodeApplying(false);
+    }
+  };
 
   const toggleSortByDueDate = () => {
     if (!sortByDueDate) {
@@ -3534,7 +3579,7 @@ const Tasks: React.FC = () => {
       )}
 
       {saveTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSaveTemplateOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -3542,68 +3587,118 @@ const Tasks: React.FC = () => {
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Star className="w-4 h-4 text-primary" />
                 </div>
-                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
+                <h2 className="text-sm font-semibold text-foreground">{savedShareCode ? 'Template is public!' : 'Save as template'}</h2>
               </div>
-              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-4">
-              {templateError && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
-                  <span>⚠</span>
-                  <span>{templateError}</span>
+            {savedShareCode ? (
+              <>
+                <div className="px-6 py-6 flex flex-col items-center text-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-[280px]">Anyone who enters this code in <span className="font-medium text-foreground">Load template</span> can load a copy of your template.</p>
+                  <span className="font-mono text-xl font-semibold tracking-[0.18em] text-foreground select-all px-5 py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 mt-1">{savedShareCode}</span>
+                  <CopyShareCode code={savedShareCode} />
                 </div>
-              )}
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
-                <input
-                  autoFocus
-                  placeholder="e.g. Daily Standup Task"
-                  value={templateName}
-                  onChange={e => setTemplateName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
-                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
-              <button
-                id="save-template-btn"
-                onClick={async () => {
-                  if (!templateName.trim()) return;
-                  setTemplateError('');
-                  try {
-                    await createTemplate({
-                      name: templateName.trim(),
-                      title: newTaskTitle || '',
-                      description: newTaskDescription || '',
-                      priority: newTaskPriority || 'none',
-                      duration: newTaskDuration || 0,
-                      startDate: newTaskStartDate || undefined,
-                      startTime: newTaskStartTime || undefined,
-                      dueDate: newTaskDueDate || undefined,
-                      dueTime: newTaskDueTime || undefined,
-                      projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
-                      columnId: newTaskColumnId || undefined,
-                      labels: newTaskLabels || [],
-                      subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
-                      checklists: newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
-                    });
-                    setSaveTemplateOpen(false);
-                    setTemplateName('');
-                  } catch (err) {
-                    setTemplateError('Failed to save template. Check your connection and try again.');
-                    setTimeout(() => setTemplateError(''), 4000);
-                  }
-                }}
-                disabled={!templateName.trim()}
-                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-              >
-                Save
-              </button>
-            </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Done</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-5 py-5 space-y-4">
+                  {templateError && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
+                      <span>⚠</span>
+                      <span>{templateError}</span>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
+                    <input
+                      autoFocus
+                      placeholder="e.g. Daily Standup Task"
+                      value={templateName}
+                      onChange={e => setTemplateName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
+                      className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Visibility</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTemplateVisibility('private')}
+                        aria-pressed={templateVisibility === 'private'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${templateVisibility === 'private' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Lock className="w-4 h-4" /> Private
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTemplateVisibility('public')}
+                        aria-pressed={templateVisibility === 'public'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${templateVisibility === 'public' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Globe className="w-4 h-4" /> Public
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      {templateVisibility === 'public'
+                        ? 'Anyone with the generated code can load this template.'
+                        : 'Only you can see this template. No code needed.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+                  <button
+                    id="save-template-btn"
+                    onClick={async () => {
+                      if (!templateName.trim()) return;
+                      setTemplateError('');
+                      try {
+                        const created = await createTemplate({
+                          name: templateName.trim(),
+                          title: newTaskTitle || '',
+                          description: newTaskDescription || '',
+                          priority: newTaskPriority || 'none',
+                          duration: newTaskDuration || 0,
+                          startDate: newTaskStartDate || undefined,
+                          startTime: newTaskStartTime || undefined,
+                          dueDate: newTaskDueDate || undefined,
+                          dueTime: newTaskDueTime || undefined,
+                          projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
+                          columnId: newTaskColumnId || undefined,
+                          labels: newTaskLabels || [],
+                          subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
+                          checklists: newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                          isPublic: templateVisibility === 'public',
+                        });
+                        if (templateVisibility === 'public' && created?.shareCode) {
+                          setSavedShareCode(created.shareCode);
+                        } else {
+                          setSaveTemplateOpen(false);
+                          setTemplateName('');
+                          setTemplateVisibility('private');
+                        }
+                      } catch (err) {
+                        setTemplateError('Failed to save template. Check your connection and try again.');
+                        setTimeout(() => setTemplateError(''), 4000);
+                      }
+                    }}
+                    disabled={!templateName.trim()}
+                    className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                  >
+                    Save
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -3644,19 +3739,7 @@ const Tasks: React.FC = () => {
                     <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
                       <button
                         onClick={() => {
-                          setNewTaskTitle(tmpl.title || '');
-                          setNewTaskDescription(tmpl.description || '');
-                          setNewTaskPriority(tmpl.priority || 'none');
-                          setNewTaskDuration(tmpl.duration || 0);
-                          setNewTaskStartDate(tmpl.startDate || '');
-                          setNewTaskStartTime(tmpl.startTime || '');
-                          setNewTaskDueDate(tmpl.dueDate || '');
-                          setNewTaskDueTime(tmpl.dueTime || '');
-                          setNewTaskProjectId(tmpl.projectId ? Number(tmpl.projectId) : '');
-                          setNewTaskColumnId(tmpl.columnId || '');
-                          setNewTaskLabels(tmpl.labels || []);
-                          setNewTaskSubtasks((tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), ...st })));
-                          setNewChecklistItems((tmpl.checklists || []).flatMap(cl => (cl.items || []).map(item => ({ id: crypto.randomUUID(), text: item.text }))));
+                          applyTemplateDraft(tmpl);
                           setLoadTemplateOpen(false);
                         }}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
@@ -3667,6 +3750,7 @@ const Tasks: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-medium block truncate">{tmpl.name}</span>
                           {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                          {tmpl.shareCode && <CopyShareCode code={tmpl.shareCode} className="mt-1.5" />}
                         </div>
                       </button>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
@@ -3701,8 +3785,34 @@ const Tasks: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end px-5 py-4 border-t border-border">
-              <button onClick={() => setLoadTemplateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
+            <div className="border-t border-border px-4 py-3 space-y-1.5">
+              <label htmlFor="load-template-code" className="text-[11px] font-semibold text-muted-foreground block">Have a share code?</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    id="load-template-code"
+                    value={templateCode}
+                    onChange={e => { setTemplateCode(e.target.value); setCodeError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && void applyTemplateByCode()}
+                    placeholder="e.g. TASK-AB12CD"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full bg-muted/40 border border-border rounded-xl pl-9 pr-3 py-2 text-xs font-mono uppercase placeholder:normal-case placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={() => void applyTemplateByCode()}
+                  disabled={!templateCode.trim() || codeApplying}
+                  className="px-3.5 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-all whitespace-nowrap"
+                >
+                  {codeApplying ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              {codeError && <p className="text-[11px] text-destructive px-0.5">{codeError}</p>}
+              <div className="flex justify-end pt-0.5">
+                <button onClick={() => setLoadTemplateOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
+              </div>
             </div>
           </div>
         </div>
@@ -5166,6 +5276,13 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
+  // Save-as-template: Public templates get a redeemable share code; Private do not.
+  const [fullViewTmplVisibility, setFullViewTmplVisibility] = useState<'public' | 'private'>('private');
+  const [fullViewSavedShareCode, setFullViewSavedShareCode] = useState<string | null>(null);
+  // Load-template: redeem someone else's public share code.
+  const [fullViewTmplCode, setFullViewTmplCode] = useState('');
+  const [fullViewCodeApplying, setFullViewCodeApplying] = useState(false);
+  const [fullViewCodeError, setFullViewCodeError] = useState('');
   const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? true);
   const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? true);
@@ -5497,6 +5614,83 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     onUpdateTask(task.id, { attachments: (taskRef.current.attachments || []).filter(item => String(item.id) !== String(attachmentId)) });
     if (/^\d+$/.test(String(attachmentId))) {
       try { await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE', credentials: 'include' }); } catch {}
+    }
+  };
+
+  // Apply a template's content onto the open task (used by share-code entry).
+  // Images/attachments are intentionally not copied — templates saved elsewhere
+  // may reference files owned by another account.
+  const applyTemplateToTask = (tmpl: TaskTemplate) => {
+    onUpdateTask(task.id, {
+      title: tmpl.title || '',
+      description: tmpl.description || '',
+      priority: (tmpl.priority || 'medium') as Priority,
+      duration: Number(tmpl.duration) || 0,
+      startDate: tmpl.startDate || '',
+      startTime: tmpl.startTime || '',
+      dueDate: tmpl.dueDate || '',
+      dueTime: tmpl.dueTime || '',
+      labels: tmpl.labels || [],
+      subtasks: (tmpl.subtasks || []).map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: st.durationMinutes || 0, completed: false })),
+      checklists: (tmpl.checklists || []).map(cl => ({
+        ...cl,
+        id: crypto.randomUUID(),
+        items: (cl.items || []).map(item => ({ ...item, id: crypto.randomUUID(), completed: false })),
+      })),
+    });
+  };
+
+  const applyFullViewTemplateByCode = async () => {
+    const code = fullViewTmplCode.trim();
+    if (!code || fullViewCodeApplying) return;
+    setFullViewCodeApplying(true);
+    setFullViewCodeError('');
+    try {
+      const tmpl = await fetchTemplateByCode(code);
+      applyTemplateToTask(tmpl);
+      setFullViewTmplCode('');
+      setFullViewLoadTmplOpen(false);
+    } catch (err: any) {
+      setFullViewCodeError(err?.message || 'No task template found for that code.');
+    } finally {
+      setFullViewCodeApplying(false);
+    }
+  };
+
+  const closeFullViewSaveTmpl = () => {
+    setFullViewSaveTmplOpen(false);
+    setFullViewTmplName('');
+    setFullViewTmplVisibility('private');
+    setFullViewSavedShareCode(null);
+  };
+
+  const saveFullViewTemplate = async () => {
+    if (!fullViewTmplName.trim()) return;
+    try {
+      const created = await createTemplate({
+        name: fullViewTmplName.trim(),
+        title: task.title || '',
+        description: task.description || '',
+        priority: task.priority || 'medium',
+        duration: Number(task.duration) || 0,
+        startDate: task.startDate || undefined,
+        startTime: task.startTime || undefined,
+        dueDate: task.dueDate || undefined,
+        dueTime: task.dueTime || undefined,
+        projectId: task.projectId ?? null,
+        columnId: task.columnId || undefined,
+        labels: task.labels || [],
+        subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
+        checklists: task.checklists || [],
+        isPublic: fullViewTmplVisibility === 'public',
+      });
+      if (fullViewTmplVisibility === 'public' && created?.shareCode) {
+        setFullViewSavedShareCode(created.shareCode);
+      } else {
+        closeFullViewSaveTmpl();
+      }
+    } catch (err) {
+      console.error('Failed to save template:', err);
     }
   };
 
@@ -6369,7 +6563,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       </div>
 
       {fullViewSaveTmplOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFullViewSaveTmplOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={closeFullViewSaveTmpl}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -6377,82 +6571,79 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Star className="w-4 h-4 text-primary" />
                 </div>
-                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
+                <h2 className="text-sm font-semibold text-foreground">{fullViewSavedShareCode ? 'Template is public!' : 'Save as template'}</h2>
               </div>
-              <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={closeFullViewSaveTmpl} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
-                <input
-                  autoFocus
-                  placeholder="e.g. Daily Standup Task"
-                  value={fullViewTmplName}
-                  onChange={e => setFullViewTmplName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && fullViewTmplName.trim() && (async () => {
-                    try {
-                      await createTemplate({
-                        name: fullViewTmplName.trim(),
-                        title: task.title || '',
-                        description: task.description || '',
-                        priority: task.priority || 'medium',
-                        duration: Number(task.duration) || 0,
-                        startDate: task.startDate || undefined,
-                        startTime: task.startTime || undefined,
-                        dueDate: task.dueDate || undefined,
-                        dueTime: task.dueTime || undefined,
-                        projectId: task.projectId ?? null,
-                        columnId: task.columnId || undefined,
-                        labels: task.labels || [],
-                        subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-                        checklists: task.checklists || [],
-                      });
-                      setFullViewSaveTmplOpen(false);
-                      setFullViewTmplName('');
-                    } catch (err) {
-                      console.error('Failed to save template:', err);
-                    }
-                  })()}
-                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-              <button onClick={() => { setFullViewSaveTmplOpen(false); setFullViewTmplName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
-              <button
-                onClick={async () => {
-                  if (!fullViewTmplName.trim()) return;
-                  try {
-                    await createTemplate({
-                      name: fullViewTmplName.trim(),
-                      title: task.title || '',
-                      description: task.description || '',
-                      priority: task.priority || 'medium',
-                      duration: Number(task.duration) || 0,
-                      startDate: task.startDate || undefined,
-                      startTime: task.startTime || undefined,
-                      dueDate: task.dueDate || undefined,
-                      dueTime: task.dueTime || undefined,
-                      projectId: task.projectId ?? null,
-                      columnId: task.columnId || undefined,
-                      labels: task.labels || [],
-                      subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
-                      checklists: task.checklists || [],
-                    });
-                    setFullViewSaveTmplOpen(false);
-                    setFullViewTmplName('');
-                  } catch (err) {
-                    console.error('Failed to save template:', err);
-                  }
-                }}
-                disabled={!fullViewTmplName.trim()}
-                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-              >
-                Save
-              </button>
-            </div>
+            {fullViewSavedShareCode ? (
+              <>
+                <div className="px-6 py-6 flex flex-col items-center text-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-[280px]">Anyone who enters this code in <span className="font-medium text-foreground">Load template</span> can load a copy of your template.</p>
+                  <span className="font-mono text-xl font-semibold tracking-[0.18em] text-foreground select-all px-5 py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 mt-1">{fullViewSavedShareCode}</span>
+                  <CopyShareCode code={fullViewSavedShareCode} />
+                </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={closeFullViewSaveTmpl} className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Done</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-5 py-5 space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
+                    <input
+                      autoFocus
+                      placeholder="e.g. Daily Standup Task"
+                      value={fullViewTmplName}
+                      onChange={e => setFullViewTmplName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && void saveFullViewTemplate()}
+                      className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Visibility</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFullViewTmplVisibility('private')}
+                        aria-pressed={fullViewTmplVisibility === 'private'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${fullViewTmplVisibility === 'private' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Lock className="w-4 h-4" /> Private
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFullViewTmplVisibility('public')}
+                        aria-pressed={fullViewTmplVisibility === 'public'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${fullViewTmplVisibility === 'public' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Globe className="w-4 h-4" /> Public
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      {fullViewTmplVisibility === 'public'
+                        ? 'Anyone with the generated code can load this template.'
+                        : 'Only you can see this template. No code needed.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={closeFullViewSaveTmpl} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+                  <button
+                    onClick={() => void saveFullViewTemplate()}
+                    disabled={!fullViewTmplName.trim()}
+                    className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                  >
+                    Save
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -6498,6 +6689,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-medium block truncate">{tmpl.name}</span>
                           {tmpl.title && <span className="text-xs text-muted-foreground truncate block">{tmpl.title}</span>}
+                          {tmpl.shareCode && <CopyShareCode code={tmpl.shareCode} className="mt-1.5" />}
                         </div>
                       </button>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0">
@@ -6532,8 +6724,34 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
               )}
             </div>
-            <div className="flex justify-end px-5 py-4 border-t border-border">
-              <button onClick={() => setFullViewLoadTmplOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
+            <div className="border-t border-border px-4 py-3 space-y-1.5">
+              <label htmlFor="fullview-load-template-code" className="text-[11px] font-semibold text-muted-foreground block">Have a share code?</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    id="fullview-load-template-code"
+                    value={fullViewTmplCode}
+                    onChange={e => { setFullViewTmplCode(e.target.value); setFullViewCodeError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && void applyFullViewTemplateByCode()}
+                    placeholder="e.g. TASK-AB12CD"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full bg-muted/40 border border-border rounded-xl pl-9 pr-3 py-2 text-xs font-mono uppercase placeholder:normal-case placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={() => void applyFullViewTemplateByCode()}
+                  disabled={!fullViewTmplCode.trim() || fullViewCodeApplying}
+                  className="px-3.5 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-all whitespace-nowrap"
+                >
+                  {fullViewCodeApplying ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              {fullViewCodeError && <p className="text-[11px] text-destructive px-0.5">{fullViewCodeError}</p>}
+              <div className="flex justify-end pt-0.5">
+                <button onClick={() => setFullViewLoadTmplOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Close</button>
+              </div>
             </div>
           </div>
         </div>

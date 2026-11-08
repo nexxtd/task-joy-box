@@ -717,6 +717,8 @@ export const taskTemplates = pgTable('task_templates', {
   checklists: text('checklists').default('[]'),
   images: text('images').default('[]'),
   attachments: text('attachments').default('[]'),
+  isPublic: boolean('is_public').default(false).notNull(),
+  shareCode: text('share_code'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -743,6 +745,8 @@ export const noteTemplates = pgTable('note_templates', {
   checklists: text('checklists').default('[]'),
   images: text('images').default('[]'),
   attachments: text('attachments').default('[]'),
+  isPublic: boolean('is_public').default(false).notNull(),
+  shareCode: text('share_code'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });

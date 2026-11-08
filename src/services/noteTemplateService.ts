@@ -3,25 +3,35 @@ import { Attachment } from '@/types/board';
 
 export interface NoteTemplate extends TaskTemplate {}
 
-export type TemplatePayload = { name: string; title: string; description: string; content?: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; tags?: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; color?: string };
+export type TemplatePayload = { name: string; title: string; description: string; content?: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; tags?: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; color?: string; isPublic?: boolean };
+
+const normalizeNoteTemplate = (t: any): TaskTemplate => ({
+  ...t,
+  description: t.description || t.content || '',
+  content: t.content || t.description || '',
+  labels: t.labels || t.tags || [],
+  tags: t.tags || t.labels || [],
+  subtasks: t.subtasks || [],
+  checklists: t.checklists || [],
+  images: t.images || [],
+  attachments: t.attachments || [],
+  priority: t.priority || 'medium',
+  duration: t.duration || 0,
+} as TaskTemplate);
 
 export async function fetchNoteTemplates(): Promise<TaskTemplate[]> {
   const res = await fetch('/api/note-templates', { credentials: 'include' });
   if (!res.ok) throw new Error('Failed to fetch note templates');
   const data = await res.json();
-  return (data.templates || []).map((t: any) => ({
-    ...t,
-    description: t.description || t.content || '',
-    content: t.content || t.description || '',
-    labels: t.labels || t.tags || [],
-    tags: t.tags || t.labels || [],
-    subtasks: t.subtasks || [],
-    checklists: t.checklists || [],
-    images: t.images || [],
-    attachments: t.attachments || [],
-    priority: t.priority || 'medium',
-    duration: t.duration || 0,
-  }));
+  return (data.templates || []).map(normalizeNoteTemplate);
+}
+
+/** Fetch a public template by its share code (note templates only). */
+export async function fetchNoteTemplateByCode(code: string): Promise<TaskTemplate> {
+  const res = await fetch(`/api/note-templates/code/${encodeURIComponent(code.trim())}`, { credentials: 'include' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'No note template found for that code');
+  return normalizeNoteTemplate(data);
 }
 
 export async function createNoteTemplate(data: TemplatePayload): Promise<TaskTemplate> {

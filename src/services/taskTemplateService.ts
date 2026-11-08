@@ -1,6 +1,6 @@
 import type { Attachment, TaskTemplate } from '@/types/board';
 
-export type TemplatePayload = { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[] };
+export type TemplatePayload = { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; isPublic?: boolean };
 
 export async function fetchTemplates(): Promise<TaskTemplate[]> {
   const res = await fetch('/api/task-templates', { credentials: 'include' });
@@ -29,6 +29,14 @@ export async function updateTemplate(id: number, data: Partial<TemplatePayload>)
   });
   if (!res.ok) throw new Error('Failed to update template');
   return res.json();
+}
+
+/** Fetch a public template by its share code (task templates only). */
+export async function fetchTemplateByCode(code: string): Promise<TaskTemplate> {
+  const res = await fetch(`/api/task-templates/code/${encodeURIComponent(code.trim())}`, { credentials: 'include' });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'No task template found for that code');
+  return data;
 }
 
 export async function deleteTemplate(id: number): Promise<void> {

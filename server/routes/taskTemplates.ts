@@ -2,22 +2,50 @@ import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { taskTemplates } from '../../shared/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { generateShareCode, normalizeShareCode } from '../lib/shareCode.js';
 
 const router = Router();
+
+type TaskTemplateRow = typeof taskTemplates.$inferSelect;
+
+const parseRow = (t: TaskTemplateRow) => ({
+  ...t,
+  labels: JSON.parse(t.labels || '[]'),
+  subtasks: JSON.parse(t.subtasks || '[]'),
+  checklists: JSON.parse(t.checklists || '[]'),
+  images: JSON.parse(t.images || '[]'),
+  attachments: JSON.parse(t.attachments || '[]'),
+});
+
+async function allocateShareCode(): Promise<string | null> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const candidate = generateShareCode('TASK');
+    const clash = await db.select({ id: taskTemplates.id }).from(taskTemplates).where(eq(taskTemplates.shareCode, candidate)).limit(1);
+    if (!clash.length) return candidate;
+  }
+  return null;
+}
+
+// Redeem a public share code: returns the template to copy into a task.
+// Task codes never resolve note templates and vice versa (type scoping).
+router.get('/code/:code', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const code = normalizeShareCode(req.params.code);
+    if (!code) return res.status(400).json({ error: 'Enter a share code' });
+    const result = await db.select().from(taskTemplates).where(and(eq(taskTemplates.shareCode, code), eq(taskTemplates.isPublic, true))).limit(1);
+    if (!result.length) return res.status(404).json({ error: 'No task template found for that code' });
+    res.json(parseRow(result[0]));
+  } catch (error) {
+    console.error('Failed to fetch template by code:', error);
+    res.status(500).json({ error: 'Failed to fetch template' });
+  }
+});
 
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.select().from(taskTemplates).where(eq(taskTemplates.userId, req.userId!)).orderBy(taskTemplates.name);
-    const parsed = result.map(t => ({
-      ...t,
-      labels: JSON.parse(t.labels || '[]'),
-      subtasks: JSON.parse(t.subtasks || '[]'),
-      checklists: JSON.parse(t.checklists || '[]'),
-      images: JSON.parse(t.images || '[]'),
-      attachments: JSON.parse(t.attachments || '[]'),
-    }));
-    res.json({ templates: parsed });
+    res.json({ templates: result.map(parseRow) });
   } catch (error) {
     console.error('Failed to fetch templates:', error);
     res.status(500).json({ error: 'Failed to fetch templates' });
@@ -26,8 +54,14 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments } = req.body;
+    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Template name is required' });
+    const wantsPublic = isPublic === true;
+    let shareCode: string | null = null;
+    if (wantsPublic) {
+      shareCode = await allocateShareCode();
+      if (!shareCode) return res.status(500).json({ error: 'Could not allocate a share code — please try again' });
+    }
     const [template] = await db.insert(taskTemplates).values({
       userId: req.userId!,
       name: name.trim(),
@@ -46,8 +80,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       checklists: JSON.stringify(checklists || []),
       images: JSON.stringify(images || []),
       attachments: JSON.stringify(attachments || []),
+      isPublic: wantsPublic,
+      shareCode,
     }).returning();
-    res.json({ ...template, labels: JSON.parse(template.labels || '[]'), subtasks: JSON.parse(template.subtasks || '[]'), checklists: JSON.parse(template.checklists || '[]'), images: JSON.parse(template.images || '[]'), attachments: JSON.parse(template.attachments || '[]') });
+    res.json(parseRow(template));
   } catch (error) {
     console.error('Failed to create template:', error);
     res.status(500).json({ error: 'Failed to create template' });
@@ -79,7 +115,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       attachments: attachments !== undefined ? JSON.stringify(attachments) : undefined,
       updatedAt: new Date().toISOString(),
     }).where(eq(taskTemplates.id, id)).returning();
-    res.json({ ...updated, labels: JSON.parse(updated.labels || '[]'), subtasks: JSON.parse(updated.subtasks || '[]'), checklists: JSON.parse(updated.checklists || '[]'), images: JSON.parse(updated.images || '[]'), attachments: JSON.parse(updated.attachments || '[]') });
+    res.json(parseRow(updated));
   } catch (error) {
     console.error('Failed to update template:', error);
     res.status(500).json({ error: 'Failed to update template' });

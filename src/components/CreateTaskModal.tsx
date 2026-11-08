@@ -16,12 +16,13 @@ import {
 } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain } from 'lucide-react';
+import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain, Lock, Globe, KeyRound, CheckCircle2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
-import { fetchTemplates as fetchTaskTemplates, createTemplate as createTaskTemplate, updateTemplate as updateTaskTemplate, deleteTemplate as deleteTaskTemplateApi } from '@/services/taskTemplateService';
-import { fetchNoteTemplates, createNoteTemplate } from '@/services/noteTemplateService';
+import { fetchTemplates as fetchTaskTemplates, fetchTemplateByCode as fetchTaskTemplateByCode, createTemplate as createTaskTemplate, updateTemplate as updateTaskTemplate, deleteTemplate as deleteTaskTemplateApi } from '@/services/taskTemplateService';
+import { fetchNoteTemplates, fetchNoteTemplateByCode, createNoteTemplate } from '@/services/noteTemplateService';
+import CopyShareCode from '@/components/CopyShareCode';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
@@ -192,6 +193,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const personalBoardLabel = isNote ? 'My Notes' : 'My Tasks';
   const aiBuilderTitle = isNote ? 'AI Note Builder' : 'AI Task Builder';
   const fetchTemplates = isNote ? fetchNoteTemplates : fetchTaskTemplates;
+  const fetchTemplateByCode = isNote ? fetchNoteTemplateByCode : fetchTaskTemplateByCode;
   const createTemplate = isNote ? createNoteTemplate : createTaskTemplate;
   const { board, addTask, updateTask, ensureProjectColumns } = useBoardContext();
   const availableColumns = columnsOverride ?? board.columns;
@@ -279,6 +281,13 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
+  // Save-as-template: Public templates get a redeemable share code; Private do not.
+  const [templateVisibility, setTemplateVisibility] = useState<'public' | 'private'>('private');
+  const [savedShareCode, setSavedShareCode] = useState<string | null>(null);
+  // Load-template: redeem someone else's public share code.
+  const [templateCode, setTemplateCode] = useState('');
+  const [codeApplying, setCodeApplying] = useState(false);
+  const [codeError, setCodeError] = useState('');
 
   const allTags = useMemo<Label[]>(() => {
     const byName = new Map<string, Label>();
@@ -599,6 +608,41 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     const tag = await createTag({ name, color });
     setSharedTags(prev => [...prev, tag]);
     return sharedTagToLabel(tag);
+  };
+
+  // Apply a template to the current draft (used by both the list and share-code entry).
+  const applyTemplate = (tmpl: TaskTemplate) => {
+    setNewTaskTitle(tmpl.title || '');
+    setNewTaskDescription(tmpl.description || '');
+    setNewTaskPriority(tmpl.priority || 'none');
+    setNewTaskDuration(tmpl.duration || 0);
+    setNewTaskStartDate(tmpl.startDate || '');
+    setNewTaskStartTime(tmpl.startTime || '');
+    setNewTaskDueDate(tmpl.dueDate || '');
+    setNewTaskDueTime(tmpl.dueTime || '');
+    if (tmpl.projectId) {
+      setNewTaskProjectId(Number(tmpl.projectId) || '');
+      setNewTaskColumnId(tmpl.columnId || '');
+    }
+    if (tmpl.labels) setNewTaskLabels(tmpl.labels);
+    if (tmpl.subtasks) setNewTaskSubtasks(tmpl.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: (st as any).durationMinutes || 0 })));
+  };
+
+  const applyTemplateByCode = async () => {
+    const code = templateCode.trim();
+    if (!code || codeApplying) return;
+    setCodeApplying(true);
+    setCodeError('');
+    try {
+      const tmpl = await fetchTemplateByCode(code);
+      applyTemplate(tmpl);
+      setTemplateCode('');
+      setLoadTemplateOpen(false);
+    } catch (err: any) {
+      setCodeError(err?.message || 'No template found for that code.');
+    } finally {
+      setCodeApplying(false);
+    }
   };
 
   const createTask = async () => {
@@ -1565,7 +1609,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       </div>
 
       {saveTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setSaveTemplateOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }}>
           <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
           <div className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -1573,71 +1617,121 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
                   <Star className="w-4 h-4 text-primary" />
                 </div>
-                <h2 className="text-sm font-semibold text-foreground">Save as template</h2>
+                <h2 className="text-sm font-semibold text-foreground">{savedShareCode ? 'Template is public!' : 'Save as template'}</h2>
               </div>
-              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="p-1.5 rounded-lg hover:bg-muted">
+              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="p-1.5 rounded-lg hover:bg-muted">
                 <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-4">
-              {templateError && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
-                  <span>⚠</span>
-                  <span>{templateError}</span>
+            {savedShareCode ? (
+              <>
+                <div className="px-6 py-6 flex flex-col items-center text-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-[280px]">Anyone who enters this code in <span className="font-medium text-foreground">Load template</span> can load a copy of your template.</p>
+                  <span className="font-mono text-xl font-semibold tracking-[0.18em] text-foreground select-all px-5 py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 mt-1">{savedShareCode}</span>
+                  <CopyShareCode code={savedShareCode} />
                 </div>
-              )}
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
-                <input
-                  autoFocus
-                  placeholder={`e.g. Daily Standup ${noun}`}
-                  value={templateName}
-                  onChange={e => setTemplateName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
-                  className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-              <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
-              <button
-                id="save-template-btn"
-                onClick={async () => {
-                  if (!templateName.trim()) return;
-                  setTemplateError('');
-                  try {
-                    await createTemplate({
-                      name: templateName.trim(),
-                      title: newTaskTitle || '',
-                      description: newTaskDescription || '',
-                      priority: newTaskPriority || 'none',
-                      duration: newTaskDuration || 0,
-                      startDate: newTaskStartDate || undefined,
-                      startTime: newTaskStartTime || undefined,
-                      dueDate: newTaskDueDate || undefined,
-                      dueTime: newTaskDueTime || undefined,
-                      projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
-                      columnId: newTaskColumnId || undefined,
-                      labels: newTaskLabels || [],
-                      subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
-                      checklists: [
-                        ...newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
-                        ...newChecklistLists.map(l => ({ id: l.id, title: l.title, items: l.items.map(it => ({ id: crypto.randomUUID(), text: it.text, checked: false })) })),
-                      ],
-                    });
-                    setSaveTemplateOpen(false);
-                    setTemplateName('');
-                  } catch (err) {
-                    setTemplateError('Failed to save template. Check your connection and try again.');
-                    setTimeout(() => setTemplateError(''), 4000);
-                  }
-                }}
-                disabled={!templateName.trim()}
-                className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-              >
-                Save
-              </button>
-            </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Done</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-5 py-5 space-y-4">
+                  {templateError && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-lg">
+                      <span>⚠</span>
+                      <span>{templateError}</span>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Template name</label>
+                    <input
+                      autoFocus
+                      placeholder={`e.g. Daily Standup ${noun}`}
+                      value={templateName}
+                      onChange={e => setTemplateName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && templateName.trim() && document.getElementById('save-template-btn')?.click()}
+                      className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Visibility</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTemplateVisibility('private')}
+                        aria-pressed={templateVisibility === 'private'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${templateVisibility === 'private' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Lock className="w-4 h-4" /> Private
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTemplateVisibility('public')}
+                        aria-pressed={templateVisibility === 'public'}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${templateVisibility === 'public' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                      >
+                        <Globe className="w-4 h-4" /> Public
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      {templateVisibility === 'public'
+                        ? 'Anyone with the generated code can load this template.'
+                        : 'Only you can see this template. No code needed.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+                  <button
+                    id="save-template-btn"
+                    onClick={async () => {
+                      if (!templateName.trim()) return;
+                      setTemplateError('');
+                      try {
+                        const created = await createTemplate({
+                          name: templateName.trim(),
+                          title: newTaskTitle || '',
+                          description: newTaskDescription || '',
+                          priority: newTaskPriority || 'none',
+                          duration: newTaskDuration || 0,
+                          startDate: newTaskStartDate || undefined,
+                          startTime: newTaskStartTime || undefined,
+                          dueDate: newTaskDueDate || undefined,
+                          dueTime: newTaskDueTime || undefined,
+                          projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
+                          columnId: newTaskColumnId || undefined,
+                          labels: newTaskLabels || [],
+                          subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
+                          checklists: [
+                            ...newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                            ...newChecklistLists.map(l => ({ id: l.id, title: l.title, items: l.items.map(it => ({ id: crypto.randomUUID(), text: it.text, checked: false })) })),
+                          ],
+                          isPublic: templateVisibility === 'public',
+                        });
+                        if (templateVisibility === 'public' && created?.shareCode) {
+                          setSavedShareCode(created.shareCode);
+                        } else {
+                          setSaveTemplateOpen(false);
+                          setTemplateName('');
+                          setTemplateVisibility('private');
+                        }
+                      } catch (err) {
+                        setTemplateError('Failed to save template. Check your connection and try again.');
+                        setTimeout(() => setTemplateError(''), 4000);
+                      }
+                    }}
+                    disabled={!templateName.trim()}
+                    className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                  >
+                    Save
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1678,20 +1772,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     <div key={tmpl.id} className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/50 rounded-xl border border-transparent hover:border-border transition-all">
                       <button
                         onClick={() => {
-                          setNewTaskTitle(tmpl.title || '');
-                          setNewTaskDescription(tmpl.description || '');
-                          setNewTaskPriority(tmpl.priority || 'none');
-                          setNewTaskDuration(tmpl.duration || 0);
-                          setNewTaskStartDate(tmpl.startDate || '');
-                          setNewTaskStartTime(tmpl.startTime || '');
-                          setNewTaskDueDate(tmpl.dueDate || '');
-                          setNewTaskDueTime(tmpl.dueTime || '');
-                          if (tmpl.projectId) {
-                            setNewTaskProjectId(tmpl.projectId);
-                            setNewTaskColumnId(tmpl.columnId || '');
-                          }
-                          if (tmpl.labels) setNewTaskLabels(tmpl.labels);
-                          if (tmpl.subtasks) setNewTaskSubtasks(tmpl.subtasks.map(st => ({ id: crypto.randomUUID(), text: st.text, durationMinutes: (st as any).durationMinutes || 0 })));
+                          applyTemplate(tmpl);
                           setLoadTemplateOpen(false);
                         }}
                         className="flex-1 flex items-center gap-3 text-left"
@@ -1700,12 +1781,39 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{tmpl.name}</p>
                           <p className="text-xs text-muted-foreground truncate">{tmpl.title || 'No title'}</p>
+                          {tmpl.shareCode && <CopyShareCode code={tmpl.shareCode} className="mt-1.5" />}
                         </div>
                       </button>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+            <div className="border-t border-border px-4 py-3 space-y-1.5">
+              <label htmlFor="modal-load-template-code" className="text-[11px] font-semibold text-muted-foreground block">Have a share code?</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    id="modal-load-template-code"
+                    value={templateCode}
+                    onChange={e => { setTemplateCode(e.target.value); setCodeError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && void applyTemplateByCode()}
+                    placeholder={isNote ? 'e.g. NOTE-AB12CD' : 'e.g. TASK-AB12CD'}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="w-full bg-muted/40 border border-border rounded-xl pl-9 pr-3 py-2 text-xs font-mono uppercase placeholder:normal-case placeholder:font-sans placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                <button
+                  onClick={() => void applyTemplateByCode()}
+                  disabled={!templateCode.trim() || codeApplying}
+                  className="px-3.5 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-xl disabled:opacity-50 hover:bg-primary/90 transition-all whitespace-nowrap"
+                >
+                  {codeApplying ? 'Applying…' : 'Apply'}
+                </button>
+              </div>
+              {codeError && <p className="text-[11px] text-destructive px-0.5">{codeError}</p>}
             </div>
           </div>
         </div>
