@@ -97,7 +97,7 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Documents',
     icon: FileText,
     component: lazy(() => import('@/pages/Documents')),
-    inSplitPicker: true,
+    // Documents is an unbuilt coming-soon stub — keep it out of the split picker.
   },
   {
     path: '/collaboration',
