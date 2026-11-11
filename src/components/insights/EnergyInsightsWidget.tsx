@@ -1,9 +1,25 @@
-import { useMemo } from 'react';
-import { Battery } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Battery, Sparkles, Clock, Target, ShieldAlert } from 'lucide-react';
 import { CollapsibleRow, CollapseAllToggle, EmptyState, useExpanded } from './InsightWidgets';
+import { ENERGY_UPDATED_EVENT } from '@/utils/energyStats';
 
 type Slot = 'morning' | 'midday' | 'afternoon';
 type Level = 'low' | 'medium' | 'high';
+export type EnergyTimeRange = '1w' | '1m' | '6m' | '1y';
+
+const RANGES: Array<{ id: EnergyTimeRange; label: string }> = [
+  { id: '1w', label: '1 Week' },
+  { id: '1m', label: '1 Month' },
+  { id: '6m', label: '6 Months' },
+  { id: '1y', label: '1 Year' },
+];
+
+const RANGE_DAYS: Record<EnergyTimeRange, number> = {
+  '1w': 7,
+  '1m': 30,
+  '6m': 180,
+  '1y': 365,
+};
 
 interface EnergyEntry {
   date: string;
@@ -24,6 +40,7 @@ const dayKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 interface Analysis {
+  windowDays: number;
   overallScore: number;
   daysLogged: number;
   checksCount: number;
@@ -39,12 +56,13 @@ interface Analysis {
   recommendations: string[];
 }
 
-function buildAnalysis(entries: EnergyEntry[]): Analysis | null {
+function buildAnalysis(entries: EnergyEntry[], timeRange: EnergyTimeRange = '1w'): Analysis | null {
+  const windowDays = RANGE_DAYS[timeRange] || 7;
   const now = new Date();
-  const sevenAgo = dayKey(new Date(now.getTime() - 6 * 86400000));
-  const fourteenAgo = dayKey(new Date(now.getTime() - 13 * 86400000));
-  const recent = entries.filter(e => e.date >= sevenAgo);
-  const prevWindow = entries.filter(e => e.date >= fourteenAgo && e.date < sevenAgo);
+  const currentCutoff = dayKey(new Date(now.getTime() - (windowDays - 1) * 86400000));
+  const prevCutoff = dayKey(new Date(now.getTime() - (windowDays * 2 - 1) * 86400000));
+  const recent = entries.filter(e => e.date >= currentCutoff);
+  const prevWindow = entries.filter(e => e.date >= prevCutoff && e.date < currentCutoff);
   if (recent.length === 0 && prevWindow.length === 0) return null;
 
   const slots: Record<Slot, { avg: number; logged: number }> = {
@@ -119,11 +137,11 @@ function buildAnalysis(entries: EnergyEntry[]): Analysis | null {
       `${SLOT_LABELS[peak]} energy averages ${fmt(slots[peak].avg)}/3 — ${SLOT_LABELS[peak].toLowerCase()} is your strongest window for demanding work.`
     );
   }
-  if (daysLogged >= 5) {
-    contributors.push(`You logged energy on ${daysLogged} of the last 7 days — the analysis is built on fresh, reliable data.`);
+  if (daysLogged >= Math.min(5, Math.ceil(windowDays * 0.7))) {
+    contributors.push(`You logged energy on ${daysLogged} of the last ${windowDays} days — the analysis is built on fresh, reliable data.`);
   }
   if (trend === 'improving') {
-    contributors.push(`Energy is trending up over the last two weeks (+${fmt(delta)}/3) — whatever you changed is working.`);
+    contributors.push(`Energy is trending up over the comparison window (+${fmt(delta)}/3) — whatever you changed is working.`);
   }
   if (fullDays === daysLogged && daysLogged >= 3) {
     contributors.push(`You completed all three daily checks on every logged day — the daily pattern is fully visible.`);
@@ -139,10 +157,10 @@ function buildAnalysis(entries: EnergyEntry[]): Analysis | null {
     penalties.push(`Energy swings ${fmt(swing)} points between your peak and your lowest slot — time-of-day planning is less predictable.`);
   }
   if (trend === 'declining') {
-    penalties.push(`Energy has dropped ${fmt(-delta)}/3 over the last two weeks — review sleep, workload and recovery.`);
+    penalties.push(`Energy has dropped ${fmt(-delta)}/3 over the comparison window — review sleep, workload and recovery.`);
   }
   if (avgAll > 0 && avgAll < 1.8) {
-    penalties.push(`Overall energy is running low (${fmt(avgAll)}/3) — consider rest and lighter scheduling this week.`);
+    penalties.push(`Overall energy is running low (${fmt(avgAll)}/3) — consider rest and lighter scheduling.`);
   }
 
   if (peak && slots[peak].logged >= 2) {
@@ -155,7 +173,7 @@ function buildAnalysis(entries: EnergyEntry[]): Analysis | null {
     insights.push(`The ${SLOT_LABELS[mostConsistent].toLowerCase()} check is your most consistent — logged ${slots[mostConsistent].logged} of ${daysLogged} days.`);
   }
   if (checksCount > 0) {
-    insights.push(`You logged ${checksCount} energy check${checksCount !== 1 ? 's' : ''} in the last 7 days.`);
+    insights.push(`You logged ${checksCount} energy check${checksCount !== 1 ? 's' : ''} in the last ${windowDays} days.`);
   }
 
   if (peak) {
@@ -181,6 +199,7 @@ function buildAnalysis(entries: EnergyEntry[]): Analysis | null {
   }
 
   return {
+    windowDays,
     overallScore: Math.round(avgAll * (100 / 3)),
     daysLogged,
     checksCount,
@@ -201,24 +220,63 @@ const scoreTone = (score: number) =>
   score >= 70 ? 'hsl(var(--label-green))' : score >= 40 ? 'hsl(var(--label-yellow))' : 'hsl(var(--label-red))';
 
 export function EnergyInsightsBody() {
-  const analysis = useMemo(() => {
+  const [timeRange, setTimeRange] = useState<EnergyTimeRange>('1w');
+  const [entries, setEntries] = useState<EnergyEntry[]>(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      const entries: EnergyEntry[] = raw ? JSON.parse(raw) : [];
-      return buildAnalysis(entries);
+      return raw ? JSON.parse(raw) : [];
     } catch {
-      return null;
+      return [];
     }
+  });
+
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        setEntries(raw ? JSON.parse(raw) : []);
+      } catch {
+        setEntries([]);
+      }
+    };
+    window.addEventListener('storage', refresh);
+    window.addEventListener(ENERGY_UPDATED_EVENT, refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener(ENERGY_UPDATED_EVENT, refresh);
+    };
   }, []);
+
+  const analysis = useMemo(() => buildAnalysis(entries, timeRange), [entries, timeRange]);
   const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
   const sectionIds = ['contributors', 'penalties', 'insights', 'recommendations'];
 
   if (!analysis) {
     return (
-      <EmptyState
-        icon={Battery}
-        text="Log your energy at the 8am, 12pm and 4pm checks — an analysis of your peak hours, consistency and what to change will build here from your last two weeks of logs."
-      />
+      <div className="space-y-3">
+        <div className="flex items-center justify-between pb-1">
+          <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
+            {RANGES.map(r => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setTimeRange(r.id)}
+                className={`px-2 py-0.5 rounded transition-all ${
+                  timeRange === r.id
+                    ? 'bg-background text-foreground shadow-xs font-bold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <EmptyState
+          icon={Battery}
+          text="Log your energy at the 8am, 12pm and 4pm checks — an analysis of your peak hours, consistency and what to change will build here from your logs."
+        />
+      </div>
     );
   }
 
@@ -228,6 +286,26 @@ export function EnergyInsightsBody() {
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between pb-1 border-b border-border/40">
+        <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
+          {RANGES.map(r => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setTimeRange(r.id)}
+              className={`px-2 py-0.5 rounded transition-all ${
+                timeRange === r.id
+                  ? 'bg-background text-foreground shadow-xs font-bold'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <CollapseAllToggle ids={sectionIds} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
+      </div>
+
       <div className="flex items-center gap-4">
         <div className="relative w-16 h-16 flex-shrink-0">
           <svg className="w-16 h-16 -rotate-90" viewBox="0 0 80 80">
@@ -243,7 +321,7 @@ export function EnergyInsightsBody() {
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Energy Analysis</p>
           <p className="text-xs text-muted-foreground leading-snug mt-1">
-            {analysis.daysLogged} of the last 7 days logged · {analysis.checksCount} check{analysis.checksCount !== 1 ? 's' : ''}
+            {analysis.daysLogged} of the last {analysis.windowDays} days logged · {analysis.checksCount} check{analysis.checksCount !== 1 ? 's' : ''}
           </p>
         </div>
       </div>

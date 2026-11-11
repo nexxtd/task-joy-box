@@ -190,6 +190,8 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ratio, setRatio] = useState(0.5);
   const [splitWidth, setSplitWidth] = useState(0);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  /** In-flight drag of the page into a half: pointer position + target side. */
+  const [movePreview, setMovePreview] = useState<{ x: number; y: number; side: Side | null } | null>(null);
 
   /** A shortcut/preset waiting for the router to finish navigating. */
   const pendingSplitRef = useRef<SplitOpenDetail | null>(null);
@@ -198,6 +200,11 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const resizeRef = useRef(false);
   const splitRef = useRef<HTMLDivElement | null>(null);
   const splitButtonRef = useRef<HTMLDivElement | null>(null);
+  /** Drag-to-split anchor for the split-screen control. */
+  const moveStartRef = useRef<{ x: number; y: number } | null>(null);
+  const moveSideRef = useRef<Side | null>(null);
+  /** True once the pointer traveled past the tap threshold in any direction. */
+  const moveFarRef = useRef(false);
   const pathRef = useRef(location.pathname);
 
   const closeSplit = useCallback(() => {
@@ -227,12 +234,104 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setPickerSide(side);
   };
 
+  // ---- Drag-to-split: move the current page into a half by dragging the
+  // split-screen control sideways. Below the threshold a tap just toggles the
+  // popover; past it the page "lifts" off the surface and the thing following
+  // the pointer is a dashed outline with the page's name — never a live view
+  // of the page. ---------------------------------------------------------
+  const MOVE_THRESHOLD = 24;
+
+  const finishMoveDrag = (commit: boolean) => {
+    const start = moveStartRef.current;
+    moveStartRef.current = null;
+    const side = moveSideRef.current;
+    moveSideRef.current = null;
+    const movedFar = moveFarRef.current;
+    moveFarRef.current = false;
+    setMovePreview(null);
+    if (!start || !commit) return;
+    if (side) {
+      chooseSide(side);
+      return;
+    }
+    // A mostly-vertical or hesitant drag is a cancelled move, not a tap —
+    // never toggle the popover for it. Only real taps do.
+    if (!movedFar) setPopoverOpen(open => !open);
+  };
+
+  const onMovePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    // Once the page already lives in a half, the control is just the popover
+    // toggle — no drag-to-move.
+    if (primarySide !== null || event.button !== 0 || event.isPrimary === false) return;
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* synthetic/unsupported pointer capture — drag still works */
+    }
+    moveStartRef.current = { x: event.clientX, y: event.clientY };
+    moveSideRef.current = null;
+    moveFarRef.current = false;
+    // No preview on pointer-down yet — a tap must not flash the blank page.
+  };
+
+  const onMovePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const start = moveStartRef.current;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    // Still a tap — nothing has happened yet.
+    if (!moveFarRef.current && Math.abs(dx) <= MOVE_THRESHOLD && Math.abs(dy) <= MOVE_THRESHOLD) {
+      return;
+    }
+    if (!moveFarRef.current) {
+      moveFarRef.current = true;
+      // Lifting the page cancels any open picker popover.
+      setPopoverOpen(false);
+    }
+    // Only mostly-horizontal drags nominate a side, so a mostly-vertical
+    // swipe blanks the page but commits nothing on release.
+    const side: Side | null =
+      Math.abs(dx) > MOVE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.25
+        ? dx < 0
+          ? 'left'
+          : 'right'
+        : null;
+    moveSideRef.current = side;
+    setMovePreview({ x: event.clientX, y: event.clientY, side });
+  };
+
+  const onMovePointerUp = () => finishMoveDrag(true);
+  const onMovePointerCancel = () => finishMoveDrag(false);
+
+  // Escape cancels an in-flight page move without splitting.
+  const movePreviewActive = movePreview !== null;
+  useEffect(() => {
+    if (!movePreviewActive) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      moveStartRef.current = null;
+      moveSideRef.current = null;
+      setMovePreview(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [movePreviewActive]);
+
   // Navigating anywhere else (sidebar, shortcut, in-page link) ends split mode.
   // Exceptions finish a pending split or replace the page on the URL-owning
   // half without dropping the second pane.
   useEffect(() => {
     if (pathRef.current === location.pathname) return;
     pathRef.current = location.pathname;
+
+    // Any route change abandons an in-flight page move.
+    moveStartRef.current = null;
+    moveSideRef.current = null;
+    moveFarRef.current = false;
+    setMovePreview(null);
 
     const replacement = pendingPrimaryRef.current;
     if (replacement && replacement.path === location.pathname) {
@@ -318,6 +417,9 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     (!isAdminView && (path === '/calendar' || path === '/collaboration'));
 
   const currentIsComingSoon = isComingSoon(location.pathname);
+  /** Icon + label used by the drag-to-split ghost (outline + name, never the live page). */
+  const MovingIcon = primaryDef?.icon;
+  const movingGhostLabel = t('{{name}} page', { name: primaryLabel });
 
   // Pages offered in the picker, excluding the two panes already in use.
   const options = useMemo(
@@ -532,9 +634,19 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         aria-label={t('Split screen')}
         aria-haspopup="menu"
         aria-expanded={popoverOpen}
-        title={t('Split screen')}
-        onClick={() => setPopoverOpen(open => !open)}
-        className="split-screen-toggle flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        title={t('Split screen — drag sideways to split, or click to choose')}
+        onPointerDown={onMovePointerDown}
+        onPointerMove={onMovePointerMove}
+        onPointerUp={onMovePointerUp}
+        onPointerCancel={onMovePointerCancel}
+        onClick={event => {
+          // Mouse/touch toggles happen in the pointer handlers; this only
+          // serves keyboard activation (detail === 0).
+          if (event.detail === 0) setPopoverOpen(open => !open);
+        }}
+        className={`split-screen-toggle flex h-6 w-14 touch-none select-none items-center justify-center rounded-b-lg border border-t-0 border-border bg-card/90 text-muted-foreground shadow-sm backdrop-blur transition-all hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+          movePreview ? 'cursor-grabbing bg-card text-primary' : primarySide === null ? 'cursor-grab' : ''
+        }`}
       >
         <Columns2 className="h-3.5 w-3.5" />
       </button>
@@ -630,6 +742,34 @@ const SplitView: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
         </div>
       )}
+
+      {movePreview ? (
+        <div className="pointer-events-none absolute inset-0 z-30" aria-hidden="true">
+          {/* The original page blanks out while it is being moved. */}
+          <div className="absolute inset-0 bg-white dark:bg-background" />
+          {/* Which half the page is about to land in */}
+          {movePreview.side === 'left' ? (
+            <div className="absolute inset-y-0 left-0 w-1/2 p-2">
+              <div className="h-full w-full rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5" />
+            </div>
+          ) : null}
+          {movePreview.side === 'right' ? (
+            <div className="absolute inset-y-0 right-0 w-1/2 p-2">
+              <div className="h-full w-full rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5" />
+            </div>
+          ) : null}
+          {/* Ghost of what is being moved: outline + page name, not the page itself */}
+          <div
+            className="fixed left-0 top-0 z-[60] flex h-28 w-44 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/70 bg-background/95 px-4 text-center shadow-2xl backdrop-blur-sm"
+            style={{ transform: `translate3d(${movePreview.x - 88}px, ${movePreview.y - 56}px, 0)` }}
+          >
+            {MovingIcon ? <MovingIcon className="h-7 w-7 text-primary" /> : null}
+            <span className="text-[12px] font-semibold leading-tight text-foreground">
+              {movingGhostLabel}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {splitButton}
     </div>

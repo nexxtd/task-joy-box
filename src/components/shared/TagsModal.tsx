@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Loader2 } from 'lucide-react';
 import { LabelColor, LABEL_COLORS } from '@/types/board';
 
 export interface TagOption {
@@ -52,7 +52,11 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [pickerRect, setPickerRect] = useState<DOMRect | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creatingCount, setCreatingCount] = useState(0);
+  const [createError, setCreateError] = useState('');
+  // Tags created in this session are listed immediately (before the request
+  // resolves) so creating a tag never feels like it is waiting on the network.
+  const [optimisticTags, setOptimisticTags] = useState<TagOption[]>([]);
   const accentColor = typeof window !== 'undefined' ? localStorage.getItem('accentColor') || '#000000' : '#000000';
   const modalRef = useRef<HTMLDivElement | null>(null);
 
@@ -129,22 +133,57 @@ const TagsModal: React.FC<TagsModalProps> = ({
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) {
+      setOptimisticTags([]);
+      setCreateError('');
+    }
+  }, [open]);
+
   if (!open) return null;
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     const name = normalizeTagName(newName);
-    if (!name || !onCreate || creating) return;
-    setCreating(true);
+    const color = newColor;
+    if (!name || !onCreate) return;
+    setCreatingCount(c => c + 1);
+    setCreateError('');
+    // Clear the input straight away so the field is ready for the next tag.
+    setNewName('');
+    setNewColor(randomTagColor());
+    const optimistic: TagOption = { id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, color };
+    const dropOptimistic = () => {
+      setOptimisticTags(prev => prev.filter(t => t.id !== optimistic.id));
+      setCreateError('That tag could not be created — please try again.');
+    };
+    const done = () => setCreatingCount(c => Math.max(0, c - 1));
+    setOptimisticTags(prev => [...prev.filter(t => normalizeTagName(t.name).toLowerCase() !== name.toLowerCase()), optimistic]);
+    // Safety net: never leave a placeholder behind if the caller's list never
+    // catches up (e.g. the request failed but the error was swallowed).
+    setTimeout(() => {
+      setOptimisticTags(prev => prev.filter(t => t.id !== optimistic.id));
+    }, 8000);
     try {
-      await onCreate(name, newColor);
-      setNewName('');
-      setNewColor(randomTagColor());
+      Promise.resolve(onCreate(name, color))
+        .catch(dropOptimistic)
+        .finally(done);
     } catch {
-      // caller is responsible for surfacing errors
-    } finally {
-      setCreating(false);
+      dropOptimistic();
+      done();
     }
   };
+
+  // Show freshly created tags right away; they are dropped from this local list
+  // as soon as the caller's list catches up (matched by name).
+  const optimisticIds = new Set(
+    optimisticTags
+      .filter(t => !tags.some(tag => normalizeTagName(tag.name).toLowerCase() === normalizeTagName(t.name).toLowerCase()))
+      .map(t => t.id),
+  );
+  const visibleTags: TagOption[] = [
+    ...optimisticTags.filter(t => optimisticIds.has(t.id)),
+    ...tags,
+  ];
 
   const handleDelete = (tagId: string) => {
     if (!onDelete) return;
@@ -188,10 +227,28 @@ const TagsModal: React.FC<TagsModalProps> = ({
         )}
 
         <div className="mb-4 max-h-80 sm:max-h-[50vh] space-y-2 overflow-y-auto overscroll-contain pr-1">
-          {tags.length === 0 && (
+          {visibleTags.length === 0 && (
             <p className="py-3 text-center text-xs text-muted-foreground">{emptyText}</p>
           )}
-          {tags.map(tag => {
+          {visibleTags.map(tag => {
+            if (optimisticIds.has(tag.id)) {
+              // Still saving — show it, but don't offer actions yet.
+              return (
+                <div
+                  key={tag.id}
+                  data-tag-row
+                  className="flex items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 py-2"
+                >
+                  <span className={`h-4 w-4 flex-shrink-0 rounded-full border border-black/10 ${LABEL_COLORS[tag.color]}`} />
+                  <span className="truncate text-sm text-foreground">{tag.name}</span>
+                  {creatingCount > 0 && (
+                    <span className="ml-auto flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Saving
+                    </span>
+                  )}
+                </div>
+              );
+            }
             const active = selectedIds.includes(tag.id);
             const isRenaming = renamingId === tag.id;
             return (
@@ -308,6 +365,9 @@ const TagsModal: React.FC<TagsModalProps> = ({
 
         {showCreate && onCreate && (
           <div className="border-t border-border pt-4">
+            {createError && (
+              <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{createError}</p>
+            )}
             <div className="mb-2 flex gap-2">
               <input
                 value={newName}
@@ -332,11 +392,11 @@ const TagsModal: React.FC<TagsModalProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={handleCreate}
-                disabled={!newName.trim() || creating}
+                disabled={!newName.trim()}
                 style={{ backgroundColor: accentColor }}
                 className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
               >
-                {creating ? 'Adding...' : 'Add tag'}
+                {creatingCount > 0 ? 'Adding...' : 'Add tag'}
               </button>
               <button
                 onClick={onClose}

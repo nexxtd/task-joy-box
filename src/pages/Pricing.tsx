@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Sparkles, Zap, Crown, ArrowLeft, X, CreditCard } from 'lucide-react';
+import { Check, Sparkles, Zap, Crown, ArrowLeft, X, CreditCard, Building2, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 
@@ -22,14 +22,16 @@ const detectCurrency = (): string => {
 
 const Pricing: React.FC = () => {
   const { user } = useAuth();
+  const [planCategory, setPlanCategory] = useState<'personal' | 'organizations'>('personal');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
   const [currency, setCurrency] = useState('USD');
+  const [schoolSeats, setSchoolSeats] = useState(25);
 
   // Checkout flow state
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState(1);
-  const [selectedPlan, setSelectedPlan] = useState<{ name: string; tier: 'premium' | 'pro'; price: number } | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<{ name: string; tier: 'premium' | 'pro'; price: number; planType?: string; seats?: number } | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState('');
@@ -130,8 +132,8 @@ const Pricing: React.FC = () => {
     period: plan.monthlyPrice === 0 ? '' : '/mo',
   }));
 
-  const openCheckout = (name: string, tier: 'premium' | 'pro', price: number) => {
-    setSelectedPlan({ name, tier, price });
+  const openCheckout = (name: string, tier: 'premium' | 'pro', price: number, planType: string = 'personal', seats?: number) => {
+    setSelectedPlan({ name, tier, price, planType, seats });
     setCheckoutStep(1);
     setCouponCode('');
     setAppliedCoupon(null);
@@ -186,7 +188,8 @@ const Pricing: React.FC = () => {
         body: JSON.stringify({
           tier: selectedPlan.tier,
           paymentMethod,
-          planType: 'personal',
+          planType: selectedPlan.planType || 'personal',
+          seats: selectedPlan.seats,
           couponCode: appliedCoupon?.code || undefined,
         }),
       });
@@ -228,8 +231,32 @@ const Pricing: React.FC = () => {
         </div>
       </header>
 
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="flex flex-col items-center mb-12">
+      <div className="p-4 sm:p-8 max-w-7xl mx-auto">
+        {/* Category Switcher: Personal vs Organizations */}
+        <div className="flex flex-col items-center gap-4 mb-8">
+          <div className="inline-flex rounded-2xl border border-border bg-card p-1 shadow-xs">
+            <button
+              onClick={() => setPlanCategory('personal')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                planCategory === 'personal'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Personal Plans
+            </button>
+            <button
+              onClick={() => setPlanCategory('organizations')}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                planCategory === 'organizations'
+                  ? 'bg-primary text-primary-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Organizations (School & Family)
+            </button>
+          </div>
+
           <div className="flex items-center bg-card border border-border rounded-xl px-4 py-2 gap-4 shadow-sm animate-fade-in">
             <span className={`text-[10px] font-black uppercase ${billingPeriod === 'monthly' ? 'text-foreground' : 'text-muted-foreground'}`}>Monthly</span>
             <button
@@ -244,11 +271,12 @@ const Pricing: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+        {planCategory === 'personal' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             {derivedPersonalPlans.map((plan, i) => (
               <div
                 key={plan.name}
-                className={`relative flex flex-col bg-card border-2 rounded-[2.5rem] p-10 transition-all duration-500 animate-fade-in hover:-translate-y-2 hover:shadow-2xl ${
+                className={`relative flex flex-col bg-card border-2 rounded-[2.5rem] p-8 sm:p-10 transition-all duration-500 animate-fade-in hover:-translate-y-2 hover:shadow-2xl ${
                   plan.popular ? 'border-emerald-500 shadow-2xl shadow-emerald-500/10 scale-105 z-10' : 'border-border hover:border-primary/30'
                 }`}
                 style={{ animationDelay: `${i * 100}ms` }}
@@ -300,6 +328,161 @@ const Pricing: React.FC = () => {
               </div>
             ))}
           </div>
+        ) : (
+          /* Organizations Tab: Family Plan & School Plan */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch max-w-5xl mx-auto">
+            {/* Family Plan */}
+            <div className="relative flex flex-col bg-card border-2 border-border rounded-[2.5rem] p-8 sm:p-10 transition-all hover:border-primary/40 hover:shadow-2xl">
+              <div className="mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+                  <Users className="w-7 h-7 text-primary" />
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-3xl font-black text-foreground">Family Plan</h3>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                    5 Seats
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1 mb-4">
+                  <span className="text-5xl font-black text-foreground">
+                    {convertPrice(billingPeriod === 'yearly' ? 11.99 : 14.99)}
+                  </span>
+                  <span className="text-sm text-muted-foreground font-black uppercase tracking-tighter">/mo</span>
+                </div>
+                <p className="text-sm text-muted-foreground font-medium leading-relaxed">
+                  Includes 5 full Pro seats (1 owner + 4 members). Perfect for households to manage personal productivity privately under one subscription.
+                </p>
+              </div>
+
+              <div className="flex-1">
+                <ul className="space-y-4 mb-8">
+                  {[
+                    '5 independent Pro accounts included',
+                    'Zero shared notes or tasks (complete member privacy)',
+                    'Buyer becomes Organization Owner',
+                    'Simplified family admin view (Users & Settings)',
+                    'Generate simple shareable join codes',
+                    'Full AI Assistant and note builder for all members',
+                  ].map((f, fi) => (
+                    <li key={fi} className="flex items-start gap-4 text-sm text-muted-foreground font-bold">
+                      <div className="mt-1 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3 text-primary" />
+                      </div>
+                      <span className="leading-snug">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => openCheckout('Family Plan', 'pro', billingPeriod === 'yearly' ? 11.99 : 14.99, 'family', 5)}
+                className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider bg-primary text-primary-foreground shadow-xl shadow-primary/10 hover:bg-primary/90 active:scale-95 transition-all"
+              >
+                Get Family Plan
+              </button>
+            </div>
+
+            {/* School / Team Plan */}
+            <div className="relative flex flex-col bg-card border-2 border-emerald-500/80 shadow-2xl shadow-emerald-500/10 rounded-[2.5rem] p-8 sm:p-10 transition-all hover:shadow-2xl">
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-6 py-2 rounded-full shadow-xl">
+                Volume Pricing
+              </div>
+
+              <div className="mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6">
+                  <Building2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-3xl font-black text-foreground">School Plan</h3>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Pro Tier
+                  </span>
+                </div>
+
+                {/* Seat Selector Slider & Input */}
+                <div className="p-4 rounded-2xl border border-border bg-muted/30 my-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase text-foreground">Custom Seats</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={10}
+                        max={1000}
+                        value={schoolSeats}
+                        onChange={e => setSchoolSeats(Math.max(10, Math.min(1000, parseInt(e.target.value) || 10)))}
+                        className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-center text-sm font-black text-foreground outline-none focus:border-primary"
+                      />
+                      <span className="text-xs text-muted-foreground font-bold">seats</span>
+                    </div>
+                  </div>
+
+                  <input
+                    type="range"
+                    min={10}
+                    max={250}
+                    step={5}
+                    value={schoolSeats}
+                    onChange={e => setSchoolSeats(parseInt(e.target.value))}
+                    className="w-full accent-emerald-500 cursor-pointer"
+                  />
+
+                  {/* Volume discount breakdown */}
+                  <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground pt-1 border-t border-border/60">
+                    <span>Rate: <span className="text-foreground">{convertPrice(billingPeriod === 'yearly' ? (schoolSeats <= 20 ? 3.2 : schoolSeats <= 50 ? 2.8 : schoolSeats <= 100 ? 2.4 : schoolSeats <= 250 ? 2.0 : 1.6) : (schoolSeats <= 20 ? 4.0 : schoolSeats <= 50 ? 3.5 : schoolSeats <= 100 ? 3.0 : schoolSeats <= 250 ? 2.5 : 2.0))}/seat</span></span>
+                    <span className="text-emerald-600 dark:text-emerald-400">Drops as seats increase</span>
+                  </div>
+                </div>
+
+                {/* Live Total Calculator */}
+                <div className="flex items-baseline gap-1 mb-2">
+                  <span className="text-5xl font-black text-foreground">
+                    {(() => {
+                      const baseRate = schoolSeats <= 20 ? 4.0 : schoolSeats <= 50 ? 3.5 : schoolSeats <= 100 ? 3.0 : schoolSeats <= 250 ? 2.5 : 2.0;
+                      const effectiveRate = billingPeriod === 'yearly' ? baseRate * 0.8 : baseRate;
+                      return convertPrice(Math.round(effectiveRate * schoolSeats * 100) / 100);
+                    })()}
+                  </span>
+                  <span className="text-sm text-muted-foreground font-black uppercase tracking-tighter">/mo</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Price automatically scales with volume. Includes full school dashboard with Year Groups & Classes.
+                </p>
+              </div>
+
+              <div className="flex-1">
+                <ul className="space-y-4 mb-8">
+                  {[
+                    `Pro tier access for all ${schoolSeats} students & staff`,
+                    'Hierarchical Groups & Sub-groups (Year 9 -> Class A)',
+                    'Join codes with auto-assignment & expiry limits',
+                    'Both tab with Board View & Drag-and-drop',
+                    '100% student data isolation (no shared notes/tasks)',
+                    'Add administrators to manage users and classes',
+                  ].map((f, fi) => (
+                    <li key={fi} className="flex items-start gap-4 text-sm text-muted-foreground font-bold">
+                      <div className="mt-1 w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                        <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <span className="leading-snug">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  const baseRate = schoolSeats <= 20 ? 4.0 : schoolSeats <= 50 ? 3.5 : schoolSeats <= 100 ? 3.0 : schoolSeats <= 250 ? 2.5 : 2.0;
+                  const effectiveRate = billingPeriod === 'yearly' ? baseRate * 0.8 : baseRate;
+                  const total = Math.round(effectiveRate * schoolSeats * 100) / 100;
+                  openCheckout('School Plan', 'pro', total, 'school', schoolSeats);
+                }}
+                className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all"
+              >
+                Get School Plan ({schoolSeats} Seats)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Multi-step Checkout Modal */}
@@ -322,7 +505,10 @@ const Pricing: React.FC = () => {
                   <p className="text-sm text-muted-foreground mb-6">Review your selected plan.</p>
                   <div className="bg-muted/50 rounded-xl p-4 mb-6">
                     <p className="font-black text-lg">{selectedPlan.name}</p>
-                    <p className="text-sm text-muted-foreground">{billingPeriod === 'monthly' ? 'Monthly' : 'Yearly'} billing</p>
+                    <p className="text-sm text-muted-foreground">
+                      {billingPeriod === 'monthly' ? 'Monthly' : 'Yearly'} billing
+                      {selectedPlan.seats ? ` · ${selectedPlan.seats} seats` : ''}
+                    </p>
                     <p className="text-2xl font-black mt-2">{convertPrice(selectedPlan.price)}<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
                   </div>
                   <div className="flex gap-3">

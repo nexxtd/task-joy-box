@@ -1233,17 +1233,29 @@ const AdminDashboard = () => {
             </button>
           ))}
           {viewAsUser !== undefined && (
-            <button
-              onClick={() => setViewAsUser(!viewAsUser)}
-              className={`px-3 py-1.5 rounded-lg capitalize transition-all flex items-center gap-1.5 text-sm font-medium ${
-                viewAsUser ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {viewAsUser ? 'View as Regular User' : 'View as Admin'}
-              {viewAsUser && (
-                <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Stated outright: this pill is the mode you are IN, the button
+                  next to it is the mode you would switch TO. */}
+              <span
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap ${
+                  viewAsUser ? 'bg-primary/10 text-primary' : 'bg-background text-foreground shadow-sm'
+                }`}
+                title={
+                  viewAsUser
+                    ? 'Admin-only features are hidden, exactly as a regular user sees them'
+                    : 'Admin-only features are unlocked'
+                }
+              >
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${viewAsUser ? 'bg-primary' : 'bg-emerald-500'}`} />
+                {viewAsUser ? 'Viewing: Regular user' : 'Viewing: Admin'}
+              </span>
+              <button
+                onClick={() => setViewAsUser(!viewAsUser)}
+                className="px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground whitespace-nowrap"
+              >
+                {viewAsUser ? 'Back to Admin view' : 'Preview as Regular User'}
+              </button>
+            </div>
           )}
         </div>
       </header>

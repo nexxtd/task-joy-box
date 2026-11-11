@@ -11,7 +11,7 @@ import { fetchTemplates, fetchTemplateByCode, createTemplate, updateTemplate, de
 import CopyShareCode from '@/components/CopyShareCode';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
-import { readTaskSections, writeTaskSections, readExpandedLists } from '@/lib/taskSectionState';
+import { readTaskSections, writeTaskSections, readExpandedLists, readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
@@ -34,6 +34,7 @@ import {
   FolderKanban,
   Image,
   KeyRound,
+  Loader2,
   Lock,
   Paperclip,
   Plus,
@@ -784,11 +785,21 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
-  // Creation modal section collapse states
-  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
-  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
-  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
-  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
+  // Creation modal section collapse states — persisted so a section closed
+  // here stays closed when the modal (or the page) is reopened.
+  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(() => readDraftSections().subtasks ?? false);
+  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(() => readDraftSections().checklists ?? false);
+  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(() => readDraftSections().attachments ?? false);
+  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(() => readDraftSections().images ?? false);
+
+  useEffect(() => {
+    writeDraftSections({
+      subtasks: draftSubtasksCollapsed,
+      checklists: draftChecklistCollapsed,
+      attachments: draftAttachmentsCollapsed,
+      images: draftImagesCollapsed,
+    });
+  }, [draftSubtasksCollapsed, draftChecklistCollapsed, draftAttachmentsCollapsed, draftImagesCollapsed]);
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(() => localStorage.getItem('tasks-mytasks-collapsed') === 'true');
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
@@ -853,6 +864,7 @@ const Tasks: React.FC = () => {
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateListLoading, setTemplateListLoading] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
   // Save-as-template: Public templates get a redeemable share code; Private do not.
@@ -1081,7 +1093,7 @@ const Tasks: React.FC = () => {
   }, [editingTemplateMeta, templateEditOverrides, templateEditName]);
 
   // Edit Template via CreateTaskModal (same layout as Task creation, title "Edit Template", no AI Builder).
-  const handleUpdateTemplateFromModal = useCallback(async (details: { name: string; title: string; description: string; priority: any; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: any[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: any[]; attachments: any[] }) => {
+  const handleUpdateTemplateFromModal = useCallback(async (details: { name: string; title: string; description: string; priority: any; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: any[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: any[]; attachments: any[]; isPublic?: boolean }) => {
     if (!editingTemplateMeta) return;
     try {
       const saved = await updateTemplate(editingTemplateMeta.id, details as any);
@@ -1098,6 +1110,20 @@ const Tasks: React.FC = () => {
     } catch (err) {
       console.error('Failed to save template:', err);
     }
+  }, [editingTemplateMeta]);
+
+  // Save the visibility toggle from the Edit Template permissions panel immediately.
+  const handleUpdateTemplateVisibility = useCallback(async (isPublic: boolean): Promise<TaskTemplate | void> => {
+    if (!editingTemplateMeta) return;
+    const saved = await updateTemplate(editingTemplateMeta.id, { isPublic });
+    setEditingTemplateMeta(prev => prev ? { ...prev, template: saved } : prev);
+    try {
+      setTemplates((prev: any[]) => prev.map(tm => tm.id === saved.id ? saved : tm));
+    } catch {}
+    try {
+      setMainTemplates((prev: any[]) => prev.map(tm => (tm as any).id === saved.id ? saved : tm));
+    } catch {}
+    return saved;
   }, [editingTemplateMeta]);
 
   // Apply a template to the new-task draft (shared by the template list and the share-code entry).
@@ -2016,9 +2042,9 @@ const Tasks: React.FC = () => {
               : 'border-border hover:border-border/80 hover:shadow-sm'
         }`}
       >
-        <div className="flex items-center gap-1.5 px-3 py-3 min-w-0 overflow-hidden flex-nowrap">
+        <div className="flex items-center gap-2 px-3 py-3 min-w-0 overflow-hidden flex-nowrap">
           {dragHandleProps && (
-            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </div>
           )}
@@ -2039,7 +2065,7 @@ const Tasks: React.FC = () => {
               <CircleToggle
                 completed={isTaskCompleted(task)}
                 onClick={e => { e.stopPropagation(); toggleTaskCompletion(task); }}
-                size="md"
+                size="lg"
                 title="Mark complete"
               />
             </div>
@@ -3115,8 +3141,8 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-center">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors shrink-0 self-start">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
                                     {editingDraftSubtaskId === subtask.id ? (
@@ -3141,7 +3167,7 @@ const Tasks: React.FC = () => {
                                         text={subtask.text}
                                       />
                                     )}
-                                    <div className="flex items-center gap-2 shrink-0 self-center">
+                                    <div className="flex items-center gap-2 shrink-0 self-start">
                                       <input
                                         type="number"
                                         min={0}
@@ -3227,7 +3253,7 @@ const Tasks: React.FC = () => {
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
                                     <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <ExpandableRowText textClassName=""
@@ -3267,7 +3293,7 @@ const Tasks: React.FC = () => {
                               {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                                 <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                     <button
@@ -3321,7 +3347,7 @@ const Tasks: React.FC = () => {
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
                                                   <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <ExpandableRowText textClassName="text-foreground"
@@ -3543,13 +3569,16 @@ const Tasks: React.FC = () => {
                         e.stopPropagation();
                         setTemplateMenuOpen(false);
                         setTemplateError('');
+                        setLoadTemplateOpen(true);
+                        setTemplateListLoading(true);
                         try {
                           const t = await fetchTemplates();
                           setTemplates(t);
-                          setLoadTemplateOpen(true);
                         } catch (err) {
                           setTemplateError('Failed to load templates. Check your connection and try again.');
                           setTimeout(() => setTemplateError(''), 4000);
+                        } finally {
+                          setTemplateListLoading(false);
                         }
                       }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
@@ -3725,7 +3754,12 @@ const Tasks: React.FC = () => {
               </div>
             )}
             <div className="max-h-80 overflow-y-auto p-2">
-              {templates.length === 0 ? (
+              {templateListLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin mb-3" />
+                  <p className="text-sm font-medium text-foreground">Loading templates…</p>
+                </div>
+              ) : templates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />
@@ -4091,8 +4125,11 @@ const Tasks: React.FC = () => {
             checklists: editingTemplateMeta.template.checklists,
             images: editingTemplateMeta.template.images,
             attachments: editingTemplateMeta.template.attachments,
+            isPublic: editingTemplateMeta.template.isPublic,
+            shareCode: editingTemplateMeta.template.shareCode,
           }}
           onUpdateTemplate={handleUpdateTemplateFromModal}
+          onUpdateTemplateVisibility={handleUpdateTemplateVisibility}
         />
       )}
 
@@ -4284,7 +4321,7 @@ const Tasks: React.FC = () => {
                                   <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-task-file-${fileIdx}-${file.name}`} index={fileIdx}>
                                     {provided => (
                                       <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/file">
-                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground"><GripVertical className="w-4 h-4" /></div>
+                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70"><GripVertical className="w-4 h-4" /></div>
                                         <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
                                           <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
                                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
@@ -4494,8 +4531,8 @@ export const TaskDropdownExpanded: React.FC<{
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
 
   // Added attachments/images states
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
   useEffect(() => {
     const prev = readTaskSections(task.id);
     writeTaskSections(task.id, { ...prev, subtasks: subtasksCollapsed, checklists: checklistsSectionCollapsed, attachments: attachmentsCollapsed, images: imagesCollapsed, expandedLists: [...expandedChecklists] });
@@ -4705,15 +4742,15 @@ export const TaskDropdownExpanded: React.FC<{
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
-                className="self-center"
+                className="self-start"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
@@ -4734,9 +4771,10 @@ export const TaskDropdownExpanded: React.FC<{
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
                   textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                   text={subtask.text}
+                  persistKey={`task-${task.id}-subtask-${subtask.id}`}
                 />
               )}
-              <div className="flex shrink-0 items-center gap-2 self-center whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
@@ -4886,7 +4924,7 @@ export const TaskDropdownExpanded: React.FC<{
                           {(provided) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                               <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
                                 <button
@@ -4960,7 +4998,7 @@ export const TaskDropdownExpanded: React.FC<{
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
                                               <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
                                                 <SquareToggle
@@ -5276,6 +5314,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
+  const [fullViewLoadTemplatesLoading, setFullViewLoadTemplatesLoading] = useState(false);
   // Save-as-template: Public templates get a redeemable share code; Private do not.
   const [fullViewTmplVisibility, setFullViewTmplVisibility] = useState<'public' | 'private'>('private');
   const [fullViewSavedShareCode, setFullViewSavedShareCode] = useState<string | null>(null);
@@ -5284,9 +5323,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewCodeApplying, setFullViewCodeApplying] = useState(false);
   const [fullViewCodeError, setFullViewCodeError] = useState('');
   const [activityCollapsed, setActivityCollapsed] = useState(() => readTaskSections(task.id).activity ?? true);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readTaskSections(task.id).subtasks ?? true);
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
   const [checklistsSectionCollapsed, setChecklistsSectionCollapsed] = useState(() => readTaskSections(task.id).checklists ?? true);
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistTitle, setEditingChecklistTitle] = useState('');
@@ -5408,15 +5447,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
-                className="self-center"
+                className="self-start"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
@@ -5437,9 +5476,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
                   textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                   text={subtask.text}
+                  persistKey={`task-${task.id}-subtask-${subtask.id}`}
                 />
               )}
-              <div className="flex shrink-0 items-center gap-2 self-center whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
@@ -5938,9 +5978,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               tags={allTags}
               selectedIds={task.labels.map(label => label.id)}
               onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(task.id, label); }}
-              onCreate={(name, color) => {
-                onCreateTag(task.id, name, color);
-              }}
+              onCreate={(name, color) => onCreateTag(task.id, name, color)}
               onDelete={tagId => onDeleteTagEverywhere(tagId)}
               onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
               onColorChange={(tagId, color) => onColorChangeTagEverywhere(tagId, color)}
@@ -6074,7 +6112,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                                 <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                   <button
@@ -6148,7 +6186,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
                                                   <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <SquareToggle
@@ -6519,12 +6557,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <button
                       onClick={async () => {
                         setTemplatePopupOpen(false);
+                        setFullViewLoadTmplOpen(true);
+                        setFullViewLoadTemplatesLoading(true);
                         try {
                           const t = await fetchTemplates();
                           setFullViewLoadTemplates(t);
-                          setFullViewLoadTmplOpen(true);
                         } catch (err) {
                           console.error('Failed to load templates:', err);
+                        } finally {
+                          setFullViewLoadTemplatesLoading(false);
                         }
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
@@ -6664,7 +6705,12 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto p-2">
-              {fullViewLoadTemplates.length === 0 ? (
+              {fullViewLoadTemplatesLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin mb-3" />
+                  <p className="text-sm font-medium text-foreground">Loading templates…</p>
+                </div>
+              ) : fullViewLoadTemplates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />

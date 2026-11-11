@@ -443,7 +443,7 @@ const Support: React.FC = () => {
   const openFaqs = (faqId?: string) => { setInitialFaqId(faqId); setView('faqs'); };
   const openResources = (catId?: string, guideId?: string) => { setInitialCatId(catId); setInitialGuideId(guideId); setView('resources'); };
   const openSubmit = () => { setView('submit'); };
-  const openTickets = () => { setView('tickets'); };
+  const openTickets = () => { navigate('/settings?tab=tickets'); };
   const openAi = () => { navigate('/ai-chat'); };
 
   useEffect(() => { trackPageVisit('support'); }, []);

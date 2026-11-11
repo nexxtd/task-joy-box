@@ -7,6 +7,10 @@ import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
+import { readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
+
+/** Storage scope for the Deep Focus overlay's section open/closed state. */
+const DEEP_FOCUS_SCOPE = 'deep-focus';
 import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import {
   DragDropContext,
@@ -211,14 +215,29 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const [checklistsCollapsed, setChecklistsCollapsed] = useState(false);
-  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
+  // Remember which sections were left open/closed so re-entering Deep Focus
+  // (or coming back to this page) doesn't reset them.
+  const [checklistsCollapsed, setChecklistsCollapsed] = useState(() => readDraftSections(DEEP_FOCUS_SCOPE).checklists ?? false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(() => readDraftSections(DEEP_FOCUS_SCOPE).subtasks ?? false);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(false);
-  const [imagesCollapsed, setImagesCollapsed] = useState(false);
-  const [progressCollapsed, setProgressCollapsed] = useState(false);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readDraftSections(DEEP_FOCUS_SCOPE).attachments ?? false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readDraftSections(DEEP_FOCUS_SCOPE).images ?? false);
+  const [progressCollapsed, setProgressCollapsed] = useState(() => readDraftSections(DEEP_FOCUS_SCOPE).progress ?? false);
+
+  useEffect(() => {
+    writeDraftSections(
+      {
+        subtasks: subtasksCollapsed,
+        checklists: checklistsCollapsed,
+        attachments: attachmentsCollapsed,
+        images: imagesCollapsed,
+        progress: progressCollapsed,
+      },
+      DEEP_FOCUS_SCOPE,
+    );
+  }, [subtasksCollapsed, checklistsCollapsed, attachmentsCollapsed, imagesCollapsed, progressCollapsed]);
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
   const { uploading: uploadingFiles, showUploading: showUploadingFiles, setUploading: setUploadingFiles } = useDelayedUploading();
   const [editingChecklistItemId, setEditingChecklistItemId] = useState<string | null>(null);

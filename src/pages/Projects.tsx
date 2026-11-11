@@ -622,6 +622,7 @@ const Projects: React.FC = () => {
 
   const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
     const tag = await createTag({ name, color });
+    setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
     return sharedTagToLabel(tag);
   };
 
@@ -2660,6 +2661,7 @@ const conversationProps = {
       {currentTask && (
         <Suspense fallback={null}>
         <TaskFullView
+          key={currentTask.id}
           task={currentTask}
           boardColumns={board.columns}
           projects={projects.map(p => ({ id: p.id, name: p.name, color: p.color, description: p.description }))}

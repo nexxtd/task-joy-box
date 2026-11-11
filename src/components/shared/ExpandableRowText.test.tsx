@@ -71,6 +71,24 @@ describe('expanded row text', () => {
     expect(container.querySelector('.row-text-value')?.textContent).toBe(text);
   });
 
+  it('remembers a collapsed row when a persistKey is provided', () => {
+    localStorage.clear();
+    vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(80);
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(120);
+    vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(360);
+    const text = 's'.repeat(300);
+    act(() => root.render(<ExpandableRowText text={text} persistKey="task-1-subtask-a" />));
+    act(() => container.querySelector('button')!.click());
+    expect(container.querySelector('.expandable-row-text')?.getAttribute('data-collapsed')).toBe('true');
+
+    // A fresh mount (as after closing and reopening the page) keeps the choice.
+    act(() => root.unmount());
+    root = createRoot(container);
+    act(() => root.render(<ExpandableRowText text={text} persistKey="task-1-subtask-a" />));
+    expect(container.querySelector('.expandable-row-text')?.getAttribute('data-collapsed')).toBe('true');
+    localStorage.clear();
+  });
+
   it('includes textarea borders so the last line is not clipped', () => {
     vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(64);
     act(() => root.render(<AutoGrowTextarea value="First\nSecond" readOnly style={{ border: '1px solid black' }} />));

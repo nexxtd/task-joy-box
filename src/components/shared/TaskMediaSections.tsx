@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Paperclip, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Paperclip, Image as ImageIcon, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Attachment, Task } from '@/types/board';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
@@ -21,8 +21,8 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
   const maxPlan = isMaxPlan(tier);
   const taskRef = useRef(task);
   taskRef.current = task;
-  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? true);
-  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? true);
+  const [attachmentsCollapsed, setAttachmentsCollapsed] = useState(() => readTaskSections(task.id).attachments ?? false);
+  const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [previewDisabled] = useState(false);
@@ -73,26 +73,38 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     if (remaining <= 0) { e.currentTarget.value = ''; return; }
     const files = picked.slice(0, remaining);
     setUploadingFiles(true);
-    const uploaded: Attachment[] = [];
     try {
-      for (const file of files) {
-        let saved = false;
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-          if (res.ok) {
-            uploaded.push(await res.json());
-            saved = true;
-          }
-        } catch { /* fall through */ }
-        if (!saved) {
+      const results = await Promise.all(
+        files.map(async file => {
+          let savedItem: Attachment | null = null;
           try {
-            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-          } catch { /* skip unreadable */ }
-        }
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
+            if (res.ok) {
+              savedItem = await res.json();
+            }
+          } catch { /* fall through */ }
+          if (!savedItem) {
+            try {
+              savedItem = {
+                id: crypto.randomUUID(),
+                taskId: task.id,
+                fileName: file.name,
+                fileType: file.type || 'application/octet-stream',
+                fileSize: file.size,
+                fileUrl: await fileToDataUrl(file),
+                createdAt: new Date().toISOString(),
+              };
+            } catch { /* skip unreadable */ }
+          }
+          return savedItem;
+        })
+      );
+      const valid = results.filter((r): r is Attachment => Boolean(r));
+      if (valid.length > 0) {
+        onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...valid] });
       }
-      if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     } finally {
       setUploadingFiles(false);
       e.currentTarget.value = '';
@@ -110,30 +122,42 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     const files = picked.slice(0, remaining);
     setUploadingImages(true);
     try {
-      const newImages: Attachment[] = [];
-      for (const file of files) {
-        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-        let saved = false;
-        if (!isHeic) {
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-            if (res.ok) {
-              newImages.push(await res.json());
-              saved = true;
-            }
-          } catch { /* fall through */ }
-        }
-        if (!saved) {
-          try {
-            const fileUrl = await imageToDataUrl(file);
-            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-          } catch { /* skip */ }
-        }
+      const results = await Promise.all(
+        files.map(async file => {
+          const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
+          let savedImage: Attachment | null = null;
+          if (!isHeic) {
+            try {
+              const formData = new FormData();
+              formData.append('file', file);
+              const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
+              if (res.ok) {
+                savedImage = await res.json();
+              }
+            } catch { /* fall through */ }
+          }
+          if (!savedImage) {
+            try {
+              const fileUrl = await imageToDataUrl(file);
+              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
+              savedImage = {
+                id: crypto.randomUUID(),
+                taskId: String(task.id),
+                fileName: file.name,
+                fileType,
+                fileSize: file.size,
+                fileUrl,
+                createdAt: new Date().toISOString(),
+              };
+            } catch { /* skip */ }
+          }
+          return savedImage;
+        })
+      );
+      const valid = results.filter((r): r is Attachment => Boolean(r));
+      if (valid.length > 0) {
+        onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...valid] });
       }
-      if (newImages.length > 0) onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
     } finally {
       setUploadingImages(false);
     }
@@ -159,7 +183,13 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
           <div className="flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Files</h3>
-            {filesCount > 0 && <span className="text-xs text-muted-foreground">({filesCount})</span>}
+            {uploadingFiles ? (
+              <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+              </span>
+            ) : (
+              filesCount > 0 && <span className="text-xs text-muted-foreground">({filesCount})</span>
+            )}
           </div>
           {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
         </button>
@@ -177,9 +207,9 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <Paperclip className="w-5 h-5 text-primary" />
+                        {uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                      <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading files…' : 'Click to upload or drag and drop'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB) · {filesCount}/{mediaLimit}</p>
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploadingFiles} className="hidden" />
@@ -200,7 +230,13 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
           <div className="flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Images</h3>
-            {imagesCount > 0 && <span className="text-xs text-muted-foreground">({imagesCount})</span>}
+            {uploadingImages ? (
+              <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+              </span>
+            ) : (
+              imagesCount > 0 && <span className="text-xs text-muted-foreground">({imagesCount})</span>
+            )}
           </div>
           {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
         </button>
@@ -218,9 +254,9 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <ImageIcon className="w-5 h-5 text-primary" />
+                        {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <ImageIcon className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading...' : 'Click to upload'}</p>
+                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading images…' : 'Click to upload'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB) · {imagesCount}/{mediaLimit}</p>
                     </div>
                     <input type="file" multiple accept="image/*,.heic,.heif" onChange={handleImageUpload} disabled={uploadingImages || previewDisabled} className="hidden" />

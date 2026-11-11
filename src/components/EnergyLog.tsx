@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Zap, Sun, Coffee, Moon } from 'lucide-react';
+import { ENERGY_UPDATED_EVENT } from '@/utils/energyStats';
 
 interface EnergyEntry {
   date: string;
@@ -26,18 +27,30 @@ const LEVEL_COLORS: Record<string, string> = {
 const EnergyLog: React.FC = () => {
   const [entries, setEntries] = useState<EnergyEntry[]>([]);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: EnergyEntry[] = JSON.parse(raw);
         const withLogs = parsed.filter(e => e.morning || e.midday || e.afternoon);
         setEntries([...withLogs].reverse());
+      } else {
+        setEntries([]);
       }
     } catch {
-      // Ignore
+      setEntries([]);
     }
   }, []);
+
+  useEffect(() => {
+    reload();
+    window.addEventListener(ENERGY_UPDATED_EVENT, reload);
+    window.addEventListener('storage', reload);
+    return () => {
+      window.removeEventListener(ENERGY_UPDATED_EVENT, reload);
+      window.removeEventListener('storage', reload);
+    };
+  }, [reload]);
 
   if (entries.length === 0) {
     return (

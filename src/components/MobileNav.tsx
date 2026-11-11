@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, FileText, Users, CreditCard, Settings,
-  X, Sparkles, Wand2, LifeBuoy, ShieldCheck, Sun, Moon, LogOut, MoreHorizontal
+  X, Sparkles, Wand2, LifeBuoy, ShieldCheck, Sun, Moon, LogOut, MoreHorizontal, Building2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -36,6 +36,7 @@ const MobileNav: React.FC = () => {
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
+    { icon: Building2, label: t('Organizations'), path: '/organizations' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
     { icon: CreditCard, label: T.nav_pricing, path: '/pricing' },

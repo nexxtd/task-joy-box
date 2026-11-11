@@ -544,6 +544,16 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     return (
       <div
         key={task.id}
+        draggable={true}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select')) return;
+          const colName = board.columns.find(c => c.id === task.columnId)?.title;
+          const itemData = JSON.stringify({ type: 'task', id: task.id, title: task.title, column: colName });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => onTaskClick(task)}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDragging
@@ -776,6 +786,16 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
     const checklistDone = (note.checklists || []).reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
     return (
       <div
+        draggable={true}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select')) return;
+          const colName = board.columns.find(c => c.id === note.columnId)?.title;
+          const itemData = JSON.stringify({ type: 'note', id: note.id, title: note.title, column: colName });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note as any); }}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer ${
           isDraggingRow
@@ -856,6 +876,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
               onToggleTag={tagId => { const label = allTags.find(t => t.id === tagId); if (label) toggleTaskTag(note.id, label); }}
               onCreateTag={async (name, color) => {
                 const tag = await createTag({ name, color });
+                setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
                 const label = sharedTagToLabel(tag);
                 notesCtx.updateTask(note.id, { labels: [...note.labels, label] });
               }}
@@ -1132,6 +1153,7 @@ const ListView: React.FC<ListViewProps> = ({ onTaskClick, onNoteClick, projectId
             onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) toggleTaskTag(popupTask.id, label); }}
             onCreate={async (name, color) => {
               const tag = await createTag({ name, color });
+              setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
               const label = sharedTagToLabel(tag);
               if (isNote) notesCtx.updateTask(popupTask.id, { labels: [...popupTask.labels, label] });
               else updateTask(popupTask.id, { labels: [...popupTask.labels, label] });

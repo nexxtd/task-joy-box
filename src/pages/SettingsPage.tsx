@@ -9,7 +9,7 @@ import {
   History, Brain, CheckCircle2, X, XCircle, Clock, MessageSquare, Dot, TrendingUp, Trash2, Plus,
   LayoutDashboard, FolderKanban, ListTodo, BarChart3, StickyNote, Bot, Users, LifeBuoy,
   Newspaper, CreditCard, Settings as SettingsIcon, FilePlus2, Search, RotateCcw, AlertTriangle, PenLine,
-  PlayCircle
+  PlayCircle, Building2
 } from 'lucide-react';
 import { DEFAULT_SHORTCUTS, SHORTCUT_ACTIONS, SHORTCUT_CATEGORY_LABELS, CREATE_SPLIT_SCREEN_ACTION_ID, loadShortcuts, saveShortcuts, normalizeCombo, beginShortcutCapture, endShortcutCapture, type ShortcutDef, type ShortcutAction, type ShortcutCategory } from '@/lib/shortcuts';
 import { APP_PAGES, findAppPage } from '@/lib/appPages';
@@ -21,7 +21,8 @@ import { LANGUAGES, canonicalLanguageCode, resolveLanguageCode } from '@/i18n/tr
 import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
-import { notificationsSupported, notificationPermission, requestNotificationPermission } from '@/lib/notifications';
+import DiscordCommunitySection from '@/components/shared/DiscordCommunitySection';
+import { notificationsSupported, notificationPermission, requestNotificationPermission, deviceNotify, sendTestNotification, setSmartAlertsEnabled } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { applyAccentHsl, normalizeAccent } from '@/lib/accent';
@@ -95,8 +96,10 @@ const SettingsPage: React.FC = () => {
   const [font, setFont] = useState(() => localStorage.getItem('font') || 'Inter');
   // Remove local language state since we're using context
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#000000');
+  const [normalAlerts, setNormalAlerts] = useState(() => localStorage.getItem('normalAlerts') !== 'false');
   const [smartAlerts, setSmartAlerts] = useState(() => localStorage.getItem('smartAlerts') !== 'false');
   const [emailNotifs, setEmailNotifs] = useState(() => localStorage.getItem('emailNotifs') !== 'false');
+  const [weeklyAiSummary, setWeeklyAiSummary] = useState(() => localStorage.getItem('weeklyAiSummary') !== 'false');
   const [summarySending, setSummarySending] = useState(false);
   const [summaryMessage, setSummaryMessage] = useState('');
   const [energyTrackerEnabled, setEnergyTrackerEnabled] = useState(() => localStorage.getItem('energyTrackerEnabled') !== 'false');
@@ -105,8 +108,29 @@ const SettingsPage: React.FC = () => {
   );
   const [saved, setSaved] = useState(false);
   const [notifError, setNotifError] = useState('');
+  const [enablingNotif, setEnablingNotif] = useState(false);
+  const [notifNotice, setNotifNotice] = useState('');
   const [savingSmart, setSavingSmart] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
+  const [savingNormal, setSavingNormal] = useState(false);
+  const [savingWeeklyAi, setSavingWeeklyAi] = useState(false);
+
+  // 2FA Disable Modal State
+  const [disable2faModalOpen, setDisable2faModalOpen] = useState(false);
+  const [disable2faCode, setDisable2faCode] = useState('');
+  const [disable2faLoading, setDisable2faLoading] = useState(false);
+  const [disable2faError, setDisable2faError] = useState('');
+  const [disable2faSending, setDisable2faSending] = useState(false);
+
+  // Organization Tab State
+  const [orgsLoading, setOrgsLoading] = useState(false);
+  const [joinedOrgs, setJoinedOrgs] = useState<any[]>([]);
+  const [ownedOrgs, setOwnedOrgs] = useState<any[]>([]);
+  const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [joinError, setJoinError] = useState('');
+  const [joinSuccess, setJoinSuccess] = useState('');
 
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarConfigured, setCalendarConfigured] = useState(false);
@@ -243,8 +267,40 @@ const SettingsPage: React.FC = () => {
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
     { id: 'account', label: 'Account', icon: User },
     { id: 'security', label: 'Privacy', icon: Shield },
+    { id: 'organization', label: 'Organization', icon: Building2 },
     { id: 'tickets', label: 'Tickets', icon: MessageSquare },
   ];
+
+  const location = useLocation();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && sections.some(s => s.id === tab)) {
+      setActiveSection(tab);
+    }
+  }, [location.search]);
+
+  const fetchOrganizations = async () => {
+    setOrgsLoading(true);
+    try {
+      const res = await fetch('/api/organizations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setJoinedOrgs(data.joinedOrganizations || []);
+        setOwnedOrgs(data.organizations || []);
+      }
+    } catch (e) {
+      console.error('Failed to load organizations', e);
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'organization') {
+      fetchOrganizations();
+    }
+  }, [activeSection]);
 
   const fetchUserTickets = async () => {
     try {
@@ -268,6 +324,20 @@ const SettingsPage: React.FC = () => {
     fetchUserTickets();
     trackPageVisit('settings');
     fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json()).then(d => { if (d?.user) setTwoFactorEnabled(!!d.user.twoFactorEnabled); }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Keep the permission badge honest if the user changes the browser's
+    // notification setting in another tab and comes back.
+    const refreshPermission = () => {
+      setNotifPermission(notificationsSupported() ? notificationPermission() : 'denied');
+    };
+    window.addEventListener('focus', refreshPermission);
+    document.addEventListener('visibilitychange', refreshPermission);
+    return () => {
+      window.removeEventListener('focus', refreshPermission);
+      document.removeEventListener('visibilitychange', refreshPermission);
+    };
   }, []);
 
   useEffect(() => {
@@ -371,6 +441,12 @@ const SettingsPage: React.FC = () => {
         }
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
+        // The notifier reads these from localStorage; mirror the account so
+        // the preference set on another device applies here too.
+        try {
+          setSmartAlertsEnabled(data.smartAlerts !== false);
+          localStorage.setItem('emailNotifs', String(data.emailNotifs !== false));
+        } catch {}
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -616,14 +692,55 @@ const SettingsPage: React.FC = () => {
       // Revert the toggle and surface the error.
       if (patch.smartAlerts !== undefined) setSmartAlerts(prev.smartAlerts);
       if (patch.emailNotifs !== undefined) setEmailNotifs(prev.emailNotifs);
+      if (patch.smartAlerts !== undefined) setSmartAlertsEnabled(prev.smartAlerts);
       try {
-        localStorage.setItem('smartAlerts', String(prev.smartAlerts));
         localStorage.setItem('emailNotifs', String(prev.emailNotifs));
       } catch {}
       setNotifError('Could not save. Please try again.');
     } finally {
       setSavingSmart(false);
       setSavingEmail(false);
+    }
+  };
+
+  const enableDeviceNotifications = async () => {
+    setEnablingNotif(true);
+    setNotifError('');
+    setNotifNotice('');
+    try {
+      if (!notificationsSupported()) {
+        setNotifError('Device notifications are not supported in this browser.');
+        return;
+      }
+      await requestNotificationPermission();
+      const perm = notificationPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        deviceNotify(
+          'Smart Alerts are on',
+          'You will now get alerts for overdue tasks, due deadlines and energy checks.',
+          'smart-alerts-welcome',
+        );
+        setNotifNotice('Device notifications enabled on this device.');
+      } else if (perm === 'denied') {
+        setNotifError('Notifications are blocked. Allow them for this site in your browser settings, then try again.');
+      } else {
+        setNotifNotice('Notification permission was not granted. You can enable it any time.');
+      }
+    } catch {
+      setNotifError('Could not request notification permission.');
+    } finally {
+      setEnablingNotif(false);
+    }
+  };
+
+  const handleSendTestNotification = () => {
+    setNotifError('');
+    setNotifNotice('');
+    if (sendTestNotification()) {
+      setNotifNotice('Test notification sent — check your notification center.');
+    } else {
+      setNotifError('Could not send a notification. Check that notifications are allowed for this site.');
     }
   };
 
@@ -635,16 +752,38 @@ const SettingsPage: React.FC = () => {
     const prev = smartAlerts;
     const next = !prev;
     setSmartAlerts(next);
-    try { localStorage.setItem('smartAlerts', String(next)); } catch {}
-    if (next && notificationsSupported() && notificationPermission() !== 'granted') {
-      requestNotificationPermission().then(() => setNotifPermission(notificationPermission()));
-    }
+    setSmartAlertsEnabled(next);
+    setNotifError('');
+    setNotifNotice('');
     setSavingSmart(true);
+    if (next && notificationsSupported()) {
+      // Ask for permission the moment the user opts in, then confirm with a
+      // real device notification once it is granted.
+      if (notificationPermission() === 'default') {
+        await requestNotificationPermission();
+      }
+      const perm = notificationPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        deviceNotify(
+          'Smart Alerts enabled',
+          'You will get alerts for overdue tasks, due deadlines and energy checks.',
+          'smart-alerts-welcome',
+        );
+      }
+    }
     await persistNotificationPrefs({ smartAlerts: next }, { smartAlerts: prev, emailNotifs });
   };
 
+  const handleNormalAlertsToggle = () => {
+    const next = !normalAlerts;
+    setNormalAlerts(next);
+    try { localStorage.setItem('normalAlerts', String(next)); } catch {}
+    showSaved();
+  };
+
   const handleEmailNotifsToggle = async () => {
-    if (!isTopTier) {
+    if (!isPaid) {
       window.location.href = '/pricing';
       return;
     }
@@ -654,6 +793,17 @@ const SettingsPage: React.FC = () => {
     try { localStorage.setItem('emailNotifs', String(next)); } catch {}
     setSavingEmail(true);
     await persistNotificationPrefs({ emailNotifs: next }, { smartAlerts, emailNotifs: prev });
+  };
+
+  const handleWeeklyAiSummaryToggle = () => {
+    if (!isTopTier) {
+      window.location.href = '/pricing';
+      return;
+    }
+    const next = !weeklyAiSummary;
+    setWeeklyAiSummary(next);
+    try { localStorage.setItem('weeklyAiSummary', String(next)); } catch {}
+    showSaved();
   };
 
   const resetDefaults = async () => {
@@ -682,8 +832,8 @@ const SettingsPage: React.FC = () => {
     if (tutorialCompleted) localStorage.setItem('tutorial_completed', tutorialCompleted);
     
     // Apply default settings to localStorage
-    localStorage.setItem('smartAlerts', 'true');
     localStorage.setItem('emailNotifs', 'true');
+    setSmartAlertsEnabled(true);
     localStorage.setItem('energyTrackerEnabled', 'true');
     localStorage.setItem('language', 'en');
     localStorage.setItem('font', 'Inter');
@@ -947,86 +1097,170 @@ const SettingsPage: React.FC = () => {
 
           {activeSection === 'notifications' && (
             <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-foreground mb-3">Notification Preferences</h2>
+              <div>
+                <h2 className="text-base font-bold text-foreground">Notification Preferences</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Control your device alerts, momentum coaching, emails and weekly recaps.</p>
+              </div>
 
-              <div className={`p-4 bg-card border border-border rounded-xl ${!isPaid && 'opacity-70'}`}>
+              {/* 1. Normal Alerts (Free) */}
+              <div className="p-4 bg-card border border-border rounded-xl">
                 <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm text-foreground font-medium flex items-center gap-2">
-                      Smart Alerts
-                      {!isPaid && <Sparkles className="w-3 h-3 text-primary" />}
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-foreground font-semibold">Normal Alerts</p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">Free</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      In-app and standard alerts for overdue tasks, project invitations, and upcoming deadlines.
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      Real device notifications for energy checks, overdue tasks and upcoming deadlines
+                  </div>
+                  <button
+                    onClick={handleNormalAlertsToggle}
+                    aria-label="Toggle normal alerts"
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ${normalAlerts ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${normalAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Smart Alerts (Premium) */}
+              <div className={`p-4 bg-card border border-border rounded-xl ${!isPaid ? 'opacity-80' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
+                        Smart Alerts
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      </p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Premium</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Proactive AI momentum coaching (e.g., "Falling behind on 3 tasks, maybe prioritize these first") and scheduled energy checks delivered directly to your device.
                     </p>
                   </div>
                   <button
                     onClick={handleSmartAlertsToggle}
                     disabled={savingSmart}
                     aria-label="Toggle smart alerts"
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${smartAlerts ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ${smartAlerts && isPaid ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
                   >
-                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${smartAlerts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${smartAlerts && isPaid ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 {isPaid && smartAlerts && (
-                  <div className="mt-3 text-xs flex items-center gap-2">
+                  <div className="mt-3 pt-3 border-t border-border text-xs" data-testid="smart-alerts-device-status">
                     {!notificationsSupported() ? (
                       <span className="text-muted-foreground">Device notifications aren't supported in this browser.</span>
                     ) : notifPermission === 'granted' ? (
-                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
-                        <CheckCircle className="w-3.5 h-3.5" /> Device notifications are enabled
-                      </span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                          <CheckCircle className="w-3.5 h-3.5" /> Device notifications are enabled
+                        </span>
+                        <button
+                          onClick={handleSendTestNotification}
+                          data-testid="button-test-notification"
+                          className="px-2.5 py-1.5 rounded-lg border border-border text-foreground hover:bg-muted transition-colors font-medium text-xs"
+                        >
+                          Send test notification
+                        </button>
+                      </div>
                     ) : notifPermission === 'denied' ? (
                       <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                        <Bell className="w-3.5 h-3.5" /> Notifications are blocked in your browser. Enable them from your browser settings to receive Smart Alerts.
+                        <Bell className="w-3.5 h-3.5" /> Notifications are blocked in your browser. Enable them in your browser settings to receive Smart Alerts.
                       </span>
                     ) : (
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Bell className="w-3.5 h-3.5" /> Allow device notifications to receive Smart Alerts on this device.
-                      </span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          <Bell className="w-3.5 h-3.5" /> Allow device notifications to receive Smart Alerts on this device.
+                        </span>
+                        <button
+                          onClick={enableDeviceNotifications}
+                          disabled={enablingNotif}
+                          data-testid="button-enable-device-notifications"
+                          className="px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium text-xs disabled:opacity-60"
+                        >
+                          {enablingNotif ? 'Requesting…' : 'Enable on this device'}
+                        </button>
+                      </div>
+                    )}
+                    {notifNotice && (
+                      <p className="mt-2 text-green-600 dark:text-green-400" role="status">{notifNotice}</p>
                     )}
                   </div>
                 )}
                 {!isPaid && (
-                  <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Premium Feature — upgrade to unlock Smart Alerts
+                  <p className="mt-2.5 text-xs text-primary font-medium flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3" /> Upgrade to Premium to unlock Smart Alerts
                   </p>
                 )}
               </div>
 
-              <div className={`p-4 bg-card border border-border rounded-xl ${!isTopTier && 'opacity-70'}`}>
+              {/* 3. Email Notifications (Premium) */}
+              <div className={`p-4 bg-card border border-border rounded-xl ${!isPaid ? 'opacity-80' : ''}`}>
                 <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm text-foreground font-medium flex items-center gap-2">
-                      Email Notifications
-                      {!isTopTier && <Sparkles className="w-3 h-3 text-primary" />}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Receive a weekly AI summary of your productivity
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
+                        Email Notifications
+                      </p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Premium</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Product updates, new feature announcements, and security notices delivered straight to your inbox.
                     </p>
                   </div>
                   <button
                     onClick={handleEmailNotifsToggle}
                     disabled={savingEmail}
                     aria-label="Toggle email notifications"
-                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ml-3 ${emailNotifs ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ${emailNotifs && isPaid ? 'bg-primary' : 'bg-muted'} disabled:opacity-60`}
                   >
-                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${emailNotifs ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${emailNotifs && isPaid ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                {!isPaid && (
+                  <p className="mt-2.5 text-xs text-primary font-medium flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3" /> Upgrade to Premium to unlock email notifications
+                  </p>
+                )}
+              </div>
+
+              {/* 4. Weekly AI Summary Emails (Pro) */}
+              <div className={`p-4 bg-card border border-border rounded-xl ${!isTopTier ? 'opacity-80' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
+                        Weekly AI Summary Emails
+                        <Brain className="w-3.5 h-3.5 text-purple-500" />
+                      </p>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">Pro</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Comprehensive weekly AI productivity recap, bottleneck diagnosis, habit streaks, and goal roadmap delivered every Monday morning.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleWeeklyAiSummaryToggle}
+                    aria-label="Toggle weekly AI summary emails"
+                    className={`w-11 h-6 rounded-full transition-all duration-200 relative flex-shrink-0 ${weeklyAiSummary && isTopTier ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 absolute top-0.5 ${weeklyAiSummary && isTopTier ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
                 {!isTopTier && (
-                  <p className="mt-3 text-xs text-primary font-medium flex items-center gap-2">
-                    <Sparkles className="w-3 h-3" /> Pro Feature upgrade to unlock weekly AI emails
+                  <p className="mt-2.5 text-xs text-purple-600 dark:text-purple-400 font-medium flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3" /> Pro Feature — upgrade to unlock weekly AI summaries
                   </p>
                 )}
-                {user?.isAdmin && (
+                {user?.isAdmin && isTopTier && (
                   <div className="mt-3 pt-3 border-t border-border">
                     <button
                       onClick={sendSummaryNow}
                       disabled={summarySending}
                       data-testid="button-send-summary-now"
-                      className="px-4 py-2 text-sm bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50 font-medium"
                     >
                       {summarySending ? 'Sending…' : 'Send summary now (admin)'}
                     </button>
@@ -1501,6 +1735,7 @@ const SettingsPage: React.FC = () => {
             return (
               <div className="space-y-4">
                 <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
+                <DiscordCommunitySection className="mb-4" />
 
                 {/* Tab switcher */}
                 <div className="flex gap-2">
@@ -1620,17 +1855,44 @@ const SettingsPage: React.FC = () => {
                 </div>
                 <button
                   aria-label="Toggle two-factor email authentication"
+                  disabled={disable2faSending}
                   onClick={async () => {
-                    // Instant response: flip the UI immediately, sync in background.
-                    const next = !twoFactorEnabled;
+                    if (twoFactorEnabled) {
+                      // Disabling requires email verification code
+                      setDisable2faError('');
+                      setDisable2faCode('');
+                      setDisable2faSending(true);
+                      setDisable2faModalOpen(true);
+                      try {
+                        const res = await fetch('/api/auth/two-factor/send-disable-code', {
+                          method: 'POST',
+                          credentials: 'include',
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                          setDisable2faError(data.error || 'Failed to send verification code');
+                        }
+                      } catch {
+                        setDisable2faError('Failed to send verification code');
+                      } finally {
+                        setDisable2faSending(false);
+                      }
+                      return;
+                    }
+
+                    // Enabling 2FA
                     const prev = twoFactorEnabled;
-                    setTwoFactorEnabled(next);
+                    setTwoFactorEnabled(true);
                     try {
-                      const res = await fetch('/api/auth/two-factor/enable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ enabled: next }) });
+                      const res = await fetch('/api/auth/two-factor/enable', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ enabled: true }),
+                      });
                       if (!res.ok) throw new Error('Failed');
                       showSaved();
                     } catch {
-                      // Revert only if the save actually failed.
                       setTwoFactorEnabled(prev);
                     }
                   }}
@@ -1660,6 +1922,335 @@ const SettingsPage: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'organization' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Organization Memberships</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Organizations grant plan access to members. No tasks, notes or personal data are ever shared.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setJoinCodeInput('');
+                    setJoinError('');
+                    setJoinSuccess('');
+                    setJoinModalOpen(true);
+                  }}
+                  data-testid="button-join-organization"
+                  className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs flex items-center justify-center gap-1.5 hover:bg-primary/90 transition-all shadow-xs flex-shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Join Organization
+                </button>
+              </div>
+
+              {orgsLoading ? (
+                <div className="flex justify-center py-12">
+                  <span className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : joinedOrgs.length === 0 && ownedOrgs.length === 0 ? (
+                <div className="p-8 text-center bg-card border border-border rounded-2xl">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-bold text-foreground">Not in any organization</h3>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto leading-relaxed">
+                    Have an invite code from a school or family plan? Click Join Organization above to enter your code and unlock their plan.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Joined Organizations */}
+                  {joinedOrgs.map((org: any) => (
+                    <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary font-bold">
+                          <Building2 className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                              {org.tier}
+                            </span>
+                            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                              {org.type}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Member · Joined {org.joinedAt ? new Date(org.joinedAt).toLocaleDateString() : 'Active'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Are you sure you want to leave ${org.name}? Your inherited ${org.tier} plan will end.`)) return;
+                          try {
+                            const res = await fetch(`/api/organizations/${org.id}/leave`, {
+                              method: 'POST',
+                              credentials: 'include',
+                            });
+                            if (res.ok) {
+                              fetchOrganizations();
+                              showSaved();
+                            } else {
+                              const data = await res.json();
+                              alert(data.error || 'Failed to leave organization');
+                            }
+                          } catch {
+                            alert('Failed to leave organization');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors flex-shrink-0"
+                      >
+                        Leave
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* Owned or Administered Organizations */}
+                  {ownedOrgs.map((org: any) => (
+                    <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center flex-shrink-0 text-purple-600 font-bold">
+                          <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                              {org.tier}
+                            </span>
+                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                              {org.isOwner ? 'Owner' : 'Admin'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {org.currentSeats} of {org.maxSeats} seats used · {org.type} plan
+                          </p>
+                        </div>
+                      </div>
+                      <a
+                        href="/organizations"
+                        className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors flex-shrink-0"
+                      >
+                        Manage
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {/* 2FA Disable Verification Modal */}
+          {disable2faModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Disable Two-Factor Authentication</h3>
+                      <p className="text-xs text-muted-foreground">Verify your identity to proceed</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setDisable2faModalOpen(false);
+                      setDisable2faError('');
+                    }}
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  A 6-digit verification code has been sent to <span className="font-semibold text-foreground">{user?.email}</span>. Enter the code below to disable two-factor authentication.
+                </p>
+
+                <div>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={disable2faCode}
+                    onChange={e => setDisable2faCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    className="w-full text-center tracking-[0.5em] text-2xl font-mono py-3 px-4 rounded-xl border border-border bg-background focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  />
+                  {disable2faError && (
+                    <p className="text-xs text-destructive mt-1.5 font-medium">{disable2faError}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setDisable2faError('');
+                      try {
+                        const res = await fetch('/api/auth/two-factor/send-disable-code', {
+                          method: 'POST',
+                          credentials: 'include',
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          alert('New code sent to your email.');
+                        } else {
+                          setDisable2faError(data.error || 'Failed to resend code');
+                        }
+                      } catch {
+                        setDisable2faError('Failed to resend code');
+                      }
+                    }}
+                    className="text-xs text-primary font-semibold hover:underline"
+                  >
+                    Resend code
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDisable2faModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-muted transition-colors text-muted-foreground"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={disable2faLoading || disable2faCode.length !== 6}
+                      onClick={async () => {
+                        setDisable2faLoading(true);
+                        setDisable2faError('');
+                        try {
+                          const res = await fetch('/api/auth/two-factor/disable', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ code: disable2faCode.trim() }),
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            setTwoFactorEnabled(false);
+                            setDisable2faModalOpen(false);
+                            showSaved();
+                          } else {
+                            setDisable2faError(data.error || 'Verification failed');
+                          }
+                        } catch {
+                          setDisable2faError('Network error verifying code');
+                        } finally {
+                          setDisable2faLoading(false);
+                        }
+                      }}
+                      className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-xs font-bold hover:bg-destructive/90 transition-all disabled:opacity-50"
+                    >
+                      {disable2faLoading ? 'Verifying…' : 'Disable 2FA'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Join Organization Modal */}
+          {joinModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Join an Organization</h3>
+                      <p className="text-xs text-muted-foreground">Enter an organization or group join code</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setJoinModalOpen(false);
+                      setJoinError('');
+                      setJoinSuccess('');
+                    }}
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Enter the 6-character code provided by your organization owner or group administrator. You'll instantly receive their plan access.
+                </p>
+
+                <div>
+                  <input
+                    type="text"
+                    maxLength={8}
+                    value={joinCodeInput}
+                    onChange={e => setJoinCodeInput(e.target.value.toUpperCase())}
+                    placeholder="ABC123"
+                    className="w-full text-center tracking-[0.3em] uppercase text-2xl font-mono py-3 px-4 rounded-xl border border-border bg-background focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  />
+                  {joinError && (
+                    <p className="text-xs text-destructive mt-1.5 font-medium">{joinError}</p>
+                  )}
+                  {joinSuccess && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1.5 font-medium">{joinSuccess}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setJoinModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-muted transition-colors text-muted-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={joinLoading || joinCodeInput.trim().length < 3}
+                    onClick={async () => {
+                      setJoinLoading(true);
+                      setJoinError('');
+                      setJoinSuccess('');
+                      try {
+                        const res = await fetch('/api/organizations/join', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ code: joinCodeInput.trim() }),
+                        });
+                        const data = await res.json();
+                        if (res.ok) {
+                          setJoinSuccess(data.message || 'Joined successfully!');
+                          setTimeout(() => {
+                            setJoinModalOpen(false);
+                            fetchOrganizations();
+                            window.location.reload();
+                          }, 1200);
+                        } else {
+                          setJoinError(data.error || 'Failed to join organization');
+                        }
+                      } catch {
+                        setJoinError('Network error joining organization');
+                      } finally {
+                        setJoinLoading(false);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all disabled:opacity-50"
+                  >
+                    {joinLoading ? 'Joining…' : 'Join'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -5,13 +5,38 @@ import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import { db } from '../db.js';
 import { pool } from '../db.js';
-import { users, passwordResetTokens, emailVerificationTokens, pendingSignups, twoFactorTokens, userSettings } from '../../shared/schema.js';
+import { users, passwordResetTokens, emailVerificationTokens, pendingSignups, twoFactorTokens, userSettings, organizations, organizationMembers } from '../../shared/schema.js';
 import { eq, desc, and } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
 import { sendEmail, verificationEmailHtml, resetEmailHtml } from '../lib/email.js';
 import { normalizeLanguageCode } from '../lib/language.js';
+
+export async function resolveEffectiveSubscriptionTier(userId: number, ownTier: string | null | undefined): Promise<string> {
+  const tierRank = (t: string | null | undefined): number => {
+    const s = (t || '').toLowerCase();
+    if (s === 'pro') return 2;
+    if (s === 'premium') return 1;
+    return 0;
+  };
+  let effective = ownTier || 'free';
+  try {
+    const orgMemberships = await db
+      .select({ tier: organizations.tier, status: organizations.status })
+      .from(organizationMembers)
+      .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+      .where(eq(organizationMembers.userId, userId));
+    for (const om of orgMemberships) {
+      if (om.status === 'active' || om.status === 'pending') {
+        if (tierRank(om.tier) > tierRank(effective)) {
+          effective = om.tier;
+        }
+      }
+    }
+  } catch {}
+  return effective;
+}
 
 const router = Router();
 
@@ -165,6 +190,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
+    const effectiveTier = await resolveEffectiveSubscriptionTier(user.id, user.subscriptionTier);
     await issueToken(res, user.id, user.email);
     res.json({
       user: {
@@ -174,7 +200,7 @@ router.post('/login', async (req: Request, res: Response) => {
         avatarUrl: user.avatarUrl,
         emailVerified: (user as any).emailVerified ?? false,
         twoFactorEnabled: (user as any).twoFactorEnabled ?? false,
-        subscriptionTier: user.subscriptionTier || 'free',
+        subscriptionTier: effectiveTier,
         subscriptionStatus: user.subscriptionStatus || 'inactive',
         isAdmin: isAdmin(user.email),
       },
@@ -392,6 +418,7 @@ router.get('/me', async (req: Request, res: Response) => {
       return res.json({ user: null });
     }
     
+    const effectiveTier = await resolveEffectiveSubscriptionTier(user.id, user.subscriptionTier);
     res.json({
       user: {
         id: user.id,
@@ -400,7 +427,7 @@ router.get('/me', async (req: Request, res: Response) => {
         avatarUrl: user.avatarUrl,
         emailVerified: (user as any).emailVerified ?? false,
         twoFactorEnabled: (user as any).twoFactorEnabled ?? false,
-        subscriptionTier: user.subscriptionTier || 'free',
+        subscriptionTier: effectiveTier,
         subscriptionStatus: user.subscriptionStatus || 'inactive',
         isAdmin: isAdmin(user.email),
       },
@@ -548,6 +575,80 @@ router.post('/two-factor/resend', async (req: Request, res: Response) => {
       debugCode: exposeCode ? code : undefined,
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/two-factor/send-disable-code', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!(user as any).twoFactorEnabled) {
+      return res.status(400).json({ error: 'Two-factor authentication is not currently enabled.' });
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    try {
+      await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
+    } catch {}
+    await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+
+    let emailSent = false;
+    try {
+      const { twoFactorEmailHtml, sendEmail } = await import('../lib/email.js');
+      emailSent = await sendEmail({
+        to: user.email,
+        subject: 'Security verification code — MyPlanner',
+        html: twoFactorEmailHtml(user.name, code),
+        text: `Your verification code to disable 2FA is ${code} (expires in 10 minutes)`,
+      });
+    } catch (e) {
+      console.error('2FA disable code email failed:', e);
+    }
+
+    const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+    return res.json({
+      success: true,
+      message: emailSent ? 'Verification code sent to your email.' : 'Code generated (email delivery simulated in dev).',
+      debugCode: exposeCode ? code : undefined,
+    });
+  } catch (e) {
+    console.error('Send disable 2FA code error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.post('/two-factor/disable', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ error: 'Verification code is required.' });
+
+    const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const recent = await db
+      .select()
+      .from(twoFactorTokens)
+      .where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)))
+      .orderBy(desc(twoFactorTokens.id))
+      .limit(5);
+
+    const match = recent.find(r => r.code === String(code).trim());
+    if (!match) {
+      return res.status(400).json({ error: 'Invalid verification code. Please check and try again.' });
+    }
+
+    if (new Date(match.expiresAt).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
+    }
+
+    await db.update(twoFactorTokens).set({ used: true }).where(eq(twoFactorTokens.id, match.id));
+    await db.update(users).set({ twoFactorEnabled: false } as any).where(eq(users.id, user.id));
+
+    res.json({ enabled: false, message: 'Two-factor authentication disabled successfully.' });
+  } catch (e) {
+    console.error('Disable 2FA error:', e);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 router.post('/two-factor/enable', requireAuth, async (req: AuthRequest, res: Response) => {

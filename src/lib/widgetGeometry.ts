@@ -2,9 +2,16 @@ export const WIDGET_COLUMNS = 12;
 export const WIDGET_ROW_HEIGHT = 112;
 export const WIDGET_GAP = 16;
 export const WIDGET_ROW_PITCH = WIDGET_ROW_HEIGHT + WIDGET_GAP;
-export const MIN_WIDGET_COLUMNS = 4;
-export const MIN_WIDGET_ROWS = 2;
+export const MIN_WIDGET_COLUMNS = 6;
+export const MIN_WIDGET_ROWS = 3;
 export const MAX_WIDGET_ROWS = 30;
+
+export interface WidgetSizeLimits {
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+}
 
 export interface WidgetRect {
   id?: string;
@@ -12,6 +19,10 @@ export interface WidgetRect {
   row: number;
   w: number;
   h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 export interface GridBounds {
@@ -31,12 +42,24 @@ const integer = (value: number, fallback: number) => Number.isFinite(value) ? Ma
 /** The space between column starts includes the gutter, unlike width / 12. */
 export const widgetColumnPitch = (width: number) => (width + WIDGET_GAP) / WIDGET_COLUMNS;
 
-export function normalizeWidget<T extends WidgetRect>(widget: T): T {
-  const w = clamp(integer(widget.w, MIN_WIDGET_COLUMNS), MIN_WIDGET_COLUMNS, WIDGET_COLUMNS);
+export function normalizeWidget<T extends WidgetRect>(widget: T, limits?: WidgetSizeLimits): T {
+  const customLimits: WidgetSizeLimits = {
+    minW: limits?.minW ?? widget.minW ?? MIN_WIDGET_COLUMNS,
+    minH: limits?.minH ?? widget.minH ?? MIN_WIDGET_ROWS,
+    maxW: limits?.maxW ?? widget.maxW ?? WIDGET_COLUMNS,
+    maxH: limits?.maxH ?? widget.maxH ?? MAX_WIDGET_ROWS,
+  };
+
+  const minW = Math.max(MIN_WIDGET_COLUMNS, customLimits.minW ?? MIN_WIDGET_COLUMNS);
+  const maxW = Math.min(WIDGET_COLUMNS, customLimits.maxW ?? WIDGET_COLUMNS);
+  const minH = Math.max(MIN_WIDGET_ROWS, customLimits.minH ?? MIN_WIDGET_ROWS);
+  const maxH = Math.min(MAX_WIDGET_ROWS, customLimits.maxH ?? MAX_WIDGET_ROWS);
+
+  const w = clamp(integer(widget.w, minW), minW, maxW);
   return {
     ...widget,
     w,
-    h: clamp(integer(widget.h, MIN_WIDGET_ROWS), MIN_WIDGET_ROWS, MAX_WIDGET_ROWS),
+    h: clamp(integer(widget.h, minH), minH, maxH),
     col: clamp(integer(widget.col, 1), 1, WIDGET_COLUMNS - w + 1),
     row: Math.max(1, integer(widget.row, 1)),
   };
@@ -47,8 +70,8 @@ export function widgetsIntersect(a: WidgetRect, b: WidgetRect) {
 }
 
 /** Pack matching-width gaps while optionally keeping the active module anchored. */
-export function compactWidgets<T extends WidgetRect>(widgets: T[], anchoredId?: string): T[] {
-  const normalized = widgets.map(normalizeWidget);
+export function compactWidgets<T extends WidgetRect>(widgets: T[], anchoredId?: string, limitsMap?: Record<string, WidgetSizeLimits>): T[] {
+  const normalized = widgets.map(w => normalizeWidget(w, w.id && limitsMap ? limitsMap[w.id] : undefined));
   const anchored = anchoredId ? normalized.find(widget => widget.id === anchoredId) : undefined;
   const placed: T[] = anchored ? [anchored] : [];
   const rest = normalized.filter(widget => widget !== anchored).sort((a, b) => a.row - b.row || a.col - b.col);
@@ -81,11 +104,32 @@ export function moveWidgetFromGrab(clientX: number, clientY: number, bounds: Gri
   };
 }
 
-export function resizeWidget(widget: WidgetRect, deltaX: number, deltaY: number, gridWidth: number): WidgetRect {
+export function resizeWidget(
+  widget: WidgetRect,
+  deltaX: number,
+  deltaY: number,
+  gridWidth: number,
+  limits?: WidgetSizeLimits,
+): WidgetRect {
+  const customLimits: WidgetSizeLimits = {
+    minW: limits?.minW ?? widget.minW ?? MIN_WIDGET_COLUMNS,
+    minH: limits?.minH ?? widget.minH ?? MIN_WIDGET_ROWS,
+    maxW: limits?.maxW ?? widget.maxW ?? WIDGET_COLUMNS,
+    maxH: limits?.maxH ?? widget.maxH ?? MAX_WIDGET_ROWS,
+  };
+
+  const minW = Math.max(MIN_WIDGET_COLUMNS, customLimits.minW ?? MIN_WIDGET_COLUMNS);
+  const maxW = Math.min(customLimits.maxW ?? WIDGET_COLUMNS, WIDGET_COLUMNS - widget.col + 1);
+  const minH = Math.max(MIN_WIDGET_ROWS, customLimits.minH ?? MIN_WIDGET_ROWS);
+  const maxH = customLimits.maxH ?? MAX_WIDGET_ROWS;
+
+  const targetW = widget.w + Math.round(deltaX / widgetColumnPitch(gridWidth));
+  const targetH = widget.h + Math.round(deltaY / WIDGET_ROW_PITCH);
+
   return {
     col: widget.col,
     row: widget.row,
-    w: clamp(widget.w + Math.round(deltaX / widgetColumnPitch(gridWidth)), Math.min(MIN_WIDGET_COLUMNS, WIDGET_COLUMNS - widget.col + 1), WIDGET_COLUMNS - widget.col + 1),
-    h: clamp(widget.h + Math.round(deltaY / WIDGET_ROW_PITCH), MIN_WIDGET_ROWS, MAX_WIDGET_ROWS),
+    w: clamp(targetW, Math.min(minW, WIDGET_COLUMNS - widget.col + 1), maxW),
+    h: clamp(targetH, minH, maxH),
   };
 }

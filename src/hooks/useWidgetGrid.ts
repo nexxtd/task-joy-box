@@ -12,6 +12,10 @@ export interface GridWidgetDef<Type extends string = string> {
   w: number;
   h: number;
   tier: WidgetTier;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 export interface GridRect {
@@ -20,12 +24,20 @@ export interface GridRect {
   row: number;
   w: number;
   h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 export interface GridWidget<Type extends string = string> extends GridRect {
   id: string;
   type: Type;
   title: string;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 export const GRID_COLS = 12;
@@ -235,8 +247,15 @@ export function useWidgetGrid<T extends string>({
     }
     let rect: GridRect;
     if (g.mode === 'resize') {
+      const def = defs.find(d => d.type === g.w.type);
+      const limits = {
+        minW: def?.minW ?? g.w.minW,
+        minH: def?.minH ?? g.w.minH,
+        maxW: def?.maxW ?? g.w.maxW,
+        maxH: def?.maxH ?? g.w.maxH,
+      };
       rect = resizeWidget({ col: g.col, row: g.row, w: g.ww, h: g.hh },
-        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width);
+        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width, limits);
     } else {
       rect = moveWidgetFromGrab(e.clientX, e.clientY, bounds, { x: g.grabX, y: g.grabY },
         { col: g.col, row: g.row, w: g.ww, h: g.hh });

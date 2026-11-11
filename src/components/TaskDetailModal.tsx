@@ -347,6 +347,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                 }}
                 onCreate={async (name, color) => {
                   const tag = await createTag({ name, color });
+                  setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
                   const label = sharedTagToLabel(tag);
                   updateTask(task.id, { labels: [...task.labels, label] });
                 }}

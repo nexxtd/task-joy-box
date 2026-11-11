@@ -11,6 +11,12 @@
   align-self: center;
 }
 
+/* Sub-task rows opt into top alignment so the move / select / time / delete
+   controls stay put when the row text is expanded or collapsed. */
+.detail-item-row.items-start > * {
+  align-self: start;
+}
+
 .detail-item-row > textarea {
   width: 100%;
   max-width: 100%;

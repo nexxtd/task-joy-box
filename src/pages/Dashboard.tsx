@@ -29,7 +29,7 @@ import { createPortal } from 'react-dom';
 import { useLanguage } from '@/context/LanguageContext';
 import { dateLocale, formatFullDate } from '@/i18n/format';
 import { tt } from '@/i18n/translations';
-import { compactWidgets, getWidgetGrab, moveWidgetFromGrab, normalizeWidget, resizeWidget } from '@/lib/widgetGeometry';
+import { compactWidgets, getWidgetGrab, moveWidgetFromGrab, normalizeWidget, resizeWidget, type WidgetSizeLimits } from '@/lib/widgetGeometry';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -74,30 +74,34 @@ interface WidgetDef {
   w: number;
   h: number;
   tier: DashboardWidgetTier;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
 }
 
 const WIDGET_DEFS: WidgetDef[] = [
-  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 8, h: 2, tier: 'free' },
-  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 3, tier: 'free' },
-  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 4, h: 3, tier: 'free' },
-  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 4, h: 3, tier: 'free' },
-  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 4, h: 2, tier: 'free' },
-  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 4, h: 2, tier: 'free' },
-  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 4, h: 2, tier: 'free' },
-  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 4, h: 2, tier: 'free' },
-  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 4, h: 2, tier: 'free' },
-  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 4, h: 3, tier: 'free' },
-  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 4, h: 2, tier: 'free' },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 4, h: 2, tier: 'free' },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 4, h: 2, tier: 'free' },
-  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
-  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 4, h: 3, tier: 'premium' },
-  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 4, h: 3, tier: 'premium' },
-  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 4, h: 3, tier: 'premium' },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 4, h: 2, tier: 'pro' },
-  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 4, h: 3, tier: 'pro' },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 4, h: 3, tier: 'pro' },
-  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 8, h: 2, tier: 'pro' },
+  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 12, h: 3, tier: 'free', minW: 8, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 8, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 6, h: 3, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 12, h: 3, tier: 'pro', minW: 8, minH: 3, maxW: 12, maxH: 6 },
 ];
 
 
@@ -128,13 +132,19 @@ const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSP
 
 const packLayout = compactWidgets<DashboardWidget>;
 
+const getDashboardWidgetLimits = (type: DashboardWidgetType): WidgetSizeLimits | undefined => {
+  const def = WIDGET_DEFS.find(d => d.type === type);
+  if (!def) return undefined;
+  return { minW: def.minW, minH: def.minH, maxW: def.maxW, maxH: def.maxH };
+};
+
 // Guarantee no two widgets intersect. If a `movedId` is supplied the moved
 // widget keeps its target position and every colliding widget is pushed down
 // beneath it; otherwise the whole set is packed (pulled up + pushed down).
 // This is the single source of truth for non-overlapping placement and is
 // applied to every layout-affecting operation and to the rendered layout.
 const resolveCollisions = (widgets: DashboardWidget[], movedId?: string): DashboardWidget[] => {
-  widgets = widgets.map(normalizeWidget);
+  widgets = widgets.map(w => normalizeWidget(w, getDashboardWidgetLimits(w.type)));
   if (movedId) {
     const moved = widgets.find(w => w.id === movedId);
     if (!moved) return packLayout(widgets);
@@ -948,8 +958,10 @@ const Dashboard: React.FC = () => {
     }
     let rect: Rect;
     if (g.mode === 'resize') {
+      const def = WIDGET_DEFS.find(d => d.type === g.w.type);
+      const limits = { minW: def?.minW, minH: def?.minH, maxW: def?.maxW, maxH: def?.maxH };
       rect = resizeWidget({ col: g.col, row: g.row, w: g.ww, h: g.hh },
-        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width);
+        e.clientX - g.sx, e.clientY - bounds.top - g.sy, bounds.width, limits);
     } else {
       rect = moveWidgetFromGrab(e.clientX, e.clientY, bounds, { x: g.grabX, y: g.grabY },
         { col: g.col, row: g.row, w: g.ww, h: g.hh });
@@ -1048,7 +1060,7 @@ const Dashboard: React.FC = () => {
       window.setTimeout(() => { setShowCustomize(false); setPanelClosing(false); }, 200);
       const bounds = gridRef.current?.getBoundingClientRect();
       if (!bounds || bounds.width <= 0) return;
-      const dimensions = normalizeWidget({ col: 1, row: 1, w: p.def.w, h: p.def.h });
+      const dimensions = normalizeWidget({ col: 1, row: 1, w: p.def.w, h: p.def.h }, { minW: p.def.minW, minH: p.def.minH, maxW: p.def.maxW, maxH: p.def.maxH });
       gestureRef.current = { mode: 'panel', def: p.def, sx, sy, lastX: ev.clientX, lastY: ev.clientY, col: 1, row: 1, ww: dimensions.w, hh: dimensions.h, grabX: p.grabX, grabY: p.grabY };
       setActiveDragId('__dragging__');
       setSuppressMotion(false);
@@ -2271,7 +2283,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
                           {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
                         </div>
-                        <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
+                        <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{tt(widget.title)}</h3>
                       </div>
                       <div className={`flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                         <button
@@ -2332,7 +2344,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                       <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
                         {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
                       </div>
-                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide flex-1">{widget.title}</h3>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide flex-1">{tt(widget.title)}</h3>
                       <button
                         onClick={() => removeWidget(widget.id)}
                         className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
@@ -2388,7 +2400,10 @@ style={{ background: 'hsl(var(--primary))' }}>
             tags={allTags}
             selectedIds={[]}
             onToggle={() => {}}
-            onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
+            onCreate={async (name, color) => {
+              const tag = await createTag({ name, color });
+              setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
+            }}
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
             onColorChange={changeTagColorEverywhere}

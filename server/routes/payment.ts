@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
-import { users, organizations, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema.js';
+import { users, organizations, organizationMembers, coupons, couponRedemptions, pendingPayments, transactions, type UpdateUser, type UpdateOrganization } from '../../shared/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
@@ -205,16 +205,18 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
 
     // Record the exact purchase intent so the return URL can't be tampered with
     // (tier/seats/coupon are read back from this record, never from the query string).
+    const purchaseSeats = req.body?.seats ? parseInt(req.body.seats) : (planType === 'family' ? 5 : 1);
     await db.insert(pendingPayments).values({
       userId: req.userId!,
       orderId: paymentId,
       tier,
       planType,
+      seats: purchaseSeats,
       couponId,
       amountCents: Math.round(adjustedPrice * 100),
     }).onConflictDoUpdate({
       target: pendingPayments.orderId,
-      set: { userId: req.userId!, tier, planType, couponId, amountCents: Math.round(adjustedPrice * 100), status: 'pending' },
+      set: { userId: req.userId!, tier, planType, seats: purchaseSeats, couponId, amountCents: Math.round(adjustedPrice * 100), status: 'pending' },
     });
 
     res.json({ approvalUrl, paymentId });
@@ -357,6 +359,30 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
         couponId: intent.couponId || null,
       }).onConflictDoNothing({ target: transactions.providerTransactionId });
 
+      if (intent.planType === 'family' || intent.planType === 'school') {
+        const orgSeats = intent.planType === 'family' ? 5 : (intent.seats || 10);
+        const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+        const orgName = intent.planType === 'family' ? `${purchaser?.name || 'Family'} Plan` : `${purchaser?.name || 'School'} Organization`;
+        const rootCode = String(Math.floor(100000 + Math.random() * 900000));
+
+        const [newOrg] = await tx.insert(organizations).values({
+          name: orgName,
+          type: intent.planType,
+          ownerId: req.userId!,
+          maxSeats: orgSeats,
+          currentSeats: 1,
+          tier: intent.tier,
+          status: 'active',
+          joinCode: rootCode,
+        }).returning();
+
+        await tx.insert(organizationMembers).values({
+          organizationId: newOrg.id,
+          userId: req.userId!,
+          role: 'owner',
+        });
+      }
+
       await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
     });
 
@@ -403,6 +429,30 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
         provider: 'paypal',
         providerTransactionId: paymentId,
       }).onConflictDoNothing({ target: transactions.providerTransactionId });
+
+      if (intent.planType === 'family' || intent.planType === 'school') {
+        const orgSeats = intent.planType === 'family' ? 5 : (intent.seats || 10);
+        const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+        const orgName = intent.planType === 'family' ? `${purchaser?.name || 'Family'} Plan` : `${purchaser?.name || 'School'} Organization`;
+        const rootCode = String(Math.floor(100000 + Math.random() * 900000));
+
+        const [newOrg] = await tx.insert(organizations).values({
+          name: orgName,
+          type: intent.planType,
+          ownerId: req.userId!,
+          maxSeats: orgSeats,
+          currentSeats: 1,
+          tier: intent.tier,
+          status: 'active',
+          joinCode: rootCode,
+        }).returning();
+
+        await tx.insert(organizationMembers).values({
+          organizationId: newOrg.id,
+          userId: req.userId!,
+          role: 'owner',
+        });
+      }
 
       await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
     });

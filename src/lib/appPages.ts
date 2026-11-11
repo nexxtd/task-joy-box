@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import type { ComponentType, LazyExoticComponent } from 'react';
 import {
   BarChart3,
+  Building2,
   CalendarDays,
   CheckSquare,
   CreditCard,
@@ -109,6 +110,14 @@ export const APP_PAGES: AppPageDef[] = [
     minSplitWidth: 560,
     inSplitPicker: true,
     paidOnly: true,
+  },
+  {
+    path: '/organizations',
+    label: 'Organizations',
+    icon: Building2,
+    component: lazy(() => import('@/pages/Organizations')),
+    minSplitWidth: 560,
+    inSplitPicker: true,
   },
   {
     path: '/support',

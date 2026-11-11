@@ -12,7 +12,7 @@ import { fetchNoteTemplates as fetchTemplates, fetchNoteTemplateByCode, createNo
 import CopyShareCode from '@/components/CopyShareCode';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
-import { readTaskSections, writeTaskSections, readExpandedLists } from '@/lib/taskSectionState';
+import { readTaskSections, writeTaskSections, readExpandedLists, readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import {
   ArrowDown,
   ArrowUp,
@@ -27,9 +27,12 @@ import {
   Edit3,
   Globe,
   GripVertical,
+  Image as ImageIcon,
   FolderKanban,
   KeyRound,
+  Loader2,
   Lock,
+  Paperclip,
   Plus,
   Save,
   Search,
@@ -43,6 +46,7 @@ import {
 import { useAnchoredPopup } from '@/hooks/useAnchoredPopup';
 import CreateTaskModal, { type CreateTaskInitialValues } from '@/components/CreateTaskModal';
 import { NoteDropdownExpanded } from '@/components/notes/NoteDropdownExpanded';
+import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import TaskMediaSections from '@/components/shared/TaskMediaSections';
 import TagsModal from '@/components/shared/TagsModal';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
@@ -752,9 +756,14 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistIndex, setEditingDraftChecklistIndex] = useState<number | null>(null);
   const [editingDraftChecklistText, setEditingDraftChecklistText] = useState('');
 
-  // Creation modal section collapse states
-  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
-  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
+  // Creation modal section collapse states — persisted so a section closed
+  // here stays closed when the modal (or the page) is reopened.
+  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(() => readDraftSections().subtasks ?? false);
+  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(() => readDraftSections().checklists ?? false);
+
+  useEffect(() => {
+    writeDraftSections({ subtasks: draftSubtasksCollapsed, checklists: draftChecklistCollapsed });
+  }, [draftSubtasksCollapsed, draftChecklistCollapsed]);
 
   const [myTasksCollapsed, setMyTasksCollapsed] = useState(() => localStorage.getItem('notes-mynotes-collapsed') === 'true');
   const [columnEditId, setColumnEditId] = useState<string | null>(null);
@@ -807,6 +816,11 @@ const Tasks: React.FC = () => {
   const [aiBuilderInput, setAiBuilderInput] = useState('');
   const [aiBuilderLoading, setAiBuilderLoading] = useState(false);
   const [aiBuilderError, setAiBuilderError] = useState('');
+  const [aiBuilderFiles, setAiBuilderFiles] = useState<File[]>([]);
+  const [aiBuilderImages, setAiBuilderImages] = useState<Attachment[]>([]);
+  const [aiBuilderFilesCollapsed, setAiBuilderFilesCollapsed] = useState(false);
+  const [aiBuilderImagesCollapsed, setAiBuilderImagesCollapsed] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [aiTaskDraft, setAiTaskDraft] = useState<CreateTaskInitialValues | null>(null);
 
   const [orderedActiveIds, setOrderedActiveIds] = useState<string[]>([]);
@@ -815,6 +829,7 @@ const Tasks: React.FC = () => {
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateListLoading, setTemplateListLoading] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
   // Save-as-template: Public templates get a redeemable share code; Private do not.
@@ -1048,7 +1063,7 @@ const Tasks: React.FC = () => {
   }, [editingTemplateMeta, templateEditOverrides, templateEditName]);
 
   // Edit Template via CreateTaskModal (same layout as Task creation, title "Edit Template", no AI Builder).
-  const handleUpdateTemplateFromModal = useCallback(async (details: { name: string; title: string; description: string; priority: any; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: any[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: any[]; attachments: any[] }) => {
+  const handleUpdateTemplateFromModal = useCallback(async (details: { name: string; title: string; description: string; priority: any; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: any[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: any[]; attachments: any[]; isPublic?: boolean }) => {
     if (!editingTemplateMeta) return;
     try {
       const saved = await updateTemplate(editingTemplateMeta.id, details as any);
@@ -1065,6 +1080,20 @@ const Tasks: React.FC = () => {
     } catch (err) {
       console.error('Failed to save template:', err);
     }
+  }, [editingTemplateMeta]);
+
+  // Save the visibility toggle from the Edit Template permissions panel immediately.
+  const handleUpdateTemplateVisibility = useCallback(async (isPublic: boolean): Promise<TaskTemplate | void> => {
+    if (!editingTemplateMeta) return;
+    const saved = await updateTemplate(editingTemplateMeta.id, { isPublic });
+    setEditingTemplateMeta(prev => prev ? { ...prev, template: saved } : prev);
+    try {
+      setTemplates((prev: any[]) => prev.map(tm => tm.id === saved.id ? saved : tm));
+    } catch {}
+    try {
+      setMainTemplates((prev: any[]) => prev.map(tm => (tm as any).id === saved.id ? saved : tm));
+    } catch {}
+    return saved;
   }, [editingTemplateMeta]);
 
   // Apply a template to the new-note draft (shared by the template list and the share-code entry).
@@ -1734,10 +1763,14 @@ const Tasks: React.FC = () => {
         })),
         checklistItems: (data.checklistItems || []).map(text => text),
         labels: matchedTags,
+        files: [...aiBuilderFiles],
+        images: [...aiBuilderImages],
       });
 
       setAiBuilderOpen(false);
       setAiBuilderInput('');
+      setAiBuilderFiles([]);
+      setAiBuilderImages([]);
       setAddingTask(true);
     } catch (err: any) {
       setAiBuilderError(err.message || 'Something went wrong');
@@ -2866,8 +2899,8 @@ const Tasks: React.FC = () => {
                             {newTaskSubtasks.map((subtask, index) => (
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
-                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-center">
+                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
                                     {editingDraftSubtaskId === subtask.id ? (
@@ -2892,7 +2925,7 @@ const Tasks: React.FC = () => {
                                         text={subtask.text}
                                       />
                                     )}
-                                    <div className="flex items-center gap-2 shrink-0 self-center">
+                                    <div className="flex items-center gap-2 shrink-0 self-start">
                                       <input
                                         type="number"
                                         min={0}
@@ -3154,13 +3187,16 @@ const Tasks: React.FC = () => {
                         e.stopPropagation();
                         setTemplateMenuOpen(false);
                         setTemplateError('');
+                        setLoadTemplateOpen(true);
+                        setTemplateListLoading(true);
                         try {
                           const t = await fetchTemplates();
                           setTemplates(t);
-                          setLoadTemplateOpen(true);
                         } catch (err) {
                           setTemplateError('Failed to load templates. Check your connection and try again.');
                           setTimeout(() => setTemplateError(''), 4000);
+                        } finally {
+                          setTemplateListLoading(false);
                         }
                       }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
@@ -3336,7 +3372,12 @@ const Tasks: React.FC = () => {
               </div>
             )}
             <div className="max-h-80 overflow-y-auto p-2">
-              {templates.length === 0 ? (
+              {templateListLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin mb-3" />
+                  <p className="text-sm font-medium text-foreground">Loading templates…</p>
+                </div>
+              ) : templates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />
@@ -3703,8 +3744,11 @@ const Tasks: React.FC = () => {
             checklists: editingTemplateMeta.template.checklists,
             images: editingTemplateMeta.template.images,
             attachments: editingTemplateMeta.template.attachments,
+            isPublic: editingTemplateMeta.template.isPublic,
+            shareCode: editingTemplateMeta.template.shareCode,
           }}
           onUpdateTemplate={handleUpdateTemplateFromModal}
+          onUpdateTemplateVisibility={handleUpdateTemplateVisibility}
         />
       )}
 
@@ -3874,6 +3918,84 @@ const Tasks: React.FC = () => {
                 {aiBuilderError && (
                   <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{aiBuilderError}</p>
                 )}
+
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <button onClick={() => setAiBuilderFilesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Files</h3>
+                      {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
+                    </div>
+                    {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {!aiBuilderFilesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                            <Paperclip className="w-5 h-5 text-primary" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                        </div>
+                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
+                      </label>
+                      {aiBuilderFiles.length > 0 && (
+                        <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(aiBuilderFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setAiBuilderFiles(items); }}>
+                          <Droppable droppableId="ai-builder-files-notes">
+                            {provided => (
+                              <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-1.5">
+                                {aiBuilderFiles.map((file, fileIdx) => (
+                                  <Draggable key={`${file.name}-${fileIdx}`} draggableId={`ai-note-file-${fileIdx}-${file.name}`} index={fileIdx}>
+                                    {provided => (
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2 group/file">
+                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70"><GripVertical className="w-4 h-4" /></div>
+                                        <div className="flex-1 flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/40">
+                                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center"><Paperclip className="w-5 h-5 text-muted-foreground" /></div>
+                                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p></div>
+                                          <button onClick={e => { e.preventDefault(); e.stopPropagation(); setAiBuilderFiles(prev => prev.filter((_, idx) => idx !== fileIdx)); }} className="p-1.5 rounded-lg bg-background/80 border border-border text-muted-foreground hover:text-destructive opacity-0 group-hover/file:opacity-100 transition-opacity duration-200"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Draggable>
+                                ))}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        </DragDropContext>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-border bg-muted/20">
+                  <button onClick={() => setAiBuilderImagesCollapsed(v => !v)} className="w-full flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">Images</h3>
+                      {aiBuilderImages.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderImages.length})</span>}
+                    </div>
+                    {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                  {!aiBuilderImagesCollapsed && (
+                    <div className="border-t border-border/60 px-4 py-3 space-y-3">
+                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                            {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <ImageIcon className="w-5 h-5 text-primary" />}
+                          </div>
+                          <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading images…' : 'Click to upload'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                        </div>
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await dataUrlForFile(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
+                      </label>
+                      {aiBuilderImages.length > 0 && (
+                        <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex justify-end gap-2">
                   <button
@@ -4066,6 +4188,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewTmplName, setFullViewTmplName] = useState('');
   const [fullViewLoadTmplOpen, setFullViewLoadTmplOpen] = useState(false);
   const [fullViewLoadTemplates, setFullViewLoadTemplates] = useState<TaskTemplate[]>([]);
+  const [fullViewLoadTemplatesLoading, setFullViewLoadTemplatesLoading] = useState(false);
   // Save-as-template: Public templates get a redeemable share code; Private do not.
   const [fullViewTmplVisibility, setFullViewTmplVisibility] = useState<'public' | 'private'>('private');
   const [fullViewSavedShareCode, setFullViewSavedShareCode] = useState<string | null>(null);
@@ -4170,15 +4293,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
                 completed={subtask.completed}
                 onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })}
                 size="sm"
-                className="self-center"
+                className="self-start"
               />
               {editingSubtaskId === subtask.id ? (
                 <AutoGrowTextarea
@@ -4199,9 +4322,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
                   textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                   text={subtask.text}
+                  persistKey={`task-${task.id}-subtask-${subtask.id}`}
                 />
               )}
-              <div className="flex shrink-0 items-center gap-2 self-center whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-2 self-start whitespace-nowrap">
                 <input
                   type="number"
                   min={0}
@@ -4573,9 +4697,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               tags={allTags}
               selectedIds={task.labels.map(label => label.id)}
               onToggle={labelId => { const label = allTags.find(t => t.id === labelId); if (label) onToggleTag(task.id, label); }}
-              onCreate={(name, color) => {
-                onCreateTag(task.id, name, color);
-              }}
+              onCreate={(name, color) => onCreateTag(task.id, name, color)}
               onDelete={tagId => onDeleteTagEverywhere(tagId)}
               onRename={(tagId, newName) => onRenameTagEverywhere(tagId, newName)}
               onColorChange={(tagId, color) => onColorChangeTagEverywhere(tagId, color)}
@@ -4932,12 +5054,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <button
                       onClick={async () => {
                         setTemplatePopupOpen(false);
+                        setFullViewLoadTmplOpen(true);
+                        setFullViewLoadTemplatesLoading(true);
                         try {
                           const t = await fetchTemplates();
                           setFullViewLoadTemplates(t);
-                          setFullViewLoadTmplOpen(true);
                         } catch (err) {
                           console.error('Failed to load templates:', err);
+                        } finally {
+                          setFullViewLoadTemplatesLoading(false);
                         }
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
@@ -5077,7 +5202,12 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto p-2">
-              {fullViewLoadTemplates.length === 0 ? (
+              {fullViewLoadTemplatesLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin mb-3" />
+                  <p className="text-sm font-medium text-foreground">Loading templates…</p>
+                </div>
+              ) : fullViewLoadTemplates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />

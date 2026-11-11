@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, FileText, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck, Building2
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -32,6 +32,7 @@ const AppSidebar: React.FC = () => {
     ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
       ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
       : []),
+    { icon: Building2, label: t('Organizations'), path: '/organizations' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
   ];

@@ -2,9 +2,35 @@ import { tt } from '@/i18n/translations';
 
 const PERMISSION_KEY = 'notif_permission_requested';
 
+export const SMART_ALERTS_STORAGE_KEY = 'smartAlerts';
+/** Fired whenever the Smart Alerts preference changes so the notifier can react without a reload. */
+export const SMART_ALERTS_CHANGED_EVENT = 'smart-alerts:changed';
+
 export type AlertTier = 'premium' | 'pro';
 
 export const notificationsSupported = (): boolean => typeof window !== 'undefined' && 'Notification' in window;
+
+/** Whether Smart Alerts are enabled on this device. Defaults to on. */
+export const smartAlertsEnabled = (): boolean => {
+  try {
+    return localStorage.getItem(SMART_ALERTS_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+};
+
+export const setSmartAlertsEnabled = (enabled: boolean): void => {
+  try {
+    localStorage.setItem(SMART_ALERTS_STORAGE_KEY, String(enabled));
+  } catch {
+    // Ignore quota/private-mode failures.
+  }
+  try {
+    window.dispatchEvent(new CustomEvent(SMART_ALERTS_CHANGED_EVENT, { detail: { enabled } }));
+  } catch {
+    // Ignore environments without CustomEvent (SSR/tests).
+  }
+};
 
 export const notificationPermission = (): 'granted' | 'denied' | 'default' =>
   notificationsSupported() ? Notification.permission : ('denied' as NotificationPermission);
@@ -25,18 +51,28 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 
 export const hasRequestedPermission = (): boolean => localStorage.getItem(PERMISSION_KEY) === 'true';
 
-export const deviceNotify = (title: string, body: string, tag?: string): void => {
-  if (!notificationsSupported() || Notification.permission !== 'granted') return;
+export const deviceNotify = (title: string, body: string, tag?: string): boolean => {
+  if (!notificationsSupported() || Notification.permission !== 'granted') return false;
   try {
     const tTitle = typeof title === 'string' ? tt(title) : title;
     const tBody = typeof body === 'string' ? tt(body) : body;
     const n = new Notification(tTitle, { body: tBody, icon: '/favicon.ico', tag, silent: false });
     n.onclick = () => { window.focus(); n.close(); };
     setTimeout(() => n.close(), 15000);
+    return true;
   } catch {
     // Ignore — notification failures must never break the app.
+    return false;
   }
 };
+
+/** Sends an immediate device notification so users can verify alerts work. */
+export const sendTestNotification = (): boolean =>
+  deviceNotify(
+    'Smart Alerts are working',
+    'This is a test notification. You will get alerts here for overdue tasks, due deadlines and energy checks.',
+    'smart-alerts-test',
+  );
 
 const SENT_KEY = 'smart_alerts_sent_v2';
 const loadSent = (): Record<string, boolean> => {

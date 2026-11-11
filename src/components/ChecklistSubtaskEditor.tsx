@@ -256,11 +256,11 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                       <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                         {provided => (
                           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
-                            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
-                              <div {...provided.dragHandleProps} className="self-center cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                            <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
+                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                 <GripVertical className="w-4 h-4" />
                               </div>
-                              <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" className="self-center" />
+                              <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" className="self-start" />
                               {editingSubtaskId === subtask.id ? (
                                 <AutoGrowTextarea
                                   autoFocus
@@ -280,9 +280,10 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                   text={subtask.text}
                                   onClick={() => { setEditingSubtaskId(subtask.id); setEditingSubtaskText(subtask.text); }}
                                   textClassName={`text-sm cursor-text ${subtask.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                  persistKey={`${entityId}-subtask-${subtask.id}`}
                                 />
                               )}
-                              <button onClick={() => removeSubtask(subtask.id)} className="shrink-0 self-center p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-all">
+                              <button onClick={() => removeSubtask(subtask.id)} className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/subtask:opacity-100 transition-all">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -415,11 +416,12 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {provided => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item checklist-item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
+                                                <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/item checklist-item bg-card/60">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
-                                                <SquareToggle completed={item.completed} onClick={() => toggleChecklistItem(list.id, item.id)} size="md" />
+                                                <SquareToggle completed={item.completed} onClick={() => toggleChecklistItem(list.id, item.id)} size="md" className="self-start mt-0.5" />
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea
                                                     autoFocus
@@ -438,13 +440,15 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                                   <ExpandableRowText
                                                     text={item.text}
                                                     onClick={() => { setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    textClassName={`cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                    textClassName={`text-sm cursor-text ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                    persistKey={`${entityId}-checklist-${list.id}-${item.id}`}
                                                   />
                                                 )}
-                                                <button onClick={() => deleteChecklistItem(list.id, item.id)} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-all">
+                                                <button onClick={() => deleteChecklistItem(list.id, item.id)} className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-all">
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
                                               </div>
+                                            </div>
                                             )}
                                           </Draggable>
                                         ))}

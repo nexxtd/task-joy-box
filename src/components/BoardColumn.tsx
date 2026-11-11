@@ -228,6 +228,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
 
   const createSharedTaskLabel = async (name: string, color: LabelColor): Promise<Label> => {
     const tag = await createTag({ name, color });
+    setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
     return sharedTagToLabel(tag);
   };
 
@@ -315,6 +316,15 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
     return (
       <div
         data-no-pan="true"
+        draggable={true}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select, .kanban-grip')) return;
+          const itemData = JSON.stringify({ type: 'task', id: task.id, title: task.title, column: column.title });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => onTaskClick(task)}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
           isDraggingRow
@@ -557,6 +567,15 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
       <div
         data-no-pan="true"
         data-note-row="true"
+        draggable={true}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select, .kanban-grip')) return;
+          const itemData = JSON.stringify({ type: 'note', id: note.id, title: note.title, column: column.title });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note); }}
         className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
           isDraggingRow

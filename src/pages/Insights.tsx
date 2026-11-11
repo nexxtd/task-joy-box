@@ -1,4 +1,5 @@
 import { useLanguage } from '@/context/LanguageContext';
+import { tt } from '@/i18n/translations';
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -57,35 +58,35 @@ const sharedTagToLabel = (tag: SharedTag): Label => ({
 });
 
 const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
-  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 4, h: 3, tier: 'free' },
-  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 4, h: 3, tier: 'free' },
-  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
-  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 4, h: 3, tier: 'free' },
-  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 4, h: 3, tier: 'free' },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 4, h: 3, tier: 'free' },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 4, h: 3, tier: 'free' },
-  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 4, h: 4, tier: 'premium' },
-  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 4, h: 4, tier: 'premium' },
-  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
-  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 4, h: 4, tier: 'premium' },
-  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 4, h: 4, tier: 'premium' },
-  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 4, h: 4, tier: 'premium' },
-  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 4, h: 4, tier: 'premium' },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 4, h: 4, tier: 'pro' },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 4, h: 4, tier: 'pro' },
+  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 12, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 12, h: 4, tier: 'premium', minW: 8, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 6, h: 3, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 6 },
 ];
 
 const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
   ({ id, type, title, col, row, w: ww, h: hh });
 
 const defaultLayout = (): InsightWidget[] => [
-  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 4, 3),
-  w('w2', 'active-vs-overdue', 'Active vs Overdue', 5, 1, 4, 3),
-  w('w3', 'tasks-by-priority', 'Tasks by Priority', 9, 1, 4, 3),
-  w('w4', 'weekly-activity', 'Weekly Activity', 1, 4, 4, 3),
-  w('w5', 'project-breakdown', 'Project Breakdown', 5, 4, 4, 3),
-  w('w6', 'tags-overview', 'Tags Overview', 9, 4, 4, 3),
-  w('w7', 'notes-overview', 'Notes Overview', 1, 7, 4, 3),
+  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 6, 3),
+  w('w2', 'active-vs-overdue', 'Active vs Overdue', 7, 1, 6, 3),
+  w('w3', 'tasks-by-priority', 'Tasks by Priority', 1, 4, 6, 3),
+  w('w4', 'weekly-activity', 'Weekly Activity', 7, 4, 6, 3),
+  w('w5', 'project-breakdown', 'Project Breakdown', 1, 7, 6, 4),
+  w('w6', 'tags-overview', 'Tags Overview', 7, 7, 6, 3),
+  w('w7', 'notes-overview', 'Notes Overview', 1, 11, 6, 3),
 ];
 
 
@@ -505,7 +506,9 @@ const Insights: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div ref={gridRef} className="insights-widget-grid relative" style={{ height: gridHeight }}>
+          <>
+          {/* Desktop 12-column grid */}
+          <div ref={gridRef} className="hidden md:block insights-widget-grid relative" style={{ height: gridHeight }}>
             {(previewLayout ?? layout).map(widget => {
               const def = WIDGET_DEFS.find(d => d.type === widget.type);
               const accent = def?.accent || 'label-blue';
@@ -548,7 +551,7 @@ const Insights: React.FC = () => {
                       <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
                         {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
                       </div>
-                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{widget.title}</h3>
+                      <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide">{tt(widget.title)}</h3>
                     </div>
                     <div className={`insights-widget-actions flex items-center gap-0.5 transition-opacity ${draft ? 'pointer-events-none opacity-0' : 'opacity-0 group-hover/widget:opacity-100'}`}>
                       <button
@@ -587,6 +590,40 @@ const Insights: React.FC = () => {
               );
             })}
           </div>
+
+          {/* Mobile view: purpose-built stacked layout */}
+          <div className="md:hidden space-y-4">
+            {layout.map(widget => {
+              const def = WIDGET_DEFS.find(d => d.type === widget.type);
+              const accent = def?.accent || 'label-blue';
+              return (
+                <section
+                  key={widget.id}
+                  aria-label={tt(widget.title)}
+                  className="rounded-2xl flex flex-col overflow-hidden bg-card border border-border shadow-sm"
+                >
+                  <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                    <div className="w-6 h-6 flex-shrink-0 rounded-md flex items-center justify-center" style={{ background: `hsl(var(--${accent}) / 0.15)` }}>
+                      {def && <def.icon className="w-3.5 h-3.5" style={{ color: `hsl(var(--${accent}))` }} />}
+                    </div>
+                    <h3 className="text-[11px] font-bold text-foreground truncate uppercase tracking-wide flex-1">{tt(widget.title)}</h3>
+                    <button
+                      onClick={() => removeWidget(widget.id)}
+                      className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                      title="Remove"
+                      aria-label={`Remove ${tt(widget.title)}`}
+                    >
+                      <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="px-4 pb-4 pt-1">
+                    {renderBody(widget as InsightWidget)}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+          </>
         )}
       </div>
 
@@ -619,7 +656,10 @@ const Insights: React.FC = () => {
           tags={allTags}
           selectedIds={[]}
           onToggle={() => {}}
-          onCreate={async (name, color) => { await createTag({ name, color }); await fetchTags().then(setSharedTags).catch(() => {}); }}
+          onCreate={async (name, color) => {
+            const tag = await createTag({ name, color });
+            setSharedTags(prev => prev.some(t => t.id === tag.id) ? prev : [...prev, tag]);
+          }}
           onDelete={deleteTagEverywhere}
           onRename={renameTagEverywhere}
           onColorChange={changeTagColorEverywhere}

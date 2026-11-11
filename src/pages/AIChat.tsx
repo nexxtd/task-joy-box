@@ -1,6 +1,7 @@
 import { useLanguage } from '@/context/LanguageContext';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useBoardContext } from '@/context/BoardContext';
+import { useNotesContext } from '@/context/NotesContext';
 import {
   Wand2, Send, Loader2, Plus, Trash2, Search, Copy,
   XCircle, AlertTriangle, ChevronRight,
@@ -67,6 +68,7 @@ const AIChat: React.FC = () => {
     board, addTask, updateTask, deleteTask, moveTask,
     findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks
   } = useBoardContext();
+  const notesCtx = useNotesContext();
 
   const storageKey = getStorageKey(user?.id);
 
@@ -304,13 +306,38 @@ const AIChat: React.FC = () => {
         return true;
       }
       case 'update': {
-        const matches = findTasksByTitle(actionData.taskTitle);
+        const matches = findTasksByTitle(actionData.taskTitle || '');
         if (matches.length === 0) {
           appendMsg(chatId, msg(`No task matching "${actionData.taskTitle}" found.`));
         } else {
           const task = matches[0];
-          updateTask(task.id, { priority: actionData.priority });
-          appendMsg(chatId, msg(`"${task.title}" priority set to ${actionData.priority}.`));
+          const updates: Partial<Task> = {};
+          if (actionData.newTitle) updates.title = actionData.newTitle;
+          if (actionData.priority) updates.priority = actionData.priority;
+          if (actionData.description !== undefined) updates.description = actionData.description;
+          if (actionData.dueDate !== undefined) updates.dueDate = actionData.dueDate;
+          if (actionData.dueTime !== undefined) updates.dueTime = actionData.dueTime;
+          if (actionData.duration !== undefined) updates.duration = actionData.duration;
+          updateTask(task.id, updates);
+          const changedFields = Object.keys(updates).join(', ');
+          appendMsg(chatId, msg(`Updated task "${task.title}" (${changedFields || 'changes applied'}).`));
+        }
+        return true;
+      }
+      case 'update_note': {
+        const noteMatches = notesCtx.findTasksByTitle(actionData.noteTitle || actionData.title || '');
+        if (noteMatches.length === 0) {
+          appendMsg(chatId, msg(`No note matching "${actionData.noteTitle || actionData.title}" found.`));
+        } else {
+          const note = noteMatches[0];
+          const updates: Partial<Task> = {};
+          if (actionData.newTitle) updates.title = actionData.newTitle;
+          if (actionData.content !== undefined || actionData.description !== undefined) {
+            updates.description = actionData.content ?? actionData.description;
+          }
+          if (actionData.color) updates.color = actionData.color;
+          notesCtx.updateTask(note.id, updates);
+          appendMsg(chatId, msg(`Updated note "${note.title}".`));
         }
         return true;
       }

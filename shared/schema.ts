@@ -251,6 +251,7 @@ export const organizations = pgTable('organizations', {
   currentSeats: integer('current_seats').notNull().default(1),
   tier: text('tier').notNull().default('premium'),
   status: text('status').notNull().default('pending'),
+  joinCode: text('join_code'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -262,6 +263,32 @@ export const organizationMembers = pgTable('organization_members', {
   role: text('role').notNull().default('member'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const organizationGroups = pgTable('organization_groups', {
+  id: serial('id').primaryKey(),
+  organizationId: integer('organization_id').references(() => organizations.id).notNull(),
+  parentId: integer('parent_id'),
+  name: text('name').notNull(),
+  color: text('color').default('#3b82f6').notNull(),
+  icon: text('icon').default('Folder').notNull(),
+  joinCode: text('join_code').notNull(),
+  codeExpiresAt: timestamp('code_expires_at', { mode: 'string' }),
+  codeMaxUses: integer('code_max_uses'),
+  codeUses: integer('code_uses').default(0).notNull(),
+  codeActive: boolean('code_active').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const organizationGroupMembers = pgTable('organization_group_members', {
+  id: serial('id').primaryKey(),
+  organizationId: integer('organization_id').references(() => organizations.id).notNull(),
+  groupId: integer('group_id').references(() => organizationGroups.id).notNull(),
+  subGroupId: integer('sub_group_id'),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const notes = pgTable('notes', {

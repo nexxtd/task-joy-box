@@ -55,6 +55,15 @@ const NoteRow: React.FC<NoteRowProps> = ({
 
   return (
     <div
+      draggable={true}
+      onDragStart={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, textarea, select')) return;
+        const itemData = JSON.stringify({ type: 'note', id: String(note.id), title: note.title });
+        e.dataTransfer.setData('application/x-planner-item', itemData);
+        e.dataTransfer.setData('text/plain', itemData);
+        e.dataTransfer.effectAllowed = 'copyLink';
+      }}
       className={cn(
         'group border rounded-xl bg-card transition-all duration-200 cursor-pointer',
         isDeleteMode

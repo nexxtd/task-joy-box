@@ -7,7 +7,7 @@ import fs from 'fs';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
-import { projectJoinRequests, projectMembers, projects, users } from '../../shared/schema.js';
+import { projectJoinRequests, projectMembers, projects, users, userNotifications } from '../../shared/schema.js';
 
 const router = Router();
 
@@ -62,6 +62,62 @@ async function getProjectMembershipCount(userId: number) {
     .from(projectMembers)
     .where(eq(projectMembers.userId, userId));
   return row?.count ?? 0;
+}
+
+/** Create an in-app invite notification once per pending join request. */
+async function notifyProjectInvite(params: {
+  userId: number;
+  requestId: number;
+  projectId: number;
+  projectName: string;
+  ownerName: string;
+  inviteCode?: string;
+}) {
+  const { userId, requestId, projectId, projectName, ownerName, inviteCode } = params;
+  const existing = await db
+    .select()
+    .from(userNotifications)
+    .where(and(eq(userNotifications.userId, userId), eq(userNotifications.type, 'project_invite')))
+    .limit(50);
+  const already = existing.some(n => {
+    try { return JSON.parse((n as any).data || '{}').requestId === requestId; } catch { return false; }
+  });
+  if (already) return;
+  await db.insert(userNotifications).values({
+    userId,
+    type: 'project_invite',
+    title: 'Project invitation',
+    message: `${ownerName} invited you to join "${projectName}".`,
+    data: JSON.stringify({
+      requestId,
+      projectId,
+      projectName,
+      ownerName,
+      inviteCode,
+      inviteLink: inviteCode ? `/projects?join=${inviteCode}` : undefined,
+    }),
+    read: false,
+  } as any);
+}
+
+/** Remove the actionable invite notification once the request is resolved. */
+async function clearInviteNotification(userId: number, requestId: number) {
+  try {
+    const rows = await db
+      .select()
+      .from(userNotifications)
+      .where(and(eq(userNotifications.userId, userId), eq(userNotifications.type, 'project_invite')));
+    const ids = rows
+      .filter(n => {
+        try { return JSON.parse((n as any).data || '{}').requestId === requestId; } catch { return false; }
+      })
+      .map(n => (n as any).id);
+    for (const id of ids) {
+      await db.delete(userNotifications).where(eq(userNotifications.id, id));
+    }
+  } catch (error) {
+    console.error('Failed to clear invite notification:', error);
+  }
 }
 
 async function serializeProject(projectId: number) {
@@ -293,27 +349,57 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
       return res.status(400).json({ error: 'User is already a member of this project' });
     }
 
-    // Invites become join requests — the owner approves before they join.
+    // Invites sent by the owner/member are pre-approved invitations for the recipient
     const existingRequest = await db
       .select()
       .from(projectJoinRequests)
       .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, recipient.id)));
-    if (existingRequest.length > 0 && existingRequest[0].status === 'pending') {
-      return res.status(200).json({ pending: true, message: 'A join request is already waiting for approval.' });
-    }
-    if (existingRequest.length > 0) {
+
+    const ownerRow = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, project[0].ownerId))
+      .limit(1);
+    const ownerName = ownerRow[0]?.name || 'The project owner';
+
+    let requestId: number | null = null;
+    if (existingRequest.length > 0 && ['invited', 'pending'].includes(existingRequest[0].status)) {
+      requestId = existingRequest[0].id;
+    } else if (existingRequest.length > 0) {
       await db.update(projectJoinRequests)
-        .set({ status: 'pending', updatedAt: new Date().toISOString() })
+        .set({ status: 'invited', updatedAt: new Date().toISOString() })
         .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, recipient.id)));
+      requestId = existingRequest[0].id;
     } else {
-      await db.insert(projectJoinRequests).values({
+      const [createdRequest] = await db.insert(projectJoinRequests).values({
         projectId,
         userId: recipient.id,
-        status: 'pending',
-      });
+        status: 'invited',
+      }).returning();
+      requestId = createdRequest?.id ?? null;
     }
 
-    res.json({ pending: true, message: 'Invite sent — they will join once the owner approves the request.' });
+    if (requestId) {
+      try {
+        await notifyProjectInvite({
+          userId: recipient.id,
+          requestId,
+          projectId,
+          projectName: project[0].name,
+          ownerName,
+          inviteCode: project[0].inviteCode,
+        });
+      } catch (notifyError) {
+        console.error('Failed to create invite notification:', notifyError);
+      }
+    }
+
+    res.json({
+      pending: false,
+      invited: true,
+      inviteCode: project[0].inviteCode,
+      message: 'Invitation sent! The user has received an invite link in their notification panel.',
+    });
   } catch (error) {
     console.error('Invite project member error:', error);
     res.status(500).json({ error: 'Failed to invite member' });
@@ -471,6 +557,8 @@ router.post('/:projectId/join-requests/:requestId/approve', requireAuth, async (
       .set({ status: 'approved', updatedAt: new Date().toISOString() })
       .where(eq(projectJoinRequests.id, requestId));
 
+    await clearInviteNotification(requesterId, requestId);
+
     res.json({ project: await serializeProject(projectId), message: 'Join request approved' });
   } catch (error) {
     console.error('Approve join request error:', error);
@@ -501,6 +589,8 @@ router.post('/:projectId/join-requests/:requestId/deny', requireAuth, async (req
     await db.update(projectJoinRequests)
       .set({ status: 'denied', updatedAt: new Date().toISOString() })
       .where(eq(projectJoinRequests.id, requestId));
+
+    await clearInviteNotification(rows[0].userId, requestId);
 
     res.json({ ok: true, message: 'Join request denied' });
   } catch (error) {

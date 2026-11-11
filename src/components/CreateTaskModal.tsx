@@ -16,7 +16,7 @@ import {
 } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import { useDeepFocus } from '@/hooks/useDeepFocus';
-import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain, Lock, Globe, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Plus, Sparkles, Star, Trash2, X, Tag, Image, Paperclip, GripVertical, ChevronDown, ChevronUp, Save, FolderKanban, Brain, Lock, Globe, KeyRound, CheckCircle2, ShieldCheck, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
@@ -27,6 +27,7 @@ import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import DraftFileList from '@/components/shared/DraftFileList';
+import { readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
@@ -90,8 +91,12 @@ export type CreateTaskModalProps = {
     checklists?: any[];
     images?: Attachment[];
     attachments?: any[];
+    isPublic?: boolean;
+    shareCode?: string | null;
   } | null;
-  onUpdateTemplate?: (details: { name: string; title: string; description: string; priority: Priority; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: Label[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: Attachment[]; attachments: any[] }) => Promise<void> | void;
+  onUpdateTemplate?: (details: { name: string; title: string; description: string; priority: Priority; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId: number | null; columnId?: string; labels: Label[]; subtasks: Array<{ text: string; durationMinutes: number }>; checklists: any[]; images: Attachment[]; attachments: any[]; isPublic?: boolean }) => Promise<void> | void;
+  /** Persist a visibility change immediately from the Edit Template permissions panel. */
+  onUpdateTemplateVisibility?: (isPublic: boolean) => Promise<TaskTemplate | void> | TaskTemplate | void;
 };
 
 type ProjectMeta = {
@@ -186,6 +191,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   editTemplateMode,
   editTemplateInitial,
   onUpdateTemplate,
+  onUpdateTemplateVisibility,
 }) => {
   const isNote = variant === 'note';
   const noun = isNote ? 'Note' : 'Task';
@@ -262,10 +268,21 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingTagName, setEditingTagName] = useState('');
 
-  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(false);
-  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(false);
-  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(false);
-  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(false);
+  // Section open/closed state is remembered across modal sessions — closing
+  // Sub-tasks (or Checklist/Attachments/Images) keeps it closed next time.
+  const [draftSubtasksCollapsed, setDraftSubtasksCollapsed] = useState(() => readDraftSections().subtasks ?? false);
+  const [draftChecklistCollapsed, setDraftChecklistCollapsed] = useState(() => readDraftSections().checklists ?? false);
+  const [draftAttachmentsCollapsed, setDraftAttachmentsCollapsed] = useState(() => readDraftSections().attachments ?? false);
+  const [draftImagesCollapsed, setDraftImagesCollapsed] = useState(() => readDraftSections().images ?? false);
+
+  useEffect(() => {
+    writeDraftSections({
+      subtasks: draftSubtasksCollapsed,
+      checklists: draftChecklistCollapsed,
+      attachments: draftAttachmentsCollapsed,
+      images: draftImagesCollapsed,
+    });
+  }, [draftSubtasksCollapsed, draftChecklistCollapsed, draftAttachmentsCollapsed, draftImagesCollapsed]);
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
@@ -279,8 +296,10 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [templateListLoading, setTemplateListLoading] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
   // Save-as-template: Public templates get a redeemable share code; Private do not.
   const [templateVisibility, setTemplateVisibility] = useState<'public' | 'private'>('private');
   const [savedShareCode, setSavedShareCode] = useState<string | null>(null);
@@ -288,6 +307,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [templateCode, setTemplateCode] = useState('');
   const [codeApplying, setCodeApplying] = useState(false);
   const [codeError, setCodeError] = useState('');
+
+  // Edit Template → Permissions panel (separate from save-as-template above).
+  const [editTemplateVisibility, setEditTemplateVisibility] = useState<'public' | 'private'>('private');
+  const [editTemplateShareCode, setEditTemplateShareCode] = useState<string | null>(null);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityError, setVisibilityError] = useState('');
 
   const allTags = useMemo<Label[]>(() => {
     const byName = new Map<string, Label>();
@@ -441,6 +466,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setLoadTemplateOpen(false);
     setTemplateName('');
     setTemplateError('');
+    setEditTemplateVisibility('private');
+    setEditTemplateShareCode(null);
+    setVisibilityError('');
   };
 
   useEffect(() => {
@@ -501,6 +529,8 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         if (lists.length) setNewChecklistLists(lists);
       }
       if (t.images) setNewTaskImages(t.images);
+      setEditTemplateVisibility(t.isPublic ? 'public' : 'private');
+      setEditTemplateShareCode(t.shareCode ?? null);
     }
     if (initialAI) setAiBuilderOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -645,6 +675,48 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }
   };
 
+  const changeEditTemplateVisibility = async (next: 'public' | 'private') => {
+    if (!editTemplateMode || visibilityBusy || next === editTemplateVisibility) return;
+    setVisibilityError('');
+    if (!onUpdateTemplateVisibility) {
+      setEditTemplateVisibility(next);
+      if (next === 'private') setEditTemplateShareCode(null);
+      return;
+    }
+    setVisibilityBusy(true);
+    try {
+      const saved = await onUpdateTemplateVisibility(next === 'public');
+      const savedTemplate = (saved && typeof saved === 'object') ? saved as TaskTemplate : null;
+      const isPublic = savedTemplate ? !!savedTemplate.isPublic : next === 'public';
+      setEditTemplateVisibility(isPublic ? 'public' : 'private');
+      setEditTemplateShareCode(isPublic ? (savedTemplate?.shareCode ?? null) : null);
+    } catch (err: any) {
+      setVisibilityError(err?.message || 'Could not update visibility. Please try again.');
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
+  // Legacy/safety net: a public template that has no share code yet.
+  const generateEditTemplateShareCode = async () => {
+    if (!onUpdateTemplateVisibility || visibilityBusy) return;
+    setVisibilityError('');
+    setVisibilityBusy(true);
+    try {
+      const saved = await onUpdateTemplateVisibility(true);
+      const savedTemplate = (saved && typeof saved === 'object') ? saved as TaskTemplate : null;
+      if (savedTemplate?.shareCode) {
+        setEditTemplateShareCode(savedTemplate.shareCode);
+      } else {
+        setVisibilityError('Could not generate a share code. Please try again.');
+      }
+    } catch (err: any) {
+      setVisibilityError(err?.message || 'Could not generate a share code. Please try again.');
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
   const createTask = async () => {
     if (!newTaskTitle.trim()) return;
     if ((templateMode || editTemplateMode) && !templateName.trim()) return;
@@ -694,13 +766,31 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         ],
         images: newTaskImages,
         attachments: [],
+        ...(editTemplateMode ? { isPublic: editTemplateVisibility === 'public' } : {}),
       };
       if (editTemplateMode && onUpdateTemplate) {
-        await onUpdateTemplate(payload);
+        setSavingTemplate(true);
+        try {
+          await onUpdateTemplate(payload);
+          onClose();
+        } catch (err) {
+          console.error('Failed to save template:', err);
+          setTemplateError('Failed to save template. Please try again.');
+        } finally {
+          setSavingTemplate(false);
+        }
       } else if (templateMode && onCreateTemplate) {
-        await onCreateTemplate(payload);
+        setSavingTemplate(true);
+        try {
+          await onCreateTemplate(payload);
+          onClose();
+        } catch (err) {
+          console.error('Failed to create template:', err);
+          setTemplateError('Failed to create template. Please try again.');
+        } finally {
+          setSavingTemplate(false);
+        }
       }
-      onClose();
       return;
     }
 
@@ -833,8 +923,15 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:p-4 md:p-8" onClick={() => onClose()}>
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
         <div
-          className="relative w-full max-w-5xl bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92dvh] overflow-y-auto"
+          className={editTemplateMode
+            ? 'relative w-full max-w-6xl flex flex-col lg:flex-row items-stretch gap-3 sm:gap-4 max-h-[92dvh] overflow-y-auto lg:overflow-visible'
+            : 'contents'}
           onClick={e => e.stopPropagation()}
+        >
+        <div
+          className={editTemplateMode
+            ? 'relative flex-1 min-w-0 bg-card border border-border rounded-2xl shadow-2xl lg:max-h-[92dvh] lg:overflow-y-auto'
+            : 'relative w-full max-w-5xl bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92dvh] overflow-y-auto'}
         >
           <div className="px-4 sm:px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-card z-10">
             <h2 className="text-base font-semibold text-foreground">{editTemplateMode ? 'Edit Template' : templateMode ? 'Create Template' : `Create ${noun}`}</h2>
@@ -1045,10 +1142,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           )
         }
         onCreate={async (name, color) => {
+          // Optimistic: show the tag immediately, then swap in the saved one.
+          const tempLabel: Label = { id: `temp-tag-${crypto.randomUUID()}`, name, color };
+          setNewTaskLabels(prev => [...prev, tempLabel]);
           try {
             const newLabel = await createSharedTaskLabel(name, color);
-            setNewTaskLabels(prev => [...prev, newLabel]);
+            setNewTaskLabels(prev => prev.map(label => label.id === tempLabel.id ? newLabel : label));
           } catch (error) {
+            setNewTaskLabels(prev => prev.filter(label => label.id !== tempLabel.id));
             console.error('Failed to create task tag:', error);
           }
         }}
@@ -1095,7 +1196,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                           {newTaskSubtasks.map((subtask, index) => (
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
-                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-center rounded-lg border border-border px-3 py-2.5 group/subtask">
+                                <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
                                   <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
@@ -1116,7 +1217,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                         textClassName="text-sm text-foreground font-medium cursor-text"
                                       />
                                   )}
-                                      <div className="self-center flex h-6 shrink-0 items-center gap-2 whitespace-nowrap">
+                                      <div className="self-start flex h-6 shrink-0 items-center gap-2 whitespace-nowrap">
                                         <input
                                           type="number"
                                           min={0}
@@ -1574,13 +1675,16 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                         e.stopPropagation();
                         setTemplateMenuOpen(false);
                         setTemplateError('');
+                        setLoadTemplateOpen(true);
+                        setTemplateListLoading(true);
                         try {
                           const t = await fetchTemplates();
                           setTemplates(t);
-                          setLoadTemplateOpen(true);
                         } catch (err) {
                           setTemplateError('Failed to load templates. Check your connection and try again.');
                           setTimeout(() => setTemplateError(''), 4000);
+                        } finally {
+                          setTemplateListLoading(false);
                         }
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground rounded-lg hover:bg-muted transition-all"
@@ -1598,13 +1702,107 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               <button onClick={() => { resetTaskDraft(); onClose(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={!newTaskTitle.trim() || ((templateMode || editTemplateMode) && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
-                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
+                disabled={savingTemplate || !newTaskTitle.trim() || ((templateMode || editTemplateMode) && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all flex items-center gap-2"
               >
-                {editTemplateMode ? 'Save Template' : templateMode ? 'Template' : 'Save'}
+                {savingTemplate && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {savingTemplate ? 'Saving…' : editTemplateMode ? 'Save Template' : templateMode ? 'Template' : 'Save'}
               </button>
             </div>
           </div>
+        </div>
+
+        {editTemplateMode && (
+          <aside className="relative w-full lg:w-80 flex-shrink-0 bg-card border border-border rounded-2xl shadow-2xl lg:max-h-[92dvh] lg:overflow-y-auto">
+            <div className="px-5 py-4 border-b border-border sticky top-0 bg-card z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground">Permissions</h3>
+                  <p className="text-[11px] text-muted-foreground">Who can use this template</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-2 block">Visibility</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void changeEditTemplateVisibility('private')}
+                    disabled={visibilityBusy}
+                    aria-pressed={editTemplateVisibility === 'private'}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-60 ${editTemplateVisibility === 'private' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                  >
+                    <Lock className="w-4 h-4" /> Private
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void changeEditTemplateVisibility('public')}
+                    disabled={visibilityBusy}
+                    aria-pressed={editTemplateVisibility === 'public'}
+                    className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-60 ${editTemplateVisibility === 'public' ? 'border-primary bg-primary/5 text-foreground ring-1 ring-primary/40' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                  >
+                    <Globe className="w-4 h-4" /> Public
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-2">
+                  {editTemplateVisibility === 'public'
+                    ? 'Anyone with the share code can load a copy of this template.'
+                    : 'Only you can see and use this template.'}
+                </p>
+              </div>
+
+              {editTemplateVisibility === 'public' && (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Share code</label>
+                  {editTemplateShareCode ? (
+                    <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-base font-semibold tracking-[0.16em] text-foreground select-all break-all">{editTemplateShareCode}</span>
+                        <CopyShareCode code={editTemplateShareCode} />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Copy this code and share it with anyone you want to use the template.</p>
+                    </div>
+                  ) : visibilityBusy ? (
+                    <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
+                      Generating share code…
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 space-y-2">
+                      <p className="text-xs text-muted-foreground">This template is public but doesn't have a share code yet.</p>
+                      <button
+                        type="button"
+                        onClick={() => void generateEditTemplateShareCode()}
+                        disabled={visibilityBusy}
+                        className="w-full py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 disabled:opacity-50"
+                      >
+                        Generate share code
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {visibilityError && (
+                <div className="flex items-start gap-2 px-3 py-2 text-[11px] text-destructive bg-destructive/10 rounded-lg">
+                  <span>⚠</span>
+                  <span>{visibilityError}</span>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Visibility saves immediately. Use <span className="font-semibold text-foreground">Save Template</span> to save the rest of your changes.
+                </p>
+              </div>
+            </div>
+          </aside>
+        )}
         </div>
       </div>
 
@@ -1758,7 +1956,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               </div>
             )}
             <div className="max-h-80 overflow-y-auto p-2">
-              {templates.length === 0 ? (
+              {templateListLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin mb-3" />
+                  <p className="text-sm font-medium text-foreground">Loading templates…</p>
+                </div>
+              ) : templates.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
                   <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mb-3">
                     <FolderKanban className="w-6 h-6 text-muted-foreground" />

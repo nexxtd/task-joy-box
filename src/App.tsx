@@ -37,7 +37,7 @@ const EnergyPopup = lazy(() => import("@/components/EnergyPopup"));
 const DeepFocusMode = lazy(() => import("@/components/DeepFocusMode"));
 import { useDeepFocus } from "@/hooks/useDeepFocus";
 import { applyAccentHsl, normalizeAccent } from "@/lib/accent";
-import { deviceNotify, formatOverdueDelta, markAlertSent, wasAlertSent } from "@/lib/notifications";
+import { deviceNotify, formatOverdueDelta, markAlertSent, wasAlertSent, smartAlertsEnabled, setSmartAlertsEnabled, SMART_ALERTS_CHANGED_EVENT } from "@/lib/notifications";
 
 const AppearanceSync = () => {
   const { user } = useAuth();
@@ -60,6 +60,15 @@ const AppearanceSync = () => {
         if (data.fontFamily) {
           applyFontFamily(data.fontFamily);
         }
+        // Notification preferences live on the account, but the notifier runs
+        // from localStorage. Mirror them so alerts follow the user across
+        // devices (and so disabling them elsewhere actually takes effect).
+        if (typeof data.smartAlerts === 'boolean') {
+          setSmartAlertsEnabled(data.smartAlerts);
+        }
+        if (typeof data.emailNotifs === 'boolean') {
+          try { localStorage.setItem('emailNotifs', String(data.emailNotifs)); } catch {}
+        }
       } catch {
         clearTimeout(tid);
       }
@@ -78,13 +87,20 @@ const Notifier = () => {
   useEffect(() => { tasksRef.current = board.tasks; }, [board.tasks]);
   useEffect(() => {
     if (!isPaid) return;
-    const smartAlertsEnabled = () => localStorage.getItem('smartAlerts') !== 'false';
     const check = () => {
-      // Skip work when tab is hidden — saves CPU/battery and avoids toast pile-ups.
-      if (document.hidden) return;
       if (!smartAlertsEnabled()) return;
       const tasks = tasksRef.current;
       if (!tasks.length) return;
+      // Toasts only make sense while the tab is visible. Device notifications
+      // are the alert that actually reaches the user in the background — they
+      // used to be skipped entirely because the whole check bailed out when
+      // the tab was hidden, so Smart Alerts silently did nothing.
+      const hidden = typeof document !== 'undefined' && document.hidden;
+      const queued: Array<{ key: string; title: string; body: string; toastTitle: string; toastBody: string }> = [];
+      const queue = (key: string, title: string, body: string, toastTitle: string, toastBody: string) => {
+        if (wasAlertSent(key)) return;
+        queued.push({ key, title, body, toastTitle, toastBody });
+      };
       tasks.forEach(task => {
         if (!task.dueDate || !task.columnId || task.columnId.toLowerCase().includes('done')) return;
         const due = new Date(`${task.dueDate}T${task.dueTime || '23:59:59'}`);
@@ -92,34 +108,49 @@ const Notifier = () => {
         const overdue = diff < 0;
         const urgent = task.priority === 'urgent';
         if (urgent && !overdue && diff < 12 * 60 * 60 * 1000) {
-          const key = `urgent_${task.id}`;
-          if (!wasAlertSent(key)) {
-            toast({ title: "Urgent Deadline", description: `Task "${task.title}" is due soon!` });
-            deviceNotify("Urgent Deadline", `Task "${task.title}" is due soon!`, key);
-            markAlertSent(key);
-          }
+          queue(`urgent_${task.id}`, "Urgent Deadline", `Task "${task.title}" is due soon!`, "Urgent Deadline", `Task "${task.title}" is due soon!`);
         }
         if (!overdue && diff < 60 * 60 * 1000) {
-          const key = `soon_${task.id}`;
-          if (!wasAlertSent(key)) {
-            toast({ title: "Due Soon", description: `Task "${task.title}" is due within the hour` });
-            deviceNotify("Due Soon", `Task "${task.title}" is due by ${task.dueTime || 'end of day'} today`, key);
-            markAlertSent(key);
-          }
+          queue(`soon_${task.id}`, "Due Soon", `Task "${task.title}" is due by ${task.dueTime || 'end of day'} today`, "Due Soon", `Task "${task.title}" is due within the hour`);
         }
         if (overdue) {
-          const key = `overdue_${task.id}_${task.dueDate}_${task.dueTime || ""}`;
-          if (!wasAlertSent(key)) {
-            toast({ title: "Overdue", description: `Task "${task.title}" is overdue` });
-            deviceNotify("Overdue", `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`, key);
-            markAlertSent(key);
-          }
+          queue(`overdue_${task.id}_${task.dueDate}_${task.dueTime || ""}`, "Overdue", `Task "${task.title}" is ${formatOverdueDelta(task.dueDate, task.dueTime)}`, "Overdue", `Task "${task.title}" is overdue`);
         }
       });
+      if (!queued.length) return;
+      if (!hidden) {
+        queued.forEach(a => {
+          toast({ title: a.toastTitle, description: a.toastBody });
+          markAlertSent(a.key);
+        });
+        return;
+      }
+      // Background: one grouped notification instead of a burst when several
+      // tasks come due at the same time.
+      const body = queued.length === 1
+        ? queued[0].body
+        : `${queued.slice(0, 3).map(a => a.body).join(' · ')}${queued.length > 3 ? ` · +${queued.length - 3} more` : ''}`;
+      const title = queued.length === 1 ? queued[0].title : `${queued.length} Smart Alerts`;
+      const tag = queued.length === 1 ? queued[0].key : 'smart-alerts-batch';
+      // Keep retrying until something was actually delivered (e.g. the user
+      // re-enables browser notifications) instead of burning the daily keys.
+      if (deviceNotify(title, body, tag)) {
+        queued.forEach(a => markAlertSent(a.key));
+      }
     };
     check();
     const timer = setInterval(check, 60000);
-    return () => clearInterval(timer);
+    // Catch up on returning to the tab, and start alerting immediately when
+    // Smart Alerts are switched on from Settings (no reload needed).
+    const onVisibility = () => { if (!document.hidden) check(); };
+    const onPreferenceChange = () => { if (smartAlertsEnabled()) check(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener(SMART_ALERTS_CHANGED_EVENT, onPreferenceChange);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(SMART_ALERTS_CHANGED_EVENT, onPreferenceChange);
+    };
   }, [isPaid]);
   return null;
 };

@@ -104,7 +104,19 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const id = parseInt(req.params.id, 10);
     const existing = await db.select().from(noteTemplates).where(eq(noteTemplates.id, id)).limit(1);
     if (!existing.length || existing[0].userId !== req.userId) return res.status(404).json({ error: 'Template not found' });
-    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments } = req.body;
+    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
+    let shareCodeUpdate: string | null | undefined;
+    if (isPublic !== undefined) {
+      if (isPublic === true) {
+        if (!existing[0].shareCode) {
+          const code = await allocateShareCode();
+          if (!code) return res.status(500).json({ error: 'Could not allocate a share code — please try again' });
+          shareCodeUpdate = code;
+        }
+      } else {
+        shareCodeUpdate = null;
+      }
+    }
     const [updated] = await db.update(noteTemplates).set({
       name: name !== undefined ? name.trim() : undefined,
       title: title !== undefined ? title : undefined,
@@ -125,6 +137,8 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       checklists: checklists !== undefined ? JSON.stringify(checklists) : undefined,
       images: images !== undefined ? JSON.stringify(images) : undefined,
       attachments: attachments !== undefined ? JSON.stringify(attachments) : undefined,
+      isPublic: isPublic !== undefined ? isPublic === true : undefined,
+      shareCode: shareCodeUpdate,
       updatedAt: new Date().toISOString(),
     } as any).where(eq(noteTemplates.id, id)).returning();
     res.json(parseRow(updated));

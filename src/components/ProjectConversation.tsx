@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Download,
   FileText,
+  GripVertical,
   Image as ImageIcon,
   Link2,
   Loader2,
@@ -12,6 +13,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Paperclip,
+  Scaling,
   Search,
   Send,
   Share2,
@@ -355,6 +357,60 @@ export const ProjectConversation: React.FC<Props> = ({
     else onOpenTask?.(msg.linkedId);
   };
 
+  const [isDropTarget, setIsDropTarget] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (!isDropTarget) setIsDropTarget(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDropTarget(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDropTarget(false);
+    const rawData = e.dataTransfer.getData('application/x-planner-item') || e.dataTransfer.getData('text/plain');
+    if (!rawData) return;
+    try {
+      const parsed = JSON.parse(rawData);
+      if (parsed && (parsed.type === 'task' || parsed.type === 'note') && parsed.id && parsed.title) {
+        setLink({
+          type: parsed.type,
+          id: String(parsed.id),
+          title: String(parsed.title),
+          column: parsed.column ? String(parsed.column) : undefined,
+        });
+        return;
+      }
+    } catch {
+      const query = rawData.trim().toLowerCase();
+      const matchedTask = tasks.find(t => t.title.toLowerCase() === query);
+      if (matchedTask) {
+        setLink({ type: 'task', id: String(matchedTask.id), title: matchedTask.title, column: matchedTask.columnName });
+        return;
+      }
+      const matchedNote = notes.find(n => n.title.toLowerCase() === query);
+      if (matchedNote) {
+        setLink({ type: 'note', id: String(matchedNote.id), title: matchedNote.title });
+        return;
+      }
+    }
+  };
+
+  const dropOverlay = isDropTarget && (
+    <div className="absolute inset-0 z-30 bg-primary/15 border-2 border-dashed border-primary rounded-2xl flex flex-col items-center justify-center pointer-events-none backdrop-blur-[1px] transition-all">
+      <div className="p-3 rounded-full bg-card shadow-lg text-primary mb-2">
+        <Link2 className="w-6 h-6 animate-pulse" />
+      </div>
+      <span className="text-sm font-semibold text-foreground">Drop task or note to reference</span>
+    </div>
+  );
+
   const header = (
     <div className="flex items-center justify-between gap-2 px-3 py-3 border-b border-border flex-shrink-0">
       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -369,7 +425,7 @@ export const ProjectConversation: React.FC<Props> = ({
               aria-label="Resize chat from top left"
               className="flex h-7 w-7 flex-shrink-0 cursor-nwse-resize touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <Maximize2 className="h-3.5 w-3.5" />
+              <Scaling className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
@@ -380,12 +436,12 @@ export const ProjectConversation: React.FC<Props> = ({
               aria-label="Move chat window"
               className="flex h-7 w-7 flex-shrink-0 cursor-move touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <Move className="h-3.5 w-3.5" />
+              <GripVertical className="h-3.5 w-3.5" />
             </button>
           </>
         ) : null}
-        <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <MessageCircle className="w-4 h-4 text-primary" />
+        <div className="w-8 h-8 rounded-full bg-label-pink/15 flex items-center justify-center flex-shrink-0">
+          <MessageCircle className="w-4 h-4 text-label-pink" />
         </div>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground truncate">Project Chat</h3>
@@ -730,8 +786,26 @@ export const ProjectConversation: React.FC<Props> = ({
           }}
           role="dialog"
           aria-label={`${projectName} conversation`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           {resizeHandles}
+          {isFloating && (
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 10 10"
+              className="pointer-events-none absolute bottom-1 right-1 z-20 h-3 w-3 text-muted-foreground/50"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinecap="round"
+            >
+              <path d="M1.5 8.5 8.5 1.5" />
+              <path d="M5.5 8.5 8.5 5.5" />
+            </svg>
+          )}
+          {dropOverlay}
           {header}
           {messageList}
           {composer}
@@ -744,7 +818,13 @@ export const ProjectConversation: React.FC<Props> = ({
 
   if (mode === 'docked') {
     return (
-      <aside className="h-full w-full min-w-0 flex flex-col bg-card border-l border-border">
+      <aside
+        className="relative h-full w-full min-w-0 flex flex-col bg-card border-l border-border"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {dropOverlay}
         {header}
         {messageList}
         {composer}
@@ -754,7 +834,14 @@ export const ProjectConversation: React.FC<Props> = ({
   }
 
   return (
-    <div className="rounded-3xl border border-border bg-card shadow-sm flex flex-col" style={{ height: 'calc(100vh - 280px)', minHeight: 400 }}>
+    <div
+      className="relative rounded-3xl border border-border bg-card shadow-sm flex flex-col"
+      style={{ height: 'calc(100vh - 280px)', minHeight: 400 }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dropOverlay}
       {header}
       {messageList}
       {composer}

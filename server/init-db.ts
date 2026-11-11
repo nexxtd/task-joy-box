@@ -67,6 +67,62 @@ export async function initDatabase() {
 
     // Create board_snapshots table if it doesn't exist
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        max_seats INTEGER NOT NULL DEFAULT 1,
+        current_seats INTEGER NOT NULL DEFAULT 1,
+        tier TEXT NOT NULL DEFAULT 'premium',
+        status TEXT NOT NULL DEFAULT 'active',
+        join_code TEXT,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS join_code TEXT;
+
+      CREATE TABLE IF NOT EXISTS organization_members (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role TEXT NOT NULL DEFAULT 'member',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS org_members_user_id_idx ON organization_members(user_id);
+      CREATE INDEX IF NOT EXISTS org_members_org_id_idx ON organization_members(organization_id);
+
+      CREATE TABLE IF NOT EXISTS organization_groups (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        parent_id INTEGER,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT '#3b82f6',
+        icon TEXT NOT NULL DEFAULT 'Folder',
+        join_code TEXT NOT NULL,
+        code_expires_at TIMESTAMP,
+        code_max_uses INTEGER,
+        code_uses INTEGER NOT NULL DEFAULT 0,
+        code_active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS org_groups_org_id_idx ON organization_groups(organization_id);
+      CREATE INDEX IF NOT EXISTS org_groups_join_code_idx ON organization_groups(join_code);
+
+      CREATE TABLE IF NOT EXISTS organization_group_members (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        group_id INTEGER NOT NULL REFERENCES organization_groups(id) ON DELETE CASCADE,
+        sub_group_id INTEGER,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS org_group_members_user_idx ON organization_group_members(user_id);
+      CREATE INDEX IF NOT EXISTS org_group_members_group_idx ON organization_group_members(group_id);
+
       CREATE TABLE IF NOT EXISTS board_snapshots (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

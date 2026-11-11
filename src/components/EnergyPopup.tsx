@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Battery } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ENERGY_UPDATED_EVENT } from '@/utils/energyStats';
+import { deviceNotify, markAlertSent, smartAlertsEnabled, wasAlertSent } from '@/lib/notifications';
 
 type Slot = 'morning' | 'midday' | 'afternoon';
 type Level = 'low' | 'medium' | 'high';
@@ -49,6 +50,33 @@ function saveHistory(entries: EnergyEntry[]) {
 }
 
 const isPremiumTier = (tier?: string) => tier === 'pro' || tier === 'premium';
+
+// While the tab is in the background, mirror each due energy check as a real
+// device notification — otherwise the popup is invisible and the "energy
+// checks" promised by Smart Alerts never reach the user.
+const notifyHiddenChecks = (pending: Slot[]) => {
+  if (!smartAlertsEnabled() || typeof document === 'undefined' || !document.hidden) return;
+  const unsent = pending.filter(slot => !wasAlertSent(`energy_check_${slot}`));
+  if (!unsent.length) return;
+  if (unsent.length === 1) {
+    const slot = unsent[0];
+    const def = SLOTS.find(s => s.id === slot);
+    const sent = deviceNotify(
+      def?.checkLabel || 'Energy Check',
+      'How is your energy right now? Take a quick check.',
+      `energy_check_${slot}`,
+    );
+    if (sent) markAlertSent(`energy_check_${slot}`);
+    return;
+  }
+  // Several checks stacked up while away — send one grouped reminder.
+  const sent = deviceNotify(
+    'Energy Check',
+    `You have ${unsent.length} energy checks waiting. Open MyPlanner and log how you feel.`,
+    'energy_checks',
+  );
+  if (sent) unsent.forEach(slot => markAlertSent(`energy_check_${slot}`));
+};
 
 const EnergyPopup: React.FC = () => {
   const { user } = useAuth();
@@ -125,6 +153,7 @@ const EnergyPopup: React.FC = () => {
       }
       lastHourRef.current = h;
       const pending = computePending();
+      notifyHiddenChecks(pending);
       setPendingSlots(prev => {
         if (prev.length === pending.length && prev.every((s, i) => pending[i] === s)) return prev;
         return pending.length > 0 ? pending : [];

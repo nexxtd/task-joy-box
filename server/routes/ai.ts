@@ -829,6 +829,24 @@ function localChatFallback(
     };
   }
 
+  if (/\b(update|fix|change|edit|modify)\b.*\bnote\b/i.test(m)) {
+    const noteMatch = (message.match(/\bnote\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'note';
+    return {
+      action: 'update_note',
+      data: { noteTitle: noteMatch.trim(), content: message },
+      message: `Updating note "${noteMatch.trim()}".`,
+    };
+  }
+
+  if (/\b(update|fix|change|edit|modify)\b.*\btask\b/i.test(m)) {
+    const taskMatch = (message.match(/\btask\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'task';
+    return {
+      action: 'update',
+      data: { taskTitle: taskMatch.trim(), description: message },
+      message: `Updating task "${taskMatch.trim()}".`,
+    };
+  }
+
   if (/\b(priority|prioriti[sz]e)\b/.test(m)) {
     return { action: 'update', data: {}, message: 'Updating that task priority now.' };
   }
@@ -990,12 +1008,13 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
   const safeMessage = sanitize(message);
 
   const systemPrompt = `You are Planora, a helpful task-management assistant.
-The user's message may ask you to CREATE, DELETE, MOVE, UPDATE a task, or answer a question.
+The user's message may ask you to CREATE, DELETE, MOVE, UPDATE a task or note, or answer a question.
 If the user asks for a board action, you MUST reply with ONLY a JSON object like:
 {"action": "create", "title": "Task Title", "description": "", "priority": "medium", "columnName": "To Do", "message": "Short friendly confirmation"}
 {"action": "delete", "taskTitle": "Task Title", "message": "..."}
 {"action": "move", "taskTitle": "Task Title", "targetColumnName": "Done", "message": "..."}
-{"action": "update", "taskTitle": "Task Title", "priority": "high", "message": "..."}
+{"action": "update", "taskTitle": "Existing Task Title", "newTitle": "Optional New Title", "description": "Updated description", "priority": "high", "dueDate": "YYYY-MM-DD", "message": "Updated task details"}
+{"action": "update_note", "noteTitle": "Existing Note Title", "newTitle": "Optional New Title", "content": "Updated content", "color": "#hex", "message": "Updated note details"}
 {"action": "show_overdue", "message": "..."}
 {"action": "clear_completed", "message": "..."}
 {"action": "find_duplicates", "message": "..."}
@@ -1009,8 +1028,10 @@ Calendar context:
 ${calendarLines.join('\n')}
 Rules:
 - For ordinary questions or conversation, respond with {"action": "chat", "message": "your answer"}.
+- When asked to fix or update a task (e.g. "can you fix this in task X", "update task X description to ..."): use {"action": "update", ...}
+- When asked to fix or update a note (e.g. "can you fix this in note Y", "update note Y content to ..."): use {"action": "update_note", ...}
 - Only use an action key when you actually must perform that board action based on the user's request.
-- Never invent tasks that don't exist. If a task name is unclear, use action "chat" and ask the user to confirm.
+- Never invent tasks that don't exist. If a task or note name is unclear, use action "chat" and ask the user to confirm.
 - You HAVE full access to ALL the user's data: tasks, columns, goals, habits, notes, projects, insights, and their calendar (tasks with due dates plus connected Google Calendar events). When asked about any of these — the calendar, today's schedule, goal progress, habit streaks, notes, productivity insights — answer directly from the data above. Never claim you lack access to the user's data or that they must show it to you; it is already provided.
 - Keep messages concise, friendly, without markdown bold/italics.
 - Reply with ONLY the JSON object, no code fences, no extra text.`.trim();
@@ -1792,16 +1813,16 @@ Respond with ONLY valid JSON (no markdown, no code fences) shaped exactly like:
 {
   "productivityScore": {
     "score": 0-100 integer,
-    "summary": "one or two short sentences about this user's productivity",
-    "focusAreas": ["2-4 short focus areas"]
+    "summary": "a rich, detailed 3-4 sentence analytical evaluation of the user's velocity, priority alignment, overdue risk factor, and momentum with specific numbers",
+    "focusAreas": ["3-5 clear, concrete strategic focus areas with quantified rationale"]
   },
   "nextTasks": [
-    { "id": "a task id from ACTIVE TASKS", "reason": "one sentence on why this should be done next (deadline/priority/effort)" }
+    { "id": "a task id from ACTIVE TASKS", "reason": "a comprehensive 2-3 sentence explanation covering deadline urgency, priority impact, estimated effort, and the immediate first action to take" }
   ],
   "bottlenecks": [
-    { "id": "a task id from the data", "reason": "why this task may be stalling", "suggestion": "one concrete next step the user should take to unblock it" }
+    { "id": "a task id from the data", "reason": "a thorough diagnostic of why this specific task is stalled or overdue and the operational risk it poses", "suggestion": "a concrete, step-by-step actionable recipe to unblock and finish it" }
   ],
-  "weeklySummary": "2-3 natural-language sentences recapping the week and what to do better next week"
+  "weeklySummary": "a thorough, executive-level natural-language recap (4-6 sentences) analyzing total tasks, completion velocity, key milestones reached, friction points, and concrete priorities for the coming week"
 }
 All task ids must come verbatim from the data provided. If there are no active tasks, leave nextTasks as an empty array.`;
 

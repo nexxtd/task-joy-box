@@ -3,6 +3,8 @@ import { Bot, BookOpen, FileText, Send, Sparkles, ChevronRight, ArrowRight } fro
 import { useNavigate } from 'react-router-dom';
 import { RESOURCES, WHATS_NEW, QUICK_LINKS } from '@/data/supportContent';
 
+import DiscordCommunitySection from '@/components/shared/DiscordCommunitySection';
+
 interface SupportContentProps {
   onOpenAi?: () => void;
   onOpenFaqs?: (faqId?: string) => void;
@@ -138,6 +140,10 @@ const SupportContent: React.FC<SupportContentProps> = ({ onOpenAi, onOpenFaqs, o
           </button>
         </div>
       )}
+
+      <div className="mt-6">
+        <DiscordCommunitySection />
+      </div>
 
       {showWhatsNew && (
         <div className="mt-10">

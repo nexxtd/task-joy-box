@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { pendingUserChanges, userNotifications, users, userSettings } from '../../shared/schema.js';
+import { pendingUserChanges, userNotifications, users, userSettings, projectJoinRequests, projectMembers, projects } from '../../shared/schema.js';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { normalizeLanguageCode } from '../lib/language.js';
@@ -8,6 +8,26 @@ import bcrypt from 'bcryptjs';
 
 const router = Router();
 router.use(requireAuth);
+
+const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
+  free: 5,
+  premium: 10,
+  pro: 20,
+};
+
+function getPlanTier(tier?: string | null): 'free' | 'premium' | 'pro' {
+  if (tier === 'pro') return 'pro';
+  if (tier === 'premium') return 'premium';
+  return 'free';
+}
+
+async function getProjectMembershipCount(userId: number) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(projectMembers)
+    .where(eq(projectMembers.userId, userId));
+  return row?.count ?? 0;
+}
 
 async function applyPendingChange(pending: any) {
   const payload = (() => {
@@ -138,6 +158,95 @@ router.post('/:id/deny', async (req: AuthRequest, res: Response) => {
   } catch (e) {
     console.error('Deny failed', e);
     res.status(500).json({ error: 'Failed to deny' });
+  }
+});
+
+router.post('/project-invite/:requestId/:action', async (req: AuthRequest, res: Response) => {
+  try {
+    const requestId = parseInt(req.params.requestId, 10);
+    const action = req.params.action;
+    if (action !== 'accept' && action !== 'decline') {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+    const userId = req.userId!;
+
+    const [request] = await db
+      .select()
+      .from(projectJoinRequests)
+      .where(and(eq(projectJoinRequests.id, requestId), eq(projectJoinRequests.userId, userId)))
+      .limit(1);
+    if (!request || !['pending', 'invited'].includes((request as any).status)) {
+      return res.status(404).json({ error: 'Invitation not found or already resolved' });
+    }
+
+    const [project] = await db.select().from(projects).where(eq(projects.id, (request as any).projectId)).limit(1);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const [me] = await db.select({ name: users.name, email: users.email, subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, userId)).limit(1);
+    const myName = me?.name || me?.email?.split('@')[0] || 'A user';
+
+    if (action === 'accept') {
+      const alreadyMember = await db
+        .select()
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, (request as any).projectId), eq(projectMembers.userId, userId)));
+      if (alreadyMember.length === 0) {
+        const planTier = getPlanTier(me?.subscriptionTier);
+        const currentCount = await getProjectMembershipCount(userId);
+        if (currentCount >= PLAN_LIMITS[planTier]) {
+          return res.status(402).json({
+            error: 'RECIPIENT_LIMIT_REACHED',
+            message: 'You cannot join any more projects on your current plan.',
+          });
+        }
+        await db.insert(projectMembers).values({
+          projectId: (request as any).projectId,
+          userId,
+          role: 'edit',
+        });
+      }
+    }
+
+    await db.update(projectJoinRequests)
+      .set({ status: action === 'accept' ? 'accepted' : 'declined', updatedAt: new Date().toISOString() })
+      .where(eq(projectJoinRequests.id, requestId));
+
+    // Resolve the invite notification so the action buttons disappear.
+    try {
+      const inviteNotifs = await db
+        .select()
+        .from(userNotifications)
+        .where(and(eq(userNotifications.userId, userId), eq(userNotifications.type, 'project_invite')));
+      const ids = inviteNotifs
+        .filter(n => {
+          try { return JSON.parse((n as any).data || '{}').requestId === requestId; } catch { return false; }
+        })
+        .map(n => (n as any).id);
+      for (const id of ids) {
+        await db.delete(userNotifications).where(eq(userNotifications.id, id));
+      }
+    } catch (cleanupError) {
+      console.error('Failed to clean invite notifications:', cleanupError);
+    }
+
+    // Tell the project owner what happened either way.
+    try {
+      await db.insert(userNotifications).values({
+        userId: (project as any).ownerId,
+        type: 'project_invite_response',
+        title: action === 'accept' ? 'Invite accepted' : 'Invite declined',
+        message: `${myName} ${action === 'accept' ? 'accepted' : 'declined'} your invitation to "${(project as any).name}".`,
+        data: JSON.stringify({ projectId: (project as any).id, requestId, decision: action }),
+        read: false,
+      } as any);
+    } catch (notifyError) {
+      console.error('Failed to notify project owner:', notifyError);
+    }
+
+    res.json({ success: true, action });
+  } catch (e) {
+    console.error('Respond to project invite failed', e);
+    res.status(500).json({ error: 'Failed to respond to invitation' });
   }
 });
 
