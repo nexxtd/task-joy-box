@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Loader2 } from 'lucide-react';
 import { LabelColor, LABEL_COLORS } from '@/types/board';
+import { useAuth } from '@/context/AuthContext';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 
 export interface TagOption {
   id: string;
@@ -59,6 +62,13 @@ const TagsModal: React.FC<TagsModalProps> = ({
   const [optimisticTags, setOptimisticTags] = useState<TagOption[]>([]);
   const accentColor = typeof window !== 'undefined' ? localStorage.getItem('accentColor') || '#000000' : '#000000';
   const modalRef = useRef<HTMLDivElement | null>(null);
+
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const tier = normalizePlanTier(user?.subscriptionTier);
+  const maxTags = PLAN_LIMITS.tags[tier];
+  const totalTagsCount = tags.length + optimisticTags.length;
+  const isTagLimitReached = totalTagsCount >= maxTags;
 
   const closeColorPicker = () => {
     setColorPickerId(null);
@@ -391,12 +401,19 @@ const TagsModal: React.FC<TagsModalProps> = ({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={handleCreate}
-                disabled={!newName.trim()}
-                style={{ backgroundColor: accentColor }}
-                className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                onClick={isTagLimitReached ? (tier === 'pro' ? undefined : () => navigate('/pricing')) : handleCreate}
+                disabled={isTagLimitReached ? tier === 'pro' : (!newName.trim() || creatingCount > 0)}
+                style={isTagLimitReached ? undefined : { backgroundColor: accentColor }}
+                title={isTagLimitReached ? (tier === 'pro' ? `Tag limit reached (${maxTags} max on Pro)` : `Tag limit reached (${maxTags} max). Click to upgrade.`) : undefined}
+                className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition-all ${
+                  isTagLimitReached
+                    ? tier === 'pro'
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border opacity-70'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                    : 'text-white hover:opacity-90 disabled:opacity-50'
+                }`}
               >
-                {creatingCount > 0 ? 'Adding...' : 'Add tag'}
+                {isTagLimitReached ? 'Limit reached' : creatingCount > 0 ? 'Adding...' : 'Add tag'}
               </button>
               <button
                 onClick={onClose}

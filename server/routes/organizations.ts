@@ -9,6 +9,7 @@ import {
 } from '../../shared/schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { reconcileUserOrgState, reconcileOrgMembers } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -140,6 +141,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
         id: users.id,
         name: users.name,
         email: users.email,
+        lastActiveAt: users.lastActiveAt,
         role: organizationMembers.role,
         joinedAt: organizationMembers.createdAt,
       })
@@ -256,6 +258,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
         email: m.email,
         role: m.id === org.ownerId ? 'owner' : m.role,
         joinedAt: m.joinedAt,
+        lastActiveAt: m.lastActiveAt || null,
         groups: assignedGroupNames,
         subGroups: assignedSubGroupNames,
         isOwner: m.id === org.ownerId,
@@ -359,10 +362,8 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       .limit(1);
 
     const isOwner = org.ownerId === userId;
-    const isAdmin = membership?.role === 'admin' || isOwner;
-
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Only organization administrators can update details' });
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only the organization owner can update organization settings' });
     }
 
     const updates: any = { updatedAt: new Date().toISOString() };
@@ -371,23 +372,23 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       updates.name = name.trim();
     }
 
-    // Owner-only fields
-    if (isOwner) {
-      if (maxSeats !== undefined) {
-        const newMaxSeats = parseInt(maxSeats);
-        if (isNaN(newMaxSeats) || newMaxSeats < 1) {
-          return res.status(400).json({ error: 'Seats must be at least 1' });
-        }
-        if (newMaxSeats < org.currentSeats) {
-          return res.status(400).json({
-            error: `Cannot reduce seats below current usage (${org.currentSeats}). Remove members first.`,
-          });
-        }
-        updates.maxSeats = newMaxSeats;
+    if (maxSeats !== undefined) {
+      if (org.type === 'family') {
+        return res.status(400).json({ error: 'Family plans are fixed at 5 seats' });
       }
-      if (tier && ['premium', 'pro'].includes(tier)) {
-        updates.tier = tier;
+      const newMaxSeats = parseInt(maxSeats);
+      if (isNaN(newMaxSeats) || newMaxSeats < 1) {
+        return res.status(400).json({ error: 'Seats must be at least 1' });
       }
+      if (newMaxSeats < org.currentSeats) {
+        return res.status(400).json({
+          error: `Cannot reduce seats below current usage (${org.currentSeats}). Remove members first.`,
+        });
+      }
+      updates.maxSeats = newMaxSeats;
+    }
+    if (tier && ['premium', 'pro'].includes(tier)) {
+      updates.tier = tier;
     }
 
     const [updated] = await db
@@ -395,6 +396,10 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       .set(updates)
       .where(eq(organizations.id, orgId))
       .returning();
+
+    if (tier && tier !== org.tier) {
+      await reconcileOrgMembers(orgId);
+    }
 
     res.json({ organization: updated, message: 'Organization updated' });
   } catch (error) {
@@ -415,10 +420,19 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Only the organization owner can delete the organization' });
     }
 
+    const memberRows = await db
+      .select({ userId: organizationMembers.userId })
+      .from(organizationMembers)
+      .where(eq(organizationMembers.organizationId, orgId));
+
     await db.delete(organizationGroupMembers).where(eq(organizationGroupMembers.organizationId, orgId));
     await db.delete(organizationGroups).where(eq(organizationGroups.organizationId, orgId));
     await db.delete(organizationMembers).where(eq(organizationMembers.organizationId, orgId));
     await db.delete(organizations).where(eq(organizations.id, orgId));
+
+    for (const m of memberRows) {
+      await reconcileUserOrgState(m.userId);
+    }
 
     res.json({ message: 'Organization deleted successfully' });
   } catch (error) {
@@ -440,6 +454,9 @@ router.post('/:id/groups', requireAuth, async (req: AuthRequest, res: Response) 
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     if (!org) return res.status(404).json({ error: 'Organization not found' });
+    if (org.type === 'family') {
+      return res.status(403).json({ error: 'Family plans do not use groups or sub-groups.' });
+    }
 
     const [membership] = await db
       .select()
@@ -618,6 +635,8 @@ router.post('/:id/kick-member/:targetUserId', requireAuth, async (req: AuthReque
       .update(organizations)
       .set({ currentSeats: Math.max(1, org.currentSeats - 1) })
       .where(eq(organizations.id, orgId));
+
+    await reconcileUserOrgState(targetUserId);
 
     res.json({ message: 'Member kicked successfully' });
   } catch (error) {
@@ -893,10 +912,26 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
 
     // If joined with a group/sub-group code, assign member accordingly:
     // "A sub-group code puts the person in that sub-group and its parent group."
+    // If joining via a parent group code while already in a sub-group of that parent, keep that sub-group!
     if (targetGroup) {
       const isSubGroup = targetGroup.parentId != null;
       const parentGroupId = isSubGroup ? targetGroup.parentId : targetGroup.id;
-      const subGroupId = isSubGroup ? targetGroup.id : null;
+
+      const existingInParent = await db
+        .select()
+        .from(organizationGroupMembers)
+        .where(
+          and(
+            eq(organizationGroupMembers.organizationId, orgId),
+            eq(organizationGroupMembers.userId, userId),
+            eq(organizationGroupMembers.groupId, parentGroupId)
+          )
+        )
+        .limit(1);
+
+      const preservedSubGroupId =
+        !isSubGroup && existingInParent[0]?.subGroupId != null ? existingInParent[0].subGroupId : null;
+      const subGroupId = isSubGroup ? targetGroup.id : preservedSubGroupId;
 
       // Remove any prior assignment in this parent group to prevent multiple sub-groups
       await db
@@ -923,6 +958,8 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
         .where(eq(organizationGroups.id, targetGroup.id));
     }
 
+    const plan = await reconcileUserOrgState(userId);
+
     res.json({
       success: true,
       message: `Successfully joined ${org.name}!`,
@@ -931,6 +968,9 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
         name: org.name,
         tier: org.tier,
       },
+      effectiveTier: plan.tier,
+      personalPlanPaused: plan.personalPlanPaused,
+      reservedOrgTier: plan.reservedOrgTier,
     });
   } catch (error) {
     console.error('Join organization error:', error);
@@ -977,7 +1017,14 @@ router.post('/:id/leave', requireAuth, async (req: AuthRequest, res: Response) =
       .set({ currentSeats: Math.max(1, org.currentSeats - 1) })
       .where(eq(organizations.id, orgId));
 
-    res.json({ message: 'Successfully left organization' });
+    const plan = await reconcileUserOrgState(userId);
+
+    res.json({
+      message: 'Successfully left organization',
+      effectiveTier: plan.tier,
+      personalPlanPaused: plan.personalPlanPaused,
+      archivedAttachmentCount: plan.archivedAttachmentCount,
+    });
   } catch (error) {
     console.error('Leave organization error:', error);
     res.status(500).json({ error: 'Failed to leave organization' });

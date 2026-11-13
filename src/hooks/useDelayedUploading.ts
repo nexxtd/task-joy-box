@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
  * inputs), while `showUploading` only becomes true after `delayMs`.
  * If the upload finishes before the delay, the spinner never appears.
  */
-export function useDelayedUploading(delayMs = 350) {
+export function useDelayedUploading(delayMs = 0) {
   const [uploading, setUploading] = useState(false);
   const [showUploading, setShowUploading] = useState(false);
   const timerRef = useRef<number | null>(null);

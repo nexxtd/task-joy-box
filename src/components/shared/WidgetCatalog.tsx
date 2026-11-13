@@ -25,15 +25,20 @@ interface Props<D extends CatalogDefinition> {
   onClose: () => void;
   onUpgrade: () => void;
   onReset: () => void;
+  widgetCount?: number;
+  maxWidgets?: number;
+  currentTier?: string | null;
 }
 
 const TIERS: CatalogTier[] = ['free', 'premium', 'pro'];
 
 export function WidgetCatalog<D extends CatalogDefinition>({
   definitions, surface, closing, hasWidget, canAccessTier, onStartDrag, onAdd,
-  onClose, onUpgrade, onReset,
+  onClose, onUpgrade, onReset, widgetCount, maxWidgets, currentTier,
 }: Props<D>) {
   const [search, setSearch] = useState('');
+  const isLimitReached = widgetCount !== undefined && maxWidgets !== undefined && maxWidgets !== Infinity && widgetCount >= maxWidgets;
+  const isPro = String(currentTier || '').toLowerCase() === 'pro';
   const visible = useMemo(() => {
     const terms = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return definitions.filter(def => {
@@ -122,17 +127,33 @@ export function WidgetCatalog<D extends CatalogDefinition>({
                                 <p className="mt-0.5 break-words text-xs text-muted-foreground">{def.desc}</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                   {def.tier !== 'free' && <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase text-primary"><Crown className="h-2.5 w-2.5" /> {def.tier}</span>}
-                                  <span className={`rounded-full border border-border px-2 py-0.5 text-[10px] font-bold ${!placed && !unlocked ? 'text-primary' : 'text-muted-foreground'}`}>
-                                    {placed ? `In ${surface}` : unlocked ? 'Drag to add' : 'Upgrade'}
+                                  <span className={`rounded-full border border-border px-2 py-0.5 text-[10px] font-bold ${!placed && !unlocked ? 'text-primary' : isLimitReached && !placed ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                                    {placed ? `In ${surface}` : !unlocked ? 'Upgrade' : isLimitReached ? 'Limit reached' : 'Drag to add'}
                                   </span>
                                   {!placed && unlocked && onAdd && (
                                     <button
                                       type="button"
-                                      aria-label={`Add ${def.title}`}
+                                      aria-label={isLimitReached ? 'Limit reached' : `Add ${def.title}`}
                                       onPointerDown={event => event.stopPropagation()}
-                                      onClick={event => { event.stopPropagation(); onAdd(def); }}
-                                      className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:bg-primary/90"
-                                    >Add</button>
+                                      onClick={event => {
+                                        event.stopPropagation();
+                                        if (isLimitReached) {
+                                          if (!isPro) onUpgrade();
+                                          return;
+                                        }
+                                        onAdd(def);
+                                      }}
+                                      disabled={isLimitReached && isPro}
+                                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                                        isLimitReached
+                                          ? isPro
+                                            ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                                            : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                                          : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                                      }`}
+                                    >
+                                      {isLimitReached ? 'Limit reached' : 'Add'}
+                                    </button>
                                   )}
                                 </div>
                               </div>

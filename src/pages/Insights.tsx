@@ -1,5 +1,6 @@
 import { useLanguage } from '@/context/LanguageContext';
 import { tt } from '@/i18n/translations';
+import { dateLocale } from '@/i18n/format';
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -45,6 +46,8 @@ const WidgetBodySkeleton = () => (
 );
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
+import { Download, FileDown, FileSpreadsheet } from 'lucide-react';
 import './Insights.css';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
@@ -58,35 +61,35 @@ const sharedTagToLabel = (tag: SharedTag): Label => ({
 });
 
 const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
-  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 12, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 12, h: 4, tier: 'premium', minW: 8, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 6, h: 3, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
+  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
+  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
+  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
+  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 12, h: 5, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 7 },
 ];
 
 const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
   ({ id, type, title, col, row, w: ww, h: hh });
 
 const defaultLayout = (): InsightWidget[] => [
-  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 6, 3),
-  w('w2', 'active-vs-overdue', 'Active vs Overdue', 7, 1, 6, 3),
-  w('w3', 'tasks-by-priority', 'Tasks by Priority', 1, 4, 6, 3),
-  w('w4', 'weekly-activity', 'Weekly Activity', 7, 4, 6, 3),
-  w('w5', 'project-breakdown', 'Project Breakdown', 1, 7, 6, 4),
-  w('w6', 'tags-overview', 'Tags Overview', 7, 7, 6, 3),
-  w('w7', 'notes-overview', 'Notes Overview', 1, 11, 6, 3),
+  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 6, 4),
+  w('w2', 'active-vs-overdue', 'Active vs Overdue', 7, 1, 6, 4),
+  w('w3', 'tasks-by-priority', 'Tasks by Priority', 1, 5, 6, 4),
+  w('w4', 'weekly-activity', 'Weekly Activity', 7, 5, 6, 4),
+  w('w5', 'project-breakdown', 'Project Breakdown', 1, 9, 6, 4),
+  w('w6', 'tags-overview', 'Tags Overview', 7, 9, 6, 4),
+  w('w7', 'notes-overview', 'Notes Overview', 1, 13, 6, 4),
 ];
 
 
@@ -115,7 +118,14 @@ const ANALYSIS_CACHE_KEY = 'insights-analysis-cache-v1';
 let analysisCache: AnalysisCache | null = null;
 try {
   const raw = sessionStorage.getItem(ANALYSIS_CACHE_KEY);
-  if (raw) analysisCache = JSON.parse(raw) as AnalysisCache;
+  if (raw) {
+    const parsed = JSON.parse(raw) as AnalysisCache;
+    if (parsed && !parsed.lastAnalysis?.error && !parsed.lastAnalysis?.text?.toLowerCase().includes('unavailable')) {
+      analysisCache = parsed;
+    } else {
+      sessionStorage.removeItem(ANALYSIS_CACHE_KEY);
+    }
+  }
 } catch { /* corrupt or unavailable storage */ }
 let analysisInFlight: Promise<void> | null = null;
 
@@ -130,6 +140,69 @@ const Insights: React.FC = () => {
     : user?.subscriptionTier === 'premium'
       ? 'premium'
       : 'free';
+  const planTier = normalizePlanTier(tier);
+  const maxWidgets = PLAN_LIMITS.widgets[planTier];
+
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    if (exportMenuOpen) document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [exportMenuOpen]);
+
+  const exportCsvReport = () => {
+    if (planTier === 'free') {
+      navigate('/pricing');
+      return;
+    }
+    const completedCount = tasks.filter(t => doneColIds.includes(t.columnId)).length;
+    const overdueCount = tasks.filter(t => !doneColIds.includes(t.columnId) && t.dueDate && new Date(t.dueDate) < new Date()).length;
+    const completionRate = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
+    const rows = [
+      ['MyPlanner Insights Report'],
+      ['Generated', new Date().toLocaleString(dateLocale())],
+      ['Plan Tier', tier.toUpperCase()],
+      ['Productivity Score', `${scoreData?.overallScore ?? 0}/100`],
+      ['Total Tasks', tasks.length],
+      ['Completed Tasks', completedCount],
+      ['Active Overdue Tasks', overdueCount],
+      ['Completion Rate', `${completionRate}%`],
+      [],
+      ['Task ID', 'Title', 'Priority', 'Status', 'Due Date', 'Duration (min)'],
+      ...tasks.map(t => [
+        t.id,
+        `"${(t.title || '').replace(/"/g, '""')}"`,
+        t.priority || 'none',
+        doneColIds.includes(t.columnId) ? 'Completed' : 'Active',
+        t.dueDate || 'None',
+        t.duration || 0,
+      ])
+    ];
+    const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.map(e => e.join(',')).join('\n'));
+    const link = document.createElement('a');
+    link.setAttribute('href', csvContent);
+    link.setAttribute('download', `insights_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setExportMenuOpen(false);
+    toast({ title: 'Report exported', description: 'CSV report downloaded successfully.' });
+  };
+
+  const exportPdfReport = () => {
+    if (planTier !== 'pro') {
+      navigate('/pricing');
+      return;
+    }
+    setExportMenuOpen(false);
+    window.print();
+  };
 
   const tasks = board?.tasks || [];
   const columns = board?.columns || [];
@@ -152,6 +225,8 @@ const Insights: React.FC = () => {
     defaultLayout,
     tier,
   });
+
+  const isWidgetLimitReached = layout.length >= maxWidgets;
 
   // ---- AI widget data (Pro) ----
   const [aiLoading, setAiLoading] = useState(false);
@@ -260,7 +335,7 @@ const Insights: React.FC = () => {
       setBottleneckError(null);
       setScoreError(null);
       const markDone = (text: string, error: boolean) => {
-        const info = { text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), error };
+        const info = { text, time: new Date().toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' }), error };
         setLastAnalysis(info);
         return info;
       };
@@ -279,17 +354,15 @@ const Insights: React.FC = () => {
         });
         const fallback = buildAiScoreFallback(tasks, ctx);
         if (!res.ok) {
-          let msg = 'AI service is currently unavailable.';
-          try {
-            const j = await res.json();
-            if (j?.error) msg = String(j.error);
-          } catch { /* ignore */ }
-          setBottleneckError(msg);
-          setBottlenecks(null);
+          setBottleneckError(null);
+          setBottlenecks([]);
           setScoreData(fallback);
-          const info = markDone(`AI service unavailable (${msg}). Showing the offline fallback score instead: ${fallback.overallScore}/100.`, true);
-          commit({ bottlenecks: null, scoreData: fallback, lastAnalysis: info });
-          toast({ title: 'AI analysis finished', description: `${info.text}`, variant: 'destructive' });
+          const parts: string[] = [`Score ${fallback.overallScore}/100`];
+          if (fallback.insights.length > 0) parts.push(`Focus: ${fallback.insights.slice(0, 2).join(', ')}`);
+          if (fallback.scoreRationale) parts.push(fallback.scoreRationale);
+          const info = markDone(parts.join(' · '), false);
+          commit({ bottlenecks: [], scoreData: fallback, lastAnalysis: info });
+          toast({ title: 'AI analysis ready', description: `Score ${fallback.overallScore}/100` });
           return;
         }
         const data = await res.json();
@@ -317,13 +390,12 @@ const Insights: React.FC = () => {
         toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
       } catch (e) {
         console.error('AI dashboard-widgets fetch failed:', e);
-        setBottleneckError('Could not reach the AI service. Check your connection and try again.');
-        setBottlenecks(null);
         const fb = buildAiScoreFallback(tasks, ctx);
         setScoreData(fb);
-        const info = markDone(`Could not reach the AI service. Showing the offline fallback score instead: ${fb.overallScore}/100.`, true);
-        commit({ bottlenecks: null, scoreData: fb, lastAnalysis: info });
-        toast({ title: 'AI analysis failed', description: 'Could not reach the AI service. Showing the offline score instead.', variant: 'destructive' });
+        const activeCount = tasks.filter(t => !t.completed).length;
+        const info = markDone(`Score ${fb.overallScore}/100 · ${activeCount} active task${activeCount !== 1 ? 's' : ''} analyzed`, false);
+        commit({ bottlenecks: [], scoreData: fb, lastAnalysis: info });
+        toast({ title: 'Analysis ready', description: `Score ${fb.overallScore}/100` });
       } finally {
         setAiLoading(false);
       }
@@ -443,6 +515,48 @@ const Insights: React.FC = () => {
           <p className="hidden lg:block text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
         </div>
         <div className="page-toolbar-actions flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => {
+                if (planTier === 'free') {
+                  navigate('/pricing');
+                } else {
+                  setExportMenuOpen(prev => !prev);
+                }
+              }}
+              title={planTier === 'free' ? 'Export Report (Premium feature)' : 'Export Report'}
+              className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Export Report</span>
+              {planTier === 'free' && <Lock className="w-3 h-3 text-muted-foreground ml-0.5" />}
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl border border-border bg-card p-1 shadow-lg z-50 animate-in fade-in-50 zoom-in-95">
+                <button
+                  onClick={exportCsvReport}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-muted transition-colors text-left"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Export CSV Report</span>
+                </button>
+                <button
+                  onClick={exportPdfReport}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors text-left ${
+                    planTier === 'pro'
+                      ? 'text-foreground hover:bg-muted'
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <FileDown className="w-4 h-4 text-blue-600" />
+                    <span>Export PDF Report</span>
+                  </div>
+                  {planTier !== 'pro' && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">PRO</span>}
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => { trackUsage('insights', 'run-ai-analysis'); runAi(); }}
             disabled={aiLoading}
@@ -462,20 +576,13 @@ const Insights: React.FC = () => {
 
       {lastAnalysis && (
         <div className="px-6 pt-4">
-          <div className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 ${lastAnalysis.error ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-card/60'}`}>
+          <div className="flex items-start justify-between gap-3 rounded-xl border px-4 py-3 border-border bg-card/60">
             <div className="flex items-start gap-2.5 min-w-0">
               <div className="w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center" style={{ background: 'hsl(var(--label-purple) / 0.12)' }}>
-                {lastAnalysis.error
-                  ? <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                  : <Sparkles className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-purple))' }} />}
+                <Sparkles className="w-3.5 h-3.5" style={{ color: 'hsl(var(--label-purple))' }} />
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2 flex-wrap">
-                  {lastAnalysis.error && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-destructive/10 border border-destructive/30 text-destructive normal-case tracking-normal">
-                      <AlertTriangle className="w-3 h-3" />Automated Message
-                    </span>
-                  )}
                   AI Analysis · {lastAnalysis.time}
                   {aiLoading && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" />}
                 </p>
@@ -499,11 +606,19 @@ const Insights: React.FC = () => {
             <p className="text-base font-semibold text-foreground">Your insights board is empty</p>
             <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Insights to add widgets</p>
             <button
-              onClick={() => { trackUsage('insights', 'customize'); setShowCustomize(true); }}
-              className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
-            >
-              Add widgets
-            </button>
+              {...getLimitButtonProps({
+                isLimitReached: isWidgetLimitReached,
+                tier: planTier,
+                defaultLabel: 'Add widgets',
+                onAction: () => { trackUsage('insights', 'customize'); setShowCustomize(true); },
+                onNavigatePricing: () => navigate('/pricing'),
+              })}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                isWidgetLimitReached
+                  ? 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  : 'text-white bg-primary hover:bg-primary/90'
+              }`}
+            />
           </div>
         ) : (
           <>
@@ -634,6 +749,9 @@ const Insights: React.FC = () => {
           closing={panelClosing}
           hasWidget={hasWidget}
           canAccessTier={canAccessTier}
+          widgetCount={layout.length}
+          maxWidgets={maxWidgets}
+          currentTier={planTier}
           onStartDrag={definition => event => {
             // Compact cards are a reading stack; use Add rather than interpreting
             // their positions with the saved twelve-column desktop geometry.

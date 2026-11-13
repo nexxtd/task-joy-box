@@ -72,15 +72,18 @@ const Pricing: React.FC = () => {
       yearlyPrice: 0,
       icon: Zap,
       tier: 'free' as const,
-      description: 'Basic organisation for students and individuals.',
+      description: 'Essential organization for individuals.',
       cta: 'Get Free',
       features: [
-        'Basic task list and simple daily planner',
-        'Limited projects (1–2 active)',
-        'Basic calendar view',
-        'Cloud sync across devices',
-        'Manual progress tracking',
-        'Simple notes section',
+        'Max 25 active tasks & 25 active notes',
+        'Max 5 templates (tasks & notes)',
+        '20 sub-tasks & 20 checklist items per task',
+        'Max 5 projects (10 people, 10 columns)',
+        'Project chat history kept 30 days',
+        'Up to 8 dashboard & insights widgets',
+        'Max 10 tags & 3 custom shortcuts',
+        'Normal support & normal alerts',
+        'Completed tasks auto-delete after 5 days',
       ],
     },
     {
@@ -89,18 +92,22 @@ const Pricing: React.FC = () => {
       yearlyPrice: yearlyFromMonthly(pricing.premium),
       icon: Crown,
       tier: 'premium' as const,
-      description: 'The standard for advanced productivity.',
+      description: 'The standard for advanced productivity and power users.',
       cta: 'Get Premium',
       features: [
         'Everything in Free, plus:',
-        'Unlimited tasks and projects',
-        'Auto-schedule calendar system',
-        'Smart reminders and notifications',
-        'Cloud-synced notes section',
-        'Custom task categories and labels',
-        'Full cloud synchronisation',
-        'Attachments on tasks',
-        'Task Analysis',
+        'Max 100 active tasks & 100 active notes',
+        'Max 15 projects (15 people, 15 columns)',
+        'Project chat history kept 1 year',
+        'Files & Images (15 each per task/note, 10MB max)',
+        'AI Assistant (20 msgs/day, max 10 chats, creates/edits tasks & notes)',
+        'Up to 14 dashboard & insights widgets',
+        'Export CSV insights reports',
+        'Max 15 templates, 40 sub-tasks & checklists',
+        'Max 15 tags & 10 custom shortcuts',
+        'Full appearance colors, Smart alerts & Email notifications',
+        'Energy tracker & Priority support',
+        'Completed tasks auto-delete after 30 days',
       ],
     },
     {
@@ -114,12 +121,19 @@ const Pricing: React.FC = () => {
       popular: true,
       features: [
         'Everything in Premium, plus:',
-        'AI Planning Assistant',
-        'AI Task Builder',
-        'AI Task Prioritisation',
-        'Advanced analytics and productivity tracking',
-        'Personalised themes',
-        'Priority 24/7 support',
+        'Unlimited active tasks, notes & templates',
+        'AI Task Builder & AI Note Builder',
+        'Task Analysis & Note Analysis',
+        'AI Assistant (100 msgs/day, unlimited chats, file attachments)',
+        'Max 20 projects (20 people, 20 columns, unlimited chat)',
+        'Files & Images (25 each per task/note, 25MB max)',
+        'Unlimited dashboard & insights widgets',
+        'Export CSV & PDF insights reports',
+        '60 sub-tasks & 60 checklists per task',
+        'Max 25 tags & Unlimited custom shortcuts',
+        'Weekly AI summary emails',
+        'Never auto-delete completed tasks',
+        'Priority support with priority badge',
       ],
     },
   ];
@@ -168,17 +182,32 @@ const Pricing: React.FC = () => {
     }
   };
 
+  const getChargeAmount = (): number => {
+    if (!selectedPlan) return 0;
+    return billingPeriod === 'yearly'
+      ? Math.round(selectedPlan.price * 12 * 100) / 100
+      : selectedPlan.price;
+  };
+
   const getDiscountedPrice = (): number => {
-    if (!selectedPlan || !appliedCoupon) return selectedPlan?.price || 0;
-    const base = selectedPlan.price;
+    const base = getChargeAmount();
+    if (!selectedPlan || !appliedCoupon) return base;
     if (appliedCoupon.discountType === 'percentage') {
-      return Math.max(0, base * (1 - appliedCoupon.discountValue / 100));
+      return Math.max(0, Math.round(base * (1 - appliedCoupon.discountValue / 100) * 100) / 100);
     }
-    return Math.max(0, base - appliedCoupon.discountValue);
+    return Math.max(0, Math.round((base - appliedCoupon.discountValue) * 100) / 100);
   };
 
   const handleCheckoutComplete = async () => {
     if (!selectedPlan) return;
+    if (!user) {
+      toast({
+        title: 'Sign in required',
+        description: 'Please log in or create an account before completing checkout.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setLoadingTier(selectedPlan.name);
     try {
       const response = await fetch('/api/payment/create-checkout-session', {
@@ -188,6 +217,7 @@ const Pricing: React.FC = () => {
         body: JSON.stringify({
           tier: selectedPlan.tier,
           paymentMethod,
+          billingPeriod,
           planType: selectedPlan.planType || 'personal',
           seats: selectedPlan.seats,
           couponCode: appliedCoupon?.code || undefined,
@@ -219,7 +249,7 @@ const Pricing: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background/50">
-      <header className="px-8 h-16 border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10 flex items-center">
+      <header className="px-4 sm:px-8 h-16 border-b border-border bg-card/30 backdrop-blur-md sticky top-0 z-10 flex items-center">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
             <Crown className="w-5 h-5 text-primary" />
@@ -537,11 +567,17 @@ const Pricing: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground mb-6">You will be prompted to log in after payment.</p>
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mb-6 space-y-3">
+                      <p className="text-sm text-foreground font-semibold">Sign in or create an account to link your subscription.</p>
+                      <div className="flex gap-2">
+                        <a href="/login" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold">Sign In</a>
+                        <a href="/signup" className="px-4 py-2 rounded-lg bg-muted text-foreground text-xs font-bold">Create Account</a>
+                      </div>
+                    </div>
                   )}
                   <div className="flex gap-3">
                     <button onClick={() => setCheckoutStep(1)} className="flex-1 py-3 bg-muted text-foreground font-bold rounded-xl flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4" />Back</button>
-                    <button onClick={() => setCheckoutStep(3)} className="flex-[2] py-3 bg-primary text-primary-foreground rounded-xl font-black shadow-lg shadow-primary/20 active:scale-95 transition-all">Continue</button>
+                    <button onClick={() => setCheckoutStep(3)} disabled={!user} className="flex-[2] py-3 bg-primary text-primary-foreground rounded-xl font-black shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed">Continue</button>
                   </div>
                 </div>
               )}
@@ -572,13 +608,8 @@ const Pricing: React.FC = () => {
                     </button>
                   </div>
                   {paymentMethod === 'card' && (
-                    <div className="space-y-3 mb-6 p-4 bg-muted/30 rounded-xl">
-                      <input type="text" placeholder="Card number" className="w-full bg-background border border-input rounded-lg px-4 py-3 text-sm" />
-                      <input type="text" placeholder="Name on card" className="w-full bg-background border border-input rounded-lg px-4 py-3 text-sm" />
-                      <div className="grid grid-cols-2 gap-3">
-                        <input type="text" placeholder="MM/YY" className="bg-background border border-input rounded-lg px-4 py-3 text-sm" />
-                        <input type="text" placeholder="CVV" className="bg-background border border-input rounded-lg px-4 py-3 text-sm" />
-                      </div>
+                    <div className="mb-6 p-4 bg-muted/40 border border-border rounded-xl text-xs text-muted-foreground leading-relaxed">
+                      Debit and credit cards are processed securely on the next screen via PayPal Guest Checkout (no PayPal account required). Card details are never stored on our servers.
                     </div>
                   )}
                   <div className="flex gap-3">
@@ -630,8 +661,10 @@ const Pricing: React.FC = () => {
 
                   <div className="bg-muted/50 rounded-xl p-4 mb-6">
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">{selectedPlan.name}</span>
-                      <span className="font-bold">{convertPrice(selectedPlan.price)}</span>
+                      <span className="text-muted-foreground">
+                        {selectedPlan.name} {billingPeriod === 'yearly' ? `(${convertPrice(selectedPlan.price)}/mo × 12)` : ''}
+                      </span>
+                      <span className="font-bold">{convertPrice(getChargeAmount())}</span>
                     </div>
                     {appliedCoupon && (
                       <div className="flex justify-between text-sm mb-1 text-emerald-600">
@@ -644,7 +677,7 @@ const Pricing: React.FC = () => {
                       </div>
                     )}
                     <div className="border-t border-border mt-2 pt-2 flex justify-between">
-                      <span className="font-black">Total</span>
+                      <span className="font-black">Total due {billingPeriod === 'yearly' ? '(Yearly)' : '(Monthly)'}</span>
                       <span className="font-black text-lg">{convertPrice(getDiscountedPrice())}</span>
                     </div>
                   </div>

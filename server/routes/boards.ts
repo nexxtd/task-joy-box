@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { boardSnapshots, users } from '../../shared/schema.js';
+import { boardSnapshots } from '../../shared/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { getSettingNumber } from '../lib/settings.js';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -42,15 +43,30 @@ router.post('/snapshot', requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: 'Invalid board data' });
     }
 
-    const freeLimit = await getSettingNumber('free_tier_task_limit', 40);
-    if (freeLimit > 0) {
-      const [user] = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, userId)).limit(1);
-      const incomingTasks = Array.isArray(boardData.tasks) ? boardData.tasks.length : 0;
-      if ((user?.subscriptionTier || 'free') === 'free' && incomingTasks > freeLimit) {
+    const effectivePlan = await resolveEffectiveUserPlan(userId);
+    const tier = effectivePlan.tier;
+
+    // Auto-delete completed tasks based on tier: Free 5 days, Premium 30 days, Pro never
+    const autoDeleteDays = SERVER_PLAN_LIMITS.taskAutoDeleteDays[tier];
+    if (Number.isFinite(autoDeleteDays) && Array.isArray(boardData.tasks)) {
+      const cutoffMs = Date.now() - autoDeleteDays * 24 * 60 * 60 * 1000;
+      boardData.tasks = boardData.tasks.filter((task: any) => {
+        const isDone = Boolean(task.completed || task.status === 'completed');
+        if (!isDone) return true;
+        const ts = new Date(task.completedAt || task.updatedAt || task.createdAt || 0).getTime();
+        return ts >= cutoffMs;
+      });
+    }
+
+    // Active tasks limit check: Free 25, Premium 100, Pro unlimited
+    const maxActiveTasks = SERVER_PLAN_LIMITS.activeTasks[tier];
+    if (Number.isFinite(maxActiveTasks) && Array.isArray(boardData.tasks)) {
+      const activeCount = boardData.tasks.filter((t: any) => !(t.completed || t.status === 'completed')).length;
+      if (activeCount > maxActiveTasks) {
         return res.status(403).json({
           error: 'LIMIT_REACHED',
-          message: `Free plan allows up to ${freeLimit} tasks. Upgrade to add more.`,
-          limit: freeLimit,
+          message: `${tier === 'free' ? 'Free' : 'Premium'} plan allows up to ${maxActiveTasks} active tasks. Upgrade to add more.`,
+          limit: maxActiveTasks,
         });
       }
     }

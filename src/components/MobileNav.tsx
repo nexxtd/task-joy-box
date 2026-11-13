@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
@@ -19,6 +19,28 @@ const MobileNav: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const [managedOrgs, setManagedOrgs] = useState<Array<{ id: number; name: string; type: string; role: string }>>([]);
+
+  const fetchManagedOrgs = useCallback(async () => {
+    if (!user?.id) {
+      setManagedOrgs([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/organizations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setManagedOrgs(Array.isArray(data?.organizations) ? data.organizations : []);
+      }
+    } catch {}
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchManagedOrgs();
+    const handler = () => { fetchManagedOrgs(); };
+    window.addEventListener('orgs-refresh', handler);
+    return () => window.removeEventListener('orgs-refresh', handler);
+  }, [fetchManagedOrgs]);
 
   // 4 primary tabs + More — fits 375px without crowding.
   const primaryTabs = [
@@ -33,10 +55,7 @@ const MobileNav: React.FC = () => {
     { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
-    ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
-      ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
-      : []),
-    { icon: Building2, label: t('Organizations'), path: '/organizations' },
+    { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
     { icon: CreditCard, label: T.nav_pricing, path: '/pricing' },
@@ -48,7 +67,7 @@ const MobileNav: React.FC = () => {
     return location.pathname.startsWith(path);
   };
 
-  const moreActive = moreItems.some(i => isActive(i.path));
+  const moreActive = moreItems.some(i => isActive(i.path)) || (managedOrgs.length > 0 && location.pathname.startsWith('/organizations'));
 
   const go = (path: string) => {
     navigate(path);
@@ -176,6 +195,34 @@ const MobileNav: React.FC = () => {
                   </button>
                 );
               })}
+
+              {managedOrgs.length > 0 && (
+                <div className="pt-3 mt-2 border-t border-border/60 space-y-0.5">
+                  <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {t('Organizations')}
+                  </div>
+                  {managedOrgs.map(org => {
+                    const searchOrgId = new URLSearchParams(location.search).get('id');
+                    const active = location.pathname.startsWith('/organizations') && (
+                      searchOrgId === String(org.id) || (!searchOrgId && managedOrgs[0]?.id === org.id)
+                    );
+                    return (
+                      <button
+                        key={org.id}
+                        onClick={() => go(`/organizations?id=${org.id}`)}
+                        className={`w-full flex items-center gap-3 px-3 py-3 min-h-[48px] text-sm rounded-xl transition-colors ${
+                          active
+                            ? 'bg-primary/10 text-primary font-semibold'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <Building2 className="w-5 h-5 flex-shrink-0" />
+                        <span className="truncate">{org.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </nav>
 
             <div className="px-3 py-3 border-t border-border space-y-0.5 flex-shrink-0">

@@ -5,34 +5,32 @@ import { CheckIcon, Sparkles, Zap, Shield, Crown, DollarSign } from 'lucide-reac
 // Plan definitions — exactly matching the user's spec
 // ──────────────────────────────────────────────────────────────────────────────
 const FREE_FEATURES: { text: string; badge?: string }[] = [
-  { text: 'Basic task list & Simple daily planner' },
-  { text: 'Limited projects (1–2 active)', badge: '2 max' },
-  { text: 'Basic calendar view' },
-  { text: 'Cloud sync across devices' },
-  { text: 'Manual progress tracking' },
-  { text: 'Simple notes section' },
+  { text: 'Up to 5 projects & 10 members per project', badge: '5 max' },
+  { text: 'Up to 25 active tasks & 25 active notes', badge: '25 max' },
+  { text: 'Up to 20 subtasks & 20 checklists per task' },
+  { text: 'Up to 10 tags & 5 task/note templates' },
+  { text: 'Free Dashboard & Insights modules', badge: 'Max 8 widgets' },
+  { text: 'Normal overdue alerts & normal support' },
 ];
 
 const PREMIUM_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Everything in Free' },
-  { text: 'Unlimited tasks and projects', badge: 'No limits' },
-  { text: 'Auto-schedule calendar system', badge: 'Smart scheduling' },
-  { text: 'Smart reminders and notifications', badge: 'Push & email' },
-  { text: 'Cloud-synced Notes section', badge: 'Synced everywhere' },
-  { text: 'Custom task categories (Labels)', badge: 'Colour labels' },
-  { text: 'Full cloud synchronization', badge: 'All devices' },
-  { text: 'Attachments on tasks', badge: 'Files & images' },
-  { text: 'Task Analysis', badge: 'Insights' },
+  { text: 'Up to 15 projects & 15 members per project', badge: '15 max' },
+  { text: 'Up to 100 active tasks & 100 active notes', badge: '100 max' },
+  { text: 'Files & images (15 each, up to 10MB)', badge: '10MB max' },
+  { text: 'Premium Dashboard & Insights + CSV Export', badge: 'Max 14 widgets' },
+  { text: 'AI Assistant (20/day), Smart Alerts & Email notifications' },
+  { text: 'Priority support & custom colors/fonts' },
 ];
 
 const PRO_FEATURES: { text: string; badge?: string }[] = [
   { text: 'Everything in Premium' },
-  { text: 'AI Planning Assistant', badge: 'Schedule suggestions' },
-  { text: 'AI Task Builder', badge: 'Auto build' },
-  { text: 'AI Task Prioritisation', badge: 'Smart reordering' },
-  { text: 'Advanced Analytics & Productivity Tracking', badge: 'Weekly insights' },
-  { text: 'Personalised Themes (Colors & Fonts)', badge: 'Fonts, colours & layouts' },
-  { text: 'Priority 24/7 Support', badge: 'Fastest response' },
+  { text: 'Up to 20 projects & 20 members per project', badge: '20 max' },
+  { text: 'Unlimited active tasks, notes & templates', badge: 'Unlimited' },
+  { text: 'Files & images (25 each, up to 25MB)', badge: '25MB max' },
+  { text: 'Pro Dashboard & Insights + CSV & PDF Export', badge: 'Unlimited widgets' },
+  { text: 'AI Task & Note Builders + Task & Note Analysis' },
+  { text: 'Weekly AI Summary Emails & Priority support' },
 ];
 
 // ──────────────────────────────────────────────────────────────────────────────

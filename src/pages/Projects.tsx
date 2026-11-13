@@ -38,6 +38,7 @@ import {
   StickyNote,
   ArrowLeft,
   Check,
+  Link2,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
@@ -58,6 +59,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CircleToggle } from '@/components/ToggleComponents';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { PLAN_LIMITS as CENTRAL_PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 
 type ProjectTab = 'home' | 'board' | 'list' | 'chat';
 
@@ -83,7 +85,9 @@ interface ProjectMeta {
 
 const STORAGE_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#ec4899'];
 const PROJECT_COLOR_OPTIONS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e'];
-const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 10, pro: 20 };
+const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 5, premium: 15, pro: 20 };
+const COLUMN_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 10, premium: 15, pro: 20 };
+const MEMBER_LIMITS: Record<'free' | 'premium' | 'pro', number> = { free: 10, premium: 15, pro: 20 };
 const ROLE_OPTIONS = [
   { value: 'view', label: 'View only', description: 'Read-only access — can view tasks, milestones and project details, but can\'t create or edit anything.', color: '#6b7280' },
   { value: 'edit', label: 'Edit', description: 'Can create, edit and complete tasks and milestones, but can\'t manage members or delete the project.', color: '#3b82f6' },
@@ -580,6 +584,7 @@ const Projects: React.FC = () => {
     : user?.subscriptionTier === 'premium'
       ? 'premium'
       : 'free') as 'free' | 'premium' | 'pro';
+  const normalizedTier = normalizePlanTier(user?.subscriptionTier);
   const projectLimit = PLAN_LIMITS[planTier];
   const activeCount = projects.filter(project => !project.archived).length;
   const canAddProject = activeCount < projectLimit;
@@ -683,6 +688,15 @@ const Projects: React.FC = () => {
     () => projects.find(project => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
   );
+
+  const currentProjectColumns = useMemo(
+    () => board.columns.filter(c => c.projectId === selectedProject?.id),
+    [board.columns, selectedProject?.id]
+  );
+  const columnLimit = COLUMN_LIMITS[planTier] || 10;
+  const isColumnLimitReached = currentProjectColumns.length >= columnLimit;
+  const memberLimit = MEMBER_LIMITS[planTier] || 10;
+  const isMemberLimitReached = (selectedProject?.members?.length || 0) >= memberLimit;
 
   // Derive current user's role and edit permissions
   const currentUserMember = selectedProject?.members.find(m => m.id === user?.id);
@@ -1905,12 +1919,23 @@ const Projects: React.FC = () => {
                       </div>
                     ) : (
                       <button
-                        onClick={() => setAddingColumn(true)}
+                        {...getLimitButtonProps({
+                          isLimitReached: isColumnLimitReached,
+                          tier: normalizedTier,
+                          defaultLabel: 'Add Column',
+                          onAction: () => setAddingColumn(true),
+                          onNavigatePricing: () => navigate('/pricing'),
+                        })}
                         data-no-pan="true"
-                        className="flex-shrink-0 w-[85vw] sm:w-[680px] max-w-[calc(100vw-2rem)] flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold text-muted-foreground hover:text-foreground border border-dashed border-border hover:border-foreground/30 rounded-2xl transition-colors bg-card/40"
+                        className={cn(
+                          "flex-shrink-0 w-[85vw] sm:w-[680px] max-w-[calc(100vw-2rem)] flex items-center justify-center gap-2 px-4 py-4 text-sm font-semibold border border-dashed rounded-2xl transition-colors",
+                          isColumnLimitReached
+                            ? "border-amber-400/50 text-amber-600 bg-amber-50/10 cursor-pointer"
+                            : "text-muted-foreground hover:text-foreground border-border hover:border-foreground/30 bg-card/40"
+                        )}
                       >
                         <Plus className="w-4 h-4" />
-                        Add Column
+                        {isColumnLimitReached ? 'Limit reached' : 'Add Column'}
                       </button>
                     )}
                   </div>
@@ -2047,24 +2072,33 @@ const conversationProps = {
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    if (!canAddProject) {
-                      setLimitHint(true);
-                      return;
-                    }
-                    setAddingProject(true);
-                  }}
-                  disabled={!canAddProject}
-                  className={cn(
-                    'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
-                    canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 opacity-70',
-                  )}
-                  title={!canAddProject ? 'You have reached your plan limit' : 'Add Project'}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Project
-                </button>
+                <div className="space-y-2">
+                  <button
+                    {...getLimitButtonProps({
+                      isLimitReached: !canAddProject,
+                      tier: normalizedTier,
+                      defaultLabel: 'Add Project',
+                      onAction: () => setAddingProject(true),
+                      onNavigatePricing: () => navigate('/pricing'),
+                    })}
+                    className={cn(
+                      'flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm font-semibold transition-all',
+                      canAddProject ? 'border-border text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-foreground' : 'border-amber-400/50 text-amber-600 bg-amber-50/10 cursor-pointer',
+                    )}
+                    title={!canAddProject ? 'Limit reached' : 'Add Project'}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {!canAddProject ? 'Limit reached' : 'Add Project'}
+                  </button>
+                  <a
+                    href="/settings?tab=integrations"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/20 hover:bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
+                    title="Connect and copy tasks or projects from ClickUp"
+                  >
+                    <Link2 className="h-3.5 w-3.5 text-primary" />
+                    Import from ClickUp
+                  </a>
+                </div>
               )}
             </div>
           </>

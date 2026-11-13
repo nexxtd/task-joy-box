@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Image, Trash2, GripVertical, X } from 'lucide-react';
+import { Image, Trash2, GripVertical, Lock, X } from 'lucide-react';
 import { Attachment } from '@/types/board';
 import { useFreeReorderDrag } from '@/hooks/useFreeReorderDrag';
 
@@ -82,13 +82,15 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
     <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3 select-none ${dragId ? 'cursor-grabbing bg-primary/5 rounded-xl p-1 border border-dashed border-primary/20' : ''}`}>
       {displayItems.map((img) => {
         const isDragged = dragId === img.id;
+        const isLocked = Boolean(img.locked || img.archived);
         return (
           <div
             key={img.id}
             ref={(el) => setItemRef(img.id, el)}
-            onClick={() => { if (!dragId) setPreview(img); }}
-            className={`relative group/img aspect-square rounded-xl border bg-muted/40 overflow-hidden cursor-zoom-in ${isDragged ? 'opacity-30 border-dashed border-primary/50 scale-[0.97] z-0' : 'hover:border-primary/40 hover:shadow-md border-border'}`}
+            onClick={() => { if (!dragId && !isLocked) setPreview(img); }}
+            className={`relative group/img aspect-square rounded-xl border bg-muted/40 overflow-hidden ${isLocked ? 'cursor-not-allowed border-amber-500/40' : 'cursor-zoom-in border-border'} ${isDragged ? 'opacity-30 border-dashed border-primary/50 scale-[0.97] z-0' : 'hover:border-primary/40 hover:shadow-md'}`}
             style={{ transition: isDragged ? 'none' : 'transform 200ms cubic-bezier(0.22,1,0.36,1), opacity 150ms, border-color 150ms' }}
+            title={isLocked ? 'Archived & Locked — Upgrade within 30 days to restore' : img.fileName}
           >
             <div
               onPointerDown={(e) => onPointerDown(e, img.id)}
@@ -97,7 +99,14 @@ export const DraggableImageGrid: React.FC<DraggableImageGridProps> = ({
             >
               <GripVertical className="w-3.5 h-3.5" />
             </div>
-            {img.fileUrl ? (
+            {isLocked ? (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 pb-7 text-center">
+                <Lock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                <span className="text-[10px] font-semibold leading-tight">
+                  Archived & Locked — Upgrade within 30 days to restore
+                </span>
+              </div>
+            ) : img.fileUrl ? (
               <ImageWithFallback img={img} className="w-full h-full object-cover pointer-events-none" draggable={false} />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Image className="w-8 h-8 text-muted-foreground" /></div>

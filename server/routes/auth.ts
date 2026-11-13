@@ -12,30 +12,29 @@ import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
 import { sendEmail, verificationEmailHtml, resetEmailHtml } from '../lib/email.js';
 import { normalizeLanguageCode } from '../lib/language.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
-export async function resolveEffectiveSubscriptionTier(userId: number, ownTier: string | null | undefined): Promise<string> {
-  const tierRank = (t: string | null | undefined): number => {
-    const s = (t || '').toLowerCase();
-    if (s === 'pro') return 2;
-    if (s === 'premium') return 1;
-    return 0;
-  };
-  let effective = ownTier || 'free';
+export async function resolveEffectiveSubscriptionTier(userId: number, _ownTier?: string | null): Promise<string> {
   try {
-    const orgMemberships = await db
-      .select({ tier: organizations.tier, status: organizations.status })
-      .from(organizationMembers)
-      .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
-      .where(eq(organizationMembers.userId, userId));
-    for (const om of orgMemberships) {
-      if (om.status === 'active' || om.status === 'pending') {
-        if (tierRank(om.tier) > tierRank(effective)) {
-          effective = om.tier;
-        }
-      }
-    }
-  } catch {}
-  return effective;
+    const plan = await resolveEffectiveUserPlan(userId);
+    return plan.tier;
+  } catch {
+    return 'free';
+  }
+}
+
+function buildPlanUserFields(plan: Awaited<ReturnType<typeof resolveEffectiveUserPlan>>) {
+  return {
+    subscriptionTier: plan.tier,
+    subscriptionStatus: plan.status,
+    planSource: plan.source,
+    personalPlanPaused: plan.personalPlanPaused,
+    pausedPersonalTier: plan.pausedPersonalTier,
+    reservedOrgTier: plan.reservedOrgTier,
+    bestOrgName: plan.bestOrgName,
+    archivedAttachmentCount: plan.archivedAttachmentCount,
+    oldestArchiveExpiresAt: plan.oldestArchiveExpiresAt,
+  };
 }
 
 const router = Router();
@@ -190,7 +189,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
-    const effectiveTier = await resolveEffectiveSubscriptionTier(user.id, user.subscriptionTier);
+    const effectivePlan = await resolveEffectiveUserPlan(user.id);
     await issueToken(res, user.id, user.email);
     res.json({
       user: {
@@ -200,8 +199,7 @@ router.post('/login', async (req: Request, res: Response) => {
         avatarUrl: user.avatarUrl,
         emailVerified: (user as any).emailVerified ?? false,
         twoFactorEnabled: (user as any).twoFactorEnabled ?? false,
-        subscriptionTier: effectiveTier,
-        subscriptionStatus: user.subscriptionStatus || 'inactive',
+        ...buildPlanUserFields(effectivePlan),
         isAdmin: isAdmin(user.email),
       },
     });
@@ -324,6 +322,7 @@ router.post('/google', async (req: Request, res: Response) => {
       console.error('2fa google check failed', e);
     }
 
+    const effectivePlan = await resolveEffectiveUserPlan(user.id);
     await issueToken(res, user.id, user.email);
     res.json({
       user: {
@@ -333,8 +332,7 @@ router.post('/google', async (req: Request, res: Response) => {
         avatarUrl: avatarUrl || user.avatarUrl,
         emailVerified: true,
         twoFactorEnabled: (user as any).twoFactorEnabled ?? false,
-        subscriptionTier: user.subscriptionTier || 'free',
-        subscriptionStatus: user.subscriptionStatus || 'inactive',
+        ...buildPlanUserFields(effectivePlan),
         isAdmin: isAdmin(user.email),
       },
     });
@@ -418,7 +416,7 @@ router.get('/me', async (req: Request, res: Response) => {
       return res.json({ user: null });
     }
     
-    const effectiveTier = await resolveEffectiveSubscriptionTier(user.id, user.subscriptionTier);
+    const effectivePlan = await resolveEffectiveUserPlan(user.id);
     res.json({
       user: {
         id: user.id,
@@ -427,8 +425,7 @@ router.get('/me', async (req: Request, res: Response) => {
         avatarUrl: user.avatarUrl,
         emailVerified: (user as any).emailVerified ?? false,
         twoFactorEnabled: (user as any).twoFactorEnabled ?? false,
-        subscriptionTier: effectiveTier,
-        subscriptionStatus: user.subscriptionStatus || 'inactive',
+        ...buildPlanUserFields(effectivePlan),
         isAdmin: isAdmin(user.email),
       },
     });
@@ -543,8 +540,9 @@ router.post('/two-factor/verify', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid code' });
     }
     await db.update(twoFactorTokens).set({ used: true }).where(eq(twoFactorTokens.id, record.id));
+    const effectivePlan = await resolveEffectiveUserPlan(user.id);
     await issueToken(res, user.id, user.email);
-    res.json({ user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, emailVerified: (user as any).emailVerified ?? true, subscriptionTier: user.subscriptionTier || 'free', subscriptionStatus: user.subscriptionStatus || 'inactive', isAdmin: isAdmin(user.email) } });
+    res.json({ user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, emailVerified: (user as any).emailVerified ?? true, twoFactorEnabled: true, ...buildPlanUserFields(effectivePlan), isAdmin: isAdmin(user.email) } });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 

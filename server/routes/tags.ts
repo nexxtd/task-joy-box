@@ -3,6 +3,8 @@ import { db } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { tags } from '../../shared/schema.js';
 import { and, eq, sql } from 'drizzle-orm';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -37,6 +39,14 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     if (existing.length > 0) {
       res.json(existing[0]);
       return;
+    }
+
+    const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+    const tier = effectivePlan.tier;
+    const maxTags = SERVER_PLAN_LIMITS.tags[tier];
+    const currentTags = await db.select({ count: sql<number>`count(*)` }).from(tags).where(eq(tags.userId, req.userId!));
+    if (Number(currentTags[0]?.count || 0) >= maxTags) {
+      return res.status(403).json({ error: `Tag limit reached (${maxTags} max for your plan). Upgrade to add more.` });
     }
 
     const [tag] = await db

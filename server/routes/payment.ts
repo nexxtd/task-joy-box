@@ -5,6 +5,20 @@ import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
 import {
+  applyCouponDiscount,
+  calculateCheckoutPricing,
+  normalizeBillingPeriod,
+  normalizePlanType,
+  FAMILY_MONTHLY_PRICE,
+  FAMILY_SEATS,
+} from '../lib/pricing.js';
+import {
+  reconcileUserOrgState,
+  reconcileOrgMembers,
+  resolveEffectiveUserPlan,
+  DAY_MS,
+} from '../lib/orgLifecycle.js';
+import {
   capturePayPalOrder,
   createPayPalOrder,
   getPayPalCredentials,
@@ -32,43 +46,38 @@ function safeParseInt(value: unknown): number | null {
 // paypal-rest-sdk is deprecated by PayPal and fails for newer app integrations
 // with `invalid_client`). Shared helpers live in server/lib/paypal.ts.
 
-// Plan definitions matching the new tier structure
+// Plan definitions matching the active tier limits
 const PRICING_TIERS = {
   free: {
     name: 'Free',
     price: 0,
     features: [
-      'Basic task list',
-      'Simple daily planner',
-      'Up to 2 projects',
-      'Basic calendar view',
-    ],
-  },
-  pro: {
-    name: 'Pro',
-    price: 9.99,
-    features: [
-      'Everything in Premium',
-      'AI planning assistant',
-      'Advanced analytics & productivity tracking',
-      'Goal tracking with progress charts',
-      'Collaboration & team sharing',
-      'Priority support',
-      'Full customisation (themes, layouts)',
+      'Up to 5 projects & 10 tags',
+      '25 active tasks & 25 active notes',
+      '5 task templates & 5 note templates',
+      'Normal alerts & 30-day project chat history',
     ],
   },
   premium: {
     name: 'Premium',
     price: 4.99,
     features: [
-      'Everything in Free',
-      'Unlimited tasks and projects',
-      'Full calendar system',
-      'Reminders and notifications',
-      'Habit tracker',
-      'Notes section',
-      'Custom categories',
-      'Cloud sync across devices',
+      'Up to 15 projects & 15 tags',
+      '100 active tasks & 100 active notes',
+      'Files & images (15 each, 10MB max)',
+      'AI Assistant, Smart Alerts & Email notifications',
+      'CSV insights export & 1-year project chat history',
+    ],
+  },
+  pro: {
+    name: 'Pro',
+    price: 9.99,
+    features: [
+      'Up to 20 projects & 25 tags',
+      'Unlimited active tasks, notes & templates',
+      'Files & images (25 each, 25MB max)',
+      'AI Task & Note Builders + Task & Note Analysis',
+      'CSV & PDF insights export, Weekly AI Summary & Priority Support',
     ],
   },
 };
@@ -76,10 +85,23 @@ const PRICING_TIERS = {
 router.get('/pricing', async (_req: Request, res: Response) => {
   const proPrice = await getSettingNumber('price_pro_monthly', PRICING_TIERS.pro.price);
   const premiumPrice = await getSettingNumber('price_premium_monthly', PRICING_TIERS.premium.price);
+  const familyPrice = await getSettingNumber('price_family_monthly', FAMILY_MONTHLY_PRICE);
   res.json({
     ...PRICING_TIERS,
     pro: { ...PRICING_TIERS.pro, price: proPrice },
     premium: { ...PRICING_TIERS.premium, price: premiumPrice },
+    family: { name: 'Family', price: familyPrice, seats: FAMILY_SEATS, tier: 'pro' },
+    school: {
+      name: 'School',
+      tier: 'pro',
+      volumeTiers: [
+        { maxSeats: 20, perSeatMonthly: 4.0 },
+        { maxSeats: 50, perSeatMonthly: 3.5 },
+        { maxSeats: 100, perSeatMonthly: 3.0 },
+        { maxSeats: 250, perSeatMonthly: 2.5 },
+        { maxSeats: null, perSeatMonthly: 2.0 },
+      ],
+    },
   });
 });
 
@@ -135,19 +157,117 @@ router.post('/validate-coupon', requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
-// Create PayPal checkout (only payment method)
+// Create PayPal checkout (personal, family, or school)
 router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const tier = req.body?.tier as SubscriptionTier;
-    const planType = req.body?.planType || 'personal';
+    const requestedTier = String(req.body?.tier || 'pro').toLowerCase() as SubscriptionTier;
+    const planType = normalizePlanType(req.body?.planType);
+    const billingPeriod = normalizeBillingPeriod(req.body?.billingPeriod);
     const couponCode = req.body?.couponCode || null;
 
-    console.log('Payment request received:', { tier, planType, userId: req.userId, couponCode });
+    if (!['premium', 'pro'].includes(requestedTier)) {
+      return res.status(400).json({
+        error: 'Invalid tier selected. Please choose Premium, Pro, Family, or School.',
+      });
+    }
 
-    if (!tier || !['premium', 'pro'].includes(tier)) {
-      console.log('Invalid tier validation failed:', { tier, planType, body: req.body });
-      return res.status(400).json({ 
-        error: 'Invalid tier selected. Available tiers: premium, pro. Family and business plans are not currently available.' 
+    const paidTier = (planType === 'family' ? 'pro' : requestedTier) as 'premium' | 'pro';
+    const selectedTier = PRICING_TIERS[paidTier];
+    const appBaseUrl = getAppBaseUrl(req);
+
+    const personalUnitMonthly = await getSettingNumber(
+      paidTier === 'pro' ? 'price_pro_monthly' : 'price_premium_monthly',
+      selectedTier.price
+    );
+    const familyMonthly = await getSettingNumber('price_family_monthly', FAMILY_MONTHLY_PRICE);
+
+    const pricingCalc = calculateCheckoutPricing({
+      tier: paidTier,
+      planType,
+      billingPeriod,
+      seats: req.body?.seats,
+      personalUnitMonthly,
+      familyMonthly,
+    });
+
+    let adjustedPrice = pricingCalc.totalDueNow;
+
+    // Apply coupon discount
+    let couponId: number | null = null;
+    if (couponCode) {
+      const [coupon] = await db.select().from(coupons).where(eq(coupons.code, String(couponCode).toUpperCase())).limit(1);
+      if (coupon && coupon.active) {
+        const now = new Date().toISOString();
+        const isValid = (!coupon.startDate || coupon.startDate <= now) &&
+          (!coupon.expiresAt || coupon.expiresAt >= now) &&
+          (coupon.maxUses === null || coupon.usedCount < coupon.maxUses);
+
+        if (isValid) {
+          adjustedPrice = applyCouponDiscount(adjustedPrice, coupon.discountType, coupon.discountValue);
+          couponId = coupon.id;
+        }
+      }
+    }
+
+    const storedPlanType = `${pricingCalc.planType}|${pricingCalc.billingPeriod}`;
+
+    // If a valid 100%-off coupon covers the entire charge, fulfill directly without PayPal $0 error
+    if (adjustedPrice <= 0 && couponId) {
+      const endsAt = new Date(Date.now() + pricingCalc.durationDays * DAY_MS).toISOString();
+      let createdOrgId: number | null = null;
+      await db.transaction(async (tx) => {
+        if (pricingCalc.planType === 'personal') {
+          await tx.update(users)
+            .set({
+              subscriptionTier: pricingCalc.tier,
+              subscriptionStatus: 'active',
+              subscriptionEndsAt: endsAt,
+              pausedPersonalTier: null,
+              pausedPersonalStatus: null,
+              pausedPersonalRemainingMs: null,
+              pausedPersonalAt: null,
+            } as UpdateUser)
+            .where(eq(users.id, req.userId!));
+        } else {
+          const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+          const orgName = pricingCalc.planType === 'family'
+            ? `${purchaser?.name || 'Family'} Plan`
+            : `${purchaser?.name || 'School'} Organization`;
+          const rootCode = String(Math.floor(100000 + Math.random() * 900000));
+          const [newOrg] = await tx.insert(organizations).values({
+            name: orgName,
+            type: pricingCalc.planType,
+            ownerId: req.userId!,
+            maxSeats: pricingCalc.seats,
+            currentSeats: 1,
+            tier: pricingCalc.tier,
+            status: 'active',
+            joinCode: rootCode,
+          }).returning();
+          createdOrgId = newOrg.id;
+          await tx.insert(organizationMembers).values({
+            organizationId: newOrg.id,
+            userId: req.userId!,
+            role: 'owner',
+          });
+        }
+
+        await tx.insert(couponRedemptions).values({ couponId: couponId!, userId: req.userId! });
+        const [updatedCoupon] = await tx.update(coupons)
+          .set({ usedCount: sql`${coupons.usedCount} + 1` })
+          .where(and(eq(coupons.id, couponId!), sql`(${coupons.maxUses} IS NULL OR ${coupons.usedCount} < ${coupons.maxUses})`))
+          .returning({ id: coupons.id, usedCount: coupons.usedCount, maxUses: coupons.maxUses });
+        if (updatedCoupon && updatedCoupon.maxUses !== null && updatedCoupon.usedCount >= updatedCoupon.maxUses) {
+          await tx.update(coupons).set({ active: false }).where(eq(coupons.id, couponId!));
+        }
+      });
+
+      await reconcileUserOrgState(req.userId!);
+      return res.json({
+        approvalUrl: createdOrgId
+          ? `${appBaseUrl}/organizations?id=${createdOrgId}&org_payment=success`
+          : `${appBaseUrl}/pricing?subscription=success`,
+        paymentId: `FREE-${Date.now()}`,
       });
     }
 
@@ -156,67 +276,41 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
       return res.status(503).json({ error: 'PayPal is not configured on this server. Set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET and PAYPAL_MODE in Render/Vercel Environment Variables and redeploy.' });
     }
 
-    const selectedTier = PRICING_TIERS[tier];
-    const appBaseUrl = getAppBaseUrl(req);
-
-    const livePrice = await getSettingNumber(tier === 'pro' ? 'price_pro_monthly' : 'price_premium_monthly', selectedTier.price);
-    let adjustedPrice = livePrice;
-    if (planType === 'personal') {
-      adjustedPrice = livePrice;
-    } else {
-      const seats = req.body?.seats || 1;
-      if (planType === 'family') {
-        adjustedPrice = livePrice;
-      } else {
-        adjustedPrice = livePrice * seats;
-      }
-    }
-
-    // Apply coupon discount
-    let couponId: number | null = null;
-    if (couponCode) {
-      const [coupon] = await db.select().from(coupons).where(eq(coupons.code, couponCode.toUpperCase())).limit(1);
-      if (coupon && coupon.active) {
-        const now = new Date().toISOString();
-        const isValid = (!coupon.startDate || coupon.startDate <= now) &&
-          (!coupon.expiresAt || coupon.expiresAt >= now) &&
-          (coupon.maxUses === null || coupon.usedCount < coupon.maxUses);
-
-        if (isValid) {
-          if (coupon.discountType === 'percentage') {
-            adjustedPrice = adjustedPrice * (1 - coupon.discountValue / 100);
-          } else {
-            adjustedPrice = Math.max(0, adjustedPrice - coupon.discountValue);
-          }
-          couponId = coupon.id;
-        }
-      }
-    }
+    const planLabel =
+      pricingCalc.planType === 'family'
+        ? `Family Plan (5 seats)`
+        : pricingCalc.planType === 'school'
+        ? `School Plan (${pricingCalc.seats} seats)`
+        : `${selectedTier.name} Personal Plan`;
 
     const paymentData = {
       amount: adjustedPrice.toFixed(2),
-      returnUrl: `${appBaseUrl}/api/payment/execute-payment?tier=${tier}&planType=${planType}${couponId ? `&couponId=${couponId}` : ''}`,
+      returnUrl: `${appBaseUrl}/api/payment/execute-payment`,
       cancelUrl: `${appBaseUrl}/pricing?subscription=cancelled`,
-      description: `${selectedTier.name} ${planType.charAt(0).toUpperCase() + planType.slice(1)} Plan — My Planner subscription`,
+      description: `${planLabel} (${pricingCalc.billingPeriod}) — My Planner`,
     };
 
     const { approvalUrl, paymentId } = await createPayPalOrder(paymentData);
-    console.log('PayPal order created successfully:', { paymentId, approvalUrl });
 
-    // Record the exact purchase intent so the return URL can't be tampered with
-    // (tier/seats/coupon are read back from this record, never from the query string).
-    const purchaseSeats = req.body?.seats ? parseInt(req.body.seats) : (planType === 'family' ? 5 : 1);
     await db.insert(pendingPayments).values({
       userId: req.userId!,
       orderId: paymentId,
-      tier,
-      planType,
-      seats: purchaseSeats,
+      tier: pricingCalc.tier,
+      planType: storedPlanType,
+      seats: pricingCalc.seats,
       couponId,
       amountCents: Math.round(adjustedPrice * 100),
     }).onConflictDoUpdate({
       target: pendingPayments.orderId,
-      set: { userId: req.userId!, tier, planType, seats: purchaseSeats, couponId, amountCents: Math.round(adjustedPrice * 100), status: 'pending' },
+      set: {
+        userId: req.userId!,
+        tier: pricingCalc.tier,
+        planType: storedPlanType,
+        seats: pricingCalc.seats,
+        couponId,
+        amountCents: Math.round(adjustedPrice * 100),
+        status: 'pending',
+      },
     });
 
     res.json({ approvalUrl, paymentId });
@@ -233,10 +327,10 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
   }
 });
 
-// Create PayPal checkout for org seats
+// Create PayPal checkout for upgrading/resizing an existing organization's seats/plan
 router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { orgId, tier, seats } = req.body;
+    const { orgId, tier, seats, billingPeriod: rawBillingPeriod } = req.body;
 
     if (!tier || !['premium', 'pro'].includes(tier)) {
       return res.status(400).json({ error: 'Invalid tier selected' });
@@ -244,6 +338,7 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 
     const parsedOrgId = safeParseInt(orgId);
     const parsedSeats = safeParseInt(seats);
+    const billingPeriod = normalizeBillingPeriod(rawBillingPeriod);
 
     if (!parsedOrgId || !parsedSeats || parsedSeats < 1) {
       return res.status(400).json({ error: 'Invalid organization or seat count' });
@@ -251,35 +346,51 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
 
     if (!isPayPalConfigured()) return res.status(503).json({ error: 'PayPal is not configured' });
 
-    const orgs = await db.select().from(organizations).where(eq(organizations.id, parsedOrgId)).limit(1);
-    if (!orgs.length || orgs[0].ownerId !== req.userId) {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, parsedOrgId)).limit(1);
+    if (!org || org.ownerId !== req.userId) {
       return res.status(403).json({ error: 'Not authorized to manage this organization' });
     }
+    if (org.type === 'family' && parsedSeats !== FAMILY_SEATS) {
+      return res.status(400).json({ error: 'Family plans are fixed at 5 seats.' });
+    }
+    if (parsedSeats < org.currentSeats) {
+      return res.status(400).json({ error: `Cannot set seats below current usage (${org.currentSeats}).` });
+    }
 
-    const selectedTier = PRICING_TIERS[tier as SubscriptionTier];
-    const liveUnit = await getSettingNumber(tier === 'pro' ? 'price_pro_monthly' : 'price_premium_monthly', selectedTier.price);
+    const familyMonthly = await getSettingNumber('price_family_monthly', FAMILY_MONTHLY_PRICE);
+    const proUnit = await getSettingNumber('price_pro_monthly', PRICING_TIERS.pro.price);
+    const pricingCalc = calculateCheckoutPricing({
+      tier: org.type === 'family' ? 'pro' : (tier as 'premium' | 'pro'),
+      planType: org.type === 'family' ? 'family' : 'school',
+      billingPeriod,
+      seats: parsedSeats,
+      personalUnitMonthly: proUnit,
+      familyMonthly,
+    });
+
     const appBaseUrl = getAppBaseUrl(req);
-    const totalCents = Math.round(liveUnit * parsedSeats * 100);
+    const totalCents = Math.round(pricingCalc.totalDueNow * 100);
     const total = (totalCents / 100).toFixed(2);
 
     const { approvalUrl, paymentId } = await createPayPalOrder({
       amount: total,
-      returnUrl: `${appBaseUrl}/api/payment/execute-org-payment?orgId=${parsedOrgId}&tier=${tier}&seats=${parsedSeats}`,
-      cancelUrl: `${appBaseUrl}/collaboration?org_payment=cancelled`,
-      description: `Organization Seats — ${selectedTier.name} (${parsedSeats} seats)`,
+      returnUrl: `${appBaseUrl}/api/payment/execute-org-payment`,
+      cancelUrl: `${appBaseUrl}/organizations?id=${parsedOrgId}&org_payment=cancelled`,
+      description: `${org.name} — ${pricingCalc.tier.toUpperCase()} (${pricingCalc.seats} seats, ${pricingCalc.billingPeriod})`,
     });
 
+    const storedPlanType = `${org.type}|${pricingCalc.billingPeriod}`;
     await db.insert(pendingPayments).values({
       userId: req.userId!,
       orderId: paymentId,
-      tier: tier as string,
-      planType: 'org',
-      seats: parsedSeats,
+      tier: pricingCalc.tier,
+      planType: storedPlanType,
+      seats: pricingCalc.seats,
       orgId: parsedOrgId,
       amountCents: totalCents,
     }).onConflictDoUpdate({
       target: pendingPayments.orderId,
-      set: { userId: req.userId!, tier: tier as string, planType: 'org', seats: parsedSeats, orgId: parsedOrgId, amountCents: totalCents, status: 'pending' },
+      set: { userId: req.userId!, tier: pricingCalc.tier, planType: storedPlanType, seats: pricingCalc.seats, orgId: parsedOrgId, amountCents: totalCents, status: 'pending' },
     });
 
     res.json({ approvalUrl, paymentId });
@@ -317,14 +428,52 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
   }
 
   try {
+    const [rawPlanType, rawPeriod] = String(intent.planType || 'personal|monthly').split('|');
+    const basePlanType = normalizePlanType(rawPlanType);
+    const durationDays = normalizeBillingPeriod(rawPeriod) === 'yearly' ? 365 : 30;
+    const endsAt = new Date(Date.now() + durationDays * DAY_MS).toISOString();
+    let createdOrgId: number | null = null;
+
     await db.transaction(async (tx) => {
-      await tx.update(users)
-        .set({
-          subscriptionTier: intent.tier,
-          subscriptionStatus: 'active',
-          subscriptionEndsAt: null,
-        } as UpdateUser)
-        .where(eq(users.id, req.userId!));
+      if (basePlanType === 'personal') {
+        // Personal plan purchase updates user's own personal subscription directly
+        await tx.update(users)
+          .set({
+            subscriptionTier: intent.tier,
+            subscriptionStatus: 'active',
+            subscriptionEndsAt: endsAt,
+            pausedPersonalTier: null,
+            pausedPersonalStatus: null,
+            pausedPersonalRemainingMs: null,
+            pausedPersonalAt: null,
+          } as UpdateUser)
+          .where(eq(users.id, req.userId!));
+      } else {
+        // Family or School purchase creates an organization (buyer is owner using 1 seat);
+        // Rule 9 pause/reserve on any personal plan is reconciled via reconcileUserOrgState below.
+        const orgSeats = basePlanType === 'family' ? FAMILY_SEATS : (intent.seats || 10);
+        const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+        const orgName = basePlanType === 'family' ? `${purchaser?.name || 'Family'} Plan` : `${purchaser?.name || 'School'} Organization`;
+        const rootCode = String(Math.floor(100000 + Math.random() * 900000));
+
+        const [newOrg] = await tx.insert(organizations).values({
+          name: orgName,
+          type: basePlanType,
+          ownerId: req.userId!,
+          maxSeats: orgSeats,
+          currentSeats: 1,
+          tier: intent.tier,
+          status: 'active',
+          joinCode: rootCode,
+        }).returning();
+        createdOrgId = newOrg.id;
+
+        await tx.insert(organizationMembers).values({
+          organizationId: newOrg.id,
+          userId: req.userId!,
+          role: 'owner',
+        });
+      }
 
       // Track coupon redemption from the recorded intent
       if (intent.couponId) {
@@ -333,14 +482,11 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
           userId: req.userId!,
         });
 
-        // Atomic increment guarded by maxUses to prevent oversell under concurrency.
         const [updated] = await tx.update(coupons)
-          .set({
-            usedCount: sql`${coupons.usedCount} + 1`,
-          })
+          .set({ usedCount: sql`${coupons.usedCount} + 1` })
           .where(and(
             eq(coupons.id, intent.couponId),
-            intent.couponId ? sql`(${coupons.maxUses} IS NULL OR ${coupons.usedCount} < ${coupons.maxUses})` : sql`TRUE`,
+            sql`(${coupons.maxUses} IS NULL OR ${coupons.usedCount} < ${coupons.maxUses})`,
           ))
           .returning({ id: coupons.id, usedCount: coupons.usedCount, maxUses: coupons.maxUses });
         if (updated && updated.maxUses !== null && updated.usedCount >= updated.maxUses) {
@@ -348,7 +494,6 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
         }
       }
 
-      // Record the completed transaction for revenue tracking
       await tx.insert(transactions).values({
         userId: req.userId!,
         amount: intent.amountCents,
@@ -359,46 +504,27 @@ router.get('/execute-payment', requireAuth, async (req: AuthRequest, res: Respon
         couponId: intent.couponId || null,
       }).onConflictDoNothing({ target: transactions.providerTransactionId });
 
-      if (intent.planType === 'family' || intent.planType === 'school') {
-        const orgSeats = intent.planType === 'family' ? 5 : (intent.seats || 10);
-        const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
-        const orgName = intent.planType === 'family' ? `${purchaser?.name || 'Family'} Plan` : `${purchaser?.name || 'School'} Organization`;
-        const rootCode = String(Math.floor(100000 + Math.random() * 900000));
-
-        const [newOrg] = await tx.insert(organizations).values({
-          name: orgName,
-          type: intent.planType,
-          ownerId: req.userId!,
-          maxSeats: orgSeats,
-          currentSeats: 1,
-          tier: intent.tier,
-          status: 'active',
-          joinCode: rootCode,
-        }).returning();
-
-        await tx.insert(organizationMembers).values({
-          organizationId: newOrg.id,
-          userId: req.userId!,
-          role: 'owner',
-        });
-      }
-
       await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
     });
 
-    res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
+    await reconcileUserOrgState(req.userId!);
+
+    if (createdOrgId) {
+      res.redirect(`${getAppBaseUrl(req)}/organizations?id=${createdOrgId}&org_payment=success`);
+    } else {
+      res.redirect(`${getAppBaseUrl(req)}/pricing?subscription=success`);
+    }
   } catch (dbError) {
     console.error('Database update error:', dbError);
     res.status(500).json({ error: 'Failed to update subscription status' });
   }
 });
 
-// Execute PayPal organization payment
+// Execute PayPal organization payment (upgrade/resize existing org)
 router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Response) => {
   const paymentId = (req.query.paymentId || req.query.token) as string | undefined;
   if (!paymentId) return res.status(400).json({ error: 'Missing parameters' });
 
-  // Seats/org/tier come from the recorded intent, never from the query string
   const [intent] = await db.select().from(pendingPayments).where(eq(pendingPayments.orderId, paymentId)).limit(1);
   if (!intent || intent.userId !== req.userId! || !intent.orgId) {
     return res.status(403).json({ error: 'Payment session not found for this account. Please contact support.' });
@@ -418,7 +544,7 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
     const orgId = intent.orgId;
     await db.transaction(async (tx) => {
       await tx.update(organizations)
-        .set({ status: 'active', tier: intent.tier, maxSeats: intent.seats || 1 } as UpdateOrganization)
+        .set({ status: 'active', tier: intent.tier, maxSeats: intent.seats || 1, updatedAt: new Date().toISOString() } as UpdateOrganization)
         .where(eq(organizations.id, orgId));
 
       await tx.insert(transactions).values({
@@ -430,34 +556,12 @@ router.get('/execute-org-payment', requireAuth, async (req: AuthRequest, res: Re
         providerTransactionId: paymentId,
       }).onConflictDoNothing({ target: transactions.providerTransactionId });
 
-      if (intent.planType === 'family' || intent.planType === 'school') {
-        const orgSeats = intent.planType === 'family' ? 5 : (intent.seats || 10);
-        const [purchaser] = await tx.select().from(users).where(eq(users.id, req.userId!)).limit(1);
-        const orgName = intent.planType === 'family' ? `${purchaser?.name || 'Family'} Plan` : `${purchaser?.name || 'School'} Organization`;
-        const rootCode = String(Math.floor(100000 + Math.random() * 900000));
-
-        const [newOrg] = await tx.insert(organizations).values({
-          name: orgName,
-          type: intent.planType,
-          ownerId: req.userId!,
-          maxSeats: orgSeats,
-          currentSeats: 1,
-          tier: intent.tier,
-          status: 'active',
-          joinCode: rootCode,
-        }).returning();
-
-        await tx.insert(organizationMembers).values({
-          organizationId: newOrg.id,
-          userId: req.userId!,
-          role: 'owner',
-        });
-      }
-
       await tx.update(pendingPayments).set({ status: 'paid' }).where(eq(pendingPayments.orderId, paymentId));
     });
 
-    res.redirect(`${getAppBaseUrl(req)}/collaboration?org_payment=success`);
+    await reconcileOrgMembers(orgId);
+
+    res.redirect(`${getAppBaseUrl(req)}/organizations?id=${orgId}&org_payment=success`);
   } catch {
     res.status(500).json({ error: 'Failed to activate organization' });
   }
@@ -490,15 +594,24 @@ router.get('/paypal-status', requireAuth, async (_req: AuthRequest, res: Respons
   }
 });
 
-// Get user's subscription status
+// Get user's subscription status (effective personal + org reconciliation)
 router.get('/subscription-status', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const user = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
     if (!user.length) return res.status(404).json({ error: 'User not found' });
+    const plan = await resolveEffectiveUserPlan(req.userId!);
     res.json({
-      tier: user[0].subscriptionTier || 'free',
-      status: user[0].subscriptionStatus || 'inactive',
+      tier: plan.tier,
+      status: plan.status,
       endsAt: user[0].subscriptionEndsAt || null,
+      source: plan.source,
+      personalTier: plan.personalTier,
+      personalPlanPaused: plan.personalPlanPaused,
+      pausedPersonalTier: plan.pausedPersonalTier,
+      reservedOrgTier: plan.reservedOrgTier,
+      bestOrgName: plan.bestOrgName,
+      archivedAttachmentCount: plan.archivedAttachmentCount,
+      oldestArchiveExpiresAt: plan.oldestArchiveExpiresAt,
     });
   } catch (error) {
     console.error('Error fetching subscription status:', error);

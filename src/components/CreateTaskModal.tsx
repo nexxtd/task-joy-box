@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import {
   Attachment,
   Column,
@@ -25,6 +27,7 @@ import { fetchNoteTemplates, fetchNoteTemplateByCode, createNoteTemplate } from 
 import CopyShareCode from '@/components/CopyShareCode';
 import TagsModal from '@/components/shared/TagsModal';
 import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
+import { convertDraftImagesBatch } from '@/lib/attachmentUpload';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import DraftFileList from '@/components/shared/DraftFileList';
 import { readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
@@ -207,10 +210,18 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const existingTasks = tasksOverride ?? board.tasks;
   const updateExisting = onUpdateItem ?? updateTask;
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { open: openDeepFocus } = useDeepFocus();
 
-  const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isPro = user?.subscriptionTier === 'pro';
+  const planTier = normalizePlanTier(user?.subscriptionTier);
+  const isPremium = planTier === 'pro' || planTier === 'premium';
+  const isPro = planTier === 'pro';
+  const maxSubtasks = PLAN_LIMITS.subtasksPerTask[planTier];
+  const maxChecklist = PLAN_LIMITS.checklistItemsPerTask[planTier];
+  const maxTemplates = isNote ? PLAN_LIMITS.noteTemplates[planTier] : PLAN_LIMITS.taskTemplates[planTier];
+  const maxFileCount = isPro ? 25 : 15;
+  const maxImageCount = isPro ? 25 : 15;
+  const maxFileSizeBytes = isPro ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
 
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [sharedTags, setSharedTags] = useState<SharedTag[]>([]);
@@ -252,6 +263,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [newChecklistLists, setNewChecklistLists] = useState<{id: string; title: string; items: {id: string; text: string; completed: boolean}[]}[]>([]);
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [perChecklistInput, setPerChecklistInput] = useState<Record<string, string>>({});
+  const totalChecklistCount = useMemo(
+    () => newChecklistItems.length + newChecklistLists.reduce((acc, l) => acc + l.items.length, 0),
+    [newChecklistItems, newChecklistLists]
+  );
+  const isChecklistLimitReached = totalChecklistCount >= maxChecklist;
   const [collapsedDraftChecklists, setCollapsedDraftChecklists] = useState<Set<string>>(new Set());
   const [editingDraftChecklistId, setEditingDraftChecklistId] = useState<string | null>(null);
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
@@ -296,6 +312,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  useEffect(() => {
+    if (saveTemplateOpen || loadTemplateOpen) {
+      fetchTemplates().then(setTemplates).catch(() => {});
+    }
+  }, [saveTemplateOpen, loadTemplateOpen]);
   const [templateListLoading, setTemplateListLoading] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateError, setTemplateError] = useState('');
@@ -796,8 +817,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
 
     const taskId = crypto.randomUUID();
 
-    const attachmentUrls: string[] = [];
-    for (const f of newFiles) { attachmentUrls.push(await fileToDataUrl(f)); }
+    const attachmentUrls = await Promise.all(newFiles.map(f => fileToDataUrl(f)));
 
     const existingImageIds = newTaskImages.filter(img => !img.fileUrl.startsWith('data:image')).map(img => img.id);
     const newImageFiles = newTaskImages.filter(img => img.fileUrl.startsWith('data:image'));
@@ -938,12 +958,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
             <div className="flex items-center gap-2">
               {!templateMode && !editTemplateMode && (
                 <button
-                  onClick={() => setAiBuilderOpen(true)}
+                  onClick={() => {
+                    if (!isPro) {
+                      navigate('/pricing');
+                      return;
+                    }
+                    setAiBuilderOpen(true);
+                  }}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-all"
-                  title={aiBuilderTitle}
+                  title={isPro ? aiBuilderTitle : `${aiBuilderTitle} (Pro feature — click to upgrade)`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  AI Builder
+                  <span>AI Builder</span>
+                  {!isPro && <span className="text-[10px] font-bold text-amber-500">PRO</span>}
                 </button>
               )}
               <button onClick={() => onClose()} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Close">
@@ -1197,7 +1224,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                             <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                               {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                   {editingDraftSubtaskId === subtask.id ? (
@@ -1251,25 +1278,43 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     <AutoGrowTextarea
                       value={newSubtaskText}
                       onChange={e => setNewSubtaskText(e.target.value)}
+                      disabled={newTaskSubtasks.length >= maxSubtasks}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          addSubtaskDraft();
+                          if (newTaskSubtasks.length < maxSubtasks) addSubtaskDraft();
                         }
                       }}
-                      placeholder="New sub-task"
-                      className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                      placeholder={newTaskSubtasks.length >= maxSubtasks ? `Limit reached (${maxSubtasks} max)` : "New sub-task"}
+                      className="bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm disabled:opacity-50"
                     />
                     <input
                       type="number"
                       min={0}
                       value={newSubtaskDuration}
+                      disabled={newTaskSubtasks.length >= maxSubtasks}
                       onChange={e => setNewSubtaskDuration(Math.max(0, Number(e.target.value) || 0))}
                       placeholder="min"
-                      className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm"
+                      className="bg-muted/40 border border-border rounded-lg px-2 py-2 text-sm disabled:opacity-50"
                     />
-                    <button onClick={addSubtaskDraft} className="px-3 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 shrink-0">
-                      Add
+                    <button
+                      {...getLimitButtonProps({
+                        isLimitReached: newTaskSubtasks.length >= maxSubtasks,
+                        tier: planTier,
+                        defaultLabel: 'Add',
+                        onAction: addSubtaskDraft,
+                        navigate,
+                      })}
+                      disabled={newTaskSubtasks.length >= maxSubtasks ? isPro : !newSubtaskText.trim()}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 transition-colors ${
+                        newTaskSubtasks.length >= maxSubtasks
+                          ? isPro
+                            ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                            : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                          : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      }`}
+                    >
+                      {newTaskSubtasks.length >= maxSubtasks ? 'Limit reached' : 'Add'}
                     </button>
                   </div>
                 </div>
@@ -1307,7 +1352,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 {newChecklistItems.map((item, index) => (
                                   <Draggable key={item.id} draggableId={item.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
                                         <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
@@ -1355,16 +1400,35 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                             <AutoGrowTextarea
                               value={newChecklistText}
                               onChange={e => setNewChecklistText(e.target.value)}
+                              disabled={isChecklistLimitReached}
                               onKeyDown={e => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                   e.preventDefault();
-                                  addChecklistDraft();
+                                  if (!isChecklistLimitReached) addChecklistDraft();
                                 }
                               }}
-                              placeholder="Add checklist item"
-                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                              placeholder={isChecklistLimitReached ? `Limit reached (${maxChecklist} max)` : "Add checklist item"}
+                              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                             />
-                            <button onClick={addChecklistDraft} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                            <button
+                              {...getLimitButtonProps({
+                                isLimitReached: isChecklistLimitReached,
+                                tier: planTier,
+                                defaultLabel: 'Add',
+                                onAction: addChecklistDraft,
+                                navigate,
+                              })}
+                              disabled={isChecklistLimitReached ? isPro : !newChecklistText.trim()}
+                              className={`px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                                isChecklistLimitReached
+                                  ? isPro
+                                    ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                                    : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                                  : 'bg-primary text-primary-foreground'
+                              }`}
+                            >
+                              {isChecklistLimitReached ? 'Limit reached' : 'Add'}
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1432,7 +1496,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               {list.items.map((item, itemIndex) => (
                                                 <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                   {(provided) => (
-                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2.5 text-sm group/item">
+                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
                                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>
@@ -1480,16 +1544,35 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                           <AutoGrowTextarea
                                             value={perChecklistInput[list.id] ?? ''}
                                             onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                            disabled={isChecklistLimitReached}
                                             onKeyDown={e => {
                                               if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
-                                                addDraftChecklistItem(list.id);
+                                                if (!isChecklistLimitReached) addDraftChecklistItem(list.id);
                                               }
                                             }}
-                                            placeholder="Add checklist item"
-                                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                            placeholder={isChecklistLimitReached ? `Limit reached (${maxChecklist} max)` : "Add checklist item"}
+                                            className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                           />
-                                          <button onClick={() => addDraftChecklistItem(list.id)} className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg">Add</button>
+                                          <button
+                                            {...getLimitButtonProps({
+                                              isLimitReached: isChecklistLimitReached,
+                                              tier: planTier,
+                                              defaultLabel: 'Add',
+                                              onAction: () => addDraftChecklistItem(list.id),
+                                              navigate,
+                                            })}
+                                            disabled={isChecklistLimitReached ? isPro : !(perChecklistInput[list.id] ?? '').trim()}
+                                            className={`px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
+                                              isChecklistLimitReached
+                                                ? isPro
+                                                  ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                                                  : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                                                : 'bg-primary text-primary-foreground'
+                                            }`}
+                                          >
+                                            {isChecklistLimitReached ? 'Limit reached' : 'Add'}
+                                          </button>
                                         </div>
                                       </div>
                                     )}
@@ -1549,20 +1632,38 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                   ) : (
                     <>
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${newFiles.length >= maxFileCount ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                             <Paperclip className="w-5 h-5 text-primary" />
                           </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
-                          <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {newFiles.length >= maxFileCount ? `File limit reached (${maxFileCount} max)` : 'Click to upload or drag and drop'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">PDF, Documents (max {isPro ? '25MB' : '10MB'} each, up to {maxFileCount} files)</p>
                         </div>
                         <input
                           type="file"
                           multiple
+                          disabled={newFiles.length >= maxFileCount}
                           onChange={e => {
                             if (!e.target.files) return;
-                            setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                            const incoming = Array.from(e.target.files);
+                            e.currentTarget.value = '';
+                            const valid = incoming.filter(f => {
+                              if (f.size > maxFileSizeBytes) {
+                                alert(`"${f.name}" exceeds max file size of ${isPro ? '25MB' : '10MB'}.`);
+                                return false;
+                              }
+                              return true;
+                            });
+                            setNewFiles(prev => {
+                              const slots = Math.max(0, maxFileCount - prev.length);
+                              if (slots < valid.length) {
+                                alert(`Limit of ${maxFileCount} files reached.`);
+                              }
+                              return [...prev, ...valid.slice(0, slots)];
+                            });
                           }}
                           className="hidden"
                         />
@@ -1607,31 +1708,52 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                   ) : (
                     <>
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${newTaskImages.length >= maxImageCount ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Image className="w-5 h-5 text-primary" />
+                            {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload</p>
-                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {showUploadingImages || uploadingImages
+                              ? 'Uploading images...'
+                              : newTaskImages.length >= maxImageCount
+                                ? `Image limit reached (${maxImageCount} max)`
+                                : 'Click to upload'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max {isPro ? '25MB' : '10MB'} each, up to {maxImageCount} images)</p>
                         </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => {
-                          if (!e.target.files) return;
-                          const files = Array.from(e.target.files);
-                          e.currentTarget.value = '';
-                          setUploadingImages(true);
-                          try {
-                            const newImgs: Attachment[] = [];
-                            for (const file of files) {
-                              const fileUrl = await imageToDataUrl(file);
-                              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                              newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,.heic,.heif"
+                          disabled={newTaskImages.length >= maxImageCount}
+                          onChange={async e => {
+                            if (!e.target.files) return;
+                            const picked = Array.from(e.target.files);
+                            e.currentTarget.value = '';
+                            const slots = Math.max(0, maxImageCount - newTaskImages.length);
+                            if (slots <= 0) {
+                              alert(`Limit of ${maxImageCount} images reached.`);
+                              return;
                             }
-                            setNewTaskImages(prev => [...prev, ...newImgs]);
-                          } finally {
-                            setUploadingImages(false);
-                          }
-                        }} className="hidden" />
+                            if (picked.length > slots) {
+                              alert(`Limit of ${maxImageCount} images reached.`);
+                            }
+                            setUploadingImages(true);
+                            try {
+                              const newImgs = await convertDraftImagesBatch(picked.slice(0, slots), {
+                                maxFileSizeBytes,
+                                onOversize: (file) => alert(`"${file.name}" exceeds max image size of ${isPro ? '25MB' : '10MB'}.`),
+                              });
+                              if (newImgs.length > 0) {
+                                setNewTaskImages(prev => [...prev, ...newImgs]);
+                              }
+                            } finally {
+                              setUploadingImages(false);
+                            }
+                          }}
+                          className="hidden"
+                        />
                       </label>
 <DraggableImageGrid
                         images={newTaskImages}
@@ -1884,49 +2006,66 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                 </div>
                 <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
                   <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
-                  <button
-                    id="save-template-btn"
-                    onClick={async () => {
-                      if (!templateName.trim()) return;
-                      setTemplateError('');
-                      try {
-                        const created = await createTemplate({
-                          name: templateName.trim(),
-                          title: newTaskTitle || '',
-                          description: newTaskDescription || '',
-                          priority: newTaskPriority || 'none',
-                          duration: newTaskDuration || 0,
-                          startDate: newTaskStartDate || undefined,
-                          startTime: newTaskStartTime || undefined,
-                          dueDate: newTaskDueDate || undefined,
-                          dueTime: newTaskDueTime || undefined,
-                          projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
-                          columnId: newTaskColumnId || undefined,
-                          labels: newTaskLabels || [],
-                          subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
-                          checklists: [
-                            ...newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
-                            ...newChecklistLists.map(l => ({ id: l.id, title: l.title, items: l.items.map(it => ({ id: crypto.randomUUID(), text: it.text, checked: false })) })),
-                          ],
-                          isPublic: templateVisibility === 'public',
-                        });
-                        if (templateVisibility === 'public' && created?.shareCode) {
-                          setSavedShareCode(created.shareCode);
-                        } else {
-                          setSaveTemplateOpen(false);
-                          setTemplateName('');
-                          setTemplateVisibility('private');
+                  {(() => {
+                    const isTemplateLimitReached = templates.length >= maxTemplates;
+                    const saveProps = getLimitButtonProps({
+                      isLimitReached: isTemplateLimitReached,
+                      tier: planTier,
+                      defaultLabel: 'Save',
+                      navigate,
+                      onAction: async () => {
+                        if (!templateName.trim()) return;
+                        setTemplateError('');
+                        try {
+                          const created = await createTemplate({
+                            name: templateName.trim(),
+                            title: newTaskTitle || '',
+                            description: newTaskDescription || '',
+                            priority: newTaskPriority || 'none',
+                            duration: newTaskDuration || 0,
+                            startDate: newTaskStartDate || undefined,
+                            startTime: newTaskStartTime || undefined,
+                            dueDate: newTaskDueDate || undefined,
+                            dueTime: newTaskDueTime || undefined,
+                            projectId: newTaskProjectId ? Number(newTaskProjectId) : null,
+                            columnId: newTaskColumnId || undefined,
+                            labels: newTaskLabels || [],
+                            subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
+                            checklists: [
+                              ...newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                              ...newChecklistLists.map(l => ({ id: l.id, title: l.title, items: l.items.map(it => ({ id: crypto.randomUUID(), text: it.text, checked: false })) })),
+                            ],
+                            isPublic: templateVisibility === 'public',
+                          });
+                          if (templateVisibility === 'public' && created?.shareCode) {
+                            setSavedShareCode(created.shareCode);
+                          } else {
+                            setSaveTemplateOpen(false);
+                            setTemplateName('');
+                            setTemplateVisibility('private');
+                          }
+                        } catch (err: any) {
+                          setTemplateError(err?.message || 'Failed to save template. Check your connection and try again.');
+                          setTimeout(() => setTemplateError(''), 4000);
                         }
-                      } catch (err) {
-                        setTemplateError('Failed to save template. Check your connection and try again.');
-                        setTimeout(() => setTemplateError(''), 4000);
-                      }
-                    }}
-                    disabled={!templateName.trim()}
-                    className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all"
-                  >
-                    Save
-                  </button>
+                      },
+                    });
+                    return (
+                      <button
+                        id="save-template-btn"
+                        onClick={saveProps.onClick}
+                        disabled={saveProps.disabled || (!isTemplateLimitReached && !templateName.trim())}
+                        title={saveProps.title}
+                        className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+                          isTemplateLimitReached
+                            ? 'bg-amber-500/15 border border-amber-500/30 text-amber-500 hover:bg-amber-500/25'
+                            : 'bg-primary text-primary-foreground disabled:opacity-50 hover:bg-primary/90'
+                        }`}
+                      >
+                        {saveProps.label}
+                      </button>
+                    );
+                  })()}
                 </div>
               </>
             )}
@@ -2106,9 +2245,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <label onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
-                        <Image className="w-3.5 h-3.5 text-primary" />
-                        <span>Add Image</span>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setNewTaskImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
+                        {showUploadingImages || uploadingImages ? <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" /> : <Image className="w-3.5 h-3.5 text-primary" />}
+                        <span>{showUploadingImages || uploadingImages ? 'Uploading...' : 'Add Image'}</span>
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs = await convertDraftImagesBatch(files); if (newImgs.length > 0) setNewTaskImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
                       {aiBuilderImagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>

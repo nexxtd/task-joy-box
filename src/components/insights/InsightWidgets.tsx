@@ -1,5 +1,6 @@
 import { dateLocale } from '@/i18n/format';
 import { useState, useMemo } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 import { ChevronRight, CheckCircle2, AlertTriangle, Layers, Tag, FolderOpen, CalendarDays, StickyNote } from 'lucide-react';
 import { Task, Column, Priority } from '@/types/board';
 import { useNotesContext } from '@/context/NotesContext';
@@ -332,7 +333,8 @@ function TasksByPriorityBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
 // ---------------------------------------------------------------------------
 
 function WeeklyActivityBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
-  const days = useMemo(() => buildWeeklyActivity(tasks, ctx), [tasks, ctx]);
+  const { language } = useLanguage();
+  const days = useMemo(() => buildWeeklyActivity(tasks, ctx), [tasks, ctx, language]);
   const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
   const total = days.reduce((s, d) => s + d.count, 0);
   const maxCount = Math.max(...days.map(d => d.count), 1);

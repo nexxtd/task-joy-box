@@ -14,6 +14,10 @@ export const users = pgTable('users', {
   subscriptionTier: text('subscription_tier').default('free'),
   subscriptionStatus: text('subscription_status').default('inactive'),
   subscriptionEndsAt: text('subscription_ends_at'),
+  pausedPersonalTier: text('paused_personal_tier'),
+  pausedPersonalStatus: text('paused_personal_status'),
+  pausedPersonalRemainingMs: text('paused_personal_remaining_ms'),
+  pausedPersonalAt: text('paused_personal_at'),
   location: text('location'),
   lastActiveAt: timestamp('last_active_at', { mode: 'string' }),
 });
@@ -172,6 +176,18 @@ export const googleCalendarTokens = pgTable('google_calendar_tokens', {
   accessToken: text('access_token').notNull(),
   refreshToken: text('refresh_token'),
   expiresAt: text('expires_at'),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const connectedAccounts = pgTable('connected_accounts', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  provider: text('provider').notNull(),
+  accountName: text('account_name'),
+  accountEmail: text('account_email'),
+  accessToken: text('access_token').notNull(),
+  metadata: text('metadata').default('{}'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -445,8 +461,10 @@ export const userSettings = pgTable('user_settings', {
   language: text('language').default('English'),
   dashboardShortcut: text('dashboard_shortcut').default('/projects'),
   tutorialCompleted: boolean('tutorial_completed').default(false),
+  normalAlerts: boolean('normal_alerts').default(true),
   smartAlerts: boolean('smart_alerts').default(true),
   emailNotifs: boolean('email_notifs').default(true),
+  weeklyAiSummary: boolean('weekly_ai_summary').default(true),
   autoSortTasks: boolean('autoSortTasks').default(false),
   doNotDisturbEnabled: boolean('do_not_disturb_enabled').default(false),
   doNotDisturbStart: text('do_not_disturb_start').default('22:00'),
@@ -495,6 +513,9 @@ export const taskAttachments = pgTable('task_attachments', {
   // ephemeral on Render/Vercel (wiped on restart), which made images turn
   // white after refresh. file_data in Postgres survives restarts.
   fileData: text('file_data'),
+  archived: boolean('archived').default(false).notNull(),
+  archivedAt: text('archived_at'),
+  archiveWarningSent: boolean('archive_warning_sent').default(false).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
 });
 

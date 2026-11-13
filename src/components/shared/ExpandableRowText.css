@@ -11,10 +11,20 @@
   align-self: center;
 }
 
-/* Sub-task rows opt into top alignment so the move / select / time / delete
-   controls stay put when the row text is expanded or collapsed. */
+/* Sub-task and checklist rows opt into top alignment so leading icons / drag handles / toggles
+   stay pinned to the first 20px line of text whether single-line, multi-line, expanded, or collapsed. */
 .detail-item-row.items-start > * {
   align-self: start;
+}
+
+/* Align leading controls (16px drag handle, 16px checkbox/radio) and trailing buttons to center at 11px with the 20px text line */
+.detail-item-row.items-start > *:not(.expandable-row-text):not(textarea) {
+  margin-top: 3px;
+}
+
+.detail-item-row.items-start > [class*="cursor-grab"] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .detail-item-row > textarea {
@@ -25,7 +35,7 @@
 .expandable-row-text {
   display: flex;
   align-items: flex-start;
-  align-self: center;
+  align-self: start;
   gap: 0.375rem;
   width: 100%;
   min-width: 0;
@@ -38,8 +48,9 @@
   flex: 1 1 0%;
   min-width: 0;
   max-width: 100%;
-  padding: 0.25rem 0.375rem;
-  line-height: 1.45;
+  padding: 0 0.25rem;
+  line-height: 20px;
+  font-size: 0.875rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: normal;
@@ -53,10 +64,10 @@
 
 .row-text-collapse {
   display: flex;
-  flex: 0 0 1.5rem;
+  flex: 0 0 1.25rem;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-top: 0.125rem;
+  width: 1.25rem;
+  height: 20px;
+  margin-top: 0;
 }

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -39,6 +40,7 @@ import habitTemplatesRoutes from './routes/habitTemplates.js';
 import notificationsRoutes from './routes/notifications.js';
 import dashboardRoutes from './routes/dashboard.js';
 import documentsRoutes from './routes/documents.js';
+import integrationsRoutes from './routes/integrations.js';
 import cronRoutes from './routes/cron.js';
 import path from 'path';
 import connectPg from 'connect-pg-simple';
@@ -338,6 +340,7 @@ app.use('/api/goal-templates', goalTemplatesRoutes);
 app.use('/api/habit-templates', habitTemplatesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/documents', documentsRoutes);
+app.use('/api/integrations', integrationsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/cron', cronRoutes);
 

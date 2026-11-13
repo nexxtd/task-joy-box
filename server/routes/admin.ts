@@ -615,6 +615,7 @@ router.get('/tickets', async (req: AuthRequest, res: Response) => {
       userId: supportTickets.userId,
       userName: users.name,
       userEmail: users.email,
+      userSubscriptionTier: users.subscriptionTier,
     })
       .from(supportTickets)
       .leftJoin(users, eq(supportTickets.userId, users.id))

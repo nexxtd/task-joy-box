@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { app, allowedOrigins, frontendUrl } from './app.js';
 import { initDatabase } from './init-db.js';
 import { pool } from './db.js';
+import { runArchiveLifecycleSweep } from './lib/orgLifecycle.js';
 
 const PORT = parseInt(process.env.PORT || '3001');
 
@@ -22,6 +23,10 @@ async function startServer() {
     console.log(`Frontend URL configured as: ${frontendUrl}`);
     console.log(`Additional allowed origins:`, [...allowedOrigins].join(', '));
   });
+
+  // Run archive lifecycle maintenance (10-day deletion warning emails, 30-day purge, expiry checks) daily
+  setTimeout(() => { void runArchiveLifecycleSweep(); }, 60_000).unref();
+  setInterval(() => { void runArchiveLifecycleSweep(); }, 24 * 60 * 60 * 1000).unref();
 
   const shutdown = (signal: string) => {
     console.log(`Received ${signal}, shutting down gracefully...`);

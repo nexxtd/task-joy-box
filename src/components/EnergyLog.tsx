@@ -12,10 +12,11 @@ interface EnergyEntry {
 
 const STORAGE_KEY = 'energy_history';
 
-const SLOT_META: Array<{ key: 'morning' | 'midday' | 'afternoon'; label: string; icon: React.ReactNode; color: string }> = [
+const SLOT_META: Array<{ key: 'morning' | 'midday' | 'afternoon' | 'evening'; label: string; icon: React.ReactNode; color: string }> = [
   { key: 'morning', label: 'Morning', icon: <Sun className="w-3 h-3" />, color: 'bg-blue-500' },
   { key: 'midday', label: 'Midday', icon: <Coffee className="w-3 h-3" />, color: 'bg-amber-500' },
   { key: 'afternoon', label: 'Afternoon', icon: <Moon className="w-3 h-3" />, color: 'bg-green-500' },
+  { key: 'evening', label: 'Evening', icon: <Moon className="w-3 h-3" />, color: 'bg-purple-500' },
 ];
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -32,7 +33,7 @@ const EnergyLog: React.FC = () => {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: EnergyEntry[] = JSON.parse(raw);
-        const withLogs = parsed.filter(e => e.morning || e.midday || e.afternoon);
+        const withLogs = parsed.filter(e => e.morning || e.midday || e.afternoon || e.evening);
         setEntries([...withLogs].reverse());
       } else {
         setEntries([]);
@@ -68,29 +69,35 @@ const EnergyLog: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      {entries.map(entry => (
-        <div key={entry.date} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">
-            {new Date(entry.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-          <div className="flex gap-2">
-            {SLOT_META.map(slot => {
-              const level = entry[slot.key];
-              if (!level) return null;
-              return (
-                <span
-                  key={slot.key}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  <span className={`w-2 h-2 rounded-full ${LEVEL_COLORS[level]}`} />
-                  {slot.icon}
-                  {slot.label}
-                </span>
-              );
-            })}
+      {entries.map(entry => {
+        const dateObj = new Date(entry.date.includes('T') ? entry.date : `${entry.date}T00:00:00`);
+        const dateStr = !isNaN(dateObj.getTime())
+          ? dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+          : entry.date;
+        return (
+          <div key={entry.date} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm font-medium text-foreground">
+              {dateStr}
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              {SLOT_META.map(slot => {
+                const level = entry[slot.key];
+                if (!level) return null;
+                return (
+                  <span
+                    key={slot.key}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${LEVEL_COLORS[level] || 'bg-muted'}`} />
+                    {slot.icon}
+                    {slot.label}: <span className="text-foreground capitalize">{level}</span>
+                  </span>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

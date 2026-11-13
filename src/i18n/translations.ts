@@ -223,7 +223,7 @@ export const interpolate = (template: string, vars?: Record<string, string | num
 
 const looksTranslatable = (s: string): boolean => {
   if (!s || NEVER_TRANSLATE.has(s)) return false;
-  if (s.length > 240) return false;
+  if (s.length > 2000) return false;
   if (!/[A-Za-z\u00C0-\u024F\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(s)) return false;
   if (/^(https?:|mailto:|tel:|\/|#)/.test(s)) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return false;

@@ -253,7 +253,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                           {(provided) => (
                             <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                               <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0" title="Move checklist">
+                                <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0" title="Move checklist">
                                   <GripVertical className="w-4 h-4" />
                                 </div>
                                 <button
@@ -312,14 +312,15 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="flex items-center gap-2.5 text-sm group/item checklist-item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0" title="Move item">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
                                                 <SquareToggle
                                                   completed={item.completed}
                                                   onClick={() => onToggleChecklistItem(note.id, list.id, item.id)}
-                                                  size="md"
+                                                  size="sm"
+                                                  className="self-start"
                                                 />
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea

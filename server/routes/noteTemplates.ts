@@ -2,8 +2,10 @@ import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { noteTemplates } from '../../shared/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { generateShareCode, normalizeShareCode } from '../lib/shareCode.js';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -58,6 +60,17 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Template name is required' });
+
+    const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+    const tier = effectivePlan.tier;
+    const maxTemplates = SERVER_PLAN_LIMITS.noteTemplates[tier];
+    if (Number.isFinite(maxTemplates)) {
+      const existingCount = await db.select({ count: sql<number>`count(*)` }).from(noteTemplates).where(eq(noteTemplates.userId, req.userId!));
+      if (Number(existingCount[0]?.count || 0) >= maxTemplates) {
+        return res.status(403).json({ error: `Template limit reached (${maxTemplates} max on your plan). Upgrade to add more.` });
+      }
+    }
+
     const wantsPublic = isPublic === true;
     let shareCode: string | null = null;
     if (wantsPublic) {

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 import { CheckCircle2, AlertTriangle, Layers, FolderOpen, CalendarDays, Bot, Gauge, RefreshCw, BarChart } from 'lucide-react';
 import { Task, Column } from '@/types/board';
 import {
@@ -62,7 +63,8 @@ export interface AiScoreData {
 // ---------------------------------------------------------------------------
 
 export function CompletionTrendBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
-  const data = useMemo(() => buildCompletionTrend(tasks, ctx), [tasks, ctx]);
+  const { language } = useLanguage();
+  const data = useMemo(() => buildCompletionTrend(tasks, ctx), [tasks, ctx, language]);
   const { expanded: expDays, toggle: toggleDay } = useExpanded([]);
   const { expanded: expWeeks, toggle: toggleWeek, expandAll, collapseAll } = useExpanded([]);
   const total = data.days.reduce((s, d) => s + d.count, 0);
@@ -189,7 +191,8 @@ export function AvgCompletionTimeBody({ tasks, ctx }: { tasks: Task[]; ctx: Done
 // ---------------------------------------------------------------------------
 
 export function BusiestDaysBody({ tasks, ctx }: { tasks: Task[]; ctx: DoneCtx }) {
-  const entries = useMemo(() => buildBusiest(tasks, ctx), [tasks, ctx]);
+  const { language } = useLanguage();
+  const entries = useMemo(() => buildBusiest(tasks, ctx), [tasks, ctx, language]);
   const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
   const total = entries.reduce((s, e) => s + e.count, 0);
   const peak = entries[0];
@@ -359,9 +362,10 @@ export function CustomReportBody({
   ctx: DoneCtx;
   onUpdate: (patch: Partial<InsightWidget>) => void;
 }) {
+  const { language } = useLanguage();
   const metric = widget.metric || 'completed';
   const range = widget.range || 14;
-  const data = useMemo(() => buildReport(tasks, ctx, metric, range), [tasks, ctx, metric, range]);
+  const data = useMemo(() => buildReport(tasks, ctx, metric, range), [tasks, ctx, metric, range, language]);
   const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
   const total = data.reduce((s, d) => s + d.count, 0);
   const metricLabel = metric === 'created' ? 'Created' : metric === 'checklist' ? 'Checklist items done' : 'Completed';
@@ -473,10 +477,14 @@ export function AiBottlenecksBody({ tasks, aiData }: { tasks: Task[]; aiData: Ai
           {bottlenecks.map(b => {
             const task = tasks.find(t => String(t.id) === String(b.id));
             return (
-              <div key={b.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-red-500/20 bg-red-500/5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                <span className="text-xs font-semibold text-foreground truncate flex-1">{task?.title || 'Task'}</span>
-                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Bottleneck</span>
+              <div key={b.id} className="px-3 py-2.5 rounded-xl border border-red-500/20 bg-red-500/5 space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                  <span className="text-xs font-semibold text-foreground truncate flex-1">{task?.title || 'Task'}</span>
+                  <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Bottleneck</span>
+                </div>
+                {b.reason && <p className="text-[11px] text-muted-foreground leading-relaxed pl-4">{b.reason}</p>}
+                {b.suggestion && <p className="text-[11px] font-medium text-primary leading-relaxed pl-4">Next step: {b.suggestion}</p>}
               </div>
             );
           })}

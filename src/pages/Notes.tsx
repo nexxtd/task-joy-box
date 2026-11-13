@@ -12,6 +12,7 @@ import { fetchNoteTemplates as fetchTemplates, fetchNoteTemplateByCode, createNo
 import CopyShareCode from '@/components/CopyShareCode';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
+import { convertDraftImagesBatch } from '@/lib/attachmentUpload';
 import { readTaskSections, writeTaskSections, readExpandedLists, readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import {
   ArrowDown,
@@ -1942,6 +1943,19 @@ const Tasks: React.FC = () => {
     return (
       <div
         key={task.id}
+        draggable={!isDeleteMode}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select, [class*="cursor-grab"]')) return;
+          const itemData = JSON.stringify({
+            type: 'note',
+            id: task.id,
+            title: task.title,
+          });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => {
           if (isDeleteMode) {
             setSelectedDeleteTaskIds(prev =>
@@ -2900,7 +2914,7 @@ const Tasks: React.FC = () => {
                               <Draggable key={subtask.id} draggableId={subtask.id} index={index}>
                                 {(provided) => (
                                   <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2.5 items-start bg-muted/20 px-3 py-2.5 rounded-lg border border-border/50 group/subtask min-w-0">
-                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
+                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors shrink-0 self-start">
                                       <GripVertical className="w-4 h-4" />
                                     </div>
                                     {editingDraftSubtaskId === subtask.id ? (
@@ -3010,8 +3024,8 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing py-0 px-0.5 self-start text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <ExpandableRowText textClassName=""
@@ -3051,7 +3065,7 @@ const Tasks: React.FC = () => {
                               {(provided) => (
                                 <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                                 <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                     <button
@@ -3104,7 +3118,7 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -3988,7 +4002,7 @@ const Tasks: React.FC = () => {
                           <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading images…' : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await dataUrlForFile(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs = await convertDraftImagesBatch(files); if (newImgs.length > 0) setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
@@ -4294,7 +4308,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
             <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
@@ -4832,7 +4846,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                             {(provided) => (
                               <div ref={provided.innerRef} {...provided.draggableProps} className="rounded-xl border border-border/60 bg-muted/20 overflow-hidden checklist-card">
                                 <div className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/30 transition-all min-w-0 group/header">
-                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                  <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                     <GripVertical className="w-4 h-4" />
                                   </div>
                                   <button
@@ -4905,14 +4919,15 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <SquareToggle
                                                       completed={item.completed}
                                                       onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                                      size="md"
+                                                      size="sm"
+                                                  className="self-start"
                                                     />
                                                     {editingChecklistItemId === item.id ? (
                                                       <AutoGrowTextarea

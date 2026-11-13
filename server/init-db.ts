@@ -1006,6 +1006,17 @@ export async function initDatabase() {
     // Disk uploads/ is ephemeral on Render/Vercel; file_data in Postgres
     // is the persistent source of truth served by GET /api/attachments/file/:id.
     await addColumnIfNotExists('task_attachments', 'file_data', 'TEXT');
+    await addColumnIfNotExists('task_attachments', 'archived', 'BOOLEAN NOT NULL DEFAULT FALSE');
+    await addColumnIfNotExists('task_attachments', 'archived_at', 'TEXT');
+    await addColumnIfNotExists('task_attachments', 'archive_warning_sent', 'BOOLEAN NOT NULL DEFAULT FALSE');
+
+    // --- USER PAUSED PERSONAL PLAN & NOTIFICATION SETTINGS ---
+    await addColumnIfNotExists('users', 'paused_personal_tier', 'TEXT');
+    await addColumnIfNotExists('users', 'paused_personal_status', 'TEXT');
+    await addColumnIfNotExists('users', 'paused_personal_remaining_ms', 'TEXT');
+    await addColumnIfNotExists('users', 'paused_personal_at', 'TEXT');
+    await addColumnIfNotExists('user_settings', 'normal_alerts', 'BOOLEAN DEFAULT TRUE');
+    await addColumnIfNotExists('user_settings', 'weekly_ai_summary', 'BOOLEAN DEFAULT TRUE');
 
     // --- EMAIL BROADCASTS (admin bulk email history) ---
     await pool.query(`
@@ -1024,6 +1035,24 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS email_broadcasts_created_at_idx ON email_broadcasts(created_at);`).catch(() => {});
     console.log('Email broadcasts table verified');
 
+    // --- CONNECTED ACCOUNTS (Integrations: ClickUp, etc.) ---
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS connected_accounts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        account_name TEXT,
+        account_email TEXT,
+        access_token TEXT NOT NULL,
+        metadata TEXT DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS connected_accounts_user_id_idx ON connected_accounts(user_id);`).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS connected_accounts_provider_idx ON connected_accounts(user_id, provider);`).catch(() => {});
+    console.log('Connected accounts table verified');
+
     // --- ENABLE ROW LEVEL SECURITY (Supabase lint compliance) ---
     // The app connects as the table owner (RLS bypassed), so no policies are
     // needed. Enabling RLS without permissive policies satisfies the linter
@@ -1034,7 +1063,7 @@ export async function initDatabase() {
       'goal_tag_assignments', 'activity_logs', 'tags', 'task_tag_assignments',
       'task_templates', 'note_templates', 'goal_templates', 'habit_templates', 'note_snapshots', 'goal_snapshots',
       'habit_snapshots', 'project_chat_messages', 'coupon_groups', 'dashboard_widget_usage',
-      'pending_payments', 'documents',
+      'pending_payments', 'documents', 'connected_accounts',
       // Server-only auth/secret tables flagged by Supabase linter
       // (0013 rls_disabled_in_public, 0023 sensitive_columns_exposed).
       // No permissive policies: app connects as table owner (RLS bypassed),

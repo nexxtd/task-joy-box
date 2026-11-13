@@ -27,6 +27,19 @@ import {
   Info,
   Clock,
   AlertTriangle,
+  Folder,
+  BookOpen,
+  Briefcase,
+  Code2,
+  Palette,
+  Music,
+  FlaskConical,
+  Globe,
+  Star,
+  GraduationCap,
+  Award,
+  Layers,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
@@ -36,6 +49,66 @@ const COLUMN_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
   '#8b5cf6', '#ec4899', '#6b7280', '#14b8a6', '#f43f5e',
 ];
+
+const GROUP_ICON_OPTIONS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { key: 'folder', label: 'Folder', icon: Folder },
+  { key: 'users', label: 'Users', icon: Users },
+  { key: 'graduation', label: 'Academic', icon: GraduationCap },
+  { key: 'book', label: 'Book', icon: BookOpen },
+  { key: 'briefcase', label: 'Team', icon: Briefcase },
+  { key: 'code', label: 'Code', icon: Code2 },
+  { key: 'flask', label: 'Science', icon: FlaskConical },
+  { key: 'palette', label: 'Art', icon: Palette },
+  { key: 'music', label: 'Music', icon: Music },
+  { key: 'globe', label: 'Global', icon: Globe },
+  { key: 'star', label: 'Star', icon: Star },
+  { key: 'award', label: 'Honors', icon: Award },
+  { key: 'layers', label: 'Layers', icon: Layers },
+  { key: 'sparkles', label: 'Sparkles', icon: Sparkles },
+];
+
+const renderGroupIcon = (iconValue?: string | null, fallback = 'folder') => {
+  const normalized = (iconValue || fallback).trim().toLowerCase();
+  const matched = GROUP_ICON_OPTIONS.find(o => o.key === normalized);
+  if (matched) {
+    const IconComp = matched.icon;
+    return <IconComp className="w-4 h-4 flex-shrink-0 text-foreground" />;
+  }
+  if (!iconValue || iconValue === '📁' || iconValue === '🏷️') {
+    const IconComp = normalized === 'layers' || iconValue === '🏷️' ? Layers : Folder;
+    return <IconComp className="w-4 h-4 flex-shrink-0 text-foreground" />;
+  }
+  return <span className="text-sm leading-none">{iconValue}</span>;
+};
+
+const formatLastActive = (val?: string | null): string => {
+  if (!val) return 'Never';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return 'Never';
+  return d.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const toDatetimeLocalInput = (iso?: string | null): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const getSchoolPerSeatMonthlyRate = (seats: number): number => {
+  if (seats <= 20) return 4.0;
+  if (seats <= 50) return 3.5;
+  if (seats <= 100) return 3.0;
+  if (seats <= 250) return 2.5;
+  return 2.0;
+};
 
 interface OrgSummary {
   id: number;
@@ -58,6 +131,7 @@ interface Member {
   email: string;
   role: string;
   joinedAt: string;
+  lastActiveAt?: string | null;
   groups?: string[];
   subGroups?: string[];
   isOwner?: boolean;
@@ -138,7 +212,8 @@ const Organizations: React.FC = () => {
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Expand / Collapse state for sub-groups in Both Tab list view
+  // Expand / Collapse state for groups and sub-groups in Both Tab
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<number, boolean>>({});
   const [collapsedSubGroups, setCollapsedSubGroups] = useState<Record<number, boolean>>({});
 
   // Modals
@@ -156,16 +231,23 @@ const Organizations: React.FC = () => {
   const [targetEditGroupId, setTargetEditGroupId] = useState<number | null>(null);
   const [groupEditName, setGroupEditName] = useState('');
   const [groupEditColor, setGroupEditColor] = useState('#3b82f6');
-  const [groupEditIcon, setGroupEditIcon] = useState('📁');
+  const [groupEditIcon, setGroupEditIcon] = useState('folder');
+  const [groupEditCodeActive, setGroupEditCodeActive] = useState(true);
+  const [groupEditCodeExpiresAt, setGroupEditCodeExpiresAt] = useState('');
+  const [groupEditCodeMaxUses, setGroupEditCodeMaxUses] = useState('');
   const [groupModalLoading, setGroupModalLoading] = useState(false);
 
   // Drag and Drop State
   const [draggedUserId, setDraggedUserId] = useState<number | null>(null);
+  const [draggedSourceGroupId, setDraggedSourceGroupId] = useState<number | null>(null);
   const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
 
   // Settings tab form state
   const [settingsName, setSettingsName] = useState('');
   const [settingsSeats, setSettingsSeats] = useState(1);
+  const [settingsTier, setSettingsTier] = useState<'premium' | 'pro'>('pro');
+  const [settingsBillingPeriod, setSettingsBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingLoading, setBillingLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [newAdminUserId, setNewAdminUserId] = useState<number | ''>('');
@@ -183,7 +265,13 @@ const Organizations: React.FC = () => {
         const data = await res.json();
         const list = data.organizations || [];
         setOrganizations(list);
-        if (list.length > 0 && selectedOrgId === null && !searchParams.get('id')) {
+        const paramId = searchParams.get('id');
+        if (paramId) {
+          const parsedParam = parseInt(paramId, 10);
+          if (!isNaN(parsedParam)) {
+            setSelectedOrgId(parsedParam);
+          }
+        } else if (list.length > 0 && selectedOrgId === null) {
           setSelectedOrgId(list[0].id);
         }
       }
@@ -205,13 +293,17 @@ const Organizations: React.FC = () => {
         setGroups(data.groups || []);
         setUnassignedMembers(data.unassignedMembers || []);
         setUserRole(data.userRole || 'member');
-        setIsOwner(Boolean(data.isOwner));
+        const ownerFlag = Boolean(data.isOwner);
+        setIsOwner(ownerFlag);
         setIsAdmin(Boolean(data.isAdmin));
         setSettingsName(data.organization?.name || '');
         setSettingsSeats(data.organization?.maxSeats || 1);
+        setSettingsTier(data.organization?.tier === 'premium' ? 'premium' : 'pro');
 
-        // Adjust tab if family org
+        // Adjust tab if family org or non-owner on settings
         if (data.organization?.type === 'family' && (activeTab === 'groups' || activeTab === 'both')) {
+          setActiveTab('users');
+        } else if (!ownerFlag && activeTab === 'settings') {
           setActiveTab('users');
         }
       } else {
@@ -228,9 +320,20 @@ const Organizations: React.FC = () => {
     fetchOrganizationsList();
   }, []);
 
+  const urlOrgIdParam = searchParams.get('id');
+  useEffect(() => {
+    if (!urlOrgIdParam) return;
+    const parsed = parseInt(urlOrgIdParam, 10);
+    if (!isNaN(parsed) && parsed !== selectedOrgId) {
+      setSelectedOrgId(parsed);
+    }
+  }, [urlOrgIdParam]);
+
   useEffect(() => {
     if (selectedOrgId !== null) {
-      setSearchParams({ id: String(selectedOrgId) }, { replace: true });
+      if (searchParams.get('id') !== String(selectedOrgId)) {
+        setSearchParams({ id: String(selectedOrgId) }, { replace: true });
+      }
       fetchOrgDetails(selectedOrgId);
     }
   }, [selectedOrgId]);
@@ -242,18 +345,30 @@ const Organizations: React.FC = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  // Filtered members for Users tab
+  // Filtered members for Users tab (searchable by name, email, group, sub-group, and last active)
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
     const q = searchQuery.toLowerCase();
-    return members.filter(
-      m => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
-    );
+    return members.filter(m => {
+      if (m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)) return true;
+      if ((m.groups || []).some(g => g.toLowerCase().includes(q))) return true;
+      if ((m.subGroups || []).some(sg => sg.toLowerCase().includes(q))) return true;
+      const formattedActive = formatLastActive(m.lastActiveAt).toLowerCase();
+      if (formattedActive.includes(q)) return true;
+      if (m.lastActiveAt && m.lastActiveAt.toLowerCase().includes(q)) return true;
+      return false;
+    });
   }, [members, searchQuery]);
 
-  // Handle Drag & Drop of users between sub-groups
-  const handleDragStart = (e: React.DragEvent, userId: number) => {
+  // Handle Drag & Drop of users between sub-groups, direct groups, and unassigned
+  const handleDragStart = (e: React.DragEvent, userId: number, sourceGroupId?: number | null) => {
     e.dataTransfer.setData('application/x-org-member', String(userId));
+    if (sourceGroupId != null) {
+      e.dataTransfer.setData('application/x-org-source-group', String(sourceGroupId));
+      setDraggedSourceGroupId(sourceGroupId);
+    } else {
+      setDraggedSourceGroupId(null);
+    }
     e.dataTransfer.effectAllowed = 'move';
     setDraggedUserId(userId);
   };
@@ -287,7 +402,7 @@ const Organizations: React.FC = () => {
         }),
       });
       if (res.ok) {
-        toast({ title: 'Moved member', description: 'Member assignment updated' });
+        toast({ title: 'Moved member', description: subGroupId ? 'Member moved to sub-group' : 'Member assigned directly to group' });
         fetchOrgDetails(selectedOrgId);
       } else {
         const data = await res.json();
@@ -297,6 +412,49 @@ const Organizations: React.FC = () => {
       toast({ title: 'Error', description: 'Failed to assign member', variant: 'destructive' });
     } finally {
       setDraggedUserId(null);
+      setDraggedSourceGroupId(null);
+    }
+  };
+
+  const handleDropOnUnassigned = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverTargetId(null);
+    const rawUserId = e.dataTransfer.getData('application/x-org-member') || String(draggedUserId);
+    const rawSourceGroupId = e.dataTransfer.getData('application/x-org-source-group');
+    const userId = parseInt(rawUserId);
+    if (!userId || !selectedOrgId) return;
+
+    const sourceGroupId = rawSourceGroupId ? parseInt(rawSourceGroupId) : draggedSourceGroupId;
+    try {
+      const groupIdsToRemove = sourceGroupId
+        ? [sourceGroupId]
+        : groups
+            .filter(
+              g =>
+                g.directMemberIds.includes(userId) ||
+                g.subGroups.some(sg => sg.memberIds.includes(userId))
+            )
+            .map(g => g.id);
+
+      if (groupIdsToRemove.length === 0) return;
+
+      await Promise.all(
+        groupIdsToRemove.map(gid =>
+          fetch(`/api/organizations/${selectedOrgId}/remove-from-group`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ targetUserId: userId, groupId: gid }),
+          })
+        )
+      );
+      toast({ title: 'Unassigned member', description: 'Member removed from group assignment.' });
+      fetchOrgDetails(selectedOrgId);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to unassign member', variant: 'destructive' });
+    } finally {
+      setDraggedUserId(null);
+      setDraggedSourceGroupId(null);
     }
   };
 
@@ -324,9 +482,50 @@ const Organizations: React.FC = () => {
   };
 
   // Create Group or Subgroup
+  const openCreateGroupModal = () => {
+    setGroupModalMode('create-group');
+    setTargetParentGroupId(null);
+    setTargetEditGroupId(null);
+    setGroupEditName('');
+    setGroupEditColor('#3b82f6');
+    setGroupEditIcon('folder');
+    setGroupEditCodeActive(true);
+    setGroupEditCodeExpiresAt('');
+    setGroupEditCodeMaxUses('');
+    setGroupModalOpen(true);
+  };
+
+  const openCreateSubGroupModal = (group: Group) => {
+    setGroupModalMode('create-subgroup');
+    setTargetParentGroupId(group.id);
+    setTargetEditGroupId(null);
+    setGroupEditName('');
+    setGroupEditColor(group.color || '#3b82f6');
+    setGroupEditIcon('layers');
+    setGroupEditCodeActive(true);
+    setGroupEditCodeExpiresAt('');
+    setGroupEditCodeMaxUses('');
+    setGroupModalOpen(true);
+  };
+
+  const openEditGroupModal = (item: Group | SubGroup, mode: 'edit-group' | 'edit-subgroup') => {
+    setGroupModalMode(mode);
+    setTargetEditGroupId(item.id);
+    setTargetParentGroupId('parentId' in item ? item.parentId : null);
+    setGroupEditName(item.name);
+    setGroupEditColor(item.color || '#3b82f6');
+    setGroupEditIcon(item.icon || (mode === 'edit-group' ? 'folder' : 'layers'));
+    setGroupEditCodeActive(item.codeActive !== false);
+    setGroupEditCodeExpiresAt(toDatetimeLocalInput(item.codeExpiresAt));
+    setGroupEditCodeMaxUses(item.codeMaxUses != null ? String(item.codeMaxUses) : '');
+    setGroupModalOpen(true);
+  };
+
   const handleSaveGroupModal = async () => {
     if (!selectedOrgId || !groupEditName.trim()) return;
     setGroupModalLoading(true);
+    const parsedMaxUses = groupEditCodeMaxUses.trim() ? parseInt(groupEditCodeMaxUses.trim(), 10) : null;
+    const expiresIso = groupEditCodeExpiresAt.trim() ? new Date(groupEditCodeExpiresAt).toISOString() : null;
     try {
       if (groupModalMode === 'create-group') {
         const res = await fetch(`/api/organizations/${selectedOrgId}/groups`, {
@@ -337,12 +536,17 @@ const Organizations: React.FC = () => {
             name: groupEditName.trim(),
             color: groupEditColor,
             icon: groupEditIcon,
+            codeExpiresAt: expiresIso,
+            codeMaxUses: parsedMaxUses,
           }),
         });
+        const data = await res.json();
         if (res.ok) {
           toast({ title: 'Group created', description: `${groupEditName} added successfully` });
           setGroupModalOpen(false);
           fetchOrgDetails(selectedOrgId);
+        } else {
+          toast({ title: 'Error', description: data.error || 'Failed to create group', variant: 'destructive' });
         }
       } else if (groupModalMode === 'create-subgroup') {
         const res = await fetch(`/api/organizations/${selectedOrgId}/groups`, {
@@ -354,12 +558,17 @@ const Organizations: React.FC = () => {
             name: groupEditName.trim(),
             color: groupEditColor,
             icon: groupEditIcon,
+            codeExpiresAt: expiresIso,
+            codeMaxUses: parsedMaxUses,
           }),
         });
+        const data = await res.json();
         if (res.ok) {
           toast({ title: 'Sub-group created', description: `${groupEditName} added successfully` });
           setGroupModalOpen(false);
           fetchOrgDetails(selectedOrgId);
+        } else {
+          toast({ title: 'Error', description: data.error || 'Failed to create sub-group', variant: 'destructive' });
         }
       } else if (groupModalMode === 'edit-group' || groupModalMode === 'edit-subgroup') {
         if (!targetEditGroupId) return;
@@ -371,12 +580,18 @@ const Organizations: React.FC = () => {
             name: groupEditName.trim(),
             color: groupEditColor,
             icon: groupEditIcon,
+            codeActive: groupEditCodeActive,
+            codeExpiresAt: expiresIso,
+            codeMaxUses: parsedMaxUses,
           }),
         });
+        const data = await res.json();
         if (res.ok) {
           toast({ title: 'Updated', description: 'Group updated successfully' });
           setGroupModalOpen(false);
           fetchOrgDetails(selectedOrgId);
+        } else {
+          toast({ title: 'Error', description: data.error || 'Failed to update group', variant: 'destructive' });
         }
       }
     } catch {
@@ -456,20 +671,25 @@ const Organizations: React.FC = () => {
     setSettingsSaving(true);
     setSettingsError('');
     try {
+      const payload: Record<string, any> = {
+        name: settingsName.trim(),
+      };
+      if (orgDetail?.type !== 'family') {
+        payload.maxSeats = settingsSeats;
+        payload.tier = settingsTier;
+      }
       const res = await fetch(`/api/organizations/${selectedOrgId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          name: settingsName.trim(),
-          maxSeats: settingsSeats,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
         toast({ title: 'Saved', description: 'Organization settings saved successfully.' });
         fetchOrgDetails(selectedOrgId);
         fetchOrganizationsList();
+        window.dispatchEvent(new Event('orgs-refresh'));
       } else {
         setSettingsError(data.error || 'Failed to save settings');
       }
@@ -477,6 +697,36 @@ const Organizations: React.FC = () => {
       setSettingsError('Failed to save settings');
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  // Start PayPal Billing Upgrade / Seat Checkout for Organization
+  const handleUpgradeBilling = async () => {
+    if (!selectedOrgId || !orgDetail) return;
+    setBillingLoading(true);
+    setSettingsError('');
+    try {
+      const res = await fetch('/api/payment/create-org-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          orgId: selectedOrgId,
+          tier: orgDetail.type === 'family' ? 'pro' : settingsTier,
+          seats: orgDetail.type === 'family' ? 5 : settingsSeats,
+          billingPeriod: settingsBillingPeriod,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.approvalUrl) {
+        window.location.href = data.approvalUrl;
+      } else {
+        setSettingsError(data.error || 'Could not start billing checkout');
+      }
+    } catch {
+      setSettingsError('Could not connect to billing checkout');
+    } finally {
+      setBillingLoading(false);
     }
   };
 
@@ -538,8 +788,10 @@ const Organizations: React.FC = () => {
       if (res.ok) {
         toast({ title: 'Ownership Transferred', description: 'New owner assigned.' });
         setTransferOwnerUserId('');
+        setActiveTab('users');
         fetchOrgDetails(selectedOrgId);
         fetchOrganizationsList();
+        window.dispatchEvent(new Event('orgs-refresh'));
       } else {
         const data = await res.json();
         toast({ title: 'Error', description: data.error || 'Failed to transfer ownership', variant: 'destructive' });
@@ -562,6 +814,7 @@ const Organizations: React.FC = () => {
         setSelectedOrgId(null);
         setOrgDetail(null);
         fetchOrganizationsList();
+        window.dispatchEvent(new Event('orgs-refresh'));
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to delete organization', variant: 'destructive' });
@@ -579,6 +832,125 @@ const Organizations: React.FC = () => {
       </div>
     );
   }
+
+  const renderCreateOrgModal = () =>
+    createModalOpen ? (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl text-left space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-foreground">New Organization</h3>
+            <button onClick={() => setCreateModalOpen(false)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-muted-foreground uppercase">Organization Name</label>
+            <input
+              type="text"
+              value={createName}
+              onChange={e => setCreateName(e.target.value)}
+              placeholder="e.g. Springfield High or Smith Family"
+              className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-muted-foreground uppercase">Plan Type</label>
+            <div className="grid grid-cols-2 gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateType('school');
+                  setCreateSeats(10);
+                }}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  createType === 'school' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <p className="text-xs font-bold text-foreground">School / Team</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Custom seats, groups & sub-groups</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateType('family');
+                  setCreateSeats(5);
+                }}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  createType === 'family' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <p className="text-xs font-bold text-foreground">Family</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">5 seats fixed, simplified view</p>
+              </button>
+            </div>
+          </div>
+
+          {createType === 'school' && (
+            <div>
+              <label className="text-xs font-bold text-muted-foreground uppercase">Seat Capacity</label>
+              <input
+                type="number"
+                min={1}
+                max={5000}
+                value={createSeats}
+                onChange={e => setCreateSeats(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Owner uses 1 seat. Remaining seats can be joined via codes.</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setCreateModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={createLoading || !createName.trim()}
+              onClick={async () => {
+                setCreateLoading(true);
+                try {
+                  const res = await fetch('/api/organizations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                      name: createName.trim(),
+                      type: createType,
+                      maxSeats: createSeats,
+                      tier: createTier,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    toast({ title: 'Success', description: 'Organization created successfully' });
+                    setCreateModalOpen(false);
+                    setSelectedOrgId(data.organization.id);
+                    fetchOrganizationsList();
+                    window.dispatchEvent(new Event('orgs-refresh'));
+                  } else {
+                    toast({ title: 'Error', description: data.error || 'Failed to create', variant: 'destructive' });
+                  }
+                } catch {
+                  toast({ title: 'Error', description: 'Failed to create organization', variant: 'destructive' });
+                } finally {
+                  setCreateLoading(false);
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50"
+            >
+              {createLoading ? 'Creating…' : 'Create Organization'}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   // If user does not have any organization selected or owns none
   if (organizations.length === 0 && !selectedOrgId) {
@@ -614,139 +986,25 @@ const Organizations: React.FC = () => {
         </div>
 
         {/* Create Organization Modal */}
-        {createModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl text-left space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-foreground">New Organization</h3>
-                <button onClick={() => setCreateModalOpen(false)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-muted-foreground uppercase">Organization Name</label>
-                <input
-                  type="text"
-                  value={createName}
-                  onChange={e => setCreateName(e.target.value)}
-                  placeholder="e.g. Springfield High or Smith Family"
-                  className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-muted-foreground uppercase">Plan Type</label>
-                <div className="grid grid-cols-2 gap-2 mt-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreateType('school');
-                      setCreateSeats(10);
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      createType === 'school' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
-                    }`}
-                  >
-                    <p className="text-xs font-bold text-foreground">School / Team</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Custom seats, groups & sub-groups</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreateType('family');
-                      setCreateSeats(5);
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      createType === 'family' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
-                    }`}
-                  >
-                    <p className="text-xs font-bold text-foreground">Family</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">5 seats fixed, simplified view</p>
-                  </button>
-                </div>
-              </div>
-
-              {createType === 'school' && (
-                <div>
-                  <label className="text-xs font-bold text-muted-foreground uppercase">Number of Seats</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={5000}
-                    value={createSeats}
-                    onChange={e => setCreateSeats(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  />
-                  <p className="text-[11px] text-muted-foreground mt-1">Owner uses 1 seat. Remaining seats can be joined via codes.</p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-border text-xs font-semibold hover:bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={createLoading || !createName.trim()}
-                  onClick={async () => {
-                    setCreateLoading(true);
-                    try {
-                      const res = await fetch('/api/organizations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                          name: createName.trim(),
-                          type: createType,
-                          maxSeats: createSeats,
-                          tier: createTier,
-                        }),
-                      });
-                      const data = await res.json();
-                      if (res.ok) {
-                        toast({ title: 'Success', description: 'Organization created successfully' });
-                        setCreateModalOpen(false);
-                        setSelectedOrgId(data.organization.id);
-                        fetchOrganizationsList();
-                      } else {
-                        toast({ title: 'Error', description: data.error || 'Failed to create', variant: 'destructive' });
-                      }
-                    } catch {
-                      toast({ title: 'Error', description: 'Failed to create organization', variant: 'destructive' });
-                    } finally {
-                      setCreateLoading(false);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {createLoading ? 'Creating…' : 'Create Organization'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderCreateOrgModal()}
       </div>
     );
   }
 
-  // Available tabs depending on organization type
+  // Available tabs depending on organization type and owner role
   // "Family organizations only show Users and Settings."
+  // "Administrators can do everything except billing and settings."
   const isFamily = orgDetail?.type === 'family';
   const tabs: Array<{ id: 'users' | 'groups' | 'both' | 'settings'; label: string; icon: any }> = isFamily
     ? [
         { id: 'users', label: 'Users', icon: Users },
-        { id: 'settings', label: 'Settings', icon: Settings },
+        ...(isOwner ? [{ id: 'settings' as const, label: 'Settings', icon: Settings }] : []),
       ]
     : [
         { id: 'users', label: 'Users', icon: Users },
         { id: 'groups', label: 'Groups', icon: FolderKanban },
         { id: 'both', label: 'Both', icon: LayoutList },
-        { id: 'settings', label: 'Settings', icon: Settings },
+        ...(isOwner ? [{ id: 'settings' as const, label: 'Settings', icon: Settings }] : []),
       ];
 
   const seatsPercentage = orgDetail ? Math.min(100, Math.round((orgDetail.currentSeats / orgDetail.maxSeats) * 100)) : 0;
@@ -853,12 +1111,12 @@ const Organizations: React.FC = () => {
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search members by name or email…"
+                      placeholder="Search by name, email, group, sub-group, or last active…"
                       className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-card text-xs text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-bold text-foreground">{members.length}</span> total members
+                    <span className="font-bold text-foreground">{filteredMembers.length}</span> / {members.length} members
                   </div>
                 </div>
 
@@ -876,81 +1134,79 @@ const Organizations: React.FC = () => {
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                          <th className="py-3 px-4">Member</th>
-                          <th className="py-3 px-4">Role</th>
-                          {!isFamily && <th className="py-3 px-4">Groups & Sub-groups</th>}
-                          <th className="py-3 px-4">Joined</th>
+                          <th className="py-3 px-4">Name</th>
+                          <th className="py-3 px-4">Email</th>
+                          {!isFamily && <th className="py-3 px-4">Group</th>}
+                          {!isFamily && <th className="py-3 px-4">Sub-group</th>}
+                          <th className="py-3 px-4">Last Active</th>
                           {isAdmin && <th className="py-3 px-4 text-right">Actions</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border text-xs">
-                        {filteredMembers.map(member => (
-                          <tr key={member.id} className="hover:bg-muted/20 transition-colors">
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center flex-shrink-0 text-xs">
-                                  {member.name.slice(0, 2).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-bold text-foreground truncate">{member.name}</p>
-                                  <p className="text-[11px] text-muted-foreground truncate">{member.email}</p>
-                                </div>
-                              </div>
+                        {filteredMembers.length === 0 ? (
+                          <tr>
+                            <td colSpan={isFamily ? (isAdmin ? 4 : 3) : (isAdmin ? 6 : 5)} className="py-8 text-center text-muted-foreground">
+                              No members match your search.
                             </td>
-                            <td className="py-3.5 px-4">
-                              <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                  member.isOwner
-                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                    : member.isAdmin
-                                    ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
-                                    : 'bg-muted text-muted-foreground border border-border'
-                                }`}
-                              >
-                                {member.isOwner && <Crown className="w-2.5 h-2.5" />}
-                                {member.isOwner ? 'Owner' : member.isAdmin ? 'Admin' : 'Member'}
-                              </span>
-                            </td>
-                            {!isFamily && (
-                              <td className="py-3.5 px-4">
-                                <div className="flex flex-wrap gap-1 max-w-xs">
-                                  {member.groups && member.groups.length > 0 ? (
-                                    member.groups.map(g => (
-                                      <span key={g} className="px-2 py-0.5 rounded-md bg-muted text-[10px] font-semibold text-foreground">
-                                        {g}
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-muted-foreground italic text-[11px]">Unassigned</span>
-                                  )}
-                                  {member.subGroups && member.subGroups.length > 0 && (
-                                    member.subGroups.map(sg => (
-                                      <span key={sg} className="px-2 py-0.5 rounded-md bg-primary/10 text-[10px] font-semibold text-primary">
-                                        ↳ {sg}
-                                      </span>
-                                    ))
-                                  )}
-                                </div>
-                              </td>
-                            )}
-                            <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
-                              {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}
-                            </td>
-                            {isAdmin && (
-                              <td className="py-3.5 px-4 text-right">
-                                {!member.isOwner && (
-                                  <button
-                                    onClick={() => handleKickMember(member.id, member.name)}
-                                    title="Kick member"
-                                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                  >
-                                    <UserX className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </td>
-                            )}
                           </tr>
-                        ))}
+                        ) : (
+                          filteredMembers.map(member => (
+                            <tr key={member.id} className="hover:bg-muted/20 transition-colors">
+                              <td className="py-3.5 px-4 font-bold text-foreground whitespace-nowrap">
+                                {member.name}
+                              </td>
+                              <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
+                                {member.email}
+                              </td>
+                              {!isFamily && (
+                                <td className="py-3.5 px-4">
+                                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                    {member.groups && member.groups.length > 0 ? (
+                                      member.groups.map(g => (
+                                        <span key={g} className="px-2 py-0.5 rounded-md bg-muted text-[10px] font-semibold text-foreground">
+                                          {g}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground italic text-[11px]">Unassigned</span>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              {!isFamily && (
+                                <td className="py-3.5 px-4">
+                                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                    {member.subGroups && member.subGroups.length > 0 ? (
+                                      member.subGroups.map(sg => (
+                                        <span key={sg} className="px-2 py-0.5 rounded-md bg-primary/10 text-[10px] font-semibold text-primary">
+                                          {sg}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-muted-foreground text-[11px]">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
+                                {formatLastActive(member.lastActiveAt)}
+                              </td>
+                              {isAdmin && (
+                                <td className="py-3.5 px-4 text-right">
+                                  {!member.isOwner && (
+                                    <button
+                                      onClick={() => handleKickMember(member.id, member.name)}
+                                      title="Kick member"
+                                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                    >
+                                      <UserX className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -961,22 +1217,16 @@ const Organizations: React.FC = () => {
             {/* ================= GROUPS TAB ================= */}
             {activeTab === 'groups' && !isFamily && (
               <div className="space-y-6 max-w-5xl mx-auto">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-foreground">Groups & Sub-groups</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Organize your members into groups (e.g. Year 9) and sub-groups (e.g. Class A, Class B).
+                      Organize members into groups (e.g. Year 9) and sub-groups (e.g. Class A, Class B). Max 1 sub-group per group per member.
                     </p>
                   </div>
                   {isAdmin && (
                     <button
-                      onClick={() => {
-                        setGroupModalMode('create-group');
-                        setGroupEditName('');
-                        setGroupEditColor('#3b82f6');
-                        setGroupEditIcon('📁');
-                        setGroupModalOpen(true);
-                      }}
+                      onClick={openCreateGroupModal}
                       className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 shadow-xs hover:bg-primary/90 transition-all"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -1001,17 +1251,26 @@ const Organizations: React.FC = () => {
                       <div key={group.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
                         {/* Parent Group Header */}
                         <div className="p-4 sm:p-5 border-b border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="w-4 h-4 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: group.color }}
-                            />
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">{group.icon || '📁'}</span>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                              <span
+                                className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: group.color }}
+                              />
+                              {renderGroupIcon(group.icon, 'folder')}
                               <h3 className="text-base font-bold text-foreground">{group.name}</h3>
                               <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground border border-border">
                                 {group.memberCount} members
                               </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground pl-6">
+                              <span>Uses: {group.codeUses}{group.codeMaxUses != null ? ` / ${group.codeMaxUses}` : ' (unlimited)'}</span>
+                              {group.codeExpiresAt && (
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  Expires {new Date(group.codeExpiresAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1050,14 +1309,7 @@ const Organizations: React.FC = () => {
                                   <RefreshCw className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    setGroupModalMode('edit-group');
-                                    setTargetEditGroupId(group.id);
-                                    setGroupEditName(group.name);
-                                    setGroupEditColor(group.color);
-                                    setGroupEditIcon(group.icon || '📁');
-                                    setGroupModalOpen(true);
-                                  }}
+                                  onClick={() => openEditGroupModal(group, 'edit-group')}
                                   className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                                   title="Edit group"
                                 >
@@ -1081,14 +1333,7 @@ const Organizations: React.FC = () => {
                             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sub-groups</p>
                             {isAdmin && (
                               <button
-                                onClick={() => {
-                                  setGroupModalMode('create-subgroup');
-                                  setTargetParentGroupId(group.id);
-                                  setGroupEditName('');
-                                  setGroupEditColor(group.color);
-                                  setGroupEditIcon('🏷️');
-                                  setGroupModalOpen(true);
-                                }}
+                                onClick={() => openCreateSubGroupModal(group)}
                                 className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -1106,56 +1351,76 @@ const Organizations: React.FC = () => {
                               {group.subGroups.map(subGroup => (
                                 <div
                                   key={subGroup.id}
-                                  className="p-3.5 rounded-xl border border-border bg-muted/30 flex items-center justify-between gap-3"
+                                  className="p-3.5 rounded-xl border border-border bg-muted/30 flex flex-col gap-2"
                                 >
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <span
-                                      className="w-3 h-3 rounded-full flex-shrink-0"
-                                      style={{ backgroundColor: subGroup.color }}
-                                    />
-                                    <span className="text-sm">{subGroup.icon || '🏷️'}</span>
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-bold text-foreground truncate">{subGroup.name}</p>
-                                      <p className="text-[10px] text-muted-foreground">{subGroup.memberCount} members</p>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        className="w-3 h-3 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: subGroup.color }}
+                                      />
+                                      {renderGroupIcon(subGroup.icon, 'layers')}
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-foreground truncate">{subGroup.name}</p>
+                                        <p className="text-[10px] text-muted-foreground">
+                                          {subGroup.memberCount} members · Uses: {subGroup.codeUses}{subGroup.codeMaxUses != null ? `/${subGroup.codeMaxUses}` : ''}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <button
+                                        onClick={() => copyToClipboard(subGroup.joinCode)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card text-[11px] font-mono font-bold hover:text-primary transition-colors"
+                                        title="Copy sub-group code (auto-assigns to both sub-group and parent)"
+                                      >
+                                        {copiedCode === subGroup.joinCode ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                                        {subGroup.joinCode}
+                                      </button>
+
+                                      {isAdmin && (
+                                        <>
+                                          <button
+                                            onClick={() => handleToggleCodeActive(subGroup.id, subGroup.codeActive)}
+                                            className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                              subGroup.codeActive
+                                                ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20'
+                                                : 'bg-muted text-muted-foreground border border-border'
+                                            }`}
+                                          >
+                                            {subGroup.codeActive ? 'On' : 'Off'}
+                                          </button>
+                                          <button
+                                            onClick={() => handleRegenerateCode(subGroup.id)}
+                                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            title="Regenerate code"
+                                          >
+                                            <RefreshCw className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            onClick={() => openEditGroupModal(subGroup, 'edit-subgroup')}
+                                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            title="Edit sub-group"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteGroup(subGroup.id, subGroup.name)}
+                                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                            title="Delete sub-group"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
-
-                                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                                    <button
-                                      onClick={() => copyToClipboard(subGroup.joinCode)}
-                                      className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card text-[11px] font-mono font-bold hover:text-primary transition-colors"
-                                      title="Copy sub-group code (auto-assigns to both sub-group and parent)"
-                                    >
-                                      {copiedCode === subGroup.joinCode ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                      {subGroup.joinCode}
-                                    </button>
-
-                                    {isAdmin && (
-                                      <>
-                                        <button
-                                          onClick={() => {
-                                            setGroupModalMode('edit-subgroup');
-                                            setTargetEditGroupId(subGroup.id);
-                                            setGroupEditName(subGroup.name);
-                                            setGroupEditColor(subGroup.color);
-                                            setGroupEditIcon(subGroup.icon || '🏷️');
-                                            setGroupModalOpen(true);
-                                          }}
-                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                                          title="Edit sub-group"
-                                        >
-                                          <Edit2 className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                          onClick={() => handleDeleteGroup(subGroup.id, subGroup.name)}
-                                          className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                          title="Delete sub-group"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
+                                  {subGroup.codeExpiresAt && (
+                                    <p className="text-[10px] text-muted-foreground flex items-center gap-1 pl-5">
+                                      <Clock className="w-3 h-3" />
+                                      Expires {new Date(subGroup.codeExpiresAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -1171,11 +1436,11 @@ const Organizations: React.FC = () => {
             {/* ================= BOTH TAB ================= */}
             {activeTab === 'both' && !isFamily && (
               <div className="space-y-6 max-w-6xl mx-auto">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-foreground">Hierarchy & Assignments</h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      View all groups, sub-groups and assigned users. Drag and drop users between sub-groups.
+                      Drag and drop users across sub-groups, directly into a parent group, or back to Unassigned.
                     </p>
                   </div>
                   <div className="flex items-center gap-1 p-0.5 rounded-xl border border-border bg-muted/40">
@@ -1200,245 +1465,290 @@ const Organizations: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Unassigned Section at Top */}
-                {unassignedMembers.length > 0 && (
-                  <div className="rounded-2xl border border-dashed border-border bg-card/60 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" />
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Unassigned Members ({unassignedMembers.length})
-                        </h4>
-                      </div>
-                      <span className="text-[11px] text-muted-foreground">Drag into a sub-group below</span>
+                {/* Unassigned Section Always at Top (Drop Target to Unassign) */}
+                <div
+                  onDragOver={e => handleDragOver(e, 'unassigned-top')}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropOnUnassigned}
+                  className={`rounded-2xl border border-dashed p-4 space-y-3 transition-colors ${
+                    dragOverTargetId === 'unassigned-top'
+                      ? 'border-primary bg-primary/10 ring-2 ring-primary/30'
+                      : 'border-border bg-card/60'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-muted-foreground" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Unassigned Members ({unassignedMembers.length})
+                      </h4>
                     </div>
+                    <span className="text-[11px] text-muted-foreground">
+                      Drag into a group/sub-group below, or drop here to unassign
+                    </span>
+                  </div>
 
+                  {unassignedMembers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No unassigned members. Drop a user here to remove them from their current group.
+                    </p>
+                  ) : (
                     <div className="flex flex-wrap gap-2">
                       {unassignedMembers.map(m => (
                         <div
                           key={m.id}
                           draggable={isAdmin}
-                          onDragStart={e => handleDragStart(e, m.id)}
+                          onDragStart={e => handleDragStart(e, m.id, null)}
                           className="px-3 py-2 rounded-xl border border-border bg-card flex items-center gap-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-all shadow-xs"
                         >
                           <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
                           <div className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
-                            {m.name.slice(0, 1)}
+                            {m.name.slice(0, 1).toUpperCase()}
                           </div>
                           <span className="text-xs font-semibold text-foreground">{m.name}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* --- LIST VIEW --- */}
                 {bothViewMode === 'list' && (
                   <div className="space-y-6">
-                    {groups.map(group => (
-                      <div key={group.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
-                        {/* Group Header */}
-                        <div
-                          onClick={() => {
-                            if (isAdmin) {
-                              setGroupModalMode('edit-group');
-                              setTargetEditGroupId(group.id);
-                              setGroupEditName(group.name);
-                              setGroupEditColor(group.color);
-                              setGroupEditIcon(group.icon || '📁');
-                              setGroupModalOpen(true);
-                            }
-                          }}
-                          className={`p-4 border-b border-border bg-muted/20 flex items-center justify-between ${isAdmin ? 'cursor-pointer hover:bg-muted/40 transition-colors' : ''}`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
-                            <span className="text-base">{group.icon || '📁'}</span>
-                            <h3 className="text-sm font-bold text-foreground">{group.name}</h3>
-                            <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground border border-border">
-                              {group.memberCount} members
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-muted-foreground font-mono font-bold">Code: {group.joinCode}</span>
-                        </div>
-
-                        {/* Direct Members (in group but not sub-group) */}
-                        {group.directMemberIds && group.directMemberIds.length > 0 && (
-                          <div className="p-4 border-b border-border/50 bg-muted/10 space-y-2">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Direct Group Members</p>
-                            <div className="flex flex-wrap gap-2">
-                              {group.directMemberIds.map(uid => {
-                                const m = members.find(u => u.id === uid);
-                                if (!m) return null;
-                                return (
-                                  <div
-                                    key={m.id}
-                                    draggable={isAdmin}
-                                    onDragStart={e => handleDragStart(e, m.id)}
-                                    className="px-2.5 py-1.5 rounded-lg border border-border bg-card flex items-center gap-1.5 text-xs cursor-grab hover:border-primary/50"
-                                  >
-                                    <GripVertical className="w-3 h-3 text-muted-foreground" />
-                                    <span className="font-medium text-foreground">{m.name}</span>
-                                  </div>
-                                );
-                              })}
+                    {groups.map(group => {
+                      const isGroupCollapsed = Boolean(collapsedGroups[group.id]);
+                      const isDirectOver = dragOverTargetId === `list-direct-${group.id}`;
+                      return (
+                        <div key={group.id} className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
+                          {/* Group Header with Expand/Collapse & Edit */}
+                          <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                onClick={() => setCollapsedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                                className="p-1 rounded-md hover:bg-muted text-muted-foreground"
+                                title={isGroupCollapsed ? 'Expand group' : 'Collapse group'}
+                              >
+                                {isGroupCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                              <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                              {renderGroupIcon(group.icon, 'folder')}
+                              <h3 className="text-sm font-bold text-foreground truncate">{group.name}</h3>
+                              <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground border border-border">
+                                {group.memberCount} members
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-[11px] text-muted-foreground font-mono font-bold hidden sm:inline">Code: {group.joinCode}</span>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => openEditGroupModal(group, 'edit-group')}
+                                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                                  title="Edit group"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
-                        )}
 
-                        {/* Sub-groups list with users */}
-                        <div className="divide-y divide-border">
-                          {group.subGroups.map(subGroup => {
-                            const isCollapsed = Boolean(collapsedSubGroups[subGroup.id]);
-                            const isOver = dragOverTargetId === `list-sub-${subGroup.id}`;
-
-                            return (
+                          {!isGroupCollapsed && (
+                            <>
+                              {/* Direct Members ABOVE Sub-groups (Drop Zone for Parent Group Only) */}
                               <div
-                                key={subGroup.id}
-                                onDragOver={e => handleDragOver(e, `list-sub-${subGroup.id}`)}
+                                onDragOver={e => handleDragOver(e, `list-direct-${group.id}`)}
                                 onDragLeave={handleDragLeave}
-                                onDrop={e => handleDropOnSubGroup(e, group.id, subGroup.id)}
-                                className={`transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-primary ring-inset' : ''}`}
+                                onDrop={e => handleDropOnSubGroup(e, group.id, null)}
+                                className={`p-4 border-b border-border/50 space-y-2 transition-colors ${
+                                  isDirectOver ? 'bg-primary/10 ring-2 ring-primary ring-inset' : 'bg-muted/10'
+                                }`}
                               >
-                                <div className="p-3.5 flex items-center justify-between hover:bg-muted/10 transition-colors">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <button
-                                      onClick={() =>
-                                        setCollapsedSubGroups(prev => ({
-                                          ...prev,
-                                          [subGroup.id]: !prev[subGroup.id],
-                                        }))
-                                      }
-                                      className="p-1 rounded-md hover:bg-muted text-muted-foreground"
-                                    >
-                                      {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                    </button>
-                                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subGroup.color }} />
-                                    <span className="text-sm">{subGroup.icon || '🏷️'}</span>
-                                    <button
-                                      onClick={() => {
-                                        if (isAdmin) {
-                                          setGroupModalMode('edit-subgroup');
-                                          setTargetEditGroupId(subGroup.id);
-                                          setGroupEditName(subGroup.name);
-                                          setGroupEditColor(subGroup.color);
-                                          setGroupEditIcon(subGroup.icon || '🏷️');
-                                          setGroupModalOpen(true);
-                                        }
-                                      }}
-                                      className="text-xs font-bold text-foreground hover:underline text-left"
-                                    >
-                                      {subGroup.name}
-                                    </button>
-                                    <span className="text-[10px] text-muted-foreground font-semibold">
-                                      ({subGroup.memberCount} users)
-                                    </span>
-                                  </div>
-                                  <span className="text-[10px] text-muted-foreground font-mono">Code: {subGroup.joinCode}</span>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Direct Group Members ({group.directMemberIds.length})
+                                  </p>
+                                  <span className="text-[10px] text-muted-foreground">No sub-group · Drop here to assign directly</span>
                                 </div>
-
-                                {/* Expanded Users inside Sub-group */}
-                                {!isCollapsed && (
-                                  <div className="px-10 pb-3.5 pt-1">
-                                    {subGroup.memberIds.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground italic py-1">No users assigned. Drop users here.</p>
-                                    ) : (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                        {subGroup.memberIds.map(uid => {
-                                          const userItem = members.find(m => m.id === uid);
-                                          if (!userItem) return null;
-                                          return (
-                                            <div
-                                              key={userItem.id}
-                                              draggable={isAdmin}
-                                              onDragStart={e => handleDragStart(e, userItem.id)}
-                                              className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between gap-2 shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all"
-                                            >
-                                              <div className="flex items-center gap-2 min-w-0">
-                                                <GripVertical className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0">
-                                                  {userItem.name.slice(0, 1)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                  <p className="text-xs font-bold text-foreground truncate">{userItem.name}</p>
-                                                  <p className="text-[10px] text-muted-foreground truncate">{userItem.email}</p>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
+                                {group.directMemberIds.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No direct members. Drop here to assign directly to {group.name}.</p>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {group.directMemberIds.map(uid => {
+                                      const m = members.find(u => u.id === uid);
+                                      if (!m) return null;
+                                      return (
+                                        <div
+                                          key={m.id}
+                                          draggable={isAdmin}
+                                          onDragStart={e => handleDragStart(e, m.id, group.id)}
+                                          className="px-2.5 py-1.5 rounded-lg border border-border bg-card flex items-center gap-1.5 text-xs cursor-grab hover:border-primary/50"
+                                        >
+                                          <GripVertical className="w-3 h-3 text-muted-foreground" />
+                                          <span className="font-medium text-foreground">{m.name}</span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
-                            );
-                          })}
+
+                              {/* Sub-groups list with users */}
+                              <div className="divide-y divide-border">
+                                {group.subGroups.map(subGroup => {
+                                  const isCollapsed = Boolean(collapsedSubGroups[subGroup.id]);
+                                  const isOver = dragOverTargetId === `list-sub-${subGroup.id}`;
+
+                                  return (
+                                    <div
+                                      key={subGroup.id}
+                                      onDragOver={e => handleDragOver(e, `list-sub-${subGroup.id}`)}
+                                      onDragLeave={handleDragLeave}
+                                      onDrop={e => handleDropOnSubGroup(e, group.id, subGroup.id)}
+                                      className={`transition-colors ${isOver ? 'bg-primary/10 ring-2 ring-primary ring-inset' : ''}`}
+                                    >
+                                      <div className="p-3.5 flex items-center justify-between hover:bg-muted/10 transition-colors">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <button
+                                            onClick={() =>
+                                              setCollapsedSubGroups(prev => ({
+                                                ...prev,
+                                                [subGroup.id]: !prev[subGroup.id],
+                                              }))
+                                            }
+                                            className="p-1 rounded-md hover:bg-muted text-muted-foreground"
+                                          >
+                                            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                          </button>
+                                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subGroup.color }} />
+                                          {renderGroupIcon(subGroup.icon, 'layers')}
+                                          <button
+                                            onClick={() => isAdmin && openEditGroupModal(subGroup, 'edit-subgroup')}
+                                            className="text-xs font-bold text-foreground hover:underline text-left truncate"
+                                          >
+                                            {subGroup.name}
+                                          </button>
+                                          <span className="text-[10px] text-muted-foreground font-semibold">
+                                            ({subGroup.memberCount} users)
+                                          </span>
+                                        </div>
+                                        <span className="text-[10px] text-muted-foreground font-mono">Code: {subGroup.joinCode}</span>
+                                      </div>
+
+                                      {/* Expanded Users inside Sub-group */}
+                                      {!isCollapsed && (
+                                        <div className="px-10 pb-3.5 pt-1">
+                                          {subGroup.memberIds.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground italic py-1">No users assigned. Drop users here.</p>
+                                          ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                              {subGroup.memberIds.map(uid => {
+                                                const userItem = members.find(m => m.id === uid);
+                                                if (!userItem) return null;
+                                                return (
+                                                  <div
+                                                    key={userItem.id}
+                                                    draggable={isAdmin}
+                                                    onDragStart={e => handleDragStart(e, userItem.id, group.id)}
+                                                    className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between gap-2 shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all"
+                                                  >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                      <GripVertical className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                                      <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0">
+                                                        {userItem.name.slice(0, 1).toUpperCase()}
+                                                      </div>
+                                                      <div className="min-w-0">
+                                                        <p className="text-xs font-bold text-foreground truncate">{userItem.name}</p>
+                                                        <p className="text-[10px] text-muted-foreground truncate">{userItem.email}</p>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* --- BOARD VIEW --- */}
                 {bothViewMode === 'board' && (
                   <div className="space-y-8">
-                    {groups.map(group => (
-                      <div key={group.id} className="space-y-3">
-                        <div className="flex items-center gap-2 border-b border-border pb-2">
-                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: group.color }} />
-                          <span className="text-base">{group.icon || '📁'}</span>
-                          <h3 className="text-sm font-bold text-foreground">{group.name}</h3>
-                          <span className="text-xs text-muted-foreground">({group.memberCount} members)</span>
-                        </div>
+                    {groups.map(group => {
+                      const isGroupCollapsed = Boolean(collapsedGroups[group.id]);
+                      const isDirectOver = dragOverTargetId === `board-direct-${group.id}`;
+                      return (
+                        <div key={group.id} className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-border pb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                onClick={() => setCollapsedGroups(prev => ({ ...prev, [group.id]: !prev[group.id] }))}
+                                className="p-1 rounded-md hover:bg-muted text-muted-foreground"
+                                title={isGroupCollapsed ? 'Expand group' : 'Collapse group'}
+                              >
+                                {isGroupCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                              {renderGroupIcon(group.icon, 'folder')}
+                              <h3 className="text-sm font-bold text-foreground truncate">{group.name}</h3>
+                              <span className="text-xs text-muted-foreground">({group.memberCount} members)</span>
+                            </div>
+                            {isAdmin && (
+                              <button
+                                onClick={() => openEditGroupModal(group, 'edit-group')}
+                                className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+                                title="Edit group"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
 
-                        {/* Columns container (sub-groups as columns) */}
-                        <div className="flex gap-4 overflow-x-auto pb-4">
-                          {group.subGroups.map(subGroup => {
-                            const isOver = dragOverTargetId === `board-sub-${subGroup.id}`;
-
-                            return (
+                          {!isGroupCollapsed && (
+                            <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+                              {/* Direct Group Members Column (Before Sub-groups) */}
                               <div
-                                key={subGroup.id}
-                                onDragOver={e => handleDragOver(e, `board-sub-${subGroup.id}`)}
+                                onDragOver={e => handleDragOver(e, `board-direct-${group.id}`)}
                                 onDragLeave={handleDragLeave}
-                                onDrop={e => handleDropOnSubGroup(e, group.id, subGroup.id)}
-                                className={`w-72 flex-shrink-0 rounded-2xl border border-border bg-muted/20 flex flex-col max-h-[600px] transition-all shadow-xs ${
-                                  isOver ? 'ring-2 ring-primary bg-primary/10 scale-[1.01]' : ''
+                                onDrop={e => handleDropOnSubGroup(e, group.id, null)}
+                                className={`w-72 flex-shrink-0 rounded-2xl border border-dashed border-border bg-muted/20 flex flex-col max-h-[600px] transition-all shadow-xs ${
+                                  isDirectOver ? 'ring-2 ring-primary bg-primary/10 scale-[1.01]' : ''
                                 }`}
                               >
-                                {/* Column Header */}
                                 <div className="p-3.5 border-b border-border flex items-center justify-between bg-card rounded-t-2xl">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: subGroup.color }} />
-                                    <span className="text-xs font-bold text-foreground truncate">{subGroup.name}</span>
-                                  </div>
+                                  <span className="text-xs font-bold text-foreground truncate">Direct Members (No Sub-group)</span>
                                   <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
-                                    {subGroup.memberCount}
+                                    {group.directMemberIds.length}
                                   </span>
                                 </div>
-
-                                {/* User Cards in Column */}
                                 <div className="p-3 overflow-y-auto space-y-2 flex-1">
-                                  {subGroup.memberIds.length === 0 ? (
+                                  {group.directMemberIds.length === 0 ? (
                                     <div className="p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl">
-                                      Drop users here
+                                      Drop here for direct group assignment
                                     </div>
                                   ) : (
-                                    subGroup.memberIds.map(uid => {
+                                    group.directMemberIds.map(uid => {
                                       const u = members.find(m => m.id === uid);
                                       if (!u) return null;
                                       return (
                                         <div
                                           key={u.id}
                                           draggable={isAdmin}
-                                          onDragStart={e => handleDragStart(e, u.id)}
+                                          onDragStart={e => handleDragStart(e, u.id, group.id)}
                                           className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all space-y-1"
                                         >
                                           <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center">
-                                                {u.name.slice(0, 1)}
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0">
+                                                {u.name.slice(0, 1).toUpperCase()}
                                               </div>
                                               <p className="text-xs font-bold text-foreground truncate">{u.name}</p>
                                             </div>
@@ -1451,23 +1761,110 @@ const Organizations: React.FC = () => {
                                   )}
                                 </div>
                               </div>
-                            );
-                          })}
+
+                              {/* Sub-group Columns */}
+                              {group.subGroups.map(subGroup => {
+                                const isOver = dragOverTargetId === `board-sub-${subGroup.id}`;
+                                const isSubCollapsed = Boolean(collapsedSubGroups[subGroup.id]);
+
+                                return (
+                                  <div
+                                    key={subGroup.id}
+                                    onDragOver={e => handleDragOver(e, `board-sub-${subGroup.id}`)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={e => handleDropOnSubGroup(e, group.id, subGroup.id)}
+                                    className={`w-72 flex-shrink-0 rounded-2xl border border-border bg-muted/20 flex flex-col max-h-[600px] transition-all shadow-xs ${
+                                      isOver ? 'ring-2 ring-primary bg-primary/10 scale-[1.01]' : ''
+                                    }`}
+                                  >
+                                    {/* Column Header with Collapse + Edit */}
+                                    <div className="p-3.5 border-b border-border flex items-center justify-between bg-card rounded-t-2xl">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <button
+                                          onClick={() =>
+                                            setCollapsedSubGroups(prev => ({
+                                              ...prev,
+                                              [subGroup.id]: !prev[subGroup.id],
+                                            }))
+                                          }
+                                          className="p-0.5 rounded hover:bg-muted text-muted-foreground"
+                                        >
+                                          {isSubCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                        </button>
+                                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subGroup.color }} />
+                                        {renderGroupIcon(subGroup.icon, 'layers')}
+                                        <span className="text-xs font-bold text-foreground truncate">{subGroup.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+                                          {subGroup.memberCount}
+                                        </span>
+                                        {isAdmin && (
+                                          <button
+                                            onClick={() => openEditGroupModal(subGroup, 'edit-subgroup')}
+                                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
+                                            title="Edit sub-group"
+                                          >
+                                            <Edit2 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* User Cards in Column */}
+                                    {!isSubCollapsed && (
+                                      <div className="p-3 overflow-y-auto space-y-2 flex-1">
+                                        {subGroup.memberIds.length === 0 ? (
+                                          <div className="p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl">
+                                            Drop users here
+                                          </div>
+                                        ) : (
+                                          subGroup.memberIds.map(uid => {
+                                            const u = members.find(m => m.id === uid);
+                                            if (!u) return null;
+                                            return (
+                                              <div
+                                                key={u.id}
+                                                draggable={isAdmin}
+                                                onDragStart={e => handleDragStart(e, u.id, group.id)}
+                                                className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all space-y-1"
+                                              >
+                                                <div className="flex items-center justify-between">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0">
+                                                      {u.name.slice(0, 1).toUpperCase()}
+                                                    </div>
+                                                    <p className="text-xs font-bold text-foreground truncate">{u.name}</p>
+                                                  </div>
+                                                  <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground truncate pl-8">{u.email}</p>
+                                              </div>
+                                            );
+                                          })
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* ================= SETTINGS TAB ================= */}
-            {activeTab === 'settings' && (
+            {/* ================= SETTINGS TAB (OWNER ONLY) ================= */}
+            {activeTab === 'settings' && isOwner && (
               <div className="space-y-6 max-w-2xl mx-auto">
                 <div className="border-b border-border pb-4">
                   <h2 className="text-base font-bold text-foreground">Organization Settings</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Manage plan tiers, seat capacity, administrators, and ownership.
+                    Manage organization name, plan tier, seat capacity, billing, administrators, and ownership.
                   </p>
                 </div>
 
@@ -1479,26 +1876,53 @@ const Organizations: React.FC = () => {
                     <label className="text-xs font-bold text-muted-foreground uppercase">Organization Name</label>
                     <input
                       type="text"
-                      disabled={!isOwner}
                       value={settingsName}
                       onChange={e => setSettingsName(e.target.value)}
-                      className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
+                      className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                   </div>
+
+                  {!isFamily && (
+                    <div>
+                      <label className="text-xs font-bold text-muted-foreground uppercase">Plan Tier</label>
+                      <div className="grid grid-cols-2 gap-2 mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSettingsTier('premium')}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            settingsTier === 'premium' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
+                          }`}
+                        >
+                          <p className="text-xs font-bold text-foreground">Premium</p>
+                          <p className="text-[11px] text-muted-foreground">Core workspace + uploads + insights</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSettingsTier('pro')}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            settingsTier === 'pro' ? 'border-primary bg-primary/5 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'
+                          }`}
+                        >
+                          <p className="text-xs font-bold text-foreground">Pro</p>
+                          <p className="text-[11px] text-muted-foreground">Unlimited AI features + PDF exports</p>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-xs font-bold text-muted-foreground uppercase">Seat Capacity</label>
                     <input
                       type="number"
                       min={orgDetail?.currentSeats || 1}
-                      disabled={!isOwner || isFamily}
-                      value={settingsSeats}
-                      onChange={e => setSettingsSeats(parseInt(e.target.value) || 1)}
+                      disabled={isFamily}
+                      value={isFamily ? 5 : settingsSeats}
+                      onChange={e => setSettingsSeats(Math.max(orgDetail?.currentSeats || 1, parseInt(e.target.value) || 1))}
                       className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                       Current active members: <span className="font-bold text-foreground">{orgDetail?.currentSeats}</span>.
-                      You cannot reduce seats below the current member count.
+                      {isFamily ? ' Family organizations are fixed at 5 seats.' : ' You cannot reduce seats below the current member count.'}
                     </p>
                   </div>
 
@@ -1506,7 +1930,7 @@ const Organizations: React.FC = () => {
                     <p className="text-xs text-destructive font-medium">{settingsError}</p>
                   )}
 
-                  {isOwner && (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
                     <button
                       onClick={handleSaveSettings}
                       disabled={settingsSaving}
@@ -1514,7 +1938,70 @@ const Organizations: React.FC = () => {
                     >
                       {settingsSaving ? 'Saving…' : 'Save Changes'}
                     </button>
+                  </div>
+                </div>
+
+                {/* Billing & Plan Upgrade */}
+                <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-primary" />
+                      <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">Billing & Plan Renewal</h3>
+                    </div>
+                    <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {orgDetail?.status || 'active'}
+                    </span>
+                  </div>
+
+                  {isFamily ? (
+                    <p className="text-xs text-muted-foreground">
+                      Family Pro Plan (5 seats fixed): <span className="font-bold text-foreground">$14.99/month</span> or <span className="font-bold text-foreground">$143.90/year (20% off)</span>.
+                    </p>
+                  ) : (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>
+                        School Volume Rate for <span className="font-bold text-foreground">{settingsSeats} seats</span>:{' '}
+                        <span className="font-bold text-foreground">${getSchoolPerSeatMonthlyRate(settingsSeats).toFixed(2)}/seat/mo</span>
+                      </p>
+                      <p>
+                        Total:{' '}
+                        <span className="font-bold text-foreground">
+                          {settingsBillingPeriod === 'yearly'
+                            ? `$${(settingsSeats * getSchoolPerSeatMonthlyRate(settingsSeats) * 12 * 0.8).toFixed(2)}/year (20% off)`
+                            : `$${(settingsSeats * getSchoolPerSeatMonthlyRate(settingsSeats)).toFixed(2)}/month`}
+                        </span>
+                      </p>
+                    </div>
                   )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsBillingPeriod('monthly')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                        settingsBillingPeriod === 'monthly' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsBillingPeriod('yearly')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                        settingsBillingPeriod === 'yearly' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      Yearly (Save 20%)
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleUpgradeBilling}
+                    disabled={billingLoading}
+                    className="px-4 py-2 rounded-xl bg-foreground text-background font-bold text-xs hover:opacity-90 transition-all disabled:opacity-50"
+                  >
+                    {billingLoading ? 'Redirecting to PayPal…' : 'Checkout Plan & Seats via PayPal'}
+                  </button>
                 </div>
 
                 {/* Administrators Management */}
@@ -1645,7 +2132,7 @@ const Organizations: React.FC = () => {
       {/* Edit Column Style Popup for Group & Sub-group */}
       {groupModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-card border border-border rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+          <div className="bg-card border border-border rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-base font-bold text-foreground">
                 {groupModalMode === 'create-group'
@@ -1692,26 +2179,107 @@ const Organizations: React.FC = () => {
 
               <div>
                 <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">Icon</label>
-                <div className="flex gap-2">
-                  <input
-                    value={groupEditIcon}
-                    onChange={e => setGroupEditIcon(e.target.value)}
-                    placeholder="e.g. 📁 or 🚀"
-                    className="flex-1 bg-muted/30 border border-border rounded-xl p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-                  />
-                  <button
-                    onClick={handleSaveGroupModal}
-                    disabled={groupModalLoading || !groupEditName.trim()}
-                    className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    Save
-                  </button>
+                <div className="grid grid-cols-7 gap-1.5 mb-2">
+                  {GROUP_ICON_OPTIONS.map(opt => {
+                    const IconComp = opt.icon;
+                    const selected = groupEditIcon.toLowerCase() === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setGroupEditIcon(opt.key)}
+                        title={opt.label}
+                        className={`p-2 rounded-xl border flex items-center justify-center transition-colors ${
+                          selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-muted/20 text-muted-foreground hover:text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        <IconComp className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
                 </div>
+                <input
+                  value={groupEditIcon}
+                  onChange={e => setGroupEditIcon(e.target.value)}
+                  placeholder="Icon key or symbol"
+                  className="w-full bg-muted/30 border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+              </div>
+
+              {/* Optional Join Code Expiry, Max Uses & Status Controls */}
+              <div className="pt-2 border-t border-border space-y-3">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase block">Join Code Controls</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Code Expiry (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={groupEditCodeExpiresAt}
+                      onChange={e => setGroupEditCodeExpiresAt(e.target.value)}
+                      className="w-full bg-muted/30 border border-border rounded-xl px-2.5 py-2 text-xs text-foreground outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Max Uses (optional)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={groupEditCodeMaxUses}
+                      onChange={e => setGroupEditCodeMaxUses(e.target.value)}
+                      placeholder="Unlimited"
+                      className="w-full bg-muted/30 border border-border rounded-xl px-2.5 py-2 text-xs text-foreground outline-none"
+                    />
+                  </div>
+                </div>
+
+                {(groupModalMode === 'edit-group' || groupModalMode === 'edit-subgroup') && targetEditGroupId && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setGroupEditCodeActive(prev => !prev)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        groupEditCodeActive
+                          ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20'
+                          : 'bg-muted text-muted-foreground border-border'
+                      }`}
+                    >
+                      Join Code: {groupEditCodeActive ? 'Active' : 'Paused'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateCode(targetEditGroupId)}
+                      className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold hover:bg-muted flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Regenerate Code
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setGroupModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveGroupModal}
+                  disabled={groupModalLoading || !groupEditName.trim()}
+                  className="px-5 py-2.5 bg-foreground text-background text-sm font-bold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {groupModalLoading ? 'Saving…' : 'Save'}
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+      {renderCreateOrgModal()}
     </div>
   );
 };

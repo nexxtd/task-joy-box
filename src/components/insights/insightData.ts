@@ -289,12 +289,12 @@ export const buildWeeklyActivity = (tasks: Task[], ctx: DoneCtx): DayActivity[] 
   startOfWeek.setHours(0, 0, 0, 0);
   startOfWeek.setDate(today.getDate() + mondayOffset);
 
-  const days: DayActivity[] = MONDAY_FIRST.map((label, i) => {
+  const days: DayActivity[] = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(startOfWeek);
     d.setDate(startOfWeek.getDate() + i);
     return {
       dayIndex: i,
-      label,
+      label: d.toLocaleDateString(dateLocale(), { weekday: 'short' }),
       dateLabel: d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }),
       count: 0,
       tasks: [],
@@ -439,7 +439,12 @@ export const buildCompletionTrend = (tasks: Task[], ctx: DoneCtx): { days: Trend
     const d = new Date(now);
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() - i);
-    days.push({ date: d, label: WEEKDAY_SHORT[d.getDay()] + ' ' + d.getDate(), count: 0, tasks: [] });
+    days.push({
+      date: d,
+      label: `${d.toLocaleDateString(dateLocale(), { weekday: 'short' })} ${d.getDate()}`,
+      count: 0,
+      tasks: [],
+    });
   }
   for (const t of tasks) {
     if (!isTaskDone(t, ctx)) continue;
@@ -575,7 +580,13 @@ export interface BusyDayEntry {
 }
 
 export const buildBusiest = (tasks: Task[], ctx: DoneCtx): BusyDayEntry[] => {
-  const entries: BusyDayEntry[] = WEEKDAY_LABELS.map((label, i) => ({ weekday: i, label, count: 0, tasks: [] }));
+  const fmt = new Intl.DateTimeFormat(dateLocale(), { weekday: 'long' });
+  const entries: BusyDayEntry[] = Array.from({ length: 7 }, (_, i) => ({
+    weekday: i,
+    label: fmt.format(new Date(2024, 0, 7 + i)),
+    count: 0,
+    tasks: [],
+  }));
   for (const t of tasks) {
     if (!isTaskDone(t, ctx)) continue;
     const stamp = completedStamp(t);
@@ -747,7 +758,7 @@ export const buildReport = (tasks: Task[], ctx: DoneCtx, metric: ReportMetric, r
     const d = new Date(startKey + i * DAY_MS);
     map.set(startKey + i * DAY_MS, {
       key: String(startKey + i * DAY_MS),
-      label: d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' }) + ' ' + WEEKDAY_SHORT[d.getDay()],
+      label: d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric', weekday: 'short' }),
       count: 0,
       items: [],
     });

@@ -113,4 +113,25 @@ describe('widget resize limits', () => {
     expect(normalizeWidget({ col: Infinity, row: NaN, w: -100, h: 500 }))
       .toEqual({ col: 1, row: 1, w: 6, h: 30 });
   });
+
+  it('enforces limitsMap bounds resolved by both module id and widget type', () => {
+    const items = [
+      { id: 'w-stats', type: 'stats', col: 1, row: 1, w: 6, h: 2 },
+      { id: 'w-id-override', type: 'notes', col: 7, row: 1, w: 6, h: 2 },
+    ];
+    const limitsMap = {
+      stats: { minW: 8, minH: 5, maxW: 12, maxH: 8 },
+      'w-id-override': { minW: 6, minH: 4, maxW: 8, maxH: 6 },
+    };
+
+    const compacted = compactWidgets(items, 'w-stats', limitsMap);
+    const stats = compacted.find((w) => w.id === 'w-stats')!;
+    const override = compacted.find((w) => w.id === 'w-id-override')!;
+
+    expect(stats.w).toBe(8);
+    expect(stats.h).toBe(5);
+    expect(override.w).toBe(6);
+    expect(override.h).toBe(4);
+    expect(widgetsIntersect(stats, override)).toBe(false);
+  });
 });

@@ -1,7 +1,8 @@
 import '@/styles/pagePanels.css';
 import { dateLocale } from '@/i18n/format';
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import {
   Palette, Bell, Globe, Battery, Keyboard,
   Moon, Sun, Monitor, LogOut, User, Shield, CheckCircle,
@@ -22,6 +23,7 @@ import { EnergyInsightsBody } from '@/components/insights/EnergyInsightsWidget';
 import EnergyLog from '@/components/EnergyLog';
 import SupportContent from '@/components/SupportContent';
 import DiscordCommunitySection from '@/components/shared/DiscordCommunitySection';
+import IntegrationsSection from '@/components/settings/IntegrationsSection';
 import { notificationsSupported, notificationPermission, requestNotificationPermission, deviceNotify, sendTestNotification, setSmartAlertsEnabled } from '@/lib/notifications';
 import TicketConversation, { TicketData, TicketMessage } from '@/components/TicketConversation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -87,7 +89,7 @@ const ACCENT_COLORS = [
 ];
 
 const SettingsPage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { board, addTask } = useBoardContext();
   const { lang, setLanguage, t } = useLanguage(); // Use language context
@@ -142,9 +144,11 @@ const SettingsPage: React.FC = () => {
   const [historyTab, setHistoryTab] = useState<'energy' | 'deepfocus'>('deepfocus');
   const [deepFocusSessions, setDeepFocusSessions] = useState<any[]>([]);
   const [deepFocusLoading, setDeepFocusLoading] = useState(false);
-  const isPaid = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
-  const isTopTier = user?.subscriptionTier === 'pro';
-  const isMidTier = user?.subscriptionTier === 'premium';
+  const navigate = useNavigate();
+  const planTier = normalizePlanTier(user?.subscriptionTier);
+  const isPaid = planTier === 'pro' || planTier === 'premium';
+  const isTopTier = planTier === 'pro';
+  const isMidTier = planTier === 'premium';
 
   const [userTickets, setUserTickets] = useState<TicketData[]>([]);
   const [hasTickets, setHasTickets] = useState(false);
@@ -163,6 +167,9 @@ const SettingsPage: React.FC = () => {
   const [twoFactorLoading, setTwoFactorLoading] = useState(false);
   // Shortcuts — pre-loaded defaults to every page + Create Task / Create Note.
   const [shortcuts, setShortcuts] = useState<ShortcutDef[]>(() => loadShortcuts());
+  const maxCustomShortcuts = PLAN_LIMITS.shortcuts[planTier];
+  const customShortcutsCount = useMemo(() => shortcuts.filter(s => !DEFAULT_SHORTCUTS.some(d => d.id === s.id)).length, [shortcuts]);
+  const isShortcutLimitReached = customShortcutsCount >= maxCustomShortcuts;
   const [rebindingId, setRebindingId] = useState<string | null>(null);
   const [rebindError, setRebindError] = useState('');
   const [addShortcutOpen, setAddShortcutOpen] = useState(false);
@@ -262,6 +269,7 @@ const SettingsPage: React.FC = () => {
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'integrations', label: 'Connected Accounts', icon: Link2 },
     { id: 'energy', label: 'Energy Levels', icon: Battery },
     { id: 'history', label: 'History', icon: History },
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
@@ -299,6 +307,7 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     if (activeSection === 'organization') {
       fetchOrganizations();
+      refreshUser();
     }
   }, [activeSection]);
 
@@ -439,13 +448,17 @@ const SettingsPage: React.FC = () => {
             try { setLanguage(data.language); } catch {}
           }
         }
+        setNormalAlerts(data.normalAlerts !== false);
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
+        setWeeklyAiSummary(data.weeklyAiSummary !== false);
         // The notifier reads these from localStorage; mirror the account so
         // the preference set on another device applies here too.
         try {
+          localStorage.setItem('normalAlerts', String(data.normalAlerts !== false));
           setSmartAlertsEnabled(data.smartAlerts !== false);
           localStorage.setItem('emailNotifs', String(data.emailNotifs !== false));
+          localStorage.setItem('weeklyAiSummary', String(data.weeklyAiSummary !== false));
         } catch {}
       }
     } catch (error) {
@@ -675,8 +688,8 @@ const SettingsPage: React.FC = () => {
   };
 
   const persistNotificationPrefs = async (
-    patch: { smartAlerts?: boolean; emailNotifs?: boolean },
-    prev: { smartAlerts: boolean; emailNotifs: boolean },
+    patch: { normalAlerts?: boolean; smartAlerts?: boolean; emailNotifs?: boolean; weeklyAiSummary?: boolean },
+    prev: { normalAlerts?: boolean; smartAlerts: boolean; emailNotifs: boolean; weeklyAiSummary?: boolean },
   ) => {
     setNotifError('');
     try {
@@ -690,12 +703,22 @@ const SettingsPage: React.FC = () => {
       showSaved();
     } catch (error) {
       // Revert the toggle and surface the error.
-      if (patch.smartAlerts !== undefined) setSmartAlerts(prev.smartAlerts);
-      if (patch.emailNotifs !== undefined) setEmailNotifs(prev.emailNotifs);
-      if (patch.smartAlerts !== undefined) setSmartAlertsEnabled(prev.smartAlerts);
-      try {
-        localStorage.setItem('emailNotifs', String(prev.emailNotifs));
-      } catch {}
+      if (patch.normalAlerts !== undefined && prev.normalAlerts !== undefined) {
+        setNormalAlerts(prev.normalAlerts);
+        try { localStorage.setItem('normalAlerts', String(prev.normalAlerts)); } catch {}
+      }
+      if (patch.smartAlerts !== undefined) {
+        setSmartAlerts(prev.smartAlerts);
+        setSmartAlertsEnabled(prev.smartAlerts);
+      }
+      if (patch.emailNotifs !== undefined) {
+        setEmailNotifs(prev.emailNotifs);
+        try { localStorage.setItem('emailNotifs', String(prev.emailNotifs)); } catch {}
+      }
+      if (patch.weeklyAiSummary !== undefined && prev.weeklyAiSummary !== undefined) {
+        setWeeklyAiSummary(prev.weeklyAiSummary);
+        try { localStorage.setItem('weeklyAiSummary', String(prev.weeklyAiSummary)); } catch {}
+      }
       setNotifError('Could not save. Please try again.');
     } finally {
       setSavingSmart(false);
@@ -775,11 +798,12 @@ const SettingsPage: React.FC = () => {
     await persistNotificationPrefs({ smartAlerts: next }, { smartAlerts: prev, emailNotifs });
   };
 
-  const handleNormalAlertsToggle = () => {
-    const next = !normalAlerts;
+  const handleNormalAlertsToggle = async () => {
+    const prev = normalAlerts;
+    const next = !prev;
     setNormalAlerts(next);
     try { localStorage.setItem('normalAlerts', String(next)); } catch {}
-    showSaved();
+    await persistNotificationPrefs({ normalAlerts: next }, { normalAlerts: prev, smartAlerts, emailNotifs, weeklyAiSummary });
   };
 
   const handleEmailNotifsToggle = async () => {
@@ -795,21 +819,24 @@ const SettingsPage: React.FC = () => {
     await persistNotificationPrefs({ emailNotifs: next }, { smartAlerts, emailNotifs: prev });
   };
 
-  const handleWeeklyAiSummaryToggle = () => {
+  const handleWeeklyAiSummaryToggle = async () => {
     if (!isTopTier) {
       window.location.href = '/pricing';
       return;
     }
-    const next = !weeklyAiSummary;
+    const prev = weeklyAiSummary;
+    const next = !prev;
     setWeeklyAiSummary(next);
     try { localStorage.setItem('weeklyAiSummary', String(next)); } catch {}
-    showSaved();
+    await persistNotificationPrefs({ weeklyAiSummary: next }, { smartAlerts, emailNotifs, weeklyAiSummary: prev });
   };
 
   const resetDefaults = async () => {
     // Reset local state
+    setNormalAlerts(true);
     setSmartAlerts(true);
     setEmailNotifs(true);
+    setWeeklyAiSummary(true);
     setEnergyTrackerEnabled(true);
     setLanguage('en');
     setFont('Inter');
@@ -832,7 +859,9 @@ const SettingsPage: React.FC = () => {
     if (tutorialCompleted) localStorage.setItem('tutorial_completed', tutorialCompleted);
     
     // Apply default settings to localStorage
+    localStorage.setItem('normalAlerts', 'true');
     localStorage.setItem('emailNotifs', 'true');
+    localStorage.setItem('weeklyAiSummary', 'true');
     setSmartAlertsEnabled(true);
     localStorage.setItem('energyTrackerEnabled', 'true');
     localStorage.setItem('language', 'en');
@@ -859,8 +888,10 @@ const SettingsPage: React.FC = () => {
           accentColor: '#000000',
           accentHsl: '0 0% 0%',
           language: 'en',
+          normalAlerts: true,
           smartAlerts: true,
           emailNotifs: true,
+          weeklyAiSummary: true,
         }),
       });
     } catch (error) {
@@ -1457,10 +1488,25 @@ const SettingsPage: React.FC = () => {
                     );
                   })()}
                   <button
-                    onClick={() => { setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setNewShortcutSplitLeft(''); setNewShortcutSplitRight(''); setAddShortcutOpen(true); }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all"
+                    onClick={() => {
+                      if (isShortcutLimitReached) {
+                        if (!isTopTier) navigate('/pricing');
+                        return;
+                      }
+                      setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setNewShortcutSplitLeft(''); setNewShortcutSplitRight(''); setAddShortcutOpen(true);
+                    }}
+                    disabled={isShortcutLimitReached && isTopTier}
+                    title={isShortcutLimitReached ? (isTopTier ? `Custom shortcuts limit reached (${maxCustomShortcuts} max on Pro)` : `Custom shortcuts limit reached (${maxCustomShortcuts} max). Click to upgrade.`) : undefined}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg transition-all ${
+                      isShortcutLimitReached
+                        ? isTopTier
+                          ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                          : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Shortcut
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{isShortcutLimitReached ? 'Limit reached' : 'Add Shortcut'}</span>
                   </button>
                 </div>
               </div>
@@ -1590,6 +1636,10 @@ const SettingsPage: React.FC = () => {
                       <button onClick={() => setAddShortcutOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
                       <button
                         onClick={() => {
+                          if (isShortcutLimitReached) {
+                            if (!isTopTier) navigate('/pricing');
+                            return;
+                          }
                           if (!newShortcutTitle.trim() || !newShortcutKeys.trim()) return;
                           if (!splitPagesReady) {
                             setNewShortcutError('Choose a different page for each half.');
@@ -1617,10 +1667,14 @@ const SettingsPage: React.FC = () => {
                           setNewShortcutSplitLeft('');
                           setNewShortcutSplitRight('');
                         }}
-                        disabled={!newShortcutTitle.trim() || !newShortcutKeys.trim() || !splitPagesReady}
-                        className="px-4 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-50"
+                        disabled={(isShortcutLimitReached && isTopTier) || (!isShortcutLimitReached && (!newShortcutTitle.trim() || !newShortcutKeys.trim() || !splitPagesReady))}
+                        className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${
+                          isShortcutLimitReached
+                            ? 'bg-amber-500/15 border border-amber-500/30 text-amber-500 hover:bg-amber-500/25'
+                            : 'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50'
+                        }`}
                       >
-                        Save Shortcut
+                        {isShortcutLimitReached ? 'Limit reached' : 'Save Shortcut'}
                       </button>
                     </div>
                   </div>
@@ -1932,7 +1986,7 @@ const SettingsPage: React.FC = () => {
                 <div>
                   <h2 className="text-base font-bold text-foreground">Organization Memberships</h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Organizations grant plan access to members. No tasks, notes or personal data are ever shared.
+                    Organizations grant plan access to members. Your personal tasks, notes, habits and chats are never shared.
                   </p>
                 </div>
                 <button
@@ -1950,104 +2004,144 @@ const SettingsPage: React.FC = () => {
                 </button>
               </div>
 
+              {/* Effective Plan / Pause / Reserve / 30-day Archive Status Banner (Rules 8-11) */}
+              {(user?.planSource === 'org' || user?.personalPlanPaused || user?.reservedOrgTier || (user?.archivedAttachmentCount || 0) > 0) && (
+                <div className="p-4 rounded-xl border border-primary/25 bg-primary/5 space-y-1.5 text-xs">
+                  {user?.planSource === 'org' && (
+                    <p className="font-semibold text-foreground">
+                      Active Plan: <span className="uppercase text-primary font-bold">{user.subscriptionTier}</span> via organization{user.bestOrgName ? ` (${user.bestOrgName})` : ''}.
+                    </p>
+                  )}
+                  {user?.personalPlanPaused && user?.pausedPersonalTier && (
+                    <p className="text-muted-foreground">
+                      Your personal <span className="uppercase font-semibold text-foreground">{user.pausedPersonalTier}</span> plan is paused while you have an equal or higher organization plan, and will resume automatically with its remaining time if you leave.
+                    </p>
+                  )}
+                  {user?.reservedOrgTier && user?.planSource !== 'org' && (
+                    <p className="text-muted-foreground">
+                      Your personal <span className="uppercase font-semibold text-foreground">{user.subscriptionTier}</span> plan remains active. Your <span className="uppercase font-semibold text-foreground">{user.reservedOrgTier}</span> organization plan is held in reserve and will take over automatically if your personal plan ends.
+                    </p>
+                  )}
+                  {(user?.archivedAttachmentCount || 0) > 0 && (
+                    <p className="text-amber-600 dark:text-amber-400 font-medium">
+                      {user?.archivedAttachmentCount} Premium file(s)/image(s) are currently archived and locked. Regain a Premium/Pro plan or join an organization{user?.oldestArchiveExpiresAt ? ` before ${new Date(user.oldestArchiveExpiresAt).toLocaleDateString()}` : ' within 30 days'} to restore them automatically.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {orgsLoading ? (
                 <div className="flex justify-center py-12">
                   <span className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                 </div>
-              ) : joinedOrgs.length === 0 && ownedOrgs.length === 0 ? (
-                <div className="p-8 text-center bg-card border border-border rounded-2xl">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
-                    <Building2 className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-sm font-bold text-foreground">Not in any organization</h3>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto leading-relaxed">
-                    Have an invite code from a school or family plan? Click Join Organization above to enter your code and unlock their plan.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* Joined Organizations */}
-                  {joinedOrgs.map((org: any) => (
-                    <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 text-primary font-bold">
-                          <Building2 className="w-5 h-5 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
-                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                              {org.tier}
-                            </span>
-                            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
-                              {org.type}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Member · Joined {org.joinedAt ? new Date(org.joinedAt).toLocaleDateString() : 'Active'}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Are you sure you want to leave ${org.name}? Your inherited ${org.tier} plan will end.`)) return;
-                          try {
-                            const res = await fetch(`/api/organizations/${org.id}/leave`, {
-                              method: 'POST',
-                              credentials: 'include',
-                            });
-                            if (res.ok) {
-                              fetchOrganizations();
-                              showSaved();
-                            } else {
-                              const data = await res.json();
-                              alert(data.error || 'Failed to leave organization');
-                            }
-                          } catch {
-                            alert('Failed to leave organization');
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors flex-shrink-0"
-                      >
-                        Leave
-                      </button>
-                    </div>
-                  ))}
+              ) : (() => {
+                const byId = new Map<number, any>();
+                for (const o of joinedOrgs) byId.set(o.id, o);
+                for (const o of ownedOrgs) byId.set(o.id, { ...(byId.get(o.id) || {}), ...o });
+                const unifiedOrgs = Array.from(byId.values());
 
-                  {/* Owned or Administered Organizations */}
-                  {ownedOrgs.map((org: any) => (
-                    <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center flex-shrink-0 text-purple-600 font-bold">
-                          <Building2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
-                            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                              {org.tier}
-                            </span>
-                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                              {org.isOwner ? 'Owner' : 'Admin'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {org.currentSeats} of {org.maxSeats} seats used · {org.type} plan
-                          </p>
-                        </div>
+                if (unifiedOrgs.length === 0) {
+                  return (
+                    <div className="p-8 text-center bg-card border border-border rounded-2xl">
+                      <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+                        <Building2 className="w-6 h-6" />
                       </div>
-                      <a
-                        href="/organizations"
-                        className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors flex-shrink-0"
-                      >
-                        Manage
-                      </a>
+                      <h3 className="text-sm font-bold text-foreground">Not in any organization</h3>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto leading-relaxed">
+                        Have an invite code from a school or family plan? Click Join Organization above to enter your code and unlock their plan.
+                      </p>
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {unifiedOrgs.map((org: any) => {
+                      const canManage = Boolean(org.isOwner || org.isAdmin);
+                      return (
+                        <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 font-bold ${
+                              canManage ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'bg-primary/10 text-primary'
+                            }`}>
+                              <Building2 className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-bold text-foreground truncate">{org.name}</p>
+                                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                  {org.tier}
+                                </span>
+                                <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                                  {org.type}
+                                </span>
+                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                                  org.isOwner
+                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                    : org.isAdmin
+                                    ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                    : 'bg-muted text-muted-foreground border-border'
+                                }`}>
+                                  {org.isOwner ? 'Owner' : org.isAdmin ? 'Admin' : 'Member'}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {org.currentSeats != null && org.maxSeats != null ? `${org.currentSeats}/${org.maxSeats} seats · ` : ''}
+                                {org.joinedAt ? `Joined ${new Date(org.joinedAt).toLocaleDateString()}` : 'Active'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {canManage && (
+                              <button
+                                onClick={() => navigate(`/organizations?id=${org.id}`)}
+                                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors"
+                              >
+                                Manage
+                              </button>
+                            )}
+                            {!org.isOwner && (
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`Are you sure you want to leave ${org.name}? Your plan will automatically adjust to your best remaining source.`)) return;
+                                  try {
+                                    const res = await fetch(`/api/organizations/${org.id}/leave`, {
+                                      method: 'POST',
+                                      credentials: 'include',
+                                    });
+                                    if (res.ok) {
+                                      await fetchOrganizations();
+                                      await refreshUser();
+                                      window.dispatchEvent(new Event('orgs-refresh'));
+                                      showSaved();
+                                    } else {
+                                      const data = await res.json();
+                                      alert(data.error || 'Failed to leave organization');
+                                    }
+                                  } catch {
+                                    alert('Failed to leave organization');
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs font-semibold hover:bg-destructive/10 transition-colors"
+                              >
+                                Leave
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
+
+          {activeSection === 'integrations' && (
+            <IntegrationsSection />
+          )}
+
           {/* 2FA Disable Verification Modal */}
           {disable2faModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -2232,11 +2326,13 @@ const SettingsPage: React.FC = () => {
                         const data = await res.json();
                         if (res.ok) {
                           setJoinSuccess(data.message || 'Joined successfully!');
+                          await fetchOrganizations();
+                          await refreshUser();
+                          window.dispatchEvent(new Event('orgs-refresh'));
+                          showSaved();
                           setTimeout(() => {
                             setJoinModalOpen(false);
-                            fetchOrganizations();
-                            window.location.reload();
-                          }, 1200);
+                          }, 800);
                         } else {
                           setJoinError(data.error || 'Failed to join organization');
                         }

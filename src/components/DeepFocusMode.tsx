@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Play, Pause, Brain, Plus, Volume2, VolumeX, CheckCircle2, Trash2, GripVertical, Paperclip, Image, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useBoardContext } from '@/context/BoardContext';
 import { Subtask, Task } from '@/types/board';
 import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
-import { fileToDataUrl as fileToDataUrlShared } from '@/lib/fileDataUrl';
+import { uploadTaskMediaBatch } from '@/lib/attachmentUpload';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
@@ -592,34 +592,14 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
     setPerChecklistInput(prev => ({ ...prev, [listId]: '' }));
   }, [addChecklistItemToBoard, perChecklistInput, selectedTask]);
 
-  const fileToDataUrl = (file: File): Promise<string> => fileToDataUrlShared(file);
-
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
-    if (!selectedTask || files.length === 0) return;
     const input = e.currentTarget;
     input.value = '';
+    if (!selectedTask || files.length === 0) return;
     setUploadingFiles(true);
     try {
-      const newAtts: any[] = [];
-      for (const file of files) {
-        let saved = false;
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
-          if (res.ok) {
-            newAtts.push(await res.json());
-            saved = true;
-          }
-        } catch { /* fall through to local copy */ }
-        if (!saved) {
-          try {
-            const dataUrl = await fileToDataUrl(file);
-            newAtts.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: dataUrl, createdAt: new Date().toISOString() });
-          } catch { /* skip unreadable file, keep the rest */ }
-        }
-      }
+      const newAtts = await uploadTaskMediaBatch(selectedTask.id, files, { kind: 'file' });
       if (newAtts.length) appendTaskAttachments(selectedTask.id, newAtts);
     } finally {
       setUploadingFiles(false);
@@ -628,34 +608,12 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
 
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
-    if (!selectedTask || files.length === 0) return;
     const input = e.currentTarget;
     input.value = '';
+    if (!selectedTask || files.length === 0) return;
     setUploadingImages(true);
     try {
-      const newImgs: any[] = [];
-      for (const file of files) {
-        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-        let saved = false;
-        if (!isHeic) {
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(`/api/attachments/${selectedTask.id}`, { method: 'POST', credentials: 'include', body: formData });
-            if (res.ok) {
-              newImgs.push(await res.json());
-              saved = true;
-            }
-          } catch { /* fall through to local copy */ }
-        }
-    if (!saved) {
-      try {
-        const fileUrl = await fileToDataUrl(file);
-        const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-        newImgs.push({ id: crypto.randomUUID(), taskId: selectedTask.id, fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-      } catch { /* skip unreadable file, keep the rest */ }
-    }
-      }
+      const newImgs = await uploadTaskMediaBatch(selectedTask.id, files, { kind: 'image', skipServerForHeic: true });
       if (newImgs.length) appendTaskImages(selectedTask.id, newImgs);
     } finally {
       setUploadingImages(false);
@@ -1607,9 +1565,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Paperclip className="w-5 h-5 text-primary" />
+                          {showUploadingFiles || uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                        <p className="text-sm font-medium text-foreground">{showUploadingFiles || uploadingFiles ? 'Uploading files...' : 'Click to upload or drag and drop'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                       </div>
                       <input ref={fileInputRef} type="file" multiple onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -1654,9 +1612,9 @@ const DeepFocusMode: React.FC<DeepFocusModeProps> = ({ task: propTask }) => {
                     <label className="relative flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer overflow-hidden">
                       <div className="flex flex-col items-center justify-center py-4 pointer-events-none">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                          <Image className="w-5 h-5 text-primary" />
+                          {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                         </div>
-                        <p className="text-sm font-medium text-foreground">Click to upload</p>
+                        <p className="text-sm font-medium text-foreground">{showUploadingImages || uploadingImages ? 'Uploading images...' : 'Click to upload'}</p>
                         <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                       </div>
                       <input ref={imageInputRef} type="file" multiple onChange={handleImageUpload} accept="image/*,.heic,.heif" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />

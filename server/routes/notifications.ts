@@ -4,16 +4,14 @@ import { pendingUserChanges, userNotifications, users, userSettings, projectJoin
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { normalizeLanguageCode } from '../lib/language.js';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
 router.use(requireAuth);
 
-const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
-  free: 5,
-  premium: 10,
-  pro: 20,
-};
+const PLAN_LIMITS = SERVER_PLAN_LIMITS.projects;
 
 function getPlanTier(tier?: string | null): 'free' | 'premium' | 'pro' {
   if (tier === 'pro') return 'pro';
@@ -191,7 +189,8 @@ router.post('/project-invite/:requestId/:action', async (req: AuthRequest, res: 
         .from(projectMembers)
         .where(and(eq(projectMembers.projectId, (request as any).projectId), eq(projectMembers.userId, userId)));
       if (alreadyMember.length === 0) {
-        const planTier = getPlanTier(me?.subscriptionTier);
+        const effectivePlan = await resolveEffectiveUserPlan(userId);
+        const planTier = effectivePlan.tier;
         const currentCount = await getProjectMembershipCount(userId);
         if (currentCount >= PLAN_LIMITS[planTier]) {
           return res.status(402).json({

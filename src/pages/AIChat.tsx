@@ -1,15 +1,17 @@
 import { useLanguage } from '@/context/LanguageContext';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
 import {
   Wand2, Send, Loader2, Plus, Trash2, Search, Copy,
   XCircle, AlertTriangle, ChevronRight,
-  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare
+  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare, Paperclip, FileText
 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { useAuth } from '@/context/AuthContext';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import '@/styles/pagePanels.css';
 
 type EntryType = 'user' | 'result-success' | 'result-error' | 'result-info' | 'result-warning' | 'confirm' | 'ai-response';
@@ -61,8 +63,25 @@ function loadChats(key: string): Chat[] {
 const AIChat: React.FC = () => {
   // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
   useLanguage();
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const isPro = user?.subscriptionTier === 'pro';
+  const planTier = normalizePlanTier(user?.subscriptionTier);
+  const isPremium = planTier === 'premium';
+  const isPro = planTier === 'pro';
+  const canAccessAi = isPremium || isPro;
+
+  const maxChats = PLAN_LIMITS.aiChats[planTier];
+  const maxDailyMsgs = PLAN_LIMITS.aiDailyMessages[planTier];
+
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const dailyMsgKey = useMemo(() => `planora_ai_msg_count_${user?.id || 'anon'}_${todayStr}`, [user?.id, todayStr]);
+  const [dailyMsgCount, setDailyMsgCount] = useState<number>(() => {
+    try { return Number(localStorage.getItem(`planora_ai_msg_count_${user?.id || 'anon'}_${new Date().toISOString().slice(0, 10)}`)) || 0; } catch { return 0; }
+  });
+  const isMsgLimitReached = dailyMsgCount >= maxDailyMsgs;
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [chatAttachments, setChatAttachments] = useState<File[]>([]);
 
   const {
     board, addTask, updateTask, deleteTask, moveTask,
@@ -88,7 +107,7 @@ const AIChat: React.FC = () => {
   // updated one) so nothing looks lost after switching pages.
   useEffect(() => { trackPageVisit('ai'); }, []);
   useEffect(() => {
-    if (!isPro || didLoad.current) return;
+    if (!canAccessAi || didLoad.current) return;
     didLoad.current = true;
     const loaded = loadChats(storageKey);
     setChats(loaded);
@@ -101,7 +120,7 @@ const AIChat: React.FC = () => {
     setActiveChatId(resumeId);
     setEphemeral([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPro, storageKey, user?.id]);
+  }, [canAccessAi, storageKey, user?.id]);
 
   // Every chat mutation is saved to localStorage synchronously so nothing is
   // ever lost on remount, navigation, or refresh.
@@ -306,9 +325,10 @@ const AIChat: React.FC = () => {
         return true;
       }
       case 'update': {
-        const matches = findTasksByTitle(actionData.taskTitle || '');
+        const query = actionData.taskTitle || actionData.title || actionData.name || '';
+        const matches = findTasksByTitle(query);
         if (matches.length === 0) {
-          appendMsg(chatId, msg(`No task matching "${actionData.taskTitle}" found.`));
+          appendMsg(chatId, msg(`No task matching "${query}" found.`));
         } else {
           const task = matches[0];
           const updates: Partial<Task> = {};
@@ -318,6 +338,10 @@ const AIChat: React.FC = () => {
           if (actionData.dueDate !== undefined) updates.dueDate = actionData.dueDate;
           if (actionData.dueTime !== undefined) updates.dueTime = actionData.dueTime;
           if (actionData.duration !== undefined) updates.duration = actionData.duration;
+          if (actionData.status) updates.status = actionData.status;
+          if (Array.isArray(actionData.subtasks)) updates.subtasks = actionData.subtasks;
+          if (Array.isArray(actionData.checklists)) updates.checklists = actionData.checklists;
+          if (Array.isArray(actionData.labels)) updates.labels = actionData.labels;
           updateTask(task.id, updates);
           const changedFields = Object.keys(updates).join(', ');
           appendMsg(chatId, msg(`Updated task "${task.title}" (${changedFields || 'changes applied'}).`));
@@ -325,9 +349,10 @@ const AIChat: React.FC = () => {
         return true;
       }
       case 'update_note': {
-        const noteMatches = notesCtx.findTasksByTitle(actionData.noteTitle || actionData.title || '');
+        const query = actionData.noteTitle || actionData.title || actionData.name || '';
+        const noteMatches = notesCtx.findTasksByTitle(query);
         if (noteMatches.length === 0) {
-          appendMsg(chatId, msg(`No note matching "${actionData.noteTitle || actionData.title}" found.`));
+          appendMsg(chatId, msg(`No note matching "${query}" found.`));
         } else {
           const note = noteMatches[0];
           const updates: Partial<Task> = {};
@@ -336,6 +361,9 @@ const AIChat: React.FC = () => {
             updates.description = actionData.content ?? actionData.description;
           }
           if (actionData.color) updates.color = actionData.color;
+          if (Array.isArray(actionData.subtasks)) updates.subtasks = actionData.subtasks;
+          if (Array.isArray(actionData.checklists)) updates.checklists = actionData.checklists;
+          if (Array.isArray(actionData.labels)) updates.labels = actionData.labels;
           notesCtx.updateTask(note.id, updates);
           appendMsg(chatId, msg(`Updated note "${note.title}".`));
         }
@@ -456,14 +484,32 @@ const AIChat: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
+    if (isMsgLimitReached) {
+      if (!isPro) navigate('/pricing');
+      return;
+    }
     trackUsage('ai', 'send-message');
-    processCommand(input.trim());
+    const attachmentNote = chatAttachments.length > 0
+      ? `\n[Attached ${chatAttachments.length} file(s): ${chatAttachments.map(f => f.name).join(', ')}]`
+      : '';
+    processCommand(input.trim() + attachmentNote);
     setInput('');
+    setChatAttachments([]);
+    const nextCount = dailyMsgCount + 1;
+    setDailyMsgCount(nextCount);
+    try { localStorage.setItem(dailyMsgKey, String(nextCount)); } catch {}
   };
 
   const handleQuickAction = (prompt: string) => {
+    if (isMsgLimitReached) {
+      if (!isPro) navigate('/pricing');
+      return;
+    }
     processCommand(prompt);
     inputRef.current?.focus();
+    const nextCount = dailyMsgCount + 1;
+    setDailyMsgCount(nextCount);
+    try { localStorage.setItem(dailyMsgKey, String(nextCount)); } catch {}
   };
 
   const quickActions = [
@@ -481,7 +527,7 @@ const AIChat: React.FC = () => {
     });
   };
 
-  if (!isPro) {
+  if (!canAccessAi) {
     return (
       <div className="ai-upgrade-state min-h-0 min-w-0 flex-1 flex flex-col items-center justify-center p-6 text-center animate-fade-in bg-background/50">
         <div className="w-24 h-24 rounded-[2rem] bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center mb-8 border border-primary/10 shadow-xl">
@@ -489,13 +535,13 @@ const AIChat: React.FC = () => {
         </div>
         <h2 className="text-3xl font-black text-foreground mb-4">Meet Planora</h2>
         <p className="text-muted-foreground max-w-md mb-10 text-lg leading-relaxed">
-          Unlock the power of natural language. Manage tasks, analyze productivity, and organize your life with your intelligent AI productivity partner.
+          AI Assistant is available on Premium and Pro plans. Unlock the power of natural language to manage tasks, create notes, and get instant answers.
         </p>
         <div className="flex flex-col gap-4 w-full max-w-sm">
-          <button onClick={() => window.location.href = '/pricing'} className="flex items-center justify-center gap-3 px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black text-base hover:bg-primary/90 transition-all duration-300 hover:scale-[1.02] shadow-2xl shadow-primary/20">
-            <Sparkles className="w-5 h-5 fill-current" />Upgrade to Pro
+          <button onClick={() => navigate('/pricing')} className="flex items-center justify-center gap-3 px-8 py-4 bg-primary text-primary-foreground rounded-2xl font-black text-base hover:bg-primary/90 transition-all duration-300 hover:scale-[1.02] shadow-2xl shadow-primary/20">
+            <Sparkles className="w-5 h-5 fill-current" />Upgrade to Premium
           </button>
-          <button onClick={() => window.location.href = '/pricing'} className="px-8 py-3 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => navigate('/pricing')} className="px-8 py-3 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
             Learn more about AI features
           </button>
         </div>
@@ -503,16 +549,32 @@ const AIChat: React.FC = () => {
     );
   }
 
+  const isChatLimitReached = sortedChats.length >= maxChats;
+  const newChatProps = getLimitButtonProps({
+    isLimitReached: isChatLimitReached,
+    tier: planTier,
+    defaultLabel: 'New chat',
+    navigate,
+    onAction: newChat,
+  });
+
   return (
     <div className="ai-chat-page flex h-full overflow-hidden">
       {/* ── Sidebar: chat list ── */}
       <aside className="ai-chat-sidebar w-60 shrink-0 border-r border-border bg-card flex flex-col">
         <header className="h-16 px-3 border-b border-border flex items-center flex-shrink-0">
           <button
-            onClick={newChat}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+            onClick={newChatProps.onClick}
+            disabled={newChatProps.disabled}
+            title={newChatProps.title}
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+              isChatLimitReached
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-500 hover:bg-amber-500/25'
+                : 'border-border text-foreground hover:bg-muted'
+            }`}
           >
-            <PenSquare className="w-4 h-4" />New chat
+            <PenSquare className="w-4 h-4" />
+            <span>{newChatProps.label}</span>
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-1">
@@ -734,7 +796,48 @@ const AIChat: React.FC = () => {
           </div>
 
           <div className="ai-chat-padding px-6 pb-3">
+            {chatAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2 p-2 bg-muted/30 border border-border/60 rounded-xl">
+                {chatAttachments.map((f, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
+                    <FileText className="w-3.5 h-3.5" />
+                    <span className="max-w-[140px] truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setChatAttachments(prev => prev.filter((_, i) => i !== idx))}
+                      className="p-0.5 hover:text-destructive"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="min-w-0 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isPro) {
+                    navigate('/pricing');
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                className="p-2.5 rounded-xl border border-border bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-all shrink-0"
+                title={isPro ? "Attach files & images" : "Attach files & images (Pro feature — click to upgrade)"}
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  if (!e.target.files) return;
+                  setChatAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                }}
+              />
               <input
                 ref={inputRef}
                 type="text"
@@ -744,13 +847,31 @@ const AIChat: React.FC = () => {
                 disabled={loading}
                 className="min-w-0 flex-1 bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 disabled:opacity-50 transition-all"
               />
-              <button
-                type="submit"
-                disabled={!input.trim() || loading}
-                className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </button>
+              {isMsgLimitReached ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isPro) navigate('/pricing');
+                  }}
+                  disabled={isPro}
+                  title={isPro ? `Daily message limit reached (${maxDailyMsgs} msgs/day)` : `Daily message limit reached (${maxDailyMsgs} msgs/day). Click to upgrade.`}
+                  className={`px-4 py-2.5 text-xs font-bold rounded-xl transition-all shrink-0 ${
+                    isPro
+                      ? 'bg-muted text-muted-foreground border border-border opacity-70 cursor-not-allowed'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                  }`}
+                >
+                  Limit reached
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </button>
+              )}
             </form>
           </div>
 
@@ -766,6 +887,9 @@ const AIChat: React.FC = () => {
                 <span className={`w-1.5 h-1.5 rounded-full ${color} shrink-0`} />{label}
               </span>
             ))}
+            <span className="ml-auto text-[11px] text-muted-foreground">
+              Messages today: {dailyMsgCount} / {Number.isFinite(maxDailyMsgs) ? maxDailyMsgs : 'unlimited'}
+            </span>
           </div>
         </div>
       </div>

@@ -15,6 +15,7 @@ export interface WidgetSizeLimits {
 
 export interface WidgetRect {
   id?: string;
+  type?: string;
   col: number;
   row: number;
   w: number;
@@ -71,7 +72,12 @@ export function widgetsIntersect(a: WidgetRect, b: WidgetRect) {
 
 /** Pack matching-width gaps while optionally keeping the active module anchored. */
 export function compactWidgets<T extends WidgetRect>(widgets: T[], anchoredId?: string, limitsMap?: Record<string, WidgetSizeLimits>): T[] {
-  const normalized = widgets.map(w => normalizeWidget(w, w.id && limitsMap ? limitsMap[w.id] : undefined));
+  const normalized = widgets.map(w => {
+    const limits = limitsMap
+      ? (w.id && limitsMap[w.id] ? limitsMap[w.id] : w.type && limitsMap[w.type] ? limitsMap[w.type] : undefined)
+      : undefined;
+    return normalizeWidget(w, limits);
+  });
   const anchored = anchoredId ? normalized.find(widget => widget.id === anchoredId) : undefined;
   const placed: T[] = anchored ? [anchored] : [];
   const rest = normalized.filter(widget => widget !== anchored).sort((a, b) => a.row - b.row || a.col - b.col);

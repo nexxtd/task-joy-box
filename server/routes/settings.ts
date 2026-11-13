@@ -32,7 +32,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.patch('/', requireAuth, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, smartAlerts, emailNotifs, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled, tutorialCompleted } = req.body;
+    const { theme, fontFamily, accentColor, accentHsl, language, dashboardShortcut, normalAlerts, smartAlerts, emailNotifs, weeklyAiSummary, energyMorning, energyAfternoon, energyEvening, energyTrackerEnabled, tutorialCompleted } = req.body;
 
     // Only language CODES (en, zh, ...) are stored on the account — never
     // display names ("中文"), which broke non-Latin locales client-side.
@@ -44,9 +44,9 @@ router.patch('/', requireAuth, async (req, res) => {
     const isCustomFont = fontFamily !== undefined && fontFamily !== 'Inter';
     const isCustomTheme = theme !== undefined && theme !== 'system' && theme !== 'light';
     if (isCustomAccent || isCustomFont || isCustomTheme) {
-      const [user] = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, userId)).limit(1);
-      const tier = (user?.subscriptionTier || 'free').toLowerCase();
-      const isPaid = tier === 'pro' || tier === 'premium';
+      const { resolveEffectiveUserPlan } = await import('../lib/orgLifecycle.js');
+      const effectivePlan = await resolveEffectiveUserPlan(userId);
+      const isPaid = effectivePlan.tier === 'pro' || effectivePlan.tier === 'premium';
       if (!isPaid) {
         return res.status(403).json({ error: 'Custom colors, fonts and themes require Premium or Pro. Please upgrade.' });
       }
@@ -62,8 +62,10 @@ router.patch('/', requireAuth, async (req, res) => {
         ...(accentHsl !== undefined ? { accentHsl } : {}),
         ...(languageCode !== undefined ? { language: languageCode } : {}),
         ...(withShortcut && cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
+        ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
         ...(smartAlerts !== undefined ? { smartAlerts } : {}),
         ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+        ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
         ...(energyMorning !== undefined ? { energyMorning } : {}),
         ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
         ...(energyEvening !== undefined ? { energyEvening } : {}),
@@ -101,8 +103,10 @@ router.patch('/', requireAuth, async (req, res) => {
           ...(accentHsl !== undefined ? { accentHsl } : {}),
           ...(languageCode !== undefined ? { language: languageCode } : {}),
           ...(cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
+          ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
           ...(smartAlerts !== undefined ? { smartAlerts } : {}),
           ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+          ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
           ...(energyMorning !== undefined ? { energyMorning } : {}),
           ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
           ...(energyEvening !== undefined ? { energyEvening } : {}),
@@ -119,8 +123,10 @@ router.patch('/', requireAuth, async (req, res) => {
             ...(accentColor !== undefined ? { accentColor } : {}),
             ...(accentHsl !== undefined ? { accentHsl } : {}),
             ...(languageCode !== undefined ? { language: languageCode } : {}),
+            ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
             ...(smartAlerts !== undefined ? { smartAlerts } : {}),
             ...(emailNotifs !== undefined ? { emailNotifs } : {}),
+            ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
             ...(energyMorning !== undefined ? { energyMorning } : {}),
             ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
             ...(energyEvening !== undefined ? { energyEvening } : {}),

@@ -5,16 +5,16 @@ import { deepFocusSessions, users } from '../../shared/schema.js';
 import { eq, desc, sql } from 'drizzle-orm';
 import { getSetting } from '../lib/settings.js';
 import { tierRank } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
 async function requireFocusTier(req: AuthRequest, res: any): Promise<boolean> {
   const requiredTier = (await getSetting('feature_deepfocus_tier', 'free')) || 'free';
   if (requiredTier === 'free') return true;
-  const [user] = await db.select({ subscriptionTier: users.subscriptionTier, subscriptionStatus: users.subscriptionStatus })
-    .from(users).where(eq(users.id, req.userId!)).limit(1);
-  const userTier = user?.subscriptionTier?.toLowerCase() || 'free';
-  const active = ['active', 'trialing'].includes(user?.subscriptionStatus || '');
+  const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+  const userTier = effectivePlan.tier;
+  const active = ['active', 'trialing'].includes(effectivePlan.status);
   if (tierRank(userTier) < tierRank(requiredTier) || !active) {
     res.status(403).json({
       error: 'Feature locked',

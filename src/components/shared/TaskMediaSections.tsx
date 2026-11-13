@@ -5,8 +5,7 @@ import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import PremiumGate from '@/components/shared/PremiumGate';
 import { getMediaLimit, isMaxPlan } from '@/lib/mediaLimits';
-import { fileToDataUrl } from '@/lib/fileDataUrl';
-const imageToDataUrl = fileToDataUrl;
+import { uploadTaskMediaBatch } from '@/lib/attachmentUpload';
 import { readTaskSections, writeTaskSections } from '@/lib/taskSectionState';
 
 interface TaskMediaSectionsProps {
@@ -67,47 +66,20 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files ? Array.from(e.target.files) : [];
+    e.currentTarget.value = '';
     if (picked.length === 0) return;
     const current = taskRef.current.attachments?.length || 0;
     const remaining = mediaLimit - current;
-    if (remaining <= 0) { e.currentTarget.value = ''; return; }
+    if (remaining <= 0) return;
     const files = picked.slice(0, remaining);
     setUploadingFiles(true);
     try {
-      const results = await Promise.all(
-        files.map(async file => {
-          let savedItem: Attachment | null = null;
-          try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-            if (res.ok) {
-              savedItem = await res.json();
-            }
-          } catch { /* fall through */ }
-          if (!savedItem) {
-            try {
-              savedItem = {
-                id: crypto.randomUUID(),
-                taskId: task.id,
-                fileName: file.name,
-                fileType: file.type || 'application/octet-stream',
-                fileSize: file.size,
-                fileUrl: await fileToDataUrl(file),
-                createdAt: new Date().toISOString(),
-              };
-            } catch { /* skip unreadable */ }
-          }
-          return savedItem;
-        })
-      );
-      const valid = results.filter((r): r is Attachment => Boolean(r));
+      const valid = await uploadTaskMediaBatch(task.id, files, { kind: 'file' });
       if (valid.length > 0) {
         onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...valid] });
       }
     } finally {
       setUploadingFiles(false);
-      e.currentTarget.value = '';
     }
   };
 
@@ -122,39 +94,7 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     const files = picked.slice(0, remaining);
     setUploadingImages(true);
     try {
-      const results = await Promise.all(
-        files.map(async file => {
-          const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-          let savedImage: Attachment | null = null;
-          if (!isHeic) {
-            try {
-              const formData = new FormData();
-              formData.append('file', file);
-              const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-              if (res.ok) {
-                savedImage = await res.json();
-              }
-            } catch { /* fall through */ }
-          }
-          if (!savedImage) {
-            try {
-              const fileUrl = await imageToDataUrl(file);
-              const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-              savedImage = {
-                id: crypto.randomUUID(),
-                taskId: String(task.id),
-                fileName: file.name,
-                fileType,
-                fileSize: file.size,
-                fileUrl,
-                createdAt: new Date().toISOString(),
-              };
-            } catch { /* skip */ }
-          }
-          return savedImage;
-        })
-      );
-      const valid = results.filter((r): r is Attachment => Boolean(r));
+      const valid = await uploadTaskMediaBatch(task.id, files, { kind: 'image', skipServerForHeic: true });
       if (valid.length > 0) {
         onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...valid] });
       }
@@ -196,9 +136,20 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
         {!attachmentsCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
             {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate title="File Attachments" description="Attach files, images, and documents directly to your tasks." icon={<Paperclip className="w-6 h-6 text-primary" />} />
-              </div>
+              <>
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate title="File Attachments" description="Attach files, images, and documents directly to your tasks." icon={<Paperclip className="w-6 h-6 text-primary" />} />
+                </div>
+                {(task.attachments || []).length > 0 && (
+                  <FreeAttachmentList
+                    attachments={(task.attachments || []).map(a => ({ ...a, locked: true }))}
+                    onReorder={() => {}}
+                    onDelete={deleteAttachment}
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
+                )}
+              </>
             ) : (
               <>
                 {filesLimitReached ? (
@@ -243,9 +194,18 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
         {!imagesCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
             {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate title="Image Attachments" description="Upload images directly to your tasks." icon={<ImageIcon className="w-6 h-6 text-primary" />} />
-              </div>
+              <>
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate title="Image Attachments" description="Upload images directly to your tasks." icon={<ImageIcon className="w-6 h-6 text-primary" />} />
+                </div>
+                {task.images && task.images.length > 0 && (
+                  <DraggableImageGrid
+                    images={task.images.map(img => ({ ...img, locked: true }))}
+                    onReorder={() => {}}
+                    onRemove={(id) => { onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(x => String(x.id) !== String(id)) }); if (/^\d+$/.test(String(id))) { fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {}); } }}
+                  />
+                )}
+              </>
             ) : (
               <>
                 {imagesLimitReached ? (

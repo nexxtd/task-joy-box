@@ -1,10 +1,11 @@
 import { Router, Response } from 'express';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db.js';
-import { goals, tags, goalTagAssignments, activityLogs, users, type InsertGoal } from '../../shared/schema.js';
+import { goals, tags, goalTagAssignments, activityLogs, type InsertGoal } from '../../shared/schema.js';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { getSettingNumber } from '../lib/settings.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -54,8 +55,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const freeLimit = await getSettingNumber('free_tier_goal_limit', 5);
     if (freeLimit > 0) {
-      const [user] = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, req.userId!)).limit(1);
-      if ((user?.subscriptionTier || 'free') === 'free') {
+      const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+      if (effectivePlan.tier === 'free') {
         const counts = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(goals)

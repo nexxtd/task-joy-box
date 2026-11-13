@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { users, userSettings, boardSnapshots, noteSnapshots } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 import { sendEmail } from './email.js';
+import { resolveEffectiveUserPlan } from './orgLifecycle.js';
 
 function formatDate(d: Date) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function formatLong(d: Date) { return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
@@ -392,14 +393,14 @@ ${nextUp.length === 0 ? '<p style="font-size:12px;color:#666;margin:0">Nothing q
 }
 
 export async function sendWeeklyEmails(): Promise<{ sent: number; skipped: number; errors: string[] }> {
-  const allSettings = await db.select().from(userSettings).where(eq(userSettings.emailNotifs, true));
+  const allSettings = await db.select().from(userSettings).where(eq(userSettings.weeklyAiSummary, true));
   let sent = 0, skipped = 0;
   const errors: string[] = [];
   for (const s of allSettings) {
     const [u] = await db.select().from(users).where(eq(users.id, s.userId)).limit(1);
     if (!u) { skipped++; continue; }
-    const tier = (u.subscriptionTier || 'free').toLowerCase();
-    const isTopTier = tier === 'pro';
+    const plan = await resolveEffectiveUserPlan(u.id);
+    const isTopTier = plan.tier === 'pro';
     if (!isTopTier) { skipped++; continue; }
     try {
       const content = await generateWeeklySummaryForUser(u.id);

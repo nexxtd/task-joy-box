@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { getSetting } from '../lib/settings.js';
 import { tierRank } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 import { capturePayPalOrder, createPayPalOrder, isPayPalConfigured } from '../lib/paypal.js';
 
 const router = Router();
@@ -132,18 +133,20 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'You already own a workspace' });
     }
 
-    // Check user's subscription tier - Premium or higher required for workspaces
-    const userResult = await db
-      .select({ subscriptionTier: users.subscriptionTier, subscriptionStatus: users.subscriptionStatus })
+    // Check user's effective subscription tier (personal or organization)
+    const userExists = await db
+      .select({ id: users.id })
       .from(users)
-      .where(eq(users.id, req.userId!));
+      .where(eq(users.id, req.userId!))
+      .limit(1);
 
-    if (userResult.length === 0) {
+    if (userExists.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const userTier = userResult[0].subscriptionTier?.toLowerCase() || 'free';
-    const userStatus = userResult[0].subscriptionStatus;
+    const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+    const userTier = effectivePlan.tier;
+    const userStatus = effectivePlan.status;
 
     // Require the feature tier (from admin settings) for workspace creation
     const requiredTier = (await getSetting('feature_collaboration_tier', 'pro')) || 'pro';

@@ -10,6 +10,13 @@ interface AuthUser {
   subscriptionTier?: 'free' | 'premium' | 'pro' | string;
   subscriptionStatus?: 'inactive' | 'active' | 'cancelled' | string;
   isAdmin?: boolean;
+  planSource?: 'personal' | 'org' | 'free' | string;
+  personalPlanPaused?: boolean;
+  pausedPersonalTier?: string | null;
+  reservedOrgTier?: string | null;
+  bestOrgName?: string | null;
+  archivedAttachmentCount?: number;
+  oldestArchiveExpiresAt?: string | null;
 }
 
 interface AuthContextType {
@@ -24,6 +31,7 @@ interface AuthContextType {
   verify2FA: (email: string, code: string) => Promise<void>;
   resend2FA: (email: string) => Promise<{ message: string; emailSent?: boolean; debugCode?: string }>;
   toggle2FA: (enabled: boolean) => Promise<void>;
+  refreshUser: () => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -304,7 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword, verify2FA, resend2FA, toggle2FA }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, logout, forgotPassword, resetPassword, verify2FA, resend2FA, toggle2FA, refreshUser: refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

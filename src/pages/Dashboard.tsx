@@ -24,6 +24,7 @@ import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/se
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import '@/pages/Dashboard.css';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '@/context/LanguageContext';
@@ -81,27 +82,27 @@ interface WidgetDef {
 }
 
 const WIDGET_DEFS: WidgetDef[] = [
-  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 12, h: 3, tier: 'free', minW: 8, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 6, h: 3, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 6, h: 4, tier: 'premium', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 8, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 6, h: 3, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 6 },
-  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 6, h: 4, tier: 'pro', minW: 6, minH: 3, maxW: 12, maxH: 8 },
-  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 12, h: 3, tier: 'pro', minW: 8, minH: 3, maxW: 12, maxH: 6 },
+  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 12, h: 4, tier: 'free', minW: 8, minH: 4, maxW: 12, maxH: 6 },
+  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
+  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
+  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 8, h: 4, tier: 'premium', minW: 7, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
+  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 12, h: 4, tier: 'pro', minW: 8, minH: 4, maxW: 12, maxH: 7 },
 ];
 
 
@@ -130,7 +131,12 @@ const cardStyle = (accent: string, alpha = 0.06, borderAlpha = 0.18): React.CSSP
   boxShadow: '0 12px 30px -30px hsl(228 25% 25% / 0.4)',
 });
 
-const packLayout = compactWidgets<DashboardWidget>;
+const DASHBOARD_LIMITS_MAP: Record<string, WidgetSizeLimits> = Object.fromEntries(
+  WIDGET_DEFS.map(def => [def.type, { minW: def.minW, minH: def.minH, maxW: def.maxW, maxH: def.maxH }]),
+);
+
+const packLayout = (widgets: DashboardWidget[], anchoredId?: string): DashboardWidget[] =>
+  compactWidgets<DashboardWidget>(widgets, anchoredId, DASHBOARD_LIMITS_MAP);
 
 const getDashboardWidgetLimits = (type: DashboardWidgetType): WidgetSizeLimits | undefined => {
   const def = WIDGET_DEFS.find(d => d.type === type);
@@ -309,7 +315,7 @@ const Dashboard: React.FC = () => {
   // "View X" shortcut target — defaults to Projects, persisted per user.
   // Every page except Dashboard can be picked from the arrow dropdown.
   // Picking only changes the target (no navigation); the main button navigates.
-  const { t: tr } = useLanguage();
+  const { language, t: tr } = useLanguage();
   const DASHBOARD_SHORTCUT_PAGES = useMemo(() => ([
     { label: 'Projects', path: '/projects' },
     { label: 'Tasks', path: '/tasks' },
@@ -541,14 +547,14 @@ const Dashboard: React.FC = () => {
       id: `${type}-${row}-${col}-${genKey()}`, type, title, col, row, w: wd, h: ht, projectId,
     });
     return [
-      w('stats', 'Stats Overview', 1, 1, 8, 2),
-      w('tasks', 'Tasks', 1, 3, 8, 3),
-      w('notes-overview', 'Notes Overview', 9, 1, 4, 2),
-      w('weekly', 'Weekly Activity', 9, 3, 4, 2),
-      w('tags-overview', 'Tags Overview', 9, 5, 4, 2),
-      w('insights', 'Insights', 1, 6, 4, 2),
-      w('projects', 'Projects', 5, 6, 4, 3),
-      w('recent-notes', 'Recent Notes', 9, 7, 4, 3),
+      w('stats', 'Stats Overview', 1, 1, 12, 4),
+      w('tasks', 'Tasks', 1, 5, 6, 4),
+      w('notes-overview', 'Notes Overview', 7, 5, 6, 4),
+      w('weekly', 'Weekly Activity', 1, 9, 6, 4),
+      w('tags-overview', 'Tags Overview', 7, 9, 6, 4),
+      w('insights', 'Insights', 1, 13, 6, 4),
+      w('projects', 'Projects', 7, 13, 6, 4),
+      w('recent-notes', 'Recent Notes', 1, 17, 6, 4),
     ];
   };
 
@@ -658,7 +664,11 @@ const Dashboard: React.FC = () => {
     return [...map.values()];
   }, [board, doneColIds]);
 
-  const weekDays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];  const weeklyData = useMemo(() => {
+  const weekDays = useMemo(() => {
+    const fmt = new Intl.DateTimeFormat(dateLocale(), { weekday: 'narrow' });
+    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 1 + i)));
+  }, [language]);
+  const weeklyData = useMemo(() => {
     const data = new Array(7).fill(0);
     const today = new Date();
     const dayOfWeek = today.getDay();
@@ -690,6 +700,9 @@ const Dashboard: React.FC = () => {
     : user?.subscriptionTier === 'premium'
       ? 'premium'
       : 'free';
+  const planTier = normalizePlanTier(tier);
+  const maxWidgets = PLAN_LIMITS.widgets[planTier];
+  const isWidgetLimitReached = layout.length >= maxWidgets;
   const TIER_RANK: Record<DashboardWidgetTier, number> = { free: 0, premium: 1, pro: 2 };
   const canAccessTier = (widgetTier: DashboardWidgetTier) => TIER_RANK[tier] >= TIER_RANK[widgetTier];
 
@@ -778,7 +791,7 @@ const Dashboard: React.FC = () => {
     for (const c of completedWithDates) weekdayCounts[c.weekday] += 1;
     const busiestIdx = weekdayCounts.indexOf(Math.max(...weekdayCounts));
     const busiestDay = Math.max(...weekdayCounts) > 0
-      ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][busiestIdx]
+      ? new Intl.DateTimeFormat(dateLocale(), { weekday: 'long' }).format(new Date(2024, 0, 7 + busiestIdx))
       : null;
     const trend30 = new Array(30).fill(0);
     const todayStart = localDayKey(new Date());
@@ -792,7 +805,7 @@ const Dashboard: React.FC = () => {
       if (idx >= 0 && idx < 30) trend30[29 - idx] += 1;
     }
     return { avgHours, busiestDay, trend30 };
-  }, [board.tasks, doneColIds]);
+  }, [board.tasks, doneColIds, language]);
 
   const buildReportSeries = useCallback((metric: ReportMetric, days: number): number[] => {
     const series = new Array(days).fill(0);
@@ -1750,7 +1763,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                   <button key={n.id} onClick={() => navigate('/notes')} className="w-full text-left p-2 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                     <p className="text-xs font-medium text-foreground truncate">{n.title || 'Untitled note'}</p>
                     {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description}</p>}
-                    <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ''}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString(dateLocale()) : ''}</p>
                   </button>
                 ))}
               </div>
@@ -1844,7 +1857,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 </div>
                 <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one {metricLabel.toLowerCase()} daily to lift the trend.`}
+                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one ${metricLabel.toLowerCase()} daily to lift the trend.`}
                   </p>
                   <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
                     <span>{total} total</span>
@@ -2224,11 +2237,19 @@ style={{ background: 'hsl(var(--primary))' }}>
               <p className="text-base font-semibold text-foreground">Your dashboard is empty</p>
               <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Dashboard to add widgets</p>
               <button
-                onClick={() => setShowCustomize(true)}
-                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-all"
-              >
-                Add widgets
-              </button>
+                {...getLimitButtonProps({
+                  isLimitReached: isWidgetLimitReached,
+                  tier: planTier,
+                  defaultLabel: 'Add widgets',
+                  onAction: () => { trackUsage('dashboard', 'customize'); setShowCustomize(true); },
+                  onNavigatePricing: () => navigate('/pricing'),
+                })}
+                className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  isWidgetLimitReached
+                    ? 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    : 'text-white bg-primary hover:bg-primary/90'
+                }`}
+              />
             </div>
           ) : (
             <>
@@ -2373,6 +2394,9 @@ style={{ background: 'hsl(var(--primary))' }}>
           closing={panelClosing}
           hasWidget={hasWidget}
           canAccessTier={canAccessTier}
+          widgetCount={layout.length}
+          maxWidgets={maxWidgets}
+          currentTier={planTier}
           onStartDrag={onPanelItemPointerDown}
           onAdd={definition => {
             if (!canAccessTier(definition.tier)) return;
@@ -2387,7 +2411,7 @@ style={{ background: 'hsl(var(--primary))' }}>
           }}
           onClose={() => setShowCustomize(false)}
           onUpgrade={() => navigate('/pricing')}
-          onReset={() => { setLayout(defaultLayout()); setShowCustomize(false); }}
+          onReset={() => { setLayout(packLayout(defaultLayout())); setShowCustomize(false); }}
         />
       )}
 

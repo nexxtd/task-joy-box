@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell, Check, X, Clock, Loader2, Mail, AlertTriangle, Inbox, CheckCheck, CalendarClock, Copy, ExternalLink } from 'lucide-react';
+import { Bell, Check, X, Clock, Loader2, Mail, AlertTriangle, Inbox, CheckCheck, CalendarClock, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { NOTIFICATIONS_REFRESH_EVENT } from '@/lib/notifications';
 import { toast } from '@/hooks/use-toast';
 import { useBoardContext } from '@/context/BoardContext';
 import { useNotesContext } from '@/context/NotesContext';
@@ -116,7 +117,12 @@ export const NotificationBell: React.FC = () => {
   useEffect(() => {
     fetchPendings();
     const id = setInterval(fetchPendings, 30000);
-    return () => clearInterval(id);
+    const onRefresh = () => { fetchPendings(); };
+    window.addEventListener(NOTIFICATIONS_REFRESH_EVENT, onRefresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener(NOTIFICATIONS_REFRESH_EVENT, onRefresh);
+    };
   }, []);
 
   const openPanel = async () => {
@@ -375,21 +381,36 @@ export const NotificationBell: React.FC = () => {
                         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Updates</span>
                       </div>
                       <div className="divide-y divide-border/50">
-                        {otherNotifications.map(n => (
-                          <div key={n.id} className="px-4 py-3 flex items-start gap-2.5">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${n.read ? 'bg-muted/60' : 'bg-primary/10'}`}>
-                              <CheckCheck className={`w-3.5 h-3.5 ${n.read ? 'text-muted-foreground' : 'text-primary'}`} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <p className={`text-xs ${n.read ? 'font-medium text-foreground/80' : 'font-semibold text-foreground'}`}>{n.title}</p>
-                                <span className="text-[10px] text-muted-foreground/70 flex-shrink-0">{relativeTime(n.createdAt)}</span>
+                        {otherNotifications.map(n => {
+                          const isSmart = n.type === 'smart_alert';
+                          const isNormal = n.type === 'normal_alert';
+                          return (
+                            <div key={n.id} className="px-4 py-3 flex items-start gap-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${isSmart ? 'bg-purple-500/15' : isNormal ? 'bg-amber-500/15' : n.read ? 'bg-muted/60' : 'bg-primary/10'}`}>
+                                {isSmart ? (
+                                  <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                ) : isNormal ? (
+                                  <CalendarClock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                ) : (
+                                  <CheckCheck className={`w-3.5 h-3.5 ${n.read ? 'text-muted-foreground' : 'text-primary'}`} />
+                                )}
                               </div>
-                              <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{n.message}</p>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                    <p className={`text-xs ${n.read ? 'font-medium text-foreground/80' : 'font-semibold text-foreground'}`}>{n.title}</p>
+                                    {isSmart && (
+                                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">AI</span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground/70 flex-shrink-0">{relativeTime(n.createdAt)}</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5 break-words">{n.message}</p>
+                              </div>
+                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
                             </div>
-                            {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 mt-1.5" />}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

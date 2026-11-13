@@ -1,8 +1,10 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
-import { noteSnapshots, users } from '../../shared/schema.js';
+import { noteSnapshots } from '../../shared/schema.js';
 import { eq, desc, inArray } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -35,6 +37,37 @@ router.get('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => 
 router.post('/snapshot', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { boardData } = req.body;
+    if (!boardData) {
+      return res.status(400).json({ error: 'Invalid board data' });
+    }
+
+    const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+    const tier = effectivePlan.tier;
+
+    // Auto-delete completed notes based on tier: Free 5 days, Premium 30 days, Pro never
+    const autoDeleteDays = SERVER_PLAN_LIMITS.noteAutoDeleteDays[tier];
+    if (Number.isFinite(autoDeleteDays) && Array.isArray(boardData.tasks)) {
+      const cutoffMs = Date.now() - autoDeleteDays * 24 * 60 * 60 * 1000;
+      boardData.tasks = boardData.tasks.filter((note: any) => {
+        const isDone = Boolean(note.completed || note.status === 'completed');
+        if (!isDone) return true;
+        const ts = new Date(note.completedAt || note.updatedAt || note.createdAt || 0).getTime();
+        return ts >= cutoffMs;
+      });
+    }
+
+    // Active notes limit check: Free 25, Premium 100, Pro unlimited
+    const maxActiveNotes = SERVER_PLAN_LIMITS.activeNotes[tier];
+    if (Number.isFinite(maxActiveNotes) && Array.isArray(boardData.tasks)) {
+      const activeCount = boardData.tasks.filter((t: any) => !(t.completed || t.status === 'completed')).length;
+      if (activeCount > maxActiveNotes) {
+        return res.status(403).json({
+          error: 'LIMIT_REACHED',
+          message: `${tier === 'free' ? 'Free' : 'Premium'} plan allows up to ${maxActiveNotes} active notes. Upgrade to add more.`,
+          limit: maxActiveNotes,
+        });
+      }
+    }
     
     // Save as JSON string
     const snapshotString = JSON.stringify(boardData);

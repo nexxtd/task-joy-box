@@ -11,6 +11,7 @@ import { fetchTemplates, fetchTemplateByCode, createTemplate, updateTemplate, de
 import CopyShareCode from '@/components/CopyShareCode';
 import { createTag, deleteTag, updateTag, fetchTags, type SharedTag } from '@/services/tagService';
 import { fileToDataUrl as dataUrlForFile } from '@/lib/fileDataUrl';
+import { uploadTaskMediaBatch, convertDraftImagesBatch } from '@/lib/attachmentUpload';
 import { readTaskSections, writeTaskSections, readExpandedLists, readDraftSections, writeDraftSections } from '@/lib/taskSectionState';
 import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
@@ -2023,6 +2024,20 @@ const Tasks: React.FC = () => {
     return (
       <div
         key={task.id}
+        draggable={!isDeleteMode}
+        onDragStart={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('button, input, textarea, select, [class*="cursor-grab"]')) return;
+          const itemData = JSON.stringify({
+            type: 'task',
+            id: task.id,
+            title: task.title,
+            column: board.columns.find(c => c.id === task.columnId)?.title || undefined,
+          });
+          e.dataTransfer.setData('application/x-planner-item', itemData);
+          e.dataTransfer.setData('text/plain', itemData);
+          e.dataTransfer.effectAllowed = 'copyLink';
+        }}
         onClick={() => {
           if (isDeleteMode) {
             setSelectedDeleteTaskIds(prev =>
@@ -3252,7 +3267,7 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                       <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
@@ -3346,7 +3361,7 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -3504,7 +3519,7 @@ const Tasks: React.FC = () => {
                         <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              <Image className="w-5 h-5 text-primary" />
+                              {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                             </div>
                             <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
@@ -3518,13 +3533,8 @@ const Tasks: React.FC = () => {
                             e.currentTarget.value = '';
                             setUploadingImages(true);
                             try {
-                              const newImgs: Attachment[] = [];
-                              for (const file of files) {
-                                const fileUrl = await imageToDataUrl(file);
-                                const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                                newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                              }
-                              setNewTaskImages(prev => [...prev, ...newImgs]);
+                              const newImgs = await convertDraftImagesBatch(files);
+                              if (newImgs.length > 0) setNewTaskImages(prev => [...prev, ...newImgs]);
                             } finally { setUploadingImages(false); }
                           }} className="hidden" />
                         </label>
@@ -4355,12 +4365,12 @@ const Tasks: React.FC = () => {
                       <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Image className="w-5 h-5 text-primary" />
+                            {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                           </div>
                           <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                         </div>
-                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs: Attachment[]=[]; for (const file of files){ const fileUrl=await imageToDataUrl(file); const fileType=/\.heic$/i.test(file.name)?'image/jpeg':(file.type||'image/*'); newImgs.push({ id: crypto.randomUUID(), taskId: 'new', fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() }); } setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
+                        <input type="file" multiple accept="image/*,.heic,.heif" onChange={async e => { if (!e.target.files) return; const files = Array.from(e.target.files); e.currentTarget.value=''; setUploadingImages(true); try { const newImgs = await convertDraftImagesBatch(files); if (newImgs.length > 0) setAiBuilderImages(prev=>[...prev,...newImgs]); } finally { setUploadingImages(false); } }} className="hidden" />
                       </label>
                       {aiBuilderImages.length > 0 && (
                         <DraggableImageGrid images={aiBuilderImages} onReorder={setAiBuilderImages} onRemove={id => setAiBuilderImages(prev=>prev.filter(x=>x.id!==id))} disabledInBuilder />
@@ -4702,32 +4712,18 @@ export const TaskDropdownExpanded: React.FC<{
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files ? Array.from(e.target.files) : [];
+    e.currentTarget.value = '';
     if (picked.length === 0) return;
     const remaining = mediaLimit - (taskRef.current.attachments?.length || 0);
-    if (remaining <= 0) { e.currentTarget.value = ''; return; }
+    if (remaining <= 0) return;
     const files = picked.slice(0, remaining);
     setUploading(true);
-    const uploaded: Attachment[] = [];
-    for (const file of files) {
-      let saved = false;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
+    try {
+      const uploaded = await uploadTaskMediaBatch(task.id, files, { kind: 'file' });
+      if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
+    } finally {
+      setUploading(false);
     }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
-    setUploading(false);
-    e.currentTarget.value = '';
   };
 
   const deleteAttachment = async (attachmentId: string) => {
@@ -4743,7 +4739,7 @@ export const TaskDropdownExpanded: React.FC<{
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
             <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
@@ -4997,7 +4993,7 @@ export const TaskDropdownExpanded: React.FC<{
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                 <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
@@ -5107,8 +5103,14 @@ export const TaskDropdownExpanded: React.FC<{
           <div className="flex items-center gap-2">
             <Paperclip className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Files</h3>
-            {(task.attachments ?? []).length > 0 && (
-              <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
+            {showUploading || uploading ? (
+              <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+              </span>
+            ) : (
+              (task.attachments ?? []).length > 0 && (
+                <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
+              )
             )}
           </div>
           {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -5116,13 +5118,24 @@ export const TaskDropdownExpanded: React.FC<{
         {!attachmentsCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
             {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate
-                  title="File Attachments"
-                  description="Attach files, images, and documents directly to your tasks."
-                  icon={<Paperclip className="w-6 h-6 text-primary" />}
-                />
-              </div>
+              <>
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate
+                    title="File Attachments"
+                    description="Attach files, images, and documents directly to your tasks."
+                    icon={<Paperclip className="w-6 h-6 text-primary" />}
+                  />
+                </div>
+                {(task.attachments || []).length > 0 && (
+                  <FreeAttachmentList
+                    attachments={(task.attachments || []).map(a => ({ ...a, locked: true }))}
+                    onReorder={() => {}}
+                    onDelete={(id) => deleteAttachment(id)}
+                    taskId={task.id}
+                    taskTitle={task.title}
+                  />
+                )}
+              </>
             ) : (
               <>
                 {(task.attachments?.length || 0) >= mediaLimit ? (
@@ -5135,9 +5148,9 @@ export const TaskDropdownExpanded: React.FC<{
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      <Paperclip className="w-5 h-5 text-primary" />
+                      {showUploading || uploading ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                     </div>
-                    <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                    <p className="text-sm font-medium text-foreground">{showUploading || uploading ? 'Uploading files...' : 'Click to upload or drag and drop'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                   </div>
                   <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
@@ -5167,8 +5180,14 @@ export const TaskDropdownExpanded: React.FC<{
           <div className="flex items-center gap-2">
             <Image className="w-4 h-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">Images</h3>
-            {task.images && task.images.length > 0 && (
-              <span className="text-xs text-muted-foreground">({task.images.length})</span>
+            {showUploadingImages || uploadingImages ? (
+              <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+              </span>
+            ) : (
+              task.images && task.images.length > 0 && (
+                <span className="text-xs text-muted-foreground">({task.images.length})</span>
+              )
             )}
           </div>
           {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -5176,13 +5195,27 @@ export const TaskDropdownExpanded: React.FC<{
         {!imagesCollapsed && (
           <div className="border-t border-border/60 px-4 py-3 space-y-3">
             {!isPremium ? (
-              <div className="border border-dashed border-border rounded-xl">
-                <PremiumGate
-                  title="Image Attachments"
-                  description="Upload images directly to your tasks."
-                  icon={<Image className="w-6 h-6 text-primary" />}
-                />
-              </div>
+              <>
+                <div className="border border-dashed border-border rounded-xl">
+                  <PremiumGate
+                    title="Image Attachments"
+                    description="Upload images directly to your tasks."
+                    icon={<Image className="w-6 h-6 text-primary" />}
+                  />
+                </div>
+                {task.images && task.images.length > 0 && (
+                  <DraggableImageGrid
+                    images={task.images.map(img => ({ ...img, locked: true }))}
+                    onReorder={() => {}}
+                    onRemove={(id) => {
+                      onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(img => String(img.id) !== String(id)) });
+                      if (/^\d+$/.test(String(id))) {
+                        fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+                      }
+                    }}
+                  />
+                )}
+              </>
             ) : (
               <>
                 {(task.images?.length || 0) >= mediaLimit ? (
@@ -5195,7 +5228,7 @@ export const TaskDropdownExpanded: React.FC<{
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <Image className="w-5 h-5 text-primary" />
+                        {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                       </div>
                       <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
@@ -5204,35 +5237,13 @@ export const TaskDropdownExpanded: React.FC<{
                       if (!e.target.files) return;
                       const allPicked = Array.from(e.target.files);
                       const remainingImgs = mediaLimit - ((taskRef.current.images?.length || 0));
-                      if (remainingImgs <= 0) { e.currentTarget.value = ''; return; }
-                      const files = allPicked.slice(0, remainingImgs);
                       e.currentTarget.value = '';
+                      if (remainingImgs <= 0) return;
+                      const files = allPicked.slice(0, remainingImgs);
                       setUploadingImages(true);
                       try {
-                      const newImages: Attachment[] = [];
-                      for (const file of files) {
-                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-                        let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
-                        if (!saved) {
-                          try {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          } catch { /* skip unreadable file, keep the rest */ }
-                        }
-                      }
-                      onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
+                        const newImages = await uploadTaskMediaBatch(task.id, files, { kind: 'image', skipServerForHeic: true });
+                        if (newImages.length > 0) onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
                       } finally {
                         setUploadingImages(false);
                       }
@@ -5448,7 +5459,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         {(provided) => (
           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
             <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                 <GripVertical className="w-4 h-4" />
               </div>
               <CircleToggle
@@ -5622,32 +5633,18 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files ? Array.from(e.target.files) : [];
+    e.currentTarget.value = '';
     if (picked.length === 0) return;
     const remaining = mediaLimit - (taskRef.current.attachments?.length || 0);
-    if (remaining <= 0) { e.currentTarget.value = ''; return; }
+    if (remaining <= 0) return;
     const files = picked.slice(0, remaining);
     setUploading(true);
-    const uploaded: Attachment[] = [];
-    for (const file of files) {
-      let saved = false;
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-        if (res.ok) {
-          uploaded.push(await res.json());
-          saved = true;
-        }
-      } catch { /* fall through to local copy */ }
-      if (!saved) {
-        try {
-        uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() });
-        } catch { /* skip unreadable file, keep the rest */ }
-      }
+    try {
+      const uploaded = await uploadTaskMediaBatch(task.id, files, { kind: 'file' });
+      if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
+    } finally {
+      setUploading(false);
     }
-    if (uploaded.length > 0) onUpdateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
-    setUploading(false);
-    e.currentTarget.value = '';
   };
 
   const deleteAttachment = async (attachmentId: string) => {
@@ -6185,7 +6182,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-center gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
                                                     <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
@@ -6294,8 +6291,14 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
             <div className="flex items-center gap-2">
               <Paperclip className="w-4 h-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Files</h3>
-              {(task.attachments ?? []).length > 0 && (
-                <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
+              {showUploading || uploading ? (
+                <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                </span>
+              ) : (
+                (task.attachments ?? []).length > 0 && (
+                  <span className="text-xs text-muted-foreground">({(task.attachments ?? []).length})</span>
+                )
               )}
             </div>
             {attachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -6303,13 +6306,24 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           {!attachmentsCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
               {!isPremium ? (
-                <div className="border border-dashed border-border rounded-xl">
-                  <PremiumGate
-                    title="File Attachments"
-                    description="Attach files, images, and documents directly to your tasks."
-                    icon={<Paperclip className="w-6 h-6 text-primary" />}
-                  />
-                </div>
+                <>
+                  <div className="border border-dashed border-border rounded-xl">
+                    <PremiumGate
+                      title="File Attachments"
+                      description="Attach files, images, and documents directly to your tasks."
+                      icon={<Paperclip className="w-6 h-6 text-primary" />}
+                    />
+                  </div>
+                  {(task.attachments || []).length > 0 && (
+                    <FreeAttachmentList
+                      attachments={(task.attachments || []).map(a => ({ ...a, locked: true }))}
+                      onReorder={() => {}}
+                      onDelete={(id) => deleteAttachment(id)}
+                      taskId={task.id}
+                      taskTitle={task.title}
+                    />
+                  )}
+                </>
               ) : (
                 <>
                   {(task.attachments?.length || 0) >= mediaLimit ? (
@@ -6322,9 +6336,9 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                   <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <Paperclip className="w-5 h-5 text-primary" />
+                        {showUploading || uploading ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                      <p className="text-sm font-medium text-foreground">{showUploading || uploading ? 'Uploading files...' : 'Click to upload or drag and drop'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploading} className="hidden" />
@@ -6353,8 +6367,14 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
             <div className="flex items-center gap-2">
               <Image className="w-4 h-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Images</h3>
-              {task.images && task.images.length > 0 && (
-                <span className="text-xs text-muted-foreground">({task.images.length})</span>
+              {showUploadingImages || uploadingImages ? (
+                <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                </span>
+              ) : (
+                task.images && task.images.length > 0 && (
+                  <span className="text-xs text-muted-foreground">({task.images.length})</span>
+                )
               )}
             </div>
             {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
@@ -6362,13 +6382,27 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           {!imagesCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
               {!isPremium ? (
-                <div className="border border-dashed border-border rounded-xl">
-                  <PremiumGate
-                    title="Image Attachments"
-                    description="Upload images directly to your tasks."
-                    icon={<Image className="w-6 h-6 text-primary" />}
-                  />
-                </div>
+                <>
+                  <div className="border border-dashed border-border rounded-xl">
+                    <PremiumGate
+                      title="Image Attachments"
+                      description="Upload images directly to your tasks."
+                      icon={<Image className="w-6 h-6 text-primary" />}
+                    />
+                  </div>
+                  {task.images && task.images.length > 0 && (
+                    <DraggableImageGrid
+                      images={task.images.map(img => ({ ...img, locked: true }))}
+                      onReorder={() => {}}
+                      onRemove={(id) => {
+                        onUpdateTask(task.id, { images: (taskRef.current.images || []).filter(img => String(img.id) !== String(id)) });
+                        if (/^\d+$/.test(String(id))) {
+                          fetch(`/api/attachments/${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
+                        }
+                      }}
+                    />
+                  )}
+                </>
               ) : (
                 <>
               {(task.images?.length || 0) >= mediaLimit ? (
@@ -6381,7 +6415,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                      <Image className="w-5 h-5 text-primary" />
+                      {showUploadingImages || uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                     </div>
                     <p className="text-sm font-medium text-foreground">{typeof uploadingImages !== 'undefined' ? (uploadingImages ? 'Uploading...' : 'Click to upload') : 'Click to upload'}</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
@@ -6390,35 +6424,13 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     if (!e.target.files) return;
                       const allPicked = Array.from(e.target.files);
                       const remainingImgs = mediaLimit - ((taskRef.current.images?.length || 0));
-                      if (remainingImgs <= 0) { e.currentTarget.value = ''; return; }
-                      const files = allPicked.slice(0, remainingImgs);
                       e.currentTarget.value = '';
+                      if (remainingImgs <= 0) return;
+                      const files = allPicked.slice(0, remainingImgs);
                       setUploadingImages(true);
                       try {
-                      const newImages: Attachment[] = [];
-                      for (const file of files) {
-                        const isHeic = /\.heic$/i.test(file.name) || file.type === 'image/heic' || file.type === 'image/heif';
-                        let saved = false;
-                        if (!isHeic) {
-                          try {
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            const res = await fetch(`/api/attachments/${String(task.id)}`, { method: 'POST', credentials: 'include', body: formData });
-                            if (res.ok) {
-                              newImages.push(await res.json());
-                              saved = true;
-                            }
-                          } catch { /* fall through to local copy */ }
-                        }
-                        if (!saved) {
-                          try {
-                            const fileUrl = await imageToDataUrl(file);
-                            const fileType = /\.heic$/i.test(file.name) ? 'image/jpeg' : (file.type || 'image/*');
-                            newImages.push({ id: crypto.randomUUID(), taskId: String(task.id), fileName: file.name, fileType, fileSize: file.size, fileUrl, createdAt: new Date().toISOString() });
-                          } catch { /* skip unreadable file, keep the rest */ }
-                        }
-                      }
-                    onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
+                        const newImages = await uploadTaskMediaBatch(task.id, files, { kind: 'image', skipServerForHeic: true });
+                        if (newImages.length > 0) onUpdateTask(task.id, { images: [...(taskRef.current.images || []), ...newImages] });
                       } finally {
                         setUploadingImages(false);
                       }

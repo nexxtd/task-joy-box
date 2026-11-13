@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Task, DEFAULT_LABELS, Label, LABEL_COLORS, PRIORITY_CONFIG, Priority, LabelColor } from '@/types/board';
 import { useBoardContext } from '@/context/BoardContext';
-import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
+import { X, Calendar, Clock3, Tag, CheckSquare, Plus, Trash2, Flag, AlignLeft, Repeat, FileUp, File, Loader2, Trash, Sparkles, Eye, GripVertical } from 'lucide-react';
 import { SquareToggle } from '@/components/ToggleComponents';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +13,7 @@ import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import { useDelayedUploading } from '@/hooks/useDelayedUploading';
+import { uploadTaskMediaBatch } from '@/lib/attachmentUpload';
 
 const SHARED_TAG_PREFIX = 'shared-tag-';
 
@@ -230,35 +231,19 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0 || !isPremium) return;
     const input = e.currentTarget;
+    input.value = '';
+    if (files.length === 0 || !isPremium) return;
     setUploading(true);
     try {
-      const uploaded: typeof task.attachments = [];
-      for (const file of files) {
-        let saved = false;
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          const res = await fetch(`/api/attachments/${task.id}`, { method: 'POST', credentials: 'include', body: formData });
-          if (res.ok) {
-            uploaded.push(await res.json());
-            saved = true;
-          }
-        } catch { /* fall through to local copy */ }
-        if (!saved) {
-          try {
-            const { fileToDataUrl } = await import('@/lib/fileDataUrl');
-            uploaded.push({ id: crypto.randomUUID(), taskId: task.id, fileName: file.name, fileType: file.type || 'application/octet-stream', fileSize: file.size, fileUrl: await fileToDataUrl(file), createdAt: new Date().toISOString() } as any);
-          } catch { /* skip unreadable file, keep the rest */ }
-        }
+      const uploaded = await uploadTaskMediaBatch(task.id, files, { kind: 'file' });
+      if (uploaded.length > 0) {
+        updateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
       }
-      if (uploaded.length > 0) updateTask(task.id, { attachments: [...(taskRef.current.attachments || []), ...uploaded] });
     } catch (error) {
       console.error('Error uploading file:', error);
     } finally {
       setUploading(false);
-      input.value = '';
     }
   };
 
@@ -536,10 +521,10 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               <div className="group relative mt-1">
                 <label className={`flex flex-col items-center justify-center w-full min-h-[80px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer ${!isPremium && 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
                   <div className="flex flex-col items-center justify-center py-2">
-                    <FileUp className="w-5 h-5 text-primary mb-1" />
-                    <p className="text-[10px] font-medium text-foreground">Click to upload</p>
+                    {showUploading || uploading ? <Loader2 className="w-5 h-5 text-primary mb-1 animate-spin" /> : <FileUp className="w-5 h-5 text-primary mb-1" />}
+                    <p className="text-[10px] font-medium text-foreground">{showUploading || uploading ? 'Uploading...' : 'Click to upload'}</p>
                   </div>
-                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium} />
+                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={!isPremium || uploading} />
                 </label>
               </div>
               {showUploading && (
@@ -552,7 +537,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
               )}
 
               <FreeAttachmentList
-                attachments={task.attachments || []}
+                attachments={!isPremium ? (task.attachments || []).map(a => ({ ...a, locked: true })) : (task.attachments || [])}
                 onReorder={(newItems) => updateTask(task.id, { attachments: newItems })}
                 onDelete={(id) => deleteAttachment(id)}
                 taskId={task.id}
@@ -634,9 +619,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                       {cl.items.map((item, idx) => (
                                         <Draggable key={item.id} draggableId={item.id} index={idx}>
                                           {(provided) => (
-                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-center gap-2 group/item min-w-0 checklist-item">
-                                              <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
-                                                <GripVertical className="w-3.5 h-3.5" />
+                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2 group/item min-w-0 checklist-item">
+                                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                <GripVertical className="w-4 h-4" />
                                               </div>
                                               <SquareToggle
                                                 completed={item.completed}

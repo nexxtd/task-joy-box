@@ -4,6 +4,7 @@ import { users, workspaces, workspaceMembers, tasks, sharedTasks, chatMessages, 
 import { eq, and, desc, or } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { encrypt, decrypt } from '../lib/encryption.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -257,9 +258,8 @@ router.post('/workspace/:workspaceId/chat', requireAuth, async (req: AuthRequest
 // Get user's subscription info
 router.get('/subscription', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await db.select({ subscriptionTier: users.subscriptionTier }).from(users).where(eq(users.id, req.userId!)).limit(1);
-    if (user.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ subscriptionTier: user[0].subscriptionTier || 'free' });
+    const plan = await resolveEffectiveUserPlan(req.userId!);
+    res.json({ subscriptionTier: plan.tier });
   } catch (error) {
     console.error('Get subscription error:', error);
     res.status(500).json({ error: 'Failed to get subscription info' });

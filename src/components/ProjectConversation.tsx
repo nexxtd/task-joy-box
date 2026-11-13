@@ -10,6 +10,7 @@ import {
   Maximize2,
   MessageCircle,
   Move,
+  MoveDiagonal,
   PanelRightClose,
   PanelRightOpen,
   Paperclip,
@@ -425,7 +426,7 @@ export const ProjectConversation: React.FC<Props> = ({
               aria-label="Resize chat from top left"
               className="flex h-7 w-7 flex-shrink-0 cursor-nwse-resize touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <Scaling className="h-3.5 w-3.5" />
+              <MoveDiagonal className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
@@ -436,7 +437,7 @@ export const ProjectConversation: React.FC<Props> = ({
               aria-label="Move chat window"
               className="flex h-7 w-7 flex-shrink-0 cursor-move touch-none items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <GripVertical className="h-3.5 w-3.5" />
+              <Move className="h-3.5 w-3.5" />
             </button>
           </>
         ) : null}

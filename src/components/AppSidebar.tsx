@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
@@ -19,6 +19,28 @@ const AppSidebar: React.FC = () => {
   const { T, t } = useLanguage();
 
   const isPremium = user?.subscriptionTier === 'pro' || user?.subscriptionTier === 'premium';
+  const [managedOrgs, setManagedOrgs] = useState<Array<{ id: number; name: string; type: string; role: string }>>([]);
+
+  const fetchManagedOrgs = useCallback(async () => {
+    if (!user?.id) {
+      setManagedOrgs([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/organizations', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setManagedOrgs(Array.isArray(data?.organizations) ? data.organizations : []);
+      }
+    } catch {}
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchManagedOrgs();
+    const handler = () => { fetchManagedOrgs(); };
+    window.addEventListener('orgs-refresh', handler);
+    return () => window.removeEventListener('orgs-refresh', handler);
+  }, [fetchManagedOrgs]);
 
   const navItems = [
     { icon: LayoutDashboard, label: T.nav_dashboard, path: '/' },
@@ -29,10 +51,7 @@ const AppSidebar: React.FC = () => {
     { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
-    ...(user?.subscriptionTier && user.subscriptionTier !== 'free'
-      ? [{ icon: Users, label: T.nav_collaboration, path: '/collaboration' }]
-      : []),
-    { icon: Building2, label: t('Organizations'), path: '/organizations' },
+    { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },
     ...(user?.isAdmin ? [{ icon: ShieldCheck, label: t('Admin Panel'), path: '/admin' }] : []),
   ];
@@ -103,6 +122,39 @@ const AppSidebar: React.FC = () => {
             </button>
           );
         })}
+
+        {managedOrgs.length > 0 && (
+          <div className="pt-3 mt-3 border-t border-border/60 space-y-0.5">
+            {!collapsed && (
+              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {t('Organizations')}
+              </div>
+            )}
+            {managedOrgs.map(org => {
+              const targetPath = `/organizations?id=${org.id}`;
+              const searchOrgId = new URLSearchParams(location.search).get('id');
+              const active = location.pathname.startsWith('/organizations') && (
+                searchOrgId === String(org.id) || (!searchOrgId && managedOrgs[0]?.id === org.id)
+              );
+              return (
+                <button
+                  key={org.id}
+                  onClick={() => navigate(targetPath)}
+                  title={collapsed ? org.name : undefined}
+                  data-testid={`nav-org-${org.id}`}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-all duration-200 group ${
+                    active
+                      ? 'bg-primary/10 text-primary font-medium border border-black'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent'
+                  }`}
+                >
+                  <Building2 className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${active ? 'scale-110' : 'group-hover:scale-105'}`} />
+                  {!collapsed && <span className="truncate flex-1 text-left">{org.name}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom */}

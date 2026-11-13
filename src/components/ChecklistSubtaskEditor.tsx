@@ -5,6 +5,8 @@ import { CircleToggle, SquareToggle } from '@/components/ToggleComponents';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import ExpandableRowText from '@/components/shared/ExpandableRowText';
 import type { Checklist, ChecklistItem, Subtask, TaskStatus } from '@/types/board';
+import { useAuth } from '@/context/AuthContext';
+import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 
 export const STATUS_OPTIONS: Array<{ value: TaskStatus; label: string; className: string }> = [
   { value: 'to_do', label: 'To Do', className: 'bg-muted text-muted-foreground' },
@@ -104,6 +106,13 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
   const checklistDone = checklists.reduce((s, l) => s + l.items.filter(i => i.completed).length, 0);
   const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
   const allChecklistsDone = checklistTotal > 0 && checklistDone === checklistTotal;
+
+  const { user } = useAuth();
+  const tier = normalizePlanTier(user?.subscriptionTier);
+  const maxSubtasks = PLAN_LIMITS.subtasksPerTask[tier];
+  const isSubtaskLimitReached = subtaskTotal >= maxSubtasks;
+  const maxChecklist = PLAN_LIMITS.checklistItemsPerTask[tier];
+  const isChecklistLimitReached = checklistTotal >= maxChecklist;
 
   const updateSubtask = (subtaskId: string, updates: Partial<Subtask>) => {
     onSubtasksChange(subtasks.map(st => (st.id === subtaskId ? { ...st, ...updates } : st)));
@@ -257,7 +266,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                         {provided => (
                           <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
                             <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/subtask">
-                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                 <GripVertical className="w-4 h-4" />
                               </div>
                               <CircleToggle completed={subtask.completed} onClick={() => updateSubtask(subtask.id, { completed: !subtask.completed })} size="sm" className="self-start" />
@@ -300,16 +309,34 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
               <AutoGrowTextarea
                 value={newSubtaskText}
                 onChange={e => setNewSubtaskText(e.target.value)}
+                disabled={isSubtaskLimitReached}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    addSubtask();
+                    if (!isSubtaskLimitReached) addSubtask();
                   }
                 }}
-                placeholder="Add sub-task"
-                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
+                placeholder={isSubtaskLimitReached ? `Limit reached (${maxSubtasks} max)` : "Add sub-task"}
+                className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm disabled:opacity-50"
               />
-              <button onClick={addSubtask} className="px-3 py-2 text-xs bg-foreground text-background rounded-lg">Add</button>
+              <button
+                {...getLimitButtonProps({
+                  isLimitReached: isSubtaskLimitReached,
+                  tier,
+                  defaultLabel: 'Add',
+                  onAction: addSubtask,
+                })}
+                disabled={isSubtaskLimitReached ? tier === 'pro' : (!newSubtaskText.trim())}
+                className={`px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${
+                  isSubtaskLimitReached
+                    ? tier === 'pro'
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border opacity-70'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                    : 'bg-foreground text-background'
+                }`}
+              >
+                {isSubtaskLimitReached ? 'Limit reached' : 'Add'}
+              </button>
             </div>
           </div>
         )}
@@ -418,10 +445,10 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                             {provided => (
                                               <div ref={provided.innerRef} {...provided.draggableProps} className="min-w-0">
                                                 <div className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] gap-2.5 items-start rounded-lg border border-border px-3 py-2.5 group/item checklist-item bg-card/60">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
-                                                <SquareToggle completed={item.completed} onClick={() => toggleChecklistItem(list.id, item.id)} size="md" className="self-start mt-0.5" />
+                                                <SquareToggle completed={item.completed} onClick={() => toggleChecklistItem(list.id, item.id)} size="sm" className="self-start" />
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea
                                                     autoFocus
@@ -460,24 +487,39 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                     <AutoGrowTextarea
                                       value={perChecklistInput[list.id] ?? ''}
                                       onChange={e => setPerChecklistInput(prev => ({ ...prev, [list.id]: e.target.value }))}
+                                      disabled={isChecklistLimitReached}
                                       onKeyDown={e => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
                                           e.preventDefault();
-                                          const text = perChecklistInput[list.id] ?? '';
-                                          if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
+                                          if (!isChecklistLimitReached) {
+                                            const text = perChecklistInput[list.id] ?? '';
+                                            if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
+                                          }
                                         }
                                       }}
-                                      placeholder="Add checklist item"
-                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs"
+                                      placeholder={isChecklistLimitReached ? `Limit reached (${maxChecklist} max)` : "Add checklist item"}
+                                      className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                     />
                                     <button
-                                      onClick={() => {
-                                        const text = perChecklistInput[list.id] ?? '';
-                                        if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
-                                      }}
-                                      className="px-3 py-2 text-xs bg-primary text-primary-foreground rounded-lg"
+                                      {...getLimitButtonProps({
+                                        isLimitReached: isChecklistLimitReached,
+                                        tier,
+                                        defaultLabel: 'Add',
+                                        onAction: () => {
+                                          const text = perChecklistInput[list.id] ?? '';
+                                          if (text.trim()) { addChecklistItem(list.id, text); setPerChecklistInput(prev => ({ ...prev, [list.id]: '' })); }
+                                        },
+                                      })}
+                                      disabled={isChecklistLimitReached ? tier === 'pro' : (!(perChecklistInput[list.id] ?? '').trim())}
+                                      className={`px-3 py-2 text-xs rounded-lg font-semibold transition-colors ${
+                                        isChecklistLimitReached
+                                          ? tier === 'pro'
+                                            ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border opacity-70'
+                                            : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-xs'
+                                          : 'bg-primary text-primary-foreground'
+                                      }`}
                                     >
-                                      Add
+                                      {isChecklistLimitReached ? 'Limit reached' : 'Add'}
                                     </button>
                                   </div>
                                 </div>

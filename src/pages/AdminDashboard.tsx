@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { dateLocale } from '@/i18n/format';
 import { useAdminPreview } from '@/hooks/useAdminPreview';
 import {
@@ -734,6 +734,7 @@ const AdminDashboard = () => {
   const [ticketFilter, setTicketFilter] = useState<string>('all');
   const [ticketSort, setTicketSort] = useState<string>('newest');
   const [ticketTypeFilter, setTicketTypeFilter] = useState<string>('all');
+  const [ticketTierFilter, setTicketTierFilter] = useState<string>('all');
   const [adminPanelTab, setAdminPanelTab] = useState<'guide' | 'auto-messages' | 'user-profile'>('guide');
   const [guideExpandedCats, setGuideExpandedCats] = useState<Set<string>>(new Set(['handling-tickets']));
   const [selectedGuide, setSelectedGuide] = useState<{ catId: string; guideId: string } | null>({ catId: 'handling-tickets', guideId: 'ht-overview' });
@@ -1654,6 +1655,16 @@ const AdminDashboard = () => {
                     <SelectItem value="report">Report</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={ticketTierFilter} onValueChange={setTicketTierFilter}>
+                  <SelectTrigger className="w-[160px] bg-card border border-border text-xs h-8">
+                    <SelectValue placeholder="Priority / Tier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Tiers</SelectItem>
+                    <SelectItem value="priority">Priority Only (Premium & Pro)</SelectItem>
+                    <SelectItem value="free">Standard (Free)</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={ticketFilter} onValueChange={setTicketFilter}>
                   <SelectTrigger className="w-[130px] bg-card border border-border text-xs h-8">
                     <SelectValue placeholder="Status" />
@@ -1695,12 +1706,22 @@ const AdminDashboard = () => {
                 {adminTickets
                   .filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
                   .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter)
+                  .filter((t: any) => {
+                    const tier = String(t.userSubscriptionTier || 'free').toLowerCase();
+                    const isPriority = tier === 'premium' || tier === 'pro';
+                    if (ticketTierFilter === 'priority') return isPriority;
+                    if (ticketTierFilter === 'free') return !isPriority;
+                    return true;
+                  })
                   .sort((a: any, b: any) => {
                     if (ticketSort === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
                     if (ticketSort === 'unread') return (b.unreadCount || 0) - (a.unreadCount || 0);
                     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
                   })
-                  .map((ticket: any) => (
+                  .map((ticket: any) => {
+                    const tier = String(ticket.userSubscriptionTier || 'free').toLowerCase();
+                    const isPriority = tier === 'premium' || tier === 'pro';
+                    return (
                   <button
                     key={ticket.id}
                     onClick={() => { setActivePanelTicket(ticket); }}
@@ -1709,6 +1730,12 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-3 min-w-0">
                       {ticket.unreadCount > 0 && <span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0" />}
                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${TYPE_COLORS[ticket.type] || 'bg-muted text-muted-foreground'}`}>{ticket.type}</span>
+                      {isPriority && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 flex-shrink-0">
+                          <Crown className="w-2.5 h-2.5 text-amber-500" />
+                          Priority ({tier === 'pro' ? 'Pro' : 'Premium'})
+                        </span>
+                      )}
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{ticket.subject}</p>
                         <p className="text-xs text-muted-foreground">{ticket.userName} · {ticket.userEmail}</p>
@@ -1725,9 +1752,18 @@ const AdminDashboard = () => {
                       }`}>{ticket.status === 'in_progress' ? 'In Progress' : ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1)}</span>
                     </div>
                   </button>
-                ))}
-                {adminTickets.filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
-                  .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter).length === 0 && (
+                    );
+                  })}
+                {adminTickets
+                  .filter((t: any) => ticketFilter === 'all' || t.status === ticketFilter)
+                  .filter((t: any) => ticketTypeFilter === 'all' || t.type === ticketTypeFilter)
+                  .filter((t: any) => {
+                    const tier = String(t.userSubscriptionTier || 'free').toLowerCase();
+                    const isPriority = tier === 'premium' || tier === 'pro';
+                    if (ticketTierFilter === 'priority') return isPriority;
+                    if (ticketTierFilter === 'free') return !isPriority;
+                    return true;
+                  }).length === 0 && (
                   <div className="text-center py-10 text-muted-foreground">
                     <p className="text-sm">No tickets match the selected filters.</p>
                   </div>

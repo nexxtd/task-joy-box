@@ -33,6 +33,9 @@ export interface Attachment {
   fileType: string;
   fileSize: number;
   fileUrl: string;
+  archived?: boolean;
+  archivedAt?: string | null;
+  locked?: boolean;
   createdAt: string;
 }
 

@@ -7,6 +7,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { getSettingNumber } from '../lib/settings.js';
+import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 
 const router = Router();
 
@@ -69,29 +71,57 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const maxMb = await getSettingNumber('max_attachment_mb', 25);
-    if (req.file.size > Math.max(1, maxMb) * 1024 * 1024) {
+    const plan = await resolveEffectiveUserPlan(userId);
+    if (plan.tier === 'free') {
+      return res.status(403).json({
+        error: 'UPGRADE_REQUIRED',
+        message: 'Uploading files and images requires a Premium or Pro plan.',
+      });
+    }
+
+    const tierMaxBytes = SERVER_PLAN_LIMITS.taskMedia.maxFileSizeBytes[plan.tier];
+    const configuredMb = await getSettingNumber('max_attachment_mb', 25);
+    const effectiveMaxBytes = Math.min(tierMaxBytes, Math.max(1, configuredMb) * 1024 * 1024);
+    if (req.file.size > effectiveMaxBytes) {
+      const limitMb = Math.round((effectiveMaxBytes / (1024 * 1024)) * 10) / 10;
       return res.status(413).json({
         error: 'FILE_TOO_LARGE',
-        message: `Attachment exceeds the ${maxMb} MB limit`,
-        limitMb: maxMb,
+        message: `Attachment exceeds the ${limitMb} MB limit for your ${plan.tier} plan`,
+        limitMb,
       });
+    }
+
+    const maxPerKind = SERVER_PLAN_LIMITS.taskMedia.maxPerTask[plan.tier];
+    if (Number.isFinite(maxPerKind)) {
+      const isImage = req.file.mimetype.startsWith('image/');
+      const existing = await db
+        .select({ id: taskAttachments.id, fileType: taskAttachments.fileType, userId: taskAttachments.userId })
+        .from(taskAttachments)
+        .where(and(eq(taskAttachments.taskId, taskId), eq(taskAttachments.archived, false)));
+      const ownedExisting = existing.filter((a) => a.userId == null || a.userId === userId);
+      const sameKindCount = ownedExisting.filter((a) => String(a.fileType || '').startsWith('image/') === isImage).length;
+      if (sameKindCount >= maxPerKind) {
+        return res.status(403).json({
+          error: 'LIMIT_REACHED',
+          message: `Limit reached (${maxPerKind} ${isImage ? 'images' : 'files'} per item on ${plan.tier} plan).`,
+          limit: maxPerKind,
+        });
+      }
     }
 
     // Persist bytes in Postgres (file_data) so images survive restarts.
     // Disk in uploads/ is ephemeral on Render/Vercel and caused white
-    // images after refresh. Keep a best-effort disk copy for compat.
+    // images after refresh. Write disk backup asynchronously so upload response is fast.
     const fileData = req.file.buffer.toString('base64');
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(req.file.originalname).replace(/[^a-zA-Z0-9.]/g, '');
     const storedFileName = uniqueSuffix + ext;
-    try {
-      const uploadDir = process.env.VERCEL === '1'
-        ? path.join('/tmp', 'uploads')
-        : path.join(process.cwd(), 'uploads');
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-      fs.writeFileSync(path.join(uploadDir, storedFileName), req.file.buffer);
-    } catch { /* disk is best-effort only; DB is the source of truth */ }
+    const uploadDir = process.env.VERCEL === '1'
+      ? path.join('/tmp', 'uploads')
+      : path.join(process.cwd(), 'uploads');
+    void fs.promises.mkdir(uploadDir, { recursive: true })
+      .then(() => fs.promises.writeFile(path.join(uploadDir, storedFileName), req.file.buffer))
+      .catch(() => {});
 
     let attachment: typeof taskAttachments.$inferSelect;
     try {
@@ -135,8 +165,27 @@ router.get('/:taskId', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!(await taskBelongsToUser(taskId, userId))) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    const rows = await db.select().from(taskAttachments).where(eq(taskAttachments.taskId, taskId));
-    res.json(rows.filter((a) => (a as any).userId == null || (a as any).userId === userId));
+    const plan = await resolveEffectiveUserPlan(userId);
+    const rows = await db
+      .select({
+        id: taskAttachments.id,
+        userId: taskAttachments.userId,
+        taskId: taskAttachments.taskId,
+        fileName: taskAttachments.fileName,
+        fileType: taskAttachments.fileType,
+        fileSize: taskAttachments.fileSize,
+        fileUrl: taskAttachments.fileUrl,
+        archived: taskAttachments.archived,
+        archivedAt: taskAttachments.archivedAt,
+        createdAt: taskAttachments.createdAt,
+      })
+      .from(taskAttachments)
+      .where(eq(taskAttachments.taskId, taskId));
+    res.json(
+      rows
+        .filter((a) => a.userId == null || a.userId === userId)
+        .map((a) => ({ ...a, locked: Boolean(a.archived || plan.tier === 'free') }))
+    );
   } catch (error) {
     console.error('Error fetching attachments');
     res.status(500).json({ error: 'Failed to fetch attachments' });

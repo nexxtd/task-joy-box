@@ -7,6 +7,7 @@ import fs from 'fs';
 import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
+import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
 import { projectJoinRequests, projectMembers, projects, users, userNotifications } from '../../shared/schema.js';
 
 const router = Router();
@@ -44,7 +45,19 @@ const INLINE_MIME_PREFIXES = ['image/', 'application/pdf', 'text/'];
 
 const PLAN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
   free: 5,
-  premium: 10,
+  premium: 15,
+  pro: 20,
+};
+
+const PROJECT_MEMBER_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
+  free: 10,
+  premium: 15,
+  pro: 20,
+};
+
+const PROJECT_COLUMN_LIMITS: Record<'free' | 'premium' | 'pro', number> = {
+  free: 10,
+  premium: 15,
   pro: 20,
 };
 
@@ -79,10 +92,26 @@ async function notifyProjectInvite(params: {
     .from(userNotifications)
     .where(and(eq(userNotifications.userId, userId), eq(userNotifications.type, 'project_invite')))
     .limit(50);
-  const already = existing.some(n => {
+  const existingNotif = existing.find(n => {
     try { return JSON.parse((n as any).data || '{}').requestId === requestId; } catch { return false; }
   });
-  if (already) return;
+  if (existingNotif) {
+    await db.update(userNotifications).set({
+      read: false,
+      title: 'Project invitation',
+      message: `${ownerName} invited you to join "${projectName}".`,
+      data: JSON.stringify({
+        requestId,
+        projectId,
+        projectName,
+        ownerName,
+        inviteCode,
+        inviteLink: inviteCode ? `/projects?join=${inviteCode}` : undefined,
+      }),
+      createdAt: new Date().toISOString(),
+    } as any).where(eq(userNotifications.id, (existingNotif as any).id));
+    return;
+  }
   await db.insert(userNotifications).values({
     userId,
     type: 'project_invite',
@@ -209,11 +238,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Project name must be at least 2 characters' });
     }
 
-    const userRow = await db
-      .select({ subscriptionTier: users.subscriptionTier })
-      .from(users)
-      .where(eq(users.id, req.userId!));
-    const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+    const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
+    const planTier = effectivePlan.tier;
     const projectCount = await getProjectMembershipCount(req.userId!);
 
     if (projectCount >= PLAN_LIMITS[planTier]) {
@@ -320,6 +346,17 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
     if (membership.length === 0) return res.status(403).json({ error: 'Not a member of this project' });
 
+    const ownerTier = project[0]?.ownerId ? (await resolveEffectiveUserPlan(project[0].ownerId)).tier : 'free';
+    const [memberCountRow] = await db.select({ count: sql<number>`count(*)::int` }).from(projectMembers).where(eq(projectMembers.projectId, projectId));
+    const currentMemberCount = memberCountRow?.count ?? 0;
+    if (currentMemberCount >= PROJECT_MEMBER_LIMITS[ownerTier]) {
+      return res.status(403).json({
+        error: 'PROJECT_MEMBER_LIMIT_REACHED',
+        message: `This project has reached the limit of ${PROJECT_MEMBER_LIMITS[ownerTier]} members for the ${ownerTier} plan.`,
+        limit: PROJECT_MEMBER_LIMITS[ownerTier],
+      });
+    }
+
     const targetUser = await db.select().from(users).where(eq(users.email, String(email).trim().toLowerCase()));
     if (targetUser.length === 0) {
       return res.status(202).json({
@@ -330,7 +367,7 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
 
     const recipient = targetUser[0];
     const recipientProjectCount = await getProjectMembershipCount(recipient.id);
-    const recipientPlanTier = getPlanTier(recipient.subscriptionTier);
+    const recipientPlanTier = (await resolveEffectiveUserPlan(recipient.id)).tier;
     const recipientLimit = PLAN_LIMITS[recipientPlanTier];
 
     if (recipientProjectCount >= recipientLimit) {
@@ -362,10 +399,15 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
       .limit(1);
     const ownerName = ownerRow[0]?.name || 'The project owner';
 
+    // Ensure project has an inviteCode
+    let inviteCode = project[0].inviteCode;
+    if (!inviteCode) {
+      inviteCode = crypto.randomBytes(16).toString('hex');
+      await db.update(projects).set({ inviteCode }).where(eq(projects.id, projectId));
+    }
+
     let requestId: number | null = null;
-    if (existingRequest.length > 0 && ['invited', 'pending'].includes(existingRequest[0].status)) {
-      requestId = existingRequest[0].id;
-    } else if (existingRequest.length > 0) {
+    if (existingRequest.length > 0) {
       await db.update(projectJoinRequests)
         .set({ status: 'invited', updatedAt: new Date().toISOString() })
         .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, recipient.id)));
@@ -387,7 +429,7 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
           projectId,
           projectName: project[0].name,
           ownerName,
-          inviteCode: project[0].inviteCode,
+          inviteCode,
         });
       } catch (notifyError) {
         console.error('Failed to create invite notification:', notifyError);
@@ -397,7 +439,7 @@ router.post('/:projectId/invite', requireAuth, async (req: AuthRequest, res: Res
     res.json({
       pending: false,
       invited: true,
-      inviteCode: project[0].inviteCode,
+      inviteCode,
       message: 'Invitation sent! The user has received an invite link in their notification panel.',
     });
   } catch (error) {
@@ -421,11 +463,7 @@ router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Resp
       return res.json({ project: await serializeProject(projectId) });
     }
 
-    const userRow = await db
-      .select({ subscriptionTier: users.subscriptionTier })
-      .from(users)
-      .where(eq(users.id, req.userId!));
-    const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+    const planTier = (await resolveEffectiveUserPlan(req.userId!)).tier;
     const currentCount = await getProjectMembershipCount(req.userId!);
     if (currentCount >= PLAN_LIMITS[planTier]) {
       return res.status(402).json({
@@ -534,11 +572,7 @@ router.post('/:projectId/join-requests/:requestId/approve', requireAuth, async (
       .from(projectMembers)
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, requesterId)));
     if (alreadyMember.length === 0) {
-      const userRow = await db
-        .select({ subscriptionTier: users.subscriptionTier })
-        .from(users)
-        .where(eq(users.id, requesterId));
-      const planTier = getPlanTier(userRow[0]?.subscriptionTier);
+      const planTier = (await resolveEffectiveUserPlan(requesterId)).tier;
       const currentCount = await getProjectMembershipCount(requesterId);
       if (currentCount >= PLAN_LIMITS[planTier]) {
         return res.status(402).json({
@@ -683,6 +717,16 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
       .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
     if (membership.length === 0) return res.status(403).json({ error: 'Access denied' });
 
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    const tier = project?.ownerId ? (await resolveEffectiveUserPlan(project.ownerId)).tier : 'free';
+
+    let retentionFilter = '';
+    if (tier === 'free') {
+      retentionFilter = ` AND pcm.created_at >= NOW() - INTERVAL '30 days'`;
+    } else if (tier === 'premium') {
+      retentionFilter = ` AND pcm.created_at >= NOW() - INTERVAL '365 days'`;
+    }
+
     const result = await pool.query(
       `SELECT pcm.id, pcm.user_id as "userId", pcm.message, pcm.created_at as "createdAt", u.name as "authorName",
               pcm.attachment_name as "attachmentName", pcm.attachment_type as "attachmentType",
@@ -690,7 +734,7 @@ router.get('/:projectId/chat', requireAuth, async (req: AuthRequest, res: Respon
               pcm.linked_id as "linkedId", pcm.linked_title as "linkedTitle", pcm.linked_column as "linkedColumn"
        FROM project_chat_messages pcm
        INNER JOIN users u ON u.id = pcm.user_id
-       WHERE pcm.project_id = $1
+       WHERE pcm.project_id = $1${retentionFilter}
        ORDER BY pcm.created_at ASC
        LIMIT 200`,
       [projectId]

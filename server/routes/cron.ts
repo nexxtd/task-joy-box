@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { sendWeeklyEmails, generateWeeklySummaryForUser } from '../lib/weeklyEmail.js';
+import { runArchiveLifecycleSweep } from '../lib/orgLifecycle.js';
 import { isAdmin } from '../lib/adminUtils.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { sendEmail } from '../lib/email.js';
@@ -67,6 +68,29 @@ router.post('/weekly-ai-summary/send-now', requireAuth, async (req: AuthRequest,
     res.json({ ok: true, subject: content.subject });
   } catch (e: any) {
     console.error('send-now summary failed', e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// Archive lifecycle sweep (10-day deletion warning emails + 30-day permanent cleanup + plan expiration)
+router.post('/archive-lifecycle', async (req: any, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  const headerSecret = req.headers['x-cron-secret'] as string | undefined;
+  const userId = req.userId as number | undefined;
+
+  let authorized = false;
+  if (cronSecret && headerSecret === cronSecret) authorized = true;
+  if (!authorized && userId) {
+    const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (u && isAdmin(u.email)) authorized = true;
+  }
+  if (!authorized) return res.status(401).json({ error: 'Unauthorized cron' });
+
+  try {
+    const result = await runArchiveLifecycleSweep();
+    res.json({ ok: true, ...result });
+  } catch (e: any) {
+    console.error('archive lifecycle cron failed', e);
     res.status(500).json({ error: e.message || String(e) });
   }
 });
