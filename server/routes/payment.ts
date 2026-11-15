@@ -179,7 +179,7 @@ router.post('/validate-coupon', requireAuth, async (req: AuthRequest, res: Respo
       tier,
       planType,
     });
-    if (!validation.ok) {
+    if (validation.ok === false) {
       return res.status(validation.status).json({ error: validation.error });
     }
 
@@ -243,7 +243,7 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
         planType: pricingCalc.planType,
         plan: pricingCalc.planType === 'personal' ? paidTier : pricingCalc.planType,
       });
-      if (!validation.ok) {
+      if (validation.ok === false) {
         return res.status(validation.status).json({ error: validation.error });
       }
       adjustedPrice = applyCouponDiscount(adjustedPrice, validation.coupon.discountType, validation.coupon.discountValue);
