@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ComponentType, PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Crown, LayoutDashboard, Lock, Search, X } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 type CatalogTier = 'free' | 'premium' | 'pro';
 
@@ -36,17 +37,19 @@ export function WidgetCatalog<D extends CatalogDefinition>({
   definitions, surface, closing, hasWidget, canAccessTier, onStartDrag, onAdd,
   onClose, onUpgrade, onReset, widgetCount, maxWidgets, currentTier,
 }: Props<D>) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const isLimitReached = widgetCount !== undefined && maxWidgets !== undefined && maxWidgets !== Infinity && widgetCount >= maxWidgets;
   const isPro = String(currentTier || '').toLowerCase() === 'pro';
   const visible = useMemo(() => {
     const terms = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return definitions.filter(def => {
-      const text = `${def.title} ${def.desc} ${def.tier}`.toLocaleLowerCase();
+      const text = `${t(def.title)} ${t(def.desc)} ${def.title} ${def.desc} ${t(def.tier)} ${def.tier}`.toLocaleLowerCase();
       return terms.every(term => text.includes(term));
     });
-  }, [definitions, search]);
-  const title = surface === 'dashboard' ? 'Customize Dashboard' : 'Customize Insights';
+  }, [definitions, search, t]);
+  const title = surface === 'dashboard' ? t('Customize Dashboard') : t('Customize Insights');
+  const surfaceLabel = surface === 'dashboard' ? t('Dashboard') : t('Insights');
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end" data-widget-catalog={surface}>
@@ -66,7 +69,7 @@ export function WidgetCatalog<D extends CatalogDefinition>({
             <h2 className="flex min-w-0 items-center gap-2 text-sm font-bold text-foreground">
               <LayoutDashboard className="h-4 w-4 shrink-0 text-primary" /> {title}
             </h2>
-            <button onClick={onClose} aria-label="Close customize panel" title="Close customize panel" className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted">
+            <button onClick={onClose} aria-label={t('Close customize panel')} title={t('Close customize panel')} className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted">
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
@@ -76,20 +79,20 @@ export function WidgetCatalog<D extends CatalogDefinition>({
               type="search"
               value={search}
               onChange={event => setSearch(event.target.value)}
-              aria-label={`Search ${surface} modules`}
-              placeholder="Search modules..."
+              aria-label={t('Search modules...')}
+              placeholder={t('Search modules...')}
               className="w-full min-w-0 rounded-xl border border-border bg-muted/40 py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30"
             />
           </label>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
           <p className="px-1 pb-4 text-xs leading-relaxed text-muted-foreground">
-            Drag a module onto the {surface}, or use Add. Modules already placed stay in this list. Grab a module's grip to move it, or its corner to resize it.
+            {t("Drag a module onto the board, or use Add. Modules already placed stay in this list. Grab a module's grip to move it, or its corner to resize it.")}
           </p>
           {visible.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center" role="status">
-              <p className="text-sm font-semibold text-foreground">No modules match your search.</p>
-              <button onClick={() => setSearch('')} className="mt-2 text-xs font-semibold text-primary hover:underline">Clear search</button>
+              <p className="text-sm font-semibold text-foreground">{t('No modules match your search.')}</p>
+              <button onClick={() => setSearch('')} className="mt-2 text-xs font-semibold text-primary hover:underline">{t('Clear search')}</button>
             </div>
           ) : (
             <div className="space-y-4">
@@ -97,17 +100,19 @@ export function WidgetCatalog<D extends CatalogDefinition>({
                 const section = visible.filter(def => def.tier === tier);
                 if (section.length === 0) return null;
                 const lockedCount = section.filter(def => !canAccessTier(def.tier)).length;
+                const tierLabel = tier === 'free' ? t('Free') : tier === 'premium' ? t('Premium') : t('Pro');
                 return (
-                  <section key={tier} aria-label={`${tier[0].toUpperCase()}${tier.slice(1)} modules`}>
+                  <section key={tier} aria-label={tierLabel}>
                     <div className="mb-1.5 flex items-center justify-between px-1">
-                      <h3 className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{tier}</h3>
-                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{lockedCount} locked</span>}
+                      <h3 className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">{tierLabel}</h3>
+                      {lockedCount > 0 && <span className="text-[10px] font-bold text-muted-foreground">{t('{{count}} locked', { count: lockedCount })}</span>}
                     </div>
                     <div className="space-y-2">
                       {section.map(def => {
                         const placed = hasWidget(def.type);
                         const unlocked = canAccessTier(def.tier);
                         const Icon = def.icon;
+                        const defTierLabel = def.tier === 'premium' ? t('Premium') : def.tier === 'pro' ? t('Pro') : t('Free');
                         return (
                           <div
                             key={def.type}
@@ -123,17 +128,17 @@ export function WidgetCatalog<D extends CatalogDefinition>({
                                 {unlocked ? <Icon className="h-4 w-4" style={{ color: `hsl(var(--${def.accent}))` }} /> : <Lock className="h-4 w-4 text-muted-foreground" />}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="break-words text-sm font-bold text-foreground">{def.title}</p>
-                                <p className="mt-0.5 break-words text-xs text-muted-foreground">{def.desc}</p>
+                                <p className="break-words text-sm font-bold text-foreground">{t(def.title)}</p>
+                                <p className="mt-0.5 break-words text-xs text-muted-foreground">{t(def.desc)}</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                  {def.tier !== 'free' && <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase text-primary"><Crown className="h-2.5 w-2.5" /> {def.tier}</span>}
+                                  {def.tier !== 'free' && <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase text-primary"><Crown className="h-2.5 w-2.5" /> {defTierLabel}</span>}
                                   <span className={`rounded-full border border-border px-2 py-0.5 text-[10px] font-bold ${!placed && !unlocked ? 'text-primary' : isLimitReached && !placed ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
-                                    {placed ? `In ${surface}` : !unlocked ? 'Upgrade' : isLimitReached ? 'Limit reached' : 'Drag to add'}
+                                    {placed ? t('In {{surface}}', { surface: surfaceLabel }) : !unlocked ? t('Upgrade') : isLimitReached ? t('Limit reached') : t('Drag to add')}
                                   </span>
                                   {!placed && unlocked && onAdd && (
                                     <button
                                       type="button"
-                                      aria-label={isLimitReached ? 'Limit reached' : `Add ${def.title}`}
+                                      aria-label={isLimitReached ? t('Limit reached') : `${t('Add')} ${t(def.title)}`}
                                       onPointerDown={event => event.stopPropagation()}
                                       onClick={event => {
                                         event.stopPropagation();
@@ -152,7 +157,7 @@ export function WidgetCatalog<D extends CatalogDefinition>({
                                           : 'bg-primary text-primary-foreground hover:bg-primary/90'
                                       }`}
                                     >
-                                      {isLimitReached ? 'Limit reached' : 'Add'}
+                                      {isLimitReached ? t('Limit reached') : t('Add')}
                                     </button>
                                   )}
                                 </div>
@@ -169,7 +174,7 @@ export function WidgetCatalog<D extends CatalogDefinition>({
           )}
         </div>
         <div className="shrink-0 border-t border-border bg-card p-3">
-          <button onClick={onReset} className="w-full rounded-xl border border-border py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted">Reset to default layout</button>
+          <button onClick={onReset} className="w-full rounded-xl border border-border py-2.5 text-sm font-bold text-muted-foreground transition-colors hover:bg-muted">{t('Reset to default layout')}</button>
         </div>
       </section>
     </div>,

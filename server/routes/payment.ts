@@ -42,6 +42,69 @@ function safeParseInt(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+type CouponValidationResult =
+  | { ok: true; coupon: typeof coupons.$inferSelect }
+  | { ok: false; status: number; error: string };
+
+/** Validates coupon eligibility including date window, usage limits, email restriction, plan restriction, and one-time redemption. */
+async function validateCouponForUser(params: {
+  code: string;
+  userId: number;
+  plan?: string;
+  tier?: string;
+  planType?: string;
+}): Promise<CouponValidationResult> {
+  const normalizedCode = params.code.trim().toUpperCase();
+  if (!normalizedCode) {
+    return { ok: false, status: 400, error: 'Coupon code is required' };
+  }
+
+  const [coupon] = await db.select().from(coupons).where(eq(coupons.code, normalizedCode)).limit(1);
+  if (!coupon) return { ok: false, status: 404, error: 'This coupon does not exist' };
+  if (!coupon.active) return { ok: false, status: 400, error: 'This coupon is no longer active' };
+
+  const now = new Date().toISOString();
+  if (coupon.startDate && coupon.startDate > now) {
+    return { ok: false, status: 400, error: 'This coupon has not started yet' };
+  }
+  if (coupon.expiresAt && coupon.expiresAt < now) {
+    return { ok: false, status: 400, error: 'This coupon has expired' };
+  }
+  if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
+    return { ok: false, status: 400, error: 'This coupon has reached its usage limit' };
+  }
+  if (coupon.restrictedToEmail) {
+    const [user] = await db.select().from(users).where(eq(users.id, params.userId)).limit(1);
+    if (!user || user.email.toLowerCase() !== coupon.restrictedToEmail.trim().toLowerCase()) {
+      return { ok: false, status: 400, error: 'This coupon is not valid for your account' };
+    }
+  }
+  if (coupon.restrictedToPlan) {
+    const required = coupon.restrictedToPlan.trim().toLowerCase();
+    const candidates = [params.plan, params.tier, params.planType]
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      .map(v => v.trim().toLowerCase());
+    const expanded = new Set<string>(candidates);
+    candidates.forEach(c => {
+      expanded.add(c.replace(/\s+plan$/, ''));
+      expanded.add(`${c} plan`);
+    });
+    if (expanded.size === 0 || !expanded.has(required)) {
+      return { ok: false, status: 400, error: `This coupon is only valid for the ${coupon.restrictedToPlan} plan` };
+    }
+  }
+  if (coupon.oneTimePerUser) {
+    const [existing] = await db.select().from(couponRedemptions)
+      .where(and(eq(couponRedemptions.couponId, coupon.id), eq(couponRedemptions.userId, params.userId)))
+      .limit(1);
+    if (existing) {
+      return { ok: false, status: 400, error: 'You have already used this coupon' };
+    }
+  }
+
+  return { ok: true, coupon };
+}
+
 // ── PayPal Orders v2 integration (the legacy REST v1 /v1/payments API used by
 // paypal-rest-sdk is deprecated by PayPal and fails for newer app integrations
 // with `invalid_client`). Shared helpers live in server/lib/paypal.ts.
@@ -108,41 +171,19 @@ router.get('/pricing', async (_req: Request, res: Response) => {
 // Validate a coupon code
 router.post('/validate-coupon', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { code, plan } = req.body;
-    if (!code) return res.status(400).json({ error: 'Coupon code is required' });
-
-    const [coupon] = await db.select().from(coupons).where(eq(coupons.code, code.toUpperCase())).limit(1);
-    if (!coupon) return res.status(404).json({ error: 'This coupon does not exist' });
-    if (!coupon.active) return res.status(400).json({ error: 'This coupon is no longer active' });
-
-    const now = new Date().toISOString();
-    if (coupon.startDate && coupon.startDate > now) {
-      return res.status(400).json({ error: 'This coupon has not started yet' });
-    }
-    if (coupon.expiresAt && coupon.expiresAt < now) {
-      return res.status(400).json({ error: 'This coupon has expired' });
-    }
-    if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
-      return res.status(400).json({ error: 'This coupon has reached its usage limit' });
-    }
-    if (coupon.restrictedToEmail) {
-      const [user] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
-      if (!user || user.email !== coupon.restrictedToEmail) {
-        return res.status(400).json({ error: 'This coupon is not valid for your account' });
-      }
-    }
-    if (coupon.restrictedToPlan && plan && coupon.restrictedToPlan !== plan) {
-      return res.status(400).json({ error: `This coupon is only valid for the ${coupon.restrictedToPlan} plan` });
-    }
-    if (coupon.oneTimePerUser) {
-      const [existing] = await db.select().from(couponRedemptions)
-        .where(and(eq(couponRedemptions.couponId, coupon.id), eq(couponRedemptions.userId, req.userId!)))
-        .limit(1);
-      if (existing) {
-        return res.status(400).json({ error: 'You have already used this coupon' });
-      }
+    const { code, plan, tier, planType } = req.body;
+    const validation = await validateCouponForUser({
+      code: String(code || ''),
+      userId: req.userId!,
+      plan,
+      tier,
+      planType,
+    });
+    if (!validation.ok) {
+      return res.status(validation.status).json({ error: validation.error });
     }
 
+    const { coupon } = validation;
     const discount = coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `$${coupon.discountValue} OFF`;
     res.json({
       valid: true,
@@ -192,21 +233,21 @@ router.post('/create-checkout-session', requireAuth, async (req: AuthRequest, re
 
     let adjustedPrice = pricingCalc.totalDueNow;
 
-    // Apply coupon discount
+    // Apply coupon discount with full restriction enforcement
     let couponId: number | null = null;
     if (couponCode) {
-      const [coupon] = await db.select().from(coupons).where(eq(coupons.code, String(couponCode).toUpperCase())).limit(1);
-      if (coupon && coupon.active) {
-        const now = new Date().toISOString();
-        const isValid = (!coupon.startDate || coupon.startDate <= now) &&
-          (!coupon.expiresAt || coupon.expiresAt >= now) &&
-          (coupon.maxUses === null || coupon.usedCount < coupon.maxUses);
-
-        if (isValid) {
-          adjustedPrice = applyCouponDiscount(adjustedPrice, coupon.discountType, coupon.discountValue);
-          couponId = coupon.id;
-        }
+      const validation = await validateCouponForUser({
+        code: String(couponCode),
+        userId: req.userId!,
+        tier: paidTier,
+        planType: pricingCalc.planType,
+        plan: pricingCalc.planType === 'personal' ? paidTier : pricingCalc.planType,
+      });
+      if (!validation.ok) {
+        return res.status(validation.status).json({ error: validation.error });
       }
+      adjustedPrice = applyCouponDiscount(adjustedPrice, validation.coupon.discountType, validation.coupon.discountValue);
+      couponId = validation.coupon.id;
     }
 
     const storedPlanType = `${pricingCalc.planType}|${pricingCalc.billingPeriod}`;

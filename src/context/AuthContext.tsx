@@ -10,7 +10,7 @@ interface AuthUser {
   subscriptionTier?: 'free' | 'premium' | 'pro' | string;
   subscriptionStatus?: 'inactive' | 'active' | 'cancelled' | string;
   isAdmin?: boolean;
-  planSource?: 'personal' | 'org' | 'free' | string;
+  planSource?: 'personal' | 'organization' | 'org' | 'free' | string;
   personalPlanPaused?: boolean;
   pausedPersonalTier?: string | null;
   reservedOrgTier?: string | null;

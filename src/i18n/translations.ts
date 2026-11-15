@@ -1,5 +1,6 @@
 import en from './locales/en';
 import type { Translations } from './locales/types';
+import { ANALYTICS_PHRASES } from '../../shared/analyticsI18n';
 
 export const LANG_CODES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'zh', 'ja', 'ko', 'ar', 'hi', 'ru', 'nl', 'tr', 'vi', 'he'] as const;
 export type LangCode = (typeof LANG_CODES)[number];
@@ -210,6 +211,7 @@ for (const [key, value] of Object.entries(en)) {
 const mergeDict = (lang: LangCode): Translations => ({
   ...(localeCache[lang] ?? en),
   ...(phrasesCache[lang] || {}),
+  ...(ANALYTICS_PHRASES[lang] || {}),
 });
 
 /** Interpolation helper shared by all languages: "{{name}} wins" -> "Sam wins" */
@@ -224,7 +226,7 @@ export const interpolate = (template: string, vars?: Record<string, string | num
 const looksTranslatable = (s: string): boolean => {
   if (!s || NEVER_TRANSLATE.has(s)) return false;
   if (s.length > 2000) return false;
-  if (!/[A-Za-z\u00C0-\u024F\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/.test(s)) return false;
+  if (!/\p{L}/u.test(s)) return false;
   if (/^(https?:|mailto:|tel:|\/|#)/.test(s)) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return false;
   return true;

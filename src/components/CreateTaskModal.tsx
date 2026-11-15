@@ -299,7 +299,9 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       images: draftImagesCollapsed,
     });
   }, [draftSubtasksCollapsed, draftChecklistCollapsed, draftAttachmentsCollapsed, draftImagesCollapsed]);
+  const { uploading: uploadingFiles, showUploading: showUploadingFiles, setUploading: setUploadingFiles } = useDelayedUploading();
   const { uploading: uploadingImages, showUploading: showUploadingImages, setUploading: setUploadingImages } = useDelayedUploading();
+  const [savingItem, setSavingItem] = useState(false);
 
   const [aiBuilderOpen, setAiBuilderOpen] = useState(false);
   const [aiBuilderInput, setAiBuilderInput] = useState('');
@@ -816,67 +818,68 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     }
 
     const taskId = crypto.randomUUID();
+    setSavingItem(true);
+    try {
+      const attachmentUrls = await Promise.all(newFiles.map(f => fileToDataUrl(f)));
 
-    const attachmentUrls = await Promise.all(newFiles.map(f => fileToDataUrl(f)));
-
-    const existingImageIds = newTaskImages.filter(img => !img.fileUrl.startsWith('data:image')).map(img => img.id);
-    const newImageFiles = newTaskImages.filter(img => img.fileUrl.startsWith('data:image'));
-
-    createItem(targetColumnId, newTaskTitle.trim(), {
-      id: taskId,
-      description: newTaskDescription,
-      status: 'to_do',
-      priority: newTaskPriority,
-      duration: Math.max(0, Number(newTaskDuration) || 0),
-      startDate: newTaskStartDate || undefined,
-      startTime: newTaskStartTime || undefined,
-      dueDate: newTaskDueDate || undefined,
-      dueTime: newTaskDueTime || undefined,
-      projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
-      projectName:
-        newTaskProjectId === ''
-          ? undefined
-          : projects.find(project => project.id === Number(newTaskProjectId))?.name || undefined,
-      subtasks: newTaskSubtasks.map(st => ({
-        id: st.id,
-        text: st.text,
-        completed: false,
-        durationMinutes: st.durationMinutes,
-      })),
-      checklists: [
-        ...(newChecklistItems.length
-          ? [{ id: crypto.randomUUID(), title: 'Checklist', items: newChecklistItems.map(it => ({ id: it.id, text: it.text, completed: false })) }]
-          : []),
-        ...newChecklistLists.map(l => ({
-          id: l.id,
-          title: l.title,
-          items: l.items.map(it => ({ id: it.id, text: it.text, completed: it.completed })),
+      createItem(targetColumnId, newTaskTitle.trim(), {
+        id: taskId,
+        description: newTaskDescription,
+        status: 'to_do',
+        priority: newTaskPriority,
+        duration: Math.max(0, Number(newTaskDuration) || 0),
+        startDate: newTaskStartDate || undefined,
+        startTime: newTaskStartTime || undefined,
+        dueDate: newTaskDueDate || undefined,
+        dueTime: newTaskDueTime || undefined,
+        projectId: newTaskProjectId === '' ? null : Number(newTaskProjectId),
+        projectName:
+          newTaskProjectId === ''
+            ? undefined
+            : projects.find(project => project.id === Number(newTaskProjectId))?.name || undefined,
+        subtasks: newTaskSubtasks.map(st => ({
+          id: st.id,
+          text: st.text,
+          completed: false,
+          durationMinutes: st.durationMinutes,
         })),
-      ],
-      attachments: newFiles.map((file, i) => ({
-        id: crypto.randomUUID(),
-        taskId,
-        fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
-        fileSize: file.size,
-        fileUrl: attachmentUrls[i],
-        createdAt: new Date().toISOString(),
-      })),
-      labels: newTaskLabels,
-      images: newTaskImages.map(img => ({
-        id: img.id,
-        taskId,
-        fileName: img.fileName,
-        fileType: img.fileType || 'image/png',
-        fileSize: img.fileSize,
-        fileUrl: img.fileUrl,
-        createdAt: img.createdAt || new Date().toISOString(),
-      })),
-      completed: false,
-      completedAt: undefined,
-    });
+        checklists: [
+          ...(newChecklistItems.length
+            ? [{ id: crypto.randomUUID(), title: 'Checklist', items: newChecklistItems.map(it => ({ id: it.id, text: it.text, completed: false })) }]
+            : []),
+          ...newChecklistLists.map(l => ({
+            id: l.id,
+            title: l.title,
+            items: l.items.map(it => ({ id: it.id, text: it.text, completed: it.completed })),
+          })),
+        ],
+        attachments: newFiles.map((file, i) => ({
+          id: crypto.randomUUID(),
+          taskId,
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+          fileUrl: attachmentUrls[i],
+          createdAt: new Date().toISOString(),
+        })),
+        labels: newTaskLabels,
+        images: newTaskImages.map(img => ({
+          id: img.id,
+          taskId,
+          fileName: img.fileName,
+          fileType: img.fileType || 'image/png',
+          fileSize: img.fileSize,
+          fileUrl: img.fileUrl,
+          createdAt: img.createdAt || new Date().toISOString(),
+        })),
+        completed: false,
+        completedAt: undefined,
+      });
 
-    onClose();
+      onClose();
+    } finally {
+      setSavingItem(false);
+    }
   };
 
   const generateAITask = async () => {
@@ -1352,14 +1355,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                 {newChecklistItems.map((item, index) => (
                                   <Draggable key={item.id} draggableId={item.id} index={index}>
                                     {(provided) => (
-                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
-                                        <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                      <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-3 py-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item rounded-lg border border-border/60 bg-card/50">
+                                        <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                           <GripVertical className="w-4 h-4" />
                                         </div>
                                         {editingDraftChecklistIndex === index ? (
                                           <AutoGrowTextarea
                                             autoFocus
-                                            className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                            className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                             value={editingDraftChecklistText}
                                             onChange={e => setEditingDraftChecklistText(e.target.value)}
                                             onBlur={() => {
@@ -1496,14 +1499,14 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                                               {list.items.map((item, itemIndex) => (
                                                 <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                   {(provided) => (
-                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2.5 text-sm group/item">
-                                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-3 py-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item rounded-lg border border-border/60 bg-card/50">
+                                                      <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                         <GripVertical className="w-4 h-4" />
                                                       </div>
                                                       {editingDraftChecklistItemKey?.listId === list.id && editingDraftChecklistItemKey?.itemId === item.id ? (
                                                         <AutoGrowTextarea
                                                           autoFocus
-                                                          className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                          className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                           value={editingDraftChecklistText}
                                                           onChange={e => setEditingDraftChecklistText(e.target.value)}
                                                           onBlur={() => {
@@ -1617,6 +1620,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                   {newFiles.length > 0 && (
                     <span className="text-xs text-muted-foreground">({newFiles.length})</span>
                   )}
+                  {(showUploadingFiles || uploadingFiles || savingItem) && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                    </span>
+                  )}
                 </div>
                 {draftAttachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
               </button>
@@ -1632,38 +1640,49 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                   ) : (
                     <>
-                      <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${newFiles.length >= maxFileCount ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${newFiles.length >= maxFileCount || uploadingFiles ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Paperclip className="w-5 h-5 text-primary" />
+                            {showUploadingFiles || uploadingFiles || savingItem ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                           </div>
                           <p className="text-sm font-medium text-foreground">
-                            {newFiles.length >= maxFileCount ? `File limit reached (${maxFileCount} max)` : 'Click to upload or drag and drop'}
+                            {showUploadingFiles || uploadingFiles || savingItem
+                              ? 'Uploading files...'
+                              : newFiles.length >= maxFileCount
+                                ? `File limit reached (${maxFileCount} max)`
+                                : 'Click to upload or drag and drop'}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">PDF, Documents (max {isPro ? '25MB' : '10MB'} each, up to {maxFileCount} files)</p>
                         </div>
                         <input
                           type="file"
                           multiple
-                          disabled={newFiles.length >= maxFileCount}
-                          onChange={e => {
+                          disabled={newFiles.length >= maxFileCount || uploadingFiles}
+                          onChange={async e => {
                             if (!e.target.files) return;
                             const incoming = Array.from(e.target.files);
                             e.currentTarget.value = '';
-                            const valid = incoming.filter(f => {
-                              if (f.size > maxFileSizeBytes) {
-                                alert(`"${f.name}" exceeds max file size of ${isPro ? '25MB' : '10MB'}.`);
-                                return false;
-                              }
-                              return true;
-                            });
-                            setNewFiles(prev => {
-                              const slots = Math.max(0, maxFileCount - prev.length);
-                              if (slots < valid.length) {
-                                alert(`Limit of ${maxFileCount} files reached.`);
-                              }
-                              return [...prev, ...valid.slice(0, slots)];
-                            });
+                            if (incoming.length === 0) return;
+                            setUploadingFiles(true);
+                            try {
+                              await Promise.resolve();
+                              const valid = incoming.filter(f => {
+                                if (f.size > maxFileSizeBytes) {
+                                  alert(`"${f.name}" exceeds max file size of ${isPro ? '25MB' : '10MB'}.`);
+                                  return false;
+                                }
+                                return true;
+                              });
+                              setNewFiles(prev => {
+                                const slots = Math.max(0, maxFileCount - prev.length);
+                                if (slots < valid.length) {
+                                  alert(`Limit of ${maxFileCount} files reached.`);
+                                }
+                                return [...prev, ...valid.slice(0, slots)];
+                              });
+                            } finally {
+                              setUploadingFiles(false);
+                            }
                           }}
                           className="hidden"
                         />
@@ -1824,11 +1843,11 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               <button onClick={() => { resetTaskDraft(); onClose(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
               <button
                 onClick={createTask}
-                disabled={savingTemplate || !newTaskTitle.trim() || ((templateMode || editTemplateMode) && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
+                disabled={savingTemplate || savingItem || !newTaskTitle.trim() || ((templateMode || editTemplateMode) && !templateName.trim()) || (newTaskProjectId !== '' && newTaskColumnId === '')}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg disabled:opacity-50 hover:bg-primary/90 transition-all flex items-center gap-2"
               >
-                {savingTemplate && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {savingTemplate ? 'Saving…' : editTemplateMode ? 'Save Template' : templateMode ? 'Template' : 'Save'}
+                {(savingTemplate || savingItem) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {savingTemplate || savingItem ? 'Saving…' : editTemplateMode ? 'Save Template' : templateMode ? 'Template' : 'Save'}
               </button>
             </div>
           </div>
@@ -2217,9 +2236,27 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                       <label onClick={e => e.stopPropagation()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-muted/50 border border-border hover:bg-muted rounded-lg cursor-pointer transition-all">
-                        <Paperclip className="w-3.5 h-3.5 text-primary" />
-                        <span>Add File</span>
-                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
+                        {showUploadingFiles || uploadingFiles || savingItem ? <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" /> : <Paperclip className="w-3.5 h-3.5 text-primary" />}
+                        <span>{showUploadingFiles || uploadingFiles || savingItem ? 'Uploading...' : 'Add File'}</span>
+                        <input
+                          type="file"
+                          multiple
+                          disabled={uploadingFiles}
+                          onChange={async e => {
+                            if (!e.target.files) return;
+                            const picked = Array.from(e.target.files || []);
+                            e.target.value = '';
+                            if (picked.length === 0) return;
+                            setUploadingFiles(true);
+                            try {
+                              await Promise.resolve();
+                              setNewFiles(prev => [...prev, ...picked]);
+                            } finally {
+                              setUploadingFiles(false);
+                            }
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                     </div>

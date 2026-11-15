@@ -40,6 +40,20 @@ function ensureDatabase(): Promise<void> {
         await pool.query(`ALTER TABLE milestones ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE NOT NULL`);
         await pool.query(`CREATE TABLE IF NOT EXISTS dashboard_usage_events (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, widget_type TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
         await pool.query(`CREATE INDEX IF NOT EXISTS dashboard_usage_events_user_date_idx ON dashboard_usage_events(user_id, created_at)`);
+        // ── Plan & org lifecycle columns/tables required by auth & resolveEffectiveUserPlan ──
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused_personal_tier TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused_personal_status TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused_personal_remaining_ms TEXT`);
+        await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS paused_personal_at TEXT`);
+        await pool.query(`ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS archived_at TEXT`);
+        await pool.query(`ALTER TABLE task_attachments ADD COLUMN IF NOT EXISTS archive_warning_sent BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS join_code TEXT`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS organization_members (id SERIAL PRIMARY KEY, organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL DEFAULT 'member', created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS org_members_user_id_idx ON organization_members(user_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS org_members_org_id_idx ON organization_members(organization_id)`);
+        await pool.query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS normal_alerts BOOLEAN DEFAULT TRUE`);
+        await pool.query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS weekly_ai_summary BOOLEAN DEFAULT TRUE`);
       } catch (e) {
         console.error('ensureDatabase (Vercel) migration error:', e);
         vercelInit = null;

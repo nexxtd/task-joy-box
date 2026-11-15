@@ -201,13 +201,21 @@ const queryClient = new QueryClient({
 
 function PublicLogin() {
   const { user, loading } = useAuth();
-  if (loading) return <PageLoader />;
-  if (user) {
+  const location = useLocation();
+  const resetToken = new URLSearchParams(location.search).get('token') || undefined;
+  if (loading) return <AuthLoader />;
+  if (user && !resetToken) {
     // New app version: show What's New once per version before the dashboard.
     if (needsWhatsNew(APP_VERSION, (user as any)?.id)) return <Navigate to="/whats-new" replace />;
     return <Navigate to="/" replace />;
   }
-  return <Suspense fallback={<PageLoader />}><ErrorBoundary><LoginPage /></ErrorBoundary></Suspense>;
+  return (
+    <Suspense fallback={<AuthLoader />}>
+      <ErrorBoundary>
+        <LoginPage initialToken={resetToken} />
+      </ErrorBoundary>
+    </Suspense>
+  );
 }
 
 function ProtectedRoutes() {
@@ -375,6 +383,23 @@ function ProtectedRoutes() {
   );
 }
 
+const AuthLoader = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center p-4" aria-hidden="true">
+    <div className="w-full max-w-md space-y-6">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-12 h-12 rounded-xl bg-muted animate-pulse" />
+        <div className="h-6 w-32 rounded bg-muted animate-pulse" />
+        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+      </div>
+      <div className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-4">
+        <div className="h-10 w-full rounded-lg bg-muted animate-pulse" />
+        <div className="h-10 w-full rounded-lg bg-muted animate-pulse" />
+        <div className="h-10 w-full rounded-lg bg-muted animate-pulse" />
+      </div>
+    </div>
+  </div>
+);
+
 const PageLoader = () => {
   // Layout-matching skeleton paints instantly; the "stuck" hint only appears
   // on genuinely slow chunk loads so users get feedback instead of a wait.
@@ -404,8 +429,9 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/verify-email" element={<ErrorBoundary variant="app"><Suspense fallback={<PageLoader />}><VerifyEmail /></Suspense></ErrorBoundary>} />
+                <Route path="/verify-email" element={<ErrorBoundary variant="app"><Suspense fallback={<AuthLoader />}><VerifyEmail /></Suspense></ErrorBoundary>} />
                 <Route path="/login" element={<PublicLogin />} />
+                <Route path="/reset-password" element={<PublicLogin />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </BrowserRouter>

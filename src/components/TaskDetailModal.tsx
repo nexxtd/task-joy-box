@@ -619,19 +619,20 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, canEdi
                                       {cl.items.map((item, idx) => (
                                         <Draggable key={item.id} draggableId={item.id} index={idx}>
                                           {(provided) => (
-                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 flex items-start gap-2 group/item min-w-0 checklist-item">
-                                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
+                                             <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row px-2 py-1.5 grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-2.5 group/item min-w-0 checklist-item">
+                                              <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0">
                                                 <GripVertical className="w-4 h-4" />
                                               </div>
                                               <SquareToggle
                                                 completed={item.completed}
                                                 onClick={() => toggleChecklistItem(task.id, cl.id, item.id)}
                                                 size="sm"
+                                                className="self-start"
                                               />
                                               {editingChecklistItemId === item.id ? (
                                                 <AutoGrowTextarea
                                                   autoFocus
-                                                  className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5 min-w-0"
+                                                  className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-1.5 py-0.5"
                                                   value={editingChecklistItemText}
                                                   onChange={e => setEditingChecklistItemText(e.target.value)}
                                                   onBlur={() => saveChecklistItemEdit(cl.id, item.id)}

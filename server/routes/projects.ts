@@ -472,11 +472,42 @@ router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Resp
       });
     }
 
-    // Joining via link creates a request — the owner approves before you join.
+    // Check if the user was already invited — accepting the invite link joins directly
     const existingRequest = await db
       .select()
       .from(projectJoinRequests)
       .where(and(eq(projectJoinRequests.projectId, projectId), eq(projectJoinRequests.userId, req.userId!)));
+
+    if (existingRequest.length > 0 && existingRequest[0].status === 'invited') {
+      const ownerTier = project[0]?.ownerId ? (await resolveEffectiveUserPlan(project[0].ownerId)).tier : 'free';
+      const [memberCountRow] = await db.select({ count: sql<number>`count(*)::int` }).from(projectMembers).where(eq(projectMembers.projectId, projectId));
+      const currentMemberCount = memberCountRow?.count ?? 0;
+      if (currentMemberCount >= PROJECT_MEMBER_LIMITS[ownerTier]) {
+        return res.status(403).json({
+          error: 'PROJECT_MEMBER_LIMIT_REACHED',
+          message: `This project has reached the limit of ${PROJECT_MEMBER_LIMITS[ownerTier]} members for the ${ownerTier} plan.`,
+          limit: PROJECT_MEMBER_LIMITS[ownerTier],
+        });
+      }
+
+      await db.insert(projectMembers).values({
+        projectId,
+        userId: req.userId!,
+        role: 'member',
+      });
+      await db.update(projectJoinRequests)
+        .set({ status: 'approved', updatedAt: new Date().toISOString() })
+        .where(eq(projectJoinRequests.id, existingRequest[0].id));
+      await clearInviteNotification(req.userId!, existingRequest[0].id);
+
+      return res.json({
+        pending: false,
+        project: await serializeProject(projectId),
+        message: 'Invitation accepted — joined project!',
+      });
+    }
+
+    // Joining via public link creates a request — the owner approves before you join.
     if (existingRequest.length > 0 && existingRequest[0].status === 'pending') {
       return res.json({
         pending: true,
@@ -495,6 +526,22 @@ router.post('/join/:inviteCode', requireAuth, async (req: AuthRequest, res: Resp
         status: 'pending',
       });
     }
+
+    // Notify project owner so incoming join requests appear in their notification panel
+    try {
+      if (project[0].ownerId && project[0].ownerId !== req.userId!) {
+        const [requesterRow] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, req.userId!)).limit(1);
+        const requesterName = requesterRow?.name || requesterRow?.email || 'Someone';
+        await db.insert(userNotifications).values({
+          userId: project[0].ownerId,
+          type: 'project_join_request',
+          title: `Join request for ${project[0].name}`,
+          message: `${requesterName} requested to join "${project[0].name}".`,
+          data: JSON.stringify({ projectId, projectName: project[0].name, requesterId: req.userId! }),
+          read: false,
+        });
+      }
+    } catch { /* non-fatal notification failure */ }
 
     res.json({
       pending: true,

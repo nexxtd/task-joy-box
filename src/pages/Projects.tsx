@@ -334,10 +334,23 @@ const Projects: React.FC = () => {
   // Narrow viewports have no room for a docked panel, so the conversation
   // always floats there instead.
   const isMobile = useIsMobile();
+  const projectWorkspaceRef = useRef<HTMLDivElement>(null);
+  const [workspaceWidth, setWorkspaceWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1280
+  );
+  useEffect(() => {
+    const el = projectWorkspaceRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width;
+      if (typeof w === 'number' && w > 0) setWorkspaceWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [selectedProjectId]);
   const chatSurfaceOpen = chatSideOpen && Boolean(selectedProjectId);
-  // Also treat narrow split panes as mobile: the pane minimum is 560px,
-  // so anything narrower means we float.
-  const paneNarrow = Boolean(selectedProjectId) && !isMobile && window.innerWidth < 768;
+  // Also treat narrow split panes as compact: float the chat when the project workspace is narrow.
+  const paneNarrow = Boolean(selectedProjectId) && !isMobile && workspaceWidth < 820;
   const showDockedChat = chatSurfaceOpen && chatMode === 'docked' && !paneNarrow;
   const showFloatingChat = chatSurfaceOpen && (chatMode === 'floating' || paneNarrow || isMobile);
 
@@ -2123,7 +2136,7 @@ const conversationProps = {
         )}
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div ref={projectWorkspaceRef} className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {!selectedProject ? (
           <div className="flex flex-1 flex-col bg-background">
             <div className="h-16 border-b border-border shrink-0" />

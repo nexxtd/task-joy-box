@@ -11,6 +11,23 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { reconcileUserOrgState, reconcileOrgMembers } from '../lib/orgLifecycle.js';
 
+async function countOrganizationMembers(orgId: number): Promise<number> {
+  const [{ cnt }] = await db
+    .select({ cnt: sql<number>`count(*)` })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, orgId));
+  return Number(cnt || 0);
+}
+
+async function syncOrganizationSeats(orgId: number): Promise<number> {
+  const actualCount = Math.max(1, await countOrganizationMembers(orgId));
+  await db
+    .update(organizations)
+    .set({ currentSeats: actualCount, updatedAt: new Date().toISOString() })
+    .where(eq(organizations.id, orgId));
+  return actualCount;
+}
+
 const router = Router();
 
 // Rate limiter for code-based joins to prevent brute forcing
@@ -78,7 +95,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
         currentSeats: m.currentSeats,
         tier: m.tier,
         status: m.status,
-        joinCode: m.joinCode,
+        ...(isAdmin ? { joinCode: m.joinCode } : {}),
         role: isOwner ? 'owner' : m.role,
         isOwner,
         isAdmin,
@@ -133,6 +150,9 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const isOwner = org.ownerId === userId;
     const isAdmin = membership[0].role === 'admin' || isOwner;
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Only organization owners and administrators can view organization management details' });
+    }
     const userRole = isOwner ? 'owner' : membership[0].role;
 
     // Get all members
@@ -349,7 +369,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const orgId = parseInt(req.params.id);
     const userId = req.userId!;
-    const { name, maxSeats, tier } = req.body;
+    const { name, maxSeats, tier, regenerateCode } = req.body;
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     if (!org) return res.status(404).json({ error: 'Organization not found' });
@@ -362,8 +382,14 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       .limit(1);
 
     const isOwner = org.ownerId === userId;
-    if (!isOwner) {
+    const isAdmin = membership?.role === 'admin' || isOwner;
+    const hasOwnerOnlyChanges = name !== undefined || maxSeats !== undefined || tier !== undefined;
+
+    if (hasOwnerOnlyChanges && !isOwner) {
       return res.status(403).json({ error: 'Only the organization owner can update organization settings' });
+    }
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Admin or owner access required' });
     }
 
     const updates: any = { updatedAt: new Date().toISOString() };
@@ -380,15 +406,20 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       if (isNaN(newMaxSeats) || newMaxSeats < 1) {
         return res.status(400).json({ error: 'Seats must be at least 1' });
       }
-      if (newMaxSeats < org.currentSeats) {
+      const liveMemberCount = Math.max(1, await countOrganizationMembers(orgId));
+      if (newMaxSeats < liveMemberCount) {
         return res.status(400).json({
-          error: `Cannot reduce seats below current usage (${org.currentSeats}). Remove members first.`,
+          error: `Cannot reduce seats below current usage (${liveMemberCount}). Remove members first.`,
         });
       }
       updates.maxSeats = newMaxSeats;
+      updates.currentSeats = liveMemberCount;
     }
     if (tier && ['premium', 'pro'].includes(tier)) {
       updates.tier = tier;
+    }
+    if (regenerateCode === true) {
+      updates.joinCode = generateJoinCode();
     }
 
     const [updated] = await db
@@ -620,6 +651,16 @@ router.post('/:id/kick-member/:targetUserId', requireAuth, async (req: AuthReque
       return res.status(400).json({ error: 'Cannot kick the organization owner' });
     }
 
+    const [targetMembership] = await db
+      .select()
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, orgId), eq(organizationMembers.userId, targetUserId)))
+      .limit(1);
+
+    if (!targetMembership) {
+      return res.status(404).json({ error: 'Member not found in this organization' });
+    }
+
     // Remove from group memberships
     await db
       .delete(organizationGroupMembers)
@@ -630,11 +671,7 @@ router.post('/:id/kick-member/:targetUserId', requireAuth, async (req: AuthReque
       .delete(organizationMembers)
       .where(and(eq(organizationMembers.organizationId, orgId), eq(organizationMembers.userId, targetUserId)));
 
-    // Decrement seats (never below 1)
-    await db
-      .update(organizations)
-      .set({ currentSeats: Math.max(1, org.currentSeats - 1) })
-      .where(eq(organizations.id, orgId));
+    await syncOrganizationSeats(orgId);
 
     await reconcileUserOrgState(targetUserId);
 
@@ -667,9 +704,49 @@ router.post('/:id/assign-member', requireAuth, async (req: AuthRequest, res: Res
       return res.status(403).json({ error: 'Only administrators can assign members' });
     }
 
+    if (org.type === 'family') {
+      return res.status(400).json({ error: 'Family organizations do not support groups' });
+    }
+
     const tUserId = parseInt(targetUserId);
     const pGroupId = parseInt(groupId);
     const sGroupId = subGroupId ? parseInt(subGroupId) : null;
+
+    if (isNaN(tUserId) || isNaN(pGroupId) || (subGroupId && (sGroupId === null || isNaN(sGroupId)))) {
+      return res.status(400).json({ error: 'Valid targetUserId, groupId, and optional subGroupId are required' });
+    }
+
+    const [targetMember] = await db
+      .select()
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, orgId), eq(organizationMembers.userId, tUserId)))
+      .limit(1);
+
+    if (!targetMember) {
+      return res.status(404).json({ error: 'Target user is not a member of this organization' });
+    }
+
+    const [parentGroup] = await db
+      .select()
+      .from(organizationGroups)
+      .where(and(eq(organizationGroups.id, pGroupId), eq(organizationGroups.organizationId, orgId)))
+      .limit(1);
+
+    if (!parentGroup || parentGroup.parentId !== null) {
+      return res.status(404).json({ error: 'Target group not found in this organization' });
+    }
+
+    if (sGroupId !== null) {
+      const [subGroup] = await db
+        .select()
+        .from(organizationGroups)
+        .where(and(eq(organizationGroups.id, sGroupId), eq(organizationGroups.organizationId, orgId)))
+        .limit(1);
+
+      if (!subGroup || subGroup.parentId !== pGroupId) {
+        return res.status(400).json({ error: 'Sub-group does not belong to the specified parent group in this organization' });
+      }
+    }
 
     // Rule: "A person can be in several groups, but in only one sub-group per group."
     // Remove existing assignment for this user in this parent group first
@@ -870,6 +947,10 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     if (!org) return res.status(404).json({ error: 'Organization not found' });
 
+    if (!['active', 'trialing'].includes(String(org.status || '').toLowerCase())) {
+      return res.status(400).json({ error: 'This organization plan is not currently active.' });
+    }
+
     // Validate group code status if joined via group
     if (targetGroup) {
       if (targetGroup.codeActive === false) {
@@ -892,7 +973,8 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
 
     if (!existingMembership) {
       // Check seat limit: "If a code is used when all seats are taken, the person sees 'Organization is full' and can't join."
-      if (org.currentSeats >= org.maxSeats) {
+      const liveMemberCount = await countOrganizationMembers(orgId);
+      if (liveMemberCount >= org.maxSeats) {
         return res.status(400).json({ error: 'Organization is full' });
       }
 
@@ -903,11 +985,8 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
         role: 'member',
       });
 
-      // Increment current seats
-      await db
-        .update(organizations)
-        .set({ currentSeats: org.currentSeats + 1 })
-        .where(eq(organizations.id, orgId));
+      // Sync current seats from live member count
+      await syncOrganizationSeats(orgId);
     }
 
     // If joined with a group/sub-group code, assign member accordingly:
@@ -1011,11 +1090,8 @@ router.post('/:id/leave', requireAuth, async (req: AuthRequest, res: Response) =
       .delete(organizationMembers)
       .where(and(eq(organizationMembers.organizationId, orgId), eq(organizationMembers.userId, userId)));
 
-    // Decrement current seats
-    await db
-      .update(organizations)
-      .set({ currentSeats: Math.max(1, org.currentSeats - 1) })
-      .where(eq(organizations.id, orgId));
+    // Sync current seats from live member count
+    await syncOrganizationSeats(orgId);
 
     const plan = await reconcileUserOrgState(userId);
 

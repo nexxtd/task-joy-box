@@ -6,7 +6,8 @@ import { useNotesContext } from '@/context/NotesContext';
 import {
   Wand2, Send, Loader2, Plus, Trash2, Search, Copy,
   XCircle, AlertTriangle, ChevronRight,
-  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare, Paperclip, FileText
+  Calendar, Flag, Layers, Sparkles, ListChecks, X, PenSquare, MessageSquare, Paperclip, FileText,
+  StickyNote, CheckSquare
 } from 'lucide-react';
 import { Task } from '@/types/board';
 import { useAuth } from '@/context/AuthContext';
@@ -82,6 +83,8 @@ const AIChat: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [chatAttachments, setChatAttachments] = useState<File[]>([]);
+  const [referencedItems, setReferencedItems] = useState<Array<{ type: 'task' | 'note'; id: string; title: string; column?: string }>>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const {
     board, addTask, updateTask, deleteTask, moveTask,
@@ -326,11 +329,55 @@ const AIChat: React.FC = () => {
       }
       case 'update': {
         const query = actionData.taskTitle || actionData.title || actionData.name || '';
-        const matches = findTasksByTitle(query);
-        if (matches.length === 0) {
+        const directTask = actionData.taskId ? board.tasks.find(t => String(t.id) === String(actionData.taskId)) : undefined;
+        const matches = directTask
+          ? [directTask]
+          : findTasksByTitle(query);
+        const fuzzyTask = matches.length === 0 && query
+          ? board.tasks.filter(t => t.title.toLowerCase().includes(String(query).toLowerCase()))
+          : [];
+        const finalMatches = matches.length > 0 ? matches : fuzzyTask;
+
+        if (finalMatches.length === 0 && query) {
+          const fallbackNote = notesCtx.findTasksByTitle(query)[0]
+            || notesCtx.board.tasks.find(n => n.title.toLowerCase().includes(String(query).toLowerCase()));
+          if (fallbackNote) {
+            const noteUpdates: Partial<Task> = {};
+            if (actionData.newTitle) noteUpdates.title = actionData.newTitle;
+            if (actionData.description !== undefined || actionData.content !== undefined) {
+              noteUpdates.description = actionData.content ?? actionData.description;
+            }
+            if (Array.isArray(actionData.subtasks)) {
+              noteUpdates.subtasks = actionData.subtasks.map((s: any, idx: number) => ({
+                id: s.id || `${genId()}-${idx}`,
+                title: String(s.title ?? s.text ?? ''),
+                completed: Boolean(s.completed),
+              }));
+            }
+            if (Array.isArray(actionData.checklists)) {
+              noteUpdates.checklists = actionData.checklists.map((cl: any, idx: number) => ({
+                id: cl.id || `${genId()}-${idx}`,
+                title: String(cl.title || 'Checklist'),
+                items: Array.isArray(cl.items)
+                  ? cl.items.map((it: any, i2: number) => ({
+                      id: it.id || `${genId()}-${idx}-${i2}`,
+                      text: String(it.text ?? it.title ?? ''),
+                      completed: Boolean(it.completed),
+                    }))
+                  : [],
+              }));
+            }
+            if (Array.isArray(actionData.labels)) noteUpdates.labels = actionData.labels;
+            notesCtx.updateTask(fallbackNote.id, noteUpdates);
+            appendMsg(chatId, msg(`Updated note "${fallbackNote.title}".`));
+            return true;
+          }
+        }
+
+        if (finalMatches.length === 0) {
           appendMsg(chatId, msg(`No task matching "${query}" found.`));
         } else {
-          const task = matches[0];
+          const task = finalMatches[0];
           const updates: Partial<Task> = {};
           if (actionData.newTitle) updates.title = actionData.newTitle;
           if (actionData.priority) updates.priority = actionData.priority;
@@ -339,8 +386,26 @@ const AIChat: React.FC = () => {
           if (actionData.dueTime !== undefined) updates.dueTime = actionData.dueTime;
           if (actionData.duration !== undefined) updates.duration = actionData.duration;
           if (actionData.status) updates.status = actionData.status;
-          if (Array.isArray(actionData.subtasks)) updates.subtasks = actionData.subtasks;
-          if (Array.isArray(actionData.checklists)) updates.checklists = actionData.checklists;
+          if (Array.isArray(actionData.subtasks)) {
+            updates.subtasks = actionData.subtasks.map((s: any, idx: number) => ({
+              id: s.id || `${genId()}-${idx}`,
+              title: String(s.title ?? s.text ?? ''),
+              completed: Boolean(s.completed),
+            }));
+          }
+          if (Array.isArray(actionData.checklists)) {
+            updates.checklists = actionData.checklists.map((cl: any, idx: number) => ({
+              id: cl.id || `${genId()}-${idx}`,
+              title: String(cl.title || 'Checklist'),
+              items: Array.isArray(cl.items)
+                ? cl.items.map((it: any, i2: number) => ({
+                    id: it.id || `${genId()}-${idx}-${i2}`,
+                    text: String(it.text ?? it.title ?? ''),
+                    completed: Boolean(it.completed),
+                  }))
+                : [],
+            }));
+          }
           if (Array.isArray(actionData.labels)) updates.labels = actionData.labels;
           updateTask(task.id, updates);
           const changedFields = Object.keys(updates).join(', ');
@@ -350,22 +415,49 @@ const AIChat: React.FC = () => {
       }
       case 'update_note': {
         const query = actionData.noteTitle || actionData.title || actionData.name || '';
-        const noteMatches = notesCtx.findTasksByTitle(query);
-        if (noteMatches.length === 0) {
+        const directId = actionData.noteId || actionData.id;
+        const directNote = directId ? notesCtx.board.tasks.find(n => String(n.id) === String(directId)) : undefined;
+        const noteMatches = directNote
+          ? [directNote]
+          : notesCtx.findTasksByTitle(query);
+        const fuzzyNote = noteMatches.length === 0 && query
+          ? notesCtx.board.tasks.filter(n => n.title.toLowerCase().includes(String(query).toLowerCase()))
+          : [];
+        const finalNoteMatches = noteMatches.length > 0 ? noteMatches : fuzzyNote;
+        if (finalNoteMatches.length === 0) {
           appendMsg(chatId, msg(`No note matching "${query}" found.`));
         } else {
-          const note = noteMatches[0];
+          const note = finalNoteMatches[0];
           const updates: Partial<Task> = {};
           if (actionData.newTitle) updates.title = actionData.newTitle;
           if (actionData.content !== undefined || actionData.description !== undefined) {
             updates.description = actionData.content ?? actionData.description;
           }
           if (actionData.color) updates.color = actionData.color;
-          if (Array.isArray(actionData.subtasks)) updates.subtasks = actionData.subtasks;
-          if (Array.isArray(actionData.checklists)) updates.checklists = actionData.checklists;
+          if (Array.isArray(actionData.subtasks)) {
+            updates.subtasks = actionData.subtasks.map((s: any, idx: number) => ({
+              id: s.id || `${genId()}-${idx}`,
+              title: String(s.title ?? s.text ?? ''),
+              completed: Boolean(s.completed),
+            }));
+          }
+          if (Array.isArray(actionData.checklists)) {
+            updates.checklists = actionData.checklists.map((cl: any, idx: number) => ({
+              id: cl.id || `${genId()}-${idx}`,
+              title: String(cl.title || 'Checklist'),
+              items: Array.isArray(cl.items)
+                ? cl.items.map((it: any, i2: number) => ({
+                    id: it.id || `${genId()}-${idx}-${i2}`,
+                    text: String(it.text ?? it.title ?? ''),
+                    completed: Boolean(it.completed),
+                  }))
+                : [],
+            }));
+          }
           if (Array.isArray(actionData.labels)) updates.labels = actionData.labels;
           notesCtx.updateTask(note.id, updates);
-          appendMsg(chatId, msg(`Updated note "${note.title}".`));
+          const changedFields = Object.keys(updates).join(', ');
+          appendMsg(chatId, msg(`Updated note "${note.title}" (${changedFields || 'changes applied'}).`));
         }
         return true;
       }
@@ -418,7 +510,7 @@ const AIChat: React.FC = () => {
       default:
         return false;
     }
-  }, [board, addTask, updateTask, deleteTask, moveTask, findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, pushEphemeral, appendMsg]);
+  }, [board, notesCtx, addTask, updateTask, deleteTask, moveTask, findTasksByTitle, findDuplicates, getColumnByName, bulkDeleteTasks, pushEphemeral, appendMsg]);
 
   const processCommand = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
@@ -445,7 +537,30 @@ const AIChat: React.FC = () => {
         body: JSON.stringify({
           message: text.trim(),
           context: {
-            tasks: board.tasks.map(t => ({ id: t.id, title: t.title, priority: t.priority, dueDate: t.dueDate, columnId: t.columnId })),
+            tasks: board.tasks.map(t => ({
+              id: t.id,
+              title: t.title,
+              description: (t.description || '').slice(0, 1200),
+              priority: t.priority,
+              dueDate: t.dueDate,
+              dueTime: t.dueTime,
+              columnId: t.columnId,
+              completed: Boolean(t.completed),
+              labels: t.labels,
+              subtasks: (t.subtasks || []).slice(0, 20),
+              checklists: (t.checklists || []).slice(0, 10),
+            })),
+            notes: notesCtx.board.tasks.map(n => ({
+              id: n.id,
+              title: n.title,
+              description: (n.description || '').slice(0, 1200),
+              color: n.color,
+              pinned: Boolean((n as Task & { pinned?: boolean }).pinned),
+              columnId: n.columnId,
+              labels: n.labels,
+              subtasks: (n.subtasks || []).slice(0, 20),
+              checklists: (n.checklists || []).slice(0, 10),
+            })),
             columns: board.columns.map(c => ({ id: c.id, title: c.title })),
           },
         }),
@@ -479,21 +594,68 @@ const AIChat: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeChatId, appendMsg, board, commitChats, loading, pushEphemeral, runAction]);
+  }, [activeChatId, appendMsg, board, notesCtx, commitChats, loading, pushEphemeral, runAction]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (
+      e.dataTransfer.types.includes('application/x-planner-item')
+      || e.dataTransfer.types.includes('text/plain')
+    ) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      if (!isDragOver) setIsDragOver(true);
+    }
+  }, [isDragOver]);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const related = e.relatedTarget as Node | null;
+    if (!related || !e.currentTarget.contains(related)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const raw = e.dataTransfer.getData('application/x-planner-item') || e.dataTransfer.getData('text/plain');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.type === 'task' || parsed.type === 'note') && parsed.title) {
+        const refItem = {
+          type: parsed.type as 'task' | 'note',
+          id: String(parsed.id || ''),
+          title: String(parsed.title),
+          column: parsed.column ? String(parsed.column) : undefined,
+        };
+        setReferencedItems(prev =>
+          prev.some(it => it.type === refItem.type && it.id === refItem.id)
+            ? prev
+            : [...prev, refItem]
+        );
+        inputRef.current?.focus();
+      }
+    } catch { /* ignore non-JSON drops */ }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if ((!input.trim() && referencedItems.length === 0) || loading) return;
     if (isMsgLimitReached) {
       if (!isPro) navigate('/pricing');
       return;
     }
     trackUsage('ai', 'send-message');
+    const refNote = referencedItems.length > 0
+      ? referencedItems.map(r => `[Referenced ${r.type}: "${r.title}"${r.id ? ` (id: ${r.id})` : ''}]`).join(' ') + '\n'
+      : '';
     const attachmentNote = chatAttachments.length > 0
       ? `\n[Attached ${chatAttachments.length} file(s): ${chatAttachments.map(f => f.name).join(', ')}]`
       : '';
-    processCommand(input.trim() + attachmentNote);
+    const bodyText = input.trim() || 'Please inspect and help with the referenced item.';
+    processCommand(refNote + bodyText + attachmentNote);
     setInput('');
+    setReferencedItems([]);
     setChatAttachments([]);
     const nextCount = dailyMsgCount + 1;
     setDailyMsgCount(nextCount);
@@ -629,7 +791,12 @@ const AIChat: React.FC = () => {
       </aside>
 
       {/* ── Main panel ── */}
-      <div className="ai-chat-main flex-1 flex flex-col bg-background/40">
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`ai-chat-main flex-1 flex flex-col bg-background/40 relative ${isDragOver ? 'ring-2 ring-inset ring-primary/50 bg-primary/5' : ''}`}
+      >
         {/* Header */}
         <header className="px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card shrink-0 flex items-center">
           <div className="flex items-center justify-between gap-2 sm:gap-4 w-full min-w-0">
@@ -796,8 +963,22 @@ const AIChat: React.FC = () => {
           </div>
 
           <div className="ai-chat-padding px-6 pb-3">
-            {chatAttachments.length > 0 && (
+            {(referencedItems.length > 0 || chatAttachments.length > 0) && (
               <div className="flex flex-wrap gap-2 mb-2 p-2 bg-muted/30 border border-border/60 rounded-xl">
+                {referencedItems.map(item => (
+                  <span key={`${item.type}:${item.id}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent text-foreground border border-border text-xs font-medium">
+                    {item.type === 'note' ? <StickyNote className="w-3.5 h-3.5 text-amber-500" /> : <CheckSquare className="w-3.5 h-3.5 text-primary" />}
+                    <span className="max-w-[160px] truncate">{item.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => setReferencedItems(prev => prev.filter(r => !(r.type === item.type && r.id === item.id)))}
+                      className="p-0.5 hover:text-destructive"
+                      title="Remove reference"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
                 {chatAttachments.map((f, idx) => (
                   <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
                     <FileText className="w-3.5 h-3.5" />
@@ -866,7 +1047,7 @@ const AIChat: React.FC = () => {
               ) : (
                 <button
                   type="submit"
-                  disabled={!input.trim() || loading}
+                  disabled={(!input.trim() && referencedItems.length === 0) || loading}
                   className="px-4 py-2.5 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

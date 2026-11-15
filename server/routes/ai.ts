@@ -2,12 +2,14 @@ import { Router, Response, Request } from 'express';
 import OpenAI from 'openai';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db.js';
-import { users, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema.js';
+import { users, userSettings, tasks, boards, columns, aiRequests, notes, goals, habits, projects } from '../../shared/schema.js';
 import { eq, desc } from 'drizzle-orm';
 import { getCalendarEventsForAI } from './calendar.js';
 import { getSetting } from '../lib/settings.js';
 import { tierRank } from '../lib/tier.js';
 import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
+import { normalizeLanguageCode } from '../lib/language.js';
+import { languageDisplayLabel, translateAnalytics } from '../../shared/analyticsI18n.js';
 
 const router = Router();
 
@@ -599,10 +601,28 @@ function localAiTaskFallback(input: string, boardColumns: any[] = [], availableT
   };
 }
 
-function localDashboardWidgetsFallback(safeTasks: any[], active: any[], completed: any[], overdue: any[]) {
+function translatePriorityLabel(priority: string | null | undefined, langCode: string): string {
+  const keyMap: Record<string, string> = {
+    urgent: 'Urgent',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+    none: 'None',
+  };
+  const key = keyMap[String(priority || 'none').toLowerCase()] || 'None';
+  return translateAnalytics(langCode, key);
+}
+
+function localDashboardWidgetsFallback(
+  safeTasks: any[],
+  active: any[],
+  completed: any[],
+  overdue: any[],
+  langCode: string = 'en',
+) {
   const total = safeTasks.length;
   const compRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
-  
+
   const overduePenalty = Math.min(30, overdue.length * 8);
   const completionBoost = Math.round((compRate / 100) * 35);
   const highPriorityActive = active.filter((t: any) => t.priority === 'urgent' || t.priority === 'high').length;
@@ -612,18 +632,49 @@ function localDashboardWidgetsFallback(safeTasks: any[], active: any[], complete
 
   const focusAreas: string[] = [];
   if (overdue.length > 0) {
-    focusAreas.push(`Resolve ${overdue.length} overdue item${overdue.length > 1 ? 's' : ''} to eliminate schedule bottlenecks`);
+    focusAreas.push(
+      translateAnalytics(
+        langCode,
+        'Clear {{count}} overdue deliverable(s) first to eliminate schedule drag and unblock downstream goals.',
+        { count: overdue.length }
+      )
+    );
   }
   if (highPriorityActive > 0) {
-    focusAreas.push(`Focus on ${highPriorityActive} high-priority deliverable${highPriorityActive > 1 ? 's' : ''} during peak energy windows`);
+    focusAreas.push(
+      translateAnalytics(
+        langCode,
+        'Protect morning focus blocks for {{count}} urgent/high priority task(s) before handling routine messages.',
+        { count: highPriorityActive }
+      )
+    );
   }
   const unassignedDate = active.filter((t: any) => !t.dueDate).length;
   if (unassignedDate > 0) {
-    focusAreas.push(`Assign target deadlines to ${unassignedDate} unscheduled task${unassignedDate > 1 ? 's' : ''}`);
+    focusAreas.push(
+      translateAnalytics(
+        langCode,
+        'Add target due dates to {{count}} unscheduled active task(s) so workload stays visible on the timeline.',
+        { count: unassignedDate }
+      )
+    );
   }
   if (focusAreas.length < 3) {
-    focusAreas.push(`Maintain momentum on current ${active.length} active workstreams`);
-    focusAreas.push('Conduct weekly review of completed milestones and upcoming goals');
+    focusAreas.push(
+      translateAnalytics(
+        langCode,
+        'Finish the remaining checklist items on near-complete active deliverables to capture quick momentum wins.'
+      )
+    );
+  }
+  if (focusAreas.length < 4) {
+    focusAreas.push(
+      translateAnalytics(
+        langCode,
+        'Maintain steady daily closure cadence across {{count}} active task(s) and review completed milestones weekly.',
+        { count: active.length }
+      )
+    );
   }
 
   const sortedActive = [...active].sort((a: any, b: any) => {
@@ -642,11 +693,26 @@ function localDashboardWidgetsFallback(safeTasks: any[], active: any[], complete
 
   const nextTasks = sortedActive.slice(0, 5).map((t: any) => {
     const isOv = overdue.some((o: any) => o.id === t.id);
-    const pLabel = t.priority && t.priority !== 'none' ? ` marked ${t.priority} priority` : '';
-    const dLabel = t.dueDate ? ` with due date ${t.dueDate}` : '';
+    const prio = translatePriorityLabel(t.priority, langCode);
+    const project = t.projectName ? ` · ${t.projectName}` : '';
+    const date = t.dueDate ? ` · ${t.dueDate}` : '';
     const reason = isOv
-      ? 'This task is overdue and requires immediate intervention to unblock dependent milestones. Allocate an uninterrupted 45-minute sprint to finish it today.'
-      : `High strategic value${pLabel}${dLabel}. Tackle this during your morning peak focus block before handling operational communications.`;
+      ? translateAnalytics(
+          langCode,
+          'Overdue since {{date}} ({{priority}} priority{{project}}). Dedicate an uninterrupted 45-minute sprint right now to close or re-scope its remaining steps.',
+          { date: t.dueDate || '—', priority: prio, project }
+        )
+      : (t.priority === 'urgent' || t.priority === 'high')
+        ? translateAnalytics(
+            langCode,
+            'High-leverage active deliverable ({{priority}} priority{{date}}{{project}}). Execute this during your peak energy block before routine admin work.',
+            { priority: prio, date, project }
+          )
+        : translateAnalytics(
+            langCode,
+            'Open backlog candidate ({{priority}} priority{{date}}{{project}}). Finish its first milestone or add checklist steps today so it stays in motion.',
+            { priority: prio, date, project }
+          );
     return { id: String(t.id), reason };
   });
 
@@ -656,28 +722,138 @@ function localDashboardWidgetsFallback(safeTasks: any[], active: any[], complete
 
   const bottlenecks = bottleneckCandidates.slice(0, 4).map((t: any) => {
     const isOv = overdue.some((o: any) => o.id === t.id);
+    const prio = translatePriorityLabel(t.priority, langCode);
     return {
       id: String(t.id),
       reason: isOv
-        ? `Task "${t.title}" is overdue${t.dueDate ? ` since ${t.dueDate}` : ''}. Timeline drift here risks compressing downstream review cycles.`
-        : `Task "${t.title}" lacks defined milestone constraints or is stalling high-priority delivery.`,
+        ? translateAnalytics(
+            langCode,
+            'Task "{{title}}" is overdue{{date}} ({{priority}} priority). Timeline drift pushes downstream milestones back and lowers delivery predictability.',
+            { title: t.title, date: t.dueDate ? ` (${t.dueDate})` : '', priority: prio }
+          )
+        : translateAnalytics(
+            langCode,
+            'Task "{{title}}" lacks a clear schedule window or is stalling at high priority ({{pct}}% sub-items done). Unclear scope drives procrastination.',
+            { title: t.title, pct: 0 }
+          ),
       suggestion: isOv
-        ? 'Break the remaining effort into 2 quick subtasks, set a revised firm completion window today, and execute without context switching.'
-        : 'Assign a specific target deadline and tag key checklist prerequisites to establish forward momentum.',
+        ? translateAnalytics(
+            langCode,
+            'Split remaining work into 2 quick subtasks, resolve the blocking dependency today, and lock a firm target time.'
+          )
+        : translateAnalytics(
+            langCode,
+            'Set a concrete due date, define the next 10-minute step in its checklist, and review progress in your next session.'
+          ),
     };
   });
 
-  const summary = total === 0
-    ? 'No tasks logged yet. Add your first task to see AI productivity analysis and bottleneck tracking.'
-    : `Overall productivity score stands at ${score}/100 with a ${compRate}% completion rate across ${total} tracked tasks (${completed.length} completed, ${active.length} active). ${overdue.length > 0 ? `Attention required on ${overdue.length} overdue task${overdue.length > 1 ? 's' : ''} to recover lost timeline velocity.` : 'All active workstreams are currently tracking on schedule with good momentum.'} Strategic focus should prioritize high-leverage deliverables.`;
+  const contributors: string[] = [];
+  if (completed.length > 0) {
+    contributors.push(
+      translateAnalytics(
+        langCode,
+        '{{count}} completed task(s) ({{pct}}% rate) contributed positively to momentum and lifted your baseline score.',
+        { count: completed.length, pct: compRate }
+      )
+    );
+  }
+  const topCompletedHigh = completed.find((t: any) => t.priority === 'urgent' || t.priority === 'high');
+  if (topCompletedHigh) {
+    contributors.push(
+      translateAnalytics(
+        langCode,
+        '"{{title}}" completed — closing urgent and high-priority items weighs heavily in your favor.',
+        { title: topCompletedHigh.title }
+      )
+    );
+  }
+  if (overdue.length === 0 && active.length > 0) {
+    contributors.push(
+      translateAnalytics(langCode, 'Zero overdue tasks — every scheduled deadline is currently protected from timeline drift.')
+    );
+  }
 
-  const weeklySummary = `Executive Weekly Recap: Over the current cycle, your workspace tracked ${total} total items with ${completed.length} marked complete, representing an effective completion velocity of ${compRate}%. Active tasks stand at ${active.length}, with ${overdue.length} items flagged as overdue. Priority alignment is concentrated in ${active.filter((t: any) => t.projectName).length} active project deliverables. For the coming week, focus should be directed at clearing stalled items early in the cycle and protecting dedicated deep work blocks for top-priority milestones.`;
+  const penalties: string[] = [];
+  for (const t of overdue.slice(0, 2)) {
+    penalties.push(
+      translateAnalytics(
+        langCode,
+        '"{{title}}" is overdue ({{date}}) — missed deadlines reduce predictability and score weight.',
+        { title: t.title, date: t.dueDate || '—' }
+      )
+    );
+  }
+  if (overdue.length > 2) {
+    penalties.push(
+      translateAnalytics(
+        langCode,
+        '{{count}} more overdue task(s) require immediate triage or updated target dates.',
+        { count: overdue.length - 2 }
+      )
+    );
+  } else if (penalties.length === 0) {
+    const stalledHigh = active.find((t: any) => t.priority === 'urgent' || t.priority === 'high');
+    if (stalledHigh) {
+      penalties.push(
+        translateAnalytics(
+          langCode,
+          '"{{title}}" remains open at {{priority}} priority — resolve or break down its prerequisites.',
+          { title: stalledHigh.title, priority: translatePriorityLabel(stalledHigh.priority, langCode) }
+        )
+      );
+    } else {
+      penalties.push(
+        translateAnalytics(langCode, 'No severe penalties detected right now — keep closing prioritized tasks consistently.')
+      );
+    }
+  }
+
+  const summary = total === 0
+    ? translateAnalytics(
+        langCode,
+        'No tasks logged yet. Add your first task with a priority and due date so AI can calculate your productivity score, surface bottlenecks, and build an execution plan.'
+      )
+    : `${translateAnalytics(
+        langCode,
+        'Productivity score stands at {{score}}/100 with {{compRate}}% completion across {{total}} tasks ({{completed}} done, {{active}} active).',
+        { score, compRate, total, completed: completed.length, active: active.length }
+      )} ${translateAnalytics(
+        langCode,
+        'Schedule pressure: {{overdue}} overdue items and {{unscheduled}} unscheduled tasks are competing with {{highPri}} urgent/high active priorities.',
+        { overdue: overdue.length, unscheduled: unassignedDate, highPri: highPriorityActive }
+      )}`;
+
+  const projectDeliverables = active.filter((t: any) => t.projectName).length;
+  const weeklySummary = total === 0
+    ? translateAnalytics(
+        langCode,
+        'No task activity recorded yet. Complete or schedule a few tasks to generate a data-backed weekly recap.'
+      )
+    : [
+        translateAnalytics(
+          langCode,
+          'Weekly Executive Recap: Tracked {{total}} tasks overall with {{completed}} completed ({{compRate}}% completion rate) and {{active}} currently active.',
+          { total, completed: completed.length, compRate, active: active.length }
+        ),
+        translateAnalytics(
+          langCode,
+          'Workload & risk: {{overdue}} item(s) are past due, {{highPri}} carry urgent/high priority, and {{projects}} active task(s) are tied to structured projects.',
+          { overdue: overdue.length, highPri: highPriorityActive, projects: projectDeliverables }
+        ),
+        translateAnalytics(
+          langCode,
+          'Next week plan: Close the oldest overdue deliverables within the first two days, schedule realistic due dates for unscheduled work, and guard peak energy hours for your top strategic goals.'
+        ),
+      ].join(' ');
 
   return {
     productivityScore: {
       score,
       summary,
       focusAreas: focusAreas.slice(0, 4),
+      contributors,
+      penalties,
     },
     nextTasks,
     bottlenecks,
@@ -899,6 +1075,7 @@ function defaultReplyFor(action: string): string {
     case 'delete': return 'Okay — looking for that task to remove.';
     case 'move': return 'Okay — moving that task now.';
     case 'update': return 'Okay — updating that task now.';
+    case 'update_note': return 'Okay — updating that note now.';
     case 'show_overdue': return 'Here are your overdue tasks.';
     case 'clear_completed': return 'Here are the completed tasks I can clear.';
     case 'find_duplicates': return 'Here are the duplicate tasks I found.';
@@ -909,15 +1086,18 @@ function defaultReplyFor(action: string): string {
 
 function localChatFallback(
   message: string,
-  context: { tasks?: any[]; columns?: any[] } | undefined,
+  context: { tasks?: any[]; notes?: any[]; columns?: any[] } | undefined,
   calendar?: { todayStr: string; tasksToday: any[]; eventsToday: any[] },
 ) {
   const m = message.toLowerCase();
   const tasks = context?.tasks || [];
+  const notes = context?.notes || [];
   const columns = context?.columns || [];
   const firstColumn = columns[0];
   const quotedTitle = message.match(/["“]([^"”]+)["”]/);
   const quoted = quotedTitle ? quotedTitle[1] : null;
+  const refNoteMatch = message.match(/\[Referenced note:\s*"([^"]+)"(?:\s*\(id:\s*([^)]+)\))?\]/i);
+  const refTaskMatch = message.match(/\[Referenced task:\s*"([^"]+)"(?:\s*\(id:\s*([^)]+)\))?\]/i);
 
   if (/\bcalendar\b/.test(m) && /(today|tonight|what|show|list|have|on|schedule|events?)/.test(m)) {
     if (calendar) {
@@ -999,20 +1179,36 @@ function localChatFallback(
     };
   }
 
-  if (/\b(update|fix|change|edit|modify)\b.*\bnote\b/i.test(m)) {
-    const noteMatch = (message.match(/\bnote\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'note';
+  if (refNoteMatch || /\b(update|fix|change|edit|modify)\b.*\bnote\b/i.test(m)) {
+    const matchedNote = refNoteMatch
+      ? notes.find((n: any) => String(n.id) === String(refNoteMatch[2]) || String(n.title).toLowerCase() === refNoteMatch[1].toLowerCase())
+      : notes.find((n: any) => n.title && m.includes(String(n.title).toLowerCase()));
+    const noteMatch = refNoteMatch?.[1] || matchedNote?.title || (message.match(/\bnote\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'note';
+    const replaceMatch = message.match(/\b(?:to|into|with)\s+["“]?(.+?)["”]?\s*$/i);
     return {
       action: 'update_note',
-      data: { noteTitle: noteMatch.trim(), content: message },
+      data: {
+        noteId: matchedNote?.id || refNoteMatch?.[2] || undefined,
+        noteTitle: noteMatch.trim(),
+        content: replaceMatch ? replaceMatch[1].trim() : undefined,
+      },
       message: `Updating note "${noteMatch.trim()}".`,
     };
   }
 
-  if (/\b(update|fix|change|edit|modify)\b.*\btask\b/i.test(m)) {
-    const taskMatch = (message.match(/\btask\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'task';
+  if (refTaskMatch || /\b(update|fix|change|edit|modify)\b.*\btask\b/i.test(m)) {
+    const matchedTask = refTaskMatch
+      ? tasks.find((t: any) => String(t.id) === String(refTaskMatch[2]) || String(t.title).toLowerCase() === refTaskMatch[1].toLowerCase())
+      : tasks.find((t: any) => t.title && m.includes(String(t.title).toLowerCase()));
+    const taskMatch = refTaskMatch?.[1] || matchedTask?.title || (message.match(/\btask\s+["“]?([^"”]+)["”]?/i) || [])[1] || quoted || 'task';
+    const replaceMatch = message.match(/\b(?:to|into|with)\s+["“]?(.+?)["”]?\s*$/i);
     return {
       action: 'update',
-      data: { taskTitle: taskMatch.trim(), description: message },
+      data: {
+        taskId: matchedTask?.id || refTaskMatch?.[2] || undefined,
+        taskTitle: taskMatch.trim(),
+        description: replaceMatch ? replaceMatch[1].trim() : undefined,
+      },
       message: `Updating task "${taskMatch.trim()}".`,
     };
   }
@@ -1175,6 +1371,28 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response) => {
     calendarLines.push(`Google Calendar events in the next 7 days: ${upcomingEvents.map((ev: any) => `"${ev.title}" on ${ev.startDate}${ev.startTime ? ` ${ev.startTime}` : ''}`).join('; ')}`);
   }
 
+  const contextTasks = Array.isArray(context?.tasks) ? context.tasks : [];
+  const mergedTasks = userData.tasks.length > 0 ? userData.tasks.map((t: any) => {
+    const cTask = contextTasks.find((ct: any) => String(ct.id) === String(t.id) || (ct.title && ct.title === t.title));
+    return cTask ? { ...t, subtasks: cTask.subtasks, checklists: cTask.checklists, labels: cTask.labels } : t;
+  }) : contextTasks;
+  const clientNotes = Array.isArray(context?.notes) ? context.notes : [];
+  const promptNotes = clientNotes.length > 0
+    ? clientNotes.slice(0, 25).map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        content: (n.description || n.content || '').slice(0, 800),
+        color: n.color,
+        subtasks: (n.subtasks || []).slice(0, 15),
+        checklists: (n.checklists || []).slice(0, 8),
+      }))
+    : extraData.notes.slice(0, 25).map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        content: (n.content || '').slice(0, 800),
+        color: n.color,
+      }));
+
   const safeMessage = sanitize(message);
 
   const systemPrompt = `You are Planora, a helpful task-management assistant.
@@ -1183,23 +1401,25 @@ If the user asks for a board action, you MUST reply with ONLY a JSON object like
 {"action": "create", "title": "Task Title", "description": "", "priority": "medium", "columnName": "To Do", "message": "Short friendly confirmation"}
 {"action": "delete", "taskTitle": "Task Title", "message": "..."}
 {"action": "move", "taskTitle": "Task Title", "targetColumnName": "Done", "message": "..."}
-{"action": "update", "taskTitle": "Existing Task Title", "newTitle": "Optional New Title", "description": "Updated description", "priority": "high", "dueDate": "YYYY-MM-DD", "message": "Updated task details"}
-{"action": "update_note", "noteTitle": "Existing Note Title", "newTitle": "Optional New Title", "content": "Updated content", "color": "#hex", "message": "Updated note details"}
+{"action": "update", "taskId": "Optional ID", "taskTitle": "Existing Task Title", "newTitle": "Optional New Title", "description": "Updated description", "priority": "high", "dueDate": "YYYY-MM-DD", "subtasks": [{"id": "1", "title": "Step", "completed": false}], "checklists": [{"id": "1", "title": "Checklist", "items": [{"id": "1", "text": "Item", "completed": false}]}], "message": "Updated task details"}
+{"action": "update_note", "noteId": "Optional ID", "noteTitle": "Existing Note Title", "newTitle": "Optional New Title", "content": "Updated content", "color": "#hex", "subtasks": [{"id": "1", "title": "Step", "completed": false}], "checklists": [{"id": "1", "title": "Checklist", "items": [{"id": "1", "text": "Item", "completed": false}]}], "message": "Updated note details"}
 {"action": "show_overdue", "message": "..."}
 {"action": "clear_completed", "message": "..."}
 {"action": "find_duplicates", "message": "..."}
 {"action": "summarize", "message": "..."}
 {"action": "chat", "message": "your helpful reply"}
 Available columns: ${(context?.columns || []).map((c: any) => c.title).join(', ') || 'none'}
-Current tasks: ${JSON.stringify(userData.tasks.slice(0, 15))}
+Current tasks: ${JSON.stringify(mergedTasks.slice(0, 25))}
+Current notes: ${JSON.stringify(promptNotes)}
 User data snapshot (goals, habits, notes, projects, insights):
 ${userDataLines.join('\n')}
 Calendar context:
 ${calendarLines.join('\n')}
 Rules:
 - For ordinary questions or conversation, respond with {"action": "chat", "message": "your answer"}.
-- When asked to fix or update a task (e.g. "can you fix this in task X", "update task X description to ..."): use {"action": "update", ...}
-- When asked to fix or update a note (e.g. "can you fix this in note Y", "update note Y content to ..."): use {"action": "update_note", ...}
+- When asked to fix or update a task (e.g. "can you fix this in task X", "update task X description to ..."): inspect the current task in Current tasks, apply the requested fix while keeping unrelated content intact, only include changed fields in the JSON, and return {"action": "update", ...}.
+- When asked to fix or update a note (e.g. "can you fix this in note Y", "update note Y content to ..."): inspect the current note in Current notes, apply the requested fix while keeping unrelated content intact, only include changed fields in the JSON, and return {"action": "update_note", ...}.
+- If the message includes [Referenced task: "..."] or [Referenced note: "..."], target that referenced item first.
 - Only use an action key when you actually must perform that board action based on the user's request.
 - Never invent tasks that don't exist. If a task or note name is unclear, use action "chat" and ask the user to confirm.
 - You HAVE full access to ALL the user's data: tasks, columns, goals, habits, notes, projects, insights, and their calendar (tasks with due dates plus connected Google Calendar events). When asked about any of these — the calendar, today's schedule, goal progress, habit streaks, notes, productivity insights — answer directly from the data above. Never claim you lack access to the user's data or that they must show it to you; it is already provided.
@@ -1268,7 +1488,7 @@ Rules:
       parsed = null;
     }
     if (parsed && typeof parsed === 'object') {
-      const knownActions = ['create', 'delete', 'move', 'update', 'show_overdue', 'clear_completed', 'find_duplicates', 'summarize'];
+      const knownActions = ['create', 'delete', 'move', 'update', 'update_note', 'show_overdue', 'clear_completed', 'find_duplicates', 'summarize'];
       if (typeof parsed.action === 'string' && knownActions.includes(parsed.action)) {
         action = parsed.action;
         actionData = parsed;
@@ -1940,6 +2160,20 @@ router.post('/premium/ai-prioritize', requireAuth, async (req: AuthRequest, res:
 // Analysis is available on all tiers; the AI widgets themselves remain Pro-gated client-side.
 router.post('/pro/dashboard-widgets', requireAuth, async (req: AuthRequest, res: Response) => {
   const { tasks } = req.body;
+  let storedLanguage = 'en';
+  try {
+    const [settings] = await db
+      .select({ language: userSettings.language })
+      .from(userSettings)
+      .where(eq(userSettings.userId, req.userId!))
+      .limit(1);
+    if (settings?.language) storedLanguage = settings.language;
+  } catch {
+    // Fallback cleanly if settings row cannot be read
+  }
+  const langCode = normalizeLanguageCode(req.body?.language || storedLanguage || 'en');
+  const targetLang = languageDisplayLabel(langCode);
+
   const safeTasks: any[] = (Array.isArray(tasks) ? tasks : []).slice(0, 120).map((t: any) => ({
     id: String(t?.id ?? ''),
     title: String(t?.title ?? '').slice(0, 120),
@@ -1966,28 +2200,40 @@ router.post('/pro/dashboard-widgets', requireAuth, async (req: AuthRequest, res:
   });
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const fallback = localDashboardWidgetsFallback(safeTasks, active, completed, overdue, langCode);
+
   if (safeTasks.length === 0) {
     return res.json({
       productivityScore: {
         score: 0,
-        summary: 'You have no tasks yet. Add your first task to get an AI productivity score.',
+        summary: translateAnalytics(
+          langCode,
+          'No tasks logged yet. Add your first task with a priority and due date so AI can calculate your productivity score, surface bottlenecks, and build an execution plan.'
+        ),
         focusAreas: [],
+        contributors: [],
+        penalties: [],
       },
       nextTasks: [],
       bottlenecks: [],
-      weeklySummary: 'No task activity to recap yet. Add and complete a few tasks and your AI weekly summary will appear here.',
+      weeklySummary: translateAnalytics(
+        langCode,
+        'No task activity recorded yet. Complete or schedule a few tasks to generate a data-backed weekly recap.'
+      ),
     });
   }
 
   const client = getOpenRouter();
   if (!client) {
-    return res.json(localDashboardWidgetsFallback(safeTasks, active, completed, overdue));
+    return res.json(fallback);
   }
 
   try {
     const prompt = `You are an AI productivity analyst powering live dashboard widgets. Today's date is ${todayStr}.
+TARGET OUTPUT LANGUAGE: ${targetLang} (code: ${langCode}).
+CRITICAL REQUIREMENT: Write EVERY single natural-language string in your JSON response natively in ${targetLang}. Never leave English prose when target language is not English. Keep task IDs untouched.
 
-Analyze ONLY the user's real data below and produce specific, data-grounded output. Never invent tasks, projects, or numbers that are not present in the data.
+Analyze ONLY the user's real data below and produce detailed, specific, multi-sentence, data-grounded output. NEVER write vague 1-sentence platitudes; reference real counts, task titles, priorities, deadlines, and concrete next steps. Never invent tasks, projects, or numbers that are not present in the data.
 
 WORKSPACE SNAPSHOT:
 - Total tasks: ${safeTasks.length}
@@ -2008,16 +2254,18 @@ Respond with ONLY valid JSON shaped exactly like:
 {
   "productivityScore": {
     "score": 0-100 integer,
-    "summary": "a rich 3-4 sentence analytical evaluation with exact numbers",
-    "focusAreas": ["3-5 concrete strategic focus areas"]
+    "summary": "a rich 3-4 sentence analytical evaluation in ${targetLang} with exact task counts, completion %, and schedule risk",
+    "focusAreas": ["3-5 concrete strategic focus actions in ${targetLang}"],
+    "contributors": ["2-3 specific positive drivers backed by numbers/task titles in ${targetLang}"],
+    "penalties": ["1-3 specific schedule drags/penalties backed by numbers/task titles in ${targetLang}"]
   },
   "nextTasks": [
-    { "id": "task id from ACTIVE TASKS", "reason": "comprehensive explanation" }
+    { "id": "task id from ACTIVE TASKS", "reason": "detailed 2-3 sentence explanation in ${targetLang} explaining urgency, impact, and how to tackle it" }
   ],
   "bottlenecks": [
-    { "id": "task id from data", "reason": "diagnostic of why stalled", "suggestion": "actionable recipe to unblock" }
+    { "id": "task id from data", "reason": "detailed diagnostic in ${targetLang} of why it stalled", "suggestion": "concrete multi-step recipe in ${targetLang} to unblock it" }
   ],
-  "weeklySummary": "executive-level natural language recap (4-6 sentences)"
+  "weeklySummary": "executive-level natural language recap in ${targetLang} (4-6 sentences covering throughput, risk, project concentration, and next-week focus)"
 }`;
 
     let responseText = await generateContentWithRetry(prompt);
@@ -2035,37 +2283,47 @@ Respond with ONLY valid JSON shaped exactly like:
 
     if (!parsed || !parsed.productivityScore) {
       console.warn('Dashboard widgets: AI output unparseable, returning smart local fallback.');
-      return res.json(localDashboardWidgetsFallback(safeTasks, active, completed, overdue));
+      return res.json(fallback);
     }
 
     const clampInt = (v: any, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
     const scoreObj = parsed.productivityScore && typeof parsed.productivityScore === 'object' ? parsed.productivityScore : {};
     const focusAreas = (Array.isArray(scoreObj.focusAreas) ? scoreObj.focusAreas : [])
-      .map((f: any) => String(f ?? '').slice(0, 90))
+      .map((f: any) => String(f ?? '').slice(0, 160))
+      .filter(Boolean)
+      .slice(0, 4);
+    const contributors = (Array.isArray(scoreObj.contributors) ? scoreObj.contributors : [])
+      .map((f: any) => String(f ?? '').slice(0, 220))
+      .filter(Boolean)
+      .slice(0, 4);
+    const penalties = (Array.isArray(scoreObj.penalties) ? scoreObj.penalties : [])
+      .map((f: any) => String(f ?? '').slice(0, 220))
       .filter(Boolean)
       .slice(0, 4);
     const nextTasks = (Array.isArray(parsed?.nextTasks) ? parsed.nextTasks : [])
-      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 200) }))
+      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 420) }))
       .filter((t: any) => t.id && validIds.has(t.id))
       .slice(0, 6);
     const bottlenecks = (Array.isArray(parsed?.bottlenecks) ? parsed.bottlenecks : [])
-      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 240), suggestion: String(t?.suggestion ?? '').slice(0, 240) }))
+      .map((t: any) => ({ id: String(t?.id ?? ''), reason: String(t?.reason ?? '').slice(0, 420), suggestion: String(t?.suggestion ?? '').slice(0, 420) }))
       .filter((t: any) => t.id && validIds.has(t.id))
       .slice(0, 5);
 
     res.json({
       productivityScore: {
         score: clampInt(scoreObj.score, 0, 100),
-        summary: String(scoreObj.summary ?? '').slice(0, 320),
-        focusAreas,
+        summary: String(scoreObj.summary ?? '').slice(0, 650) || fallback.productivityScore.summary,
+        focusAreas: focusAreas.length > 0 ? focusAreas : fallback.productivityScore.focusAreas,
+        contributors: contributors.length > 0 ? contributors : fallback.productivityScore.contributors,
+        penalties: penalties.length > 0 ? penalties : fallback.productivityScore.penalties,
       },
-      nextTasks: nextTasks.length > 0 ? nextTasks : localDashboardWidgetsFallback(safeTasks, active, completed, overdue).nextTasks,
-      bottlenecks: bottlenecks.length > 0 ? bottlenecks : localDashboardWidgetsFallback(safeTasks, active, completed, overdue).bottlenecks,
-      weeklySummary: String(parsed?.weeklySummary ?? '').slice(0, 600) || localDashboardWidgetsFallback(safeTasks, active, completed, overdue).weeklySummary,
+      nextTasks: nextTasks.length > 0 ? nextTasks : fallback.nextTasks,
+      bottlenecks: bottlenecks.length > 0 ? bottlenecks : fallback.bottlenecks,
+      weeklySummary: String(parsed?.weeklySummary ?? '').slice(0, 1200) || fallback.weeklySummary,
     });
   } catch (e) {
     console.warn('Dashboard widgets AI request failed, falling back gracefully to local:', e);
-    res.json(localDashboardWidgetsFallback(safeTasks, active, completed, overdue));
+    res.json(fallback);
   }
 });
 

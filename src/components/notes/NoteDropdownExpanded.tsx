@@ -312,8 +312,8 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0" title="Move item">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/30 hover:text-muted-foreground transition-colors flex-shrink-0" title="Move item">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
                                                 <SquareToggle
@@ -325,7 +325,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea
                                                     autoFocus
-                                                    className="flex-1 min-w-0 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                    className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}
@@ -340,7 +340,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                                 ) : (
                                                   <span
                                                     onClick={(e) => { e.stopPropagation(); setEditingChecklistItemId(item.id); setEditingChecklistText(item.text); }}
-                                                    className={`flex-1 min-w-0 cursor-text truncate ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                                                    className={`min-w-0 cursor-text break-words ${item.completed ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                                                     title="Click to edit"
                                                   >
                                                     {item.text}
@@ -349,7 +349,7 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
                                                 <button
                                                   onClick={() => onDeleteChecklistItem(note.id, list.id, item.id)}
                                                   title="Delete item"
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-100 md:opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-200 flex-shrink-0"
+                                                  className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-100 md:opacity-0 md:group-hover/item:opacity-100 transition-opacity duration-200"
                                                 >
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>

@@ -123,7 +123,21 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
       .then(() => fs.promises.writeFile(path.join(uploadDir, storedFileName), req.file.buffer))
       .catch(() => {});
 
-    let attachment: typeof taskAttachments.$inferSelect;
+    const returningCols = {
+      id: taskAttachments.id,
+      userId: taskAttachments.userId,
+      taskId: taskAttachments.taskId,
+      fileName: taskAttachments.fileName,
+      fileType: taskAttachments.fileType,
+      fileSize: taskAttachments.fileSize,
+      fileUrl: taskAttachments.fileUrl,
+      archived: taskAttachments.archived,
+      archivedAt: taskAttachments.archivedAt,
+      archiveWarningSent: taskAttachments.archiveWarningSent,
+      createdAt: taskAttachments.createdAt,
+    };
+
+    let attachment: Omit<typeof taskAttachments.$inferSelect, 'fileData'>;
     try {
       [attachment] = await db.insert(taskAttachments).values({
         userId,
@@ -133,7 +147,7 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
         fileSize: req.file.size,
         fileUrl: `/uploads/${storedFileName}`,
         fileData,
-      } as any).returning();
+      } as any).returning(returningCols);
     } catch (e: any) {
       // Column file_data may not exist yet (migration pending) — retry
       // without it so uploads keep working; images then fall back to disk.
@@ -145,13 +159,13 @@ router.post('/:taskId', requireAuth, upload.single('file'), async (req: any, res
           fileType: req.file.mimetype,
           fileSize: req.file.size,
           fileUrl: `/uploads/${storedFileName}`,
-        }).returning();
+        }).returning(returningCols);
       } else {
         throw e;
       }
     }
 
-    res.json(attachment);
+    res.json({ ...attachment, locked: false });
   } catch (error) {
     console.error('Error uploading attachment');
     res.status(500).json({ error: 'Failed to upload attachment' });

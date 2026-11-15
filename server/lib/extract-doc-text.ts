@@ -96,7 +96,7 @@ function rtfToHtml(rtfText: string): string {
   text = text.replace(/\\ul\s+(.*?)\\ul0\b/gi, '<u>$1</u>');
 
   // Remove RTF control words and braces
-  text = text.replace(/\\[a-z0-9\-]+\s?/gi, '');
+  text = text.replace(/\\[a-z0-9-]+\s?/gi, '');
   text = text.replace(/[{}]/g, '');
 
   return textToParagraphHtml(text);

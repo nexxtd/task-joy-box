@@ -29,5 +29,8 @@ export function normalizeLanguageCode(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!raw) return 'en';
   if (VALID_LANGUAGE_CODES.has(raw)) return raw;
-  return LEGACY_LANGUAGE_NAMES[raw] || 'en';
+  if (LEGACY_LANGUAGE_NAMES[raw]) return LEGACY_LANGUAGE_NAMES[raw];
+  const base = raw.split(/[-_]/)[0];
+  if (base && VALID_LANGUAGE_CODES.has(base)) return base;
+  return 'en';
 }

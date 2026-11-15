@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Pin, Save, Tag, Image, Star, Trash2, ChevronUp, ChevronDown, Paperclip } from 'lucide-react';
+import { X, Pin, Save, Tag, Image, Star, Trash2, ChevronUp, ChevronDown, Paperclip, Loader2 } from 'lucide-react';
 import { getImageSrc } from '@/components/shared/DraggableImageGrid';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ChecklistSubtaskEditor from '@/components/ChecklistSubtaskEditor';
@@ -50,10 +50,12 @@ interface NoteDetailModalProps {
   onClose: () => void;
   onTagPopup: () => void;
   onDelete: () => void;
-  onImageUpload: (files: FileList | null) => void;
+  onImageUpload: (files: FileList | null) => Promise<void> | void;
   onImageDelete: (imageId: string) => void;
-  onFileUpload?: (files: FileList | null) => void;
+  onFileUpload?: (files: FileList | null) => Promise<void> | void;
   onFileDelete?: (fileId: string) => void;
+  uploadingFiles?: boolean;
+  uploadingImages?: boolean;
   onTemplatesClick?: () => void;
   onSaveTemplate?: () => void;
   onCancelTemplateEdit?: () => void;
@@ -63,12 +65,16 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
   note, projects, boardColumns, tags, isTemplateEdit, templateEditName, onTemplateEditNameChange,
   onTitleChange, onContentChange, onPriorityChange, onProjectChange, onColumnChange, onStatusChange,
   onChecklistsChange, onSubtasksChange, onPinToggle, onClose, onTagPopup,
-  onDelete, onImageUpload, onImageDelete, onFileUpload, onFileDelete, onTemplatesClick, onSaveTemplate, onCancelTemplateEdit
+  onDelete, onImageUpload, onImageDelete, onFileUpload, onFileDelete, uploadingFiles, uploadingImages,
+  onTemplatesClick, onSaveTemplate, onCancelTemplateEdit
 }) => {
   const [tagsCollapsed, setTagsCollapsed] = useState(false);
   const [filesCollapsed, setFilesCollapsed] = useState(false);
   const [imagesCollapsed, setImagesCollapsed] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [localUploadingFiles, setLocalUploadingFiles] = useState(false);
+  const [localUploadingImages, setLocalUploadingImages] = useState(false);
+  const isUploadingFiles = Boolean(uploadingFiles || localUploadingFiles);
+  const isUploadingImages = Boolean(uploadingImages || localUploadingImages);
 
   if (!note) return null;
 
@@ -211,20 +217,41 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
               <Paperclip className="w-4 h-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Files</h3>
               {note.files && note.files.length > 0 && <span className="text-xs text-muted-foreground">({note.files.length})</span>}
+              {isUploadingFiles && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                </span>
+              )}
             </div>
             {filesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
           </button>
           {!filesCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+              <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${isUploadingFiles ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}>
                 <div className="flex flex-col items-center justify-center py-4">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                    <Paperclip className="w-5 h-5 text-primary" />
+                    {isUploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                   </div>
-                  <p className="text-sm font-medium text-foreground">{uploading ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                  <p className="text-sm font-medium text-foreground">{isUploadingFiles ? 'Uploading files...' : 'Click to upload or drag and drop'}</p>
                   <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                 </div>
-                <input type="file" multiple onChange={e => { onFileUpload?.(e.target.files); e.target.value = ''; }} className="hidden" />
+                <input
+                  type="file"
+                  multiple
+                  disabled={isUploadingFiles}
+                  onChange={async e => {
+                    const files = e.target.files;
+                    e.target.value = '';
+                    if (!files || files.length === 0 || !onFileUpload) return;
+                    setLocalUploadingFiles(true);
+                    try {
+                      await onFileUpload(files);
+                    } finally {
+                      setLocalUploadingFiles(false);
+                    }
+                  }}
+                  className="hidden"
+                />
               </label>
               {note.files && note.files.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -261,20 +288,42 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
               <Image className="w-4 h-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold text-foreground">Images</h3>
               {note.images && note.images.length > 0 && <span className="text-xs text-muted-foreground">({note.images.length})</span>}
+              {isUploadingImages && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                </span>
+              )}
             </div>
             {imagesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
           </button>
           {!imagesCollapsed && (
             <div className="border-t border-border/60 px-4 py-3 space-y-3">
-              <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+              <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${isUploadingImages ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}>
                 <div className="flex flex-col items-center justify-center py-4">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                    <Paperclip className="w-5 h-5 text-primary" />
+                    {isUploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Image className="w-5 h-5 text-primary" />}
                   </div>
-                  <p className="text-sm font-medium text-foreground">Click to upload</p>
+                  <p className="text-sm font-medium text-foreground">{isUploadingImages ? 'Uploading images...' : 'Click to upload'}</p>
                   <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB)</p>
                 </div>
-                <input type="file" multiple accept="image/*" onChange={e => { onImageUpload(e.target.files); e.target.value = ''; }} className="hidden" />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.heic,.heif"
+                  disabled={isUploadingImages}
+                  onChange={async e => {
+                    const files = e.target.files;
+                    e.target.value = '';
+                    if (!files || files.length === 0) return;
+                    setLocalUploadingImages(true);
+                    try {
+                      await onImageUpload(files);
+                    } finally {
+                      setLocalUploadingImages(false);
+                    }
+                  }}
+                  className="hidden"
+                />
               </label>
               {note.images && note.images.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

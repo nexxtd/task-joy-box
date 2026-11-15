@@ -3,6 +3,20 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WidgetCatalog } from './WidgetCatalog';
 
+vi.mock('@/context/LanguageContext', () => ({
+  useLanguage: () => ({
+    language: 'English',
+    lang: 'en',
+    T: {},
+    t: (phrase: string, vars?: Record<string, string | number>) =>
+      vars ? phrase.replace(/\{\{(\w+)\}\}/g, (_, k) => String(vars[k] ?? '')) : phrase,
+    setLanguage: vi.fn(),
+    isRTL: false,
+    currency: 'USD',
+    ready: true,
+  }),
+}));
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const Icon = () => <svg />;
@@ -53,7 +67,7 @@ describe('module catalog', () => {
     const { dialog, drag, upgrade } = renderCatalog();
     expect(dialog.querySelectorAll('[data-widget-type]')).toHaveLength(3);
     const placed = dialog.querySelector('[data-widget-type="paid-trend"]')!;
-    expect(placed.textContent).toContain('In dashboard');
+    expect(placed.textContent).toContain('In Dashboard');
     act(() => {
       placed.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
       placed.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -80,7 +94,7 @@ describe('module catalog', () => {
     expect([...dialog.querySelectorAll('[data-widget-type]')].map(element => element.getAttribute('data-widget-type'))).toEqual(['pro-summary']);
     search(dialog, '  PREMIUM  ');
     expect([...dialog.querySelectorAll('[data-widget-type]')].map(element => element.getAttribute('data-widget-type'))).toEqual(['paid-trend']);
-    expect(dialog.textContent).toContain('In dashboard');
+    expect(dialog.textContent).toContain('In Dashboard');
     search(dialog, 'no-such-module');
     expect(dialog.querySelector('[role="status"]')?.textContent).toContain('No modules match');
     const clear = [...dialog.querySelectorAll('button')].find(button => button.textContent === 'Clear search')!;
@@ -88,10 +102,11 @@ describe('module catalog', () => {
     expect(dialog.querySelectorAll('[data-widget-type]')).toHaveLength(3);
   });
 
-  it('uses the Insights status and search label on the Insights page', () => {
+  it('uses the Insights status and Customize Insights label on the Insights page', () => {
     const { dialog } = renderCatalog('insights');
-    expect(dialog.querySelector('[data-widget-type="paid-trend"]')?.textContent).toContain('In insights');
-    expect(dialog.querySelector('input')?.getAttribute('aria-label')).toBe('Search insights modules');
+    expect(dialog.querySelector('[data-widget-type="paid-trend"]')?.textContent).toContain('In Insights');
+    expect(dialog.querySelector('section[role="dialog"]')?.getAttribute('aria-label')).toBe('Customize Insights');
+    expect(dialog.querySelector('input')?.getAttribute('aria-label')).toBe('Search modules...');
   });
 
   it('offers Add only for available unplaced modules and does not start a drag', () => {

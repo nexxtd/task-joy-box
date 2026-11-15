@@ -29,9 +29,10 @@ import goalBoardRoutes from './routes/goalBoards.js';
 import habitBoardRoutes from './routes/habitBoards.js';
 import whiteboardsRoutes from './routes/whiteboards.js';
 import deepFocusRoutes from './routes/deepFocus.js';
+import energyRoutes from './routes/energy.js';
 import supportRoutes from './routes/support.js';
 import { getSettingBoolean, getSetting } from './lib/settings.js';
-import { firewall, sanitizePrototypePollution } from './middleware/firewall.js';
+import { firewall, sanitizePrototypePollution, inspectRequestBody } from './middleware/firewall.js';
 import milestonesRoutes from './routes/milestones.js';
 import taskTemplatesRoutes from './routes/taskTemplates.js';
 import noteTemplatesRoutes from './routes/noteTemplates.js';
@@ -103,6 +104,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self'; object-src 'none'; base-uri 'self'");
   next();
 });
 
@@ -116,10 +118,27 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 15,
+  max: 25,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === 'GET' && (req.path === '/me' || req.path === '/session'),
   message: { error: 'Too many authentication attempts. Please try again later.' },
+});
+
+const twoFactorLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many verification code attempts. Please wait a few minutes.' },
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many payment requests. Please wait a moment and try again.' },
 });
 
 const aiLimiter = rateLimit({
@@ -234,6 +253,7 @@ app.use((req, _res, next) => {
   }
   next();
 });
+app.use(inspectRequestBody);
 app.use(cookieParser());
 
 const uploadsDir = process.env.VERCEL === '1'
@@ -293,7 +313,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: isProduction,
+    secure: isProduction ? 'auto' : false,
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
     sameSite: crossSiteCookies ? 'none' : 'lax',
@@ -311,6 +331,47 @@ app.use((req, res, next) => {
   next();
 });
 
+// Defense-in-depth CSRF / cross-site state-change guard for cookie-authenticated API calls
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    next();
+    return;
+  }
+  if (req.path === '/payment/webhook' || req.path.startsWith('/cron/')) {
+    next();
+    return;
+  }
+  const secFetchSite = req.headers['sec-fetch-site'];
+  if (secFetchSite === 'cross-site') {
+    const rawOrigin = req.headers.origin;
+    const reqOrigin = typeof rawOrigin === 'string' ? normalizeOrigin(rawOrigin) : '';
+    const isTrustedLocalOrigin =
+      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+):\d+$/.test(reqOrigin);
+    if (!reqOrigin || (!allowedOrigins.has(reqOrigin) && !isTrustedLocalOrigin)) {
+      res.status(403).json({ error: 'Cross-site request blocked by security policy.', code: 'CSRF_BLOCKED' });
+      return;
+    }
+  }
+  const referer = req.headers.referer;
+  const host = req.headers.host;
+  if (!req.headers.origin && typeof referer === 'string' && host) {
+    try {
+      const refOrigin = normalizeOrigin(new URL(referer).origin);
+      const refHost = new URL(referer).host;
+      const isTrustedLocal =
+        /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):\d+$/.test(refOrigin);
+      if (refHost !== host && !allowedOrigins.has(refOrigin) && !isTrustedLocal) {
+        res.status(403).json({ error: 'Invalid request referer.', code: 'CSRF_REFERER_BLOCKED' });
+        return;
+      }
+    } catch { /* ignore malformed referer */ }
+  }
+  next();
+});
+
+app.use('/api/auth/two-factor', twoFactorLimiter);
+app.use('/api/auth/forgot-password', twoFactorLimiter);
+app.use('/api/auth/reset-password', twoFactorLimiter);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/collaboration', collaborationRoutes);
@@ -318,7 +379,7 @@ app.use('/api/organizations', organizationsRoutes);
 app.use('/api/workspace', workspaceRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/calendar', calendarRoutes);
-app.use('/api/payment', paymentRoutes);
+app.use('/api/payment', paymentLimiter, paymentRoutes);
 app.use('/api/goals', goalsRoutes);
 app.use('/api/habits', habitsRoutes);
 app.use('/api/notes', notesRoutes);
@@ -332,6 +393,7 @@ app.use('/api/goal-boards', goalBoardRoutes);
 app.use('/api/habit-boards', habitBoardRoutes);
 app.use('/api/whiteboards', whiteboardsRoutes);
 app.use('/api/deep-focus', deepFocusRoutes);
+app.use('/api/energy', energyRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/milestones', milestonesRoutes);
 app.use('/api/task-templates', taskTemplatesRoutes);

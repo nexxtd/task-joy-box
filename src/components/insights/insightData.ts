@@ -1,6 +1,16 @@
 import { dateLocale } from '@/i18n/format';
 import { Task, Column, Priority } from '@/types/board';
 
+export type TranslateFn = (phrase: string, vars?: Record<string, string | number>) => string;
+
+export const defaultTranslate: TranslateFn = (phrase, vars) => {
+  if (!vars) return phrase;
+  return phrase.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const val = vars[key];
+    return val === undefined || val === null ? match : String(val);
+  });
+};
+
 export interface DoneCtx {
   doneColIds: string[];
 }
@@ -28,8 +38,8 @@ export const localDayKey = (d: Date) => {
   return c.getTime();
 };
 
-export const formatDate = (value?: string): string => {
-  if (!value) return 'No date';
+export const formatDate = (value?: string, t: TranslateFn = defaultTranslate): string => {
+  if (!value) return t('No date');
   const d = safeDate(value);
   if (!d) return value;
   return d.toLocaleDateString(dateLocale(), { month: 'short', day: 'numeric' });
@@ -121,7 +131,12 @@ export interface CompletionOverviewData {
   explanation: string;
 }
 
-export const buildCompletionOverview = (tasks: Task[], ctx: DoneCtx, rangeDays: number): CompletionOverviewData => {
+export const buildCompletionOverview = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  rangeDays: number,
+  t: TranslateFn = defaultTranslate,
+): CompletionOverviewData => {
   const startKey = localDayKey(new Date()) - (rangeDays - 1) * DAY_MS;
 
   const createdInPeriod: CompletionOverviewEntry[] = tasks
@@ -164,22 +179,40 @@ export const buildCompletionOverview = (tasks: Task[], ctx: DoneCtx, rangeDays: 
   const lateAdded = createdInPeriod.filter(t => !t.completed).length;
   const addedLate = createdInPeriod.filter(t => {
     if (t.completed) return false;
-    const created = safeDate(t.when);
-    if (!created) return false;
-    return Date.now() - created.getTime() <= 2 * DAY_MS;
+    const createdDate = safeDate(t.when);
+    if (!createdDate) return false;
+    return Date.now() - createdDate.getTime() <= 2 * DAY_MS;
   });
 
   let explanation: string;
   if (total === 0) {
-    explanation = 'No tasks were created or completed in the selected period, so there is nothing to measure yet.';
+    explanation = t('No tasks were created or completed in the last {{days}} days. Add or complete deliverables to generate completion velocity analysis.', { days: rangeDays });
   } else if (completed === 0) {
-    explanation = `Completion is at 0% for the last ${rangeDays} days — ${created} task${created !== 1 ? 's were' : ' was'} added but none finished.`;
+    explanation = t('Completion sits at 0% for the last {{days}} days — {{created}} task(s) were added without a closure yet. Finish the smallest item to start momentum.', { days: rangeDays, created });
   } else if (lateAdded > 0 && lateAdded >= completed) {
-    explanation = `Completion is ${completionRate}% because ${lateAdded} task${lateAdded !== 1 ? 's were' : ' was'} added in the last ${rangeDays} days and ${lateAdded === 1 ? 'is' : 'are'} still open — ${completed} completed in the same window.${addedLate.length > 0 ? ` ${addedLate.length} of those came in the final 48 hours, dragging the rate down.` : ''}`;
+    explanation = t('Completion is {{rate}}% over {{days}} days: {{completed}} completed vs {{open}} still open out of {{created}} created ({{late}} added in the final 48h). Prioritize clearing older items first.', {
+      rate: completionRate,
+      days: rangeDays,
+      completed,
+      open: lateAdded,
+      created,
+      late: addedLate.length,
+    });
   } else if (completed > created) {
-    explanation = `Completion is ${completionRate}% — ${completed} task${completed !== 1 ? 's' : ''} finished against ${created} added, so you are clearing the backlog faster than it grows.`;
+    explanation = t('Completion is {{rate}}% over {{days}} days — {{completed}} finished vs {{created}} created, meaning backlog debt is actively shrinking.', {
+      rate: completionRate,
+      days: rangeDays,
+      completed,
+      created,
+    });
   } else {
-    explanation = `Completion is ${completionRate}% over the last ${rangeDays} days: ${completed} completed, ${created - completed} still open out of ${created} added.`;
+    explanation = t('Completion is {{rate}}% over the last {{days}} days: {{completed}} completed and {{open}} still open out of {{created}} created.', {
+      rate: completionRate,
+      days: rangeDays,
+      completed,
+      open: Math.max(0, created - completed),
+      created,
+    });
   }
 
   return {
@@ -209,33 +242,50 @@ export interface OverdueEntry {
   reasoning: string;
 }
 
-export const buildOverdue = (tasks: Task[], ctx: DoneCtx): OverdueEntry[] =>
+export const buildOverdue = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): OverdueEntry[] =>
   tasks
-    .filter(t => !isTaskDone(t, ctx))
-    .map(t => ({ t, due: dueEnd(t) }))
-    .filter((x): x is { t: Task; due: Date } => x.due !== null && x.due.getTime() < Date.now())
+    .filter(task => !isTaskDone(task, ctx))
+    .map(task => ({ task, due: dueEnd(task) }))
+    .filter((x): x is { task: Task; due: Date } => x.due !== null && x.due.getTime() < Date.now())
     .sort((a, b) => a.due.getTime() - b.due.getTime())
-    .map(({ t, due }) => {
+    .map(({ task, due }) => {
       const daysOverdue = Math.max(1, Math.floor((Date.now() - due.getTime()) / DAY_MS));
-      const prio = t.priority === 'none' ? 'unprioritized' : PRIORITY_LABEL[t.priority].toLowerCase();
-      const { subtaskTotal, subDone, checklistTotal, checklistDone } = taskBreakdown(t);
+      const prioLabel = t(task.priority === 'none' ? 'Unprioritized' : PRIORITY_LABEL[task.priority]);
+      const dateStr = formatDate(task.dueDate, t);
+      const { subtaskTotal, subDone, checklistTotal, checklistDone } = taskBreakdown(task);
       const openWork = (subtaskTotal - subDone) + (checklistTotal - checklistDone);
+      const workNote = openWork > 0
+        ? t('Still carries {{count}} open sub-item(s).', { count: openWork })
+        : t('All breakdown steps are done, yet the task itself is still open.');
       let reasoning: string;
       if (daysOverdue >= 14) {
-        reasoning = `"${t.title}" has been overdue for ${daysOverdue} days — past the point where a deadline still feels real. ${openWork > 0 ? `It still has ${openWork} open item${openWork > 1 ? 's' : ''} of work attached.` : 'Its breakdown is done but the task was never closed.'} The longer an overdue task sits, the lower the odds it ever gets finished.`;
+        reasoning = t(
+          '"{{title}}" has been overdue for {{days}} days — past the point where deadlines feel urgent. {{work}} The longer it sits overdue, the lower the chance it gets closed.',
+          { title: task.title, days: daysOverdue, work: workNote }
+        );
       } else if (daysOverdue >= 7) {
-        reasoning = `"${t.title}" is ${daysOverdue} days past its due date (${formatDate(t.dueDate)}). At this stage it has dropped out of every "up next" ordering, so nothing pulls it back in. ${t.priority === 'urgent' || t.priority === 'high' ? `It is ${prio} priority, which makes the missed date harder to justify.` : ''}`;
+        reasoning = t(
+          '"{{title}}" is {{days}} days past due ({{date}}). At {{priority}} priority, leaving it open pushes dependent schedules out of alignment.',
+          { title: task.title, days: daysOverdue, date: dateStr, priority: prioLabel }
+        );
       } else {
-        reasoning = `"${t.title}" was due ${formatDate(t.dueDate)} — ${daysOverdue} day${daysOverdue > 1 ? 's' : ''} ago — and is still ${openWork > 0 ? `carrying ${openWork} open item${openWork > 1 ? 's' : ''}` : 'unfinished'}. Fresh overdue tasks quietly become permanent ones when they are not re-dated or closed within the first few days.`;
+        reasoning = t(
+          '"{{title}}" was due {{date}} ({{days}}d ago) and still remains open. Re-date or close fresh overdue items within 48h to avoid backlog buildup.',
+          { title: task.title, date: dateStr, days: daysOverdue }
+        );
       }
       return {
-        id: t.id,
-        title: t.title,
-        dueDate: t.dueDate || '',
-        dueTime: t.dueTime,
+        id: task.id,
+        title: task.title,
+        dueDate: task.dueDate || '',
+        dueTime: task.dueTime,
         daysOverdue,
-        priority: t.priority,
-        projectName: t.projectName,
+        priority: task.priority,
+        projectName: task.projectName,
         reasoning,
       };
     });
@@ -252,9 +302,13 @@ export interface PriorityGroup {
   totalMinutes: number;
 }
 
-export const buildPriorityGroups = (tasks: Task[], ctx: DoneCtx): PriorityGroup[] =>
+export const buildPriorityGroups = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): PriorityGroup[] =>
   PRIORITY_ORDER.map(priority => {
-    const group = tasks.filter(t => !isTaskDone(t, ctx) && t.priority === priority)
+    const group = tasks.filter(task => !isTaskDone(task, ctx) && task.priority === priority)
       .sort((a, b) => {
         const da = dueEnd(a)?.getTime() ?? Number.MAX_SAFE_INTEGER;
         const db = dueEnd(b)?.getTime() ?? Number.MAX_SAFE_INTEGER;
@@ -262,10 +316,10 @@ export const buildPriorityGroups = (tasks: Task[], ctx: DoneCtx): PriorityGroup[
       });
     return {
       priority,
-      label: priority === 'none' ? 'Unprioritized' : PRIORITY_LABEL[priority],
+      label: priority === 'none' ? t('Unprioritized') : t(PRIORITY_LABEL[priority]),
       count: group.length,
       tasks: group,
-      totalMinutes: group.reduce((s, t) => s + Math.max(0, Number(t.duration) || 0), 0),
+      totalMinutes: group.reduce((s, task) => s + Math.max(0, Number(task.duration) || 0), 0),
     };
   }).filter(g => g.count > 0);
 
@@ -337,36 +391,43 @@ export interface ProjectInfo {
   done: number;
   overdue: number;
   completionPct: number;
-  status: 'Strong' | 'On track' | 'Lagging' | 'At risk';
+  statusKey: 'Strong' | 'On track' | 'Lagging' | 'At risk';
+  status: string;
   statusTone: 'ok' | 'warn' | 'bad';
   tasks: Array<{ id: string; title: string; done: boolean; priority: Priority }>;
 }
 
-export const buildProjects = (tasks: Task[], columns: Column[], ctx: DoneCtx): ProjectInfo[] => {
+export const buildProjects = (
+  tasks: Task[],
+  columns: Column[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): ProjectInfo[] => {
   const map = new Map<number, ProjectInfo>();
-  tasks.forEach(t => {
-    if (t.projectId == null) return;
-    const pid = t.projectId;
+  tasks.forEach(task => {
+    if (task.projectId == null) return;
+    const pid = task.projectId;
     const cur = map.get(pid) || {
       id: pid,
-      name: t.projectName || 'Project',
-      color: t.color || 'hsl(var(--label-blue))',
+      name: task.projectName || t('Project'),
+      color: task.color || 'hsl(var(--label-blue))',
       total: 0,
       done: 0,
       overdue: 0,
       completionPct: 0,
-      status: 'At risk' as ProjectInfo['status'],
+      statusKey: 'At risk' as ProjectInfo['statusKey'],
+      status: t('At risk'),
       statusTone: 'bad' as ProjectInfo['statusTone'],
       tasks: [],
     };
-    if (t.color) cur.color = t.color;
-    if (t.projectName) cur.name = t.projectName;
-    const done = isTaskDone(t, ctx);
+    if (task.color) cur.color = task.color;
+    if (task.projectName) cur.name = task.projectName;
+    const done = isTaskDone(task, ctx);
     cur.total += 1;
     if (done) cur.done += 1;
-    const due = dueEnd(t);
+    const due = dueEnd(task);
     if (!done && due && due.getTime() < Date.now()) cur.overdue += 1;
-    cur.tasks.push({ id: t.id, title: t.title, done, priority: t.priority });
+    cur.tasks.push({ id: task.id, title: task.title, done, priority: task.priority });
     map.set(pid, cur);
   });
   columns.forEach(c => {
@@ -377,14 +438,14 @@ export const buildProjects = (tasks: Task[], columns: Column[], ctx: DoneCtx): P
 
   return [...map.values()].map(p => {
     const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
-    let status: ProjectInfo['status'];
+    let statusKey: ProjectInfo['statusKey'];
     let tone: ProjectInfo['statusTone'];
-    if (pct >= 80) { status = 'Strong'; tone = 'ok'; }
-    else if (pct >= 50) { status = 'On track'; tone = 'ok'; }
-    else if (pct >= 20) { status = 'Lagging'; tone = 'warn'; }
-    else { status = 'At risk'; tone = 'bad'; }
-    if (p.overdue > 0 && pct < 80) { status = p.overdue >= 2 ? 'At risk' : 'Lagging'; tone = p.overdue >= 2 ? 'bad' : 'warn'; }
-    return { ...p, completionPct: pct, status, statusTone: tone, tasks: p.tasks.slice(0, 40) };
+    if (pct >= 80) { statusKey = 'Strong'; tone = 'ok'; }
+    else if (pct >= 50) { statusKey = 'On track'; tone = 'ok'; }
+    else if (pct >= 20) { statusKey = 'Lagging'; tone = 'warn'; }
+    else { statusKey = 'At risk'; tone = 'bad'; }
+    if (p.overdue > 0 && pct < 80) { statusKey = p.overdue >= 2 ? 'At risk' : 'Lagging'; tone = p.overdue >= 2 ? 'bad' : 'warn'; }
+    return { ...p, completionPct: pct, statusKey, status: t(statusKey), statusTone: tone, tasks: p.tasks.slice(0, 40) };
   }).sort((a, b) => a.completionPct - b.completionPct);
 };
 
@@ -472,21 +533,27 @@ export const buildCompletionTrend = (tasks: Task[], ctx: DoneCtx): { days: Trend
   return { days, weeks };
 };
 
-export const trendExplanation = (day: TrendDay, prevCount: number): string | null => {
+export const trendExplanation = (
+  day: TrendDay,
+  prevCount: number,
+  t: TranslateFn = defaultTranslate,
+): string | null => {
   if (day.count === 0) {
-    if (prevCount > 0) return `No completions — the first quiet day after ${prevCount} on the previous day, so the trend dips.`;
-    return 'No completions this day.';
+    if (prevCount > 0) {
+      return t('No completions recorded this day following {{prev}} on the prior day — a post-push cool-down dip.', { prev: prevCount });
+    }
+    return t('No completions logged on this day.');
   }
   if (prevCount === 0) {
-    return `${day.count} task${day.count > 1 ? 's were' : ' was'} completed — breaking a quiet stretch and pushing the trend up.`;
+    return t('{{count}} task(s) closed today — breaking a quiet stretch and lifting the rolling trend.', { count: day.count });
   }
   if (day.count > prevCount) {
-    return `${day.count} completions vs ${prevCount} the day before — a rise, likely from finishing work that had been building up.`;
+    return t('{{count}} completions vs {{prev}} the day before — stronger output momentum.', { count: day.count, prev: prevCount });
   }
   if (day.count < prevCount) {
-    return `${day.count} completions, down from ${prevCount} the day before — a dip.`;
+    return t('{{count}} completions vs {{prev}} the day before — slightly lighter throughput.', { count: day.count, prev: prevCount });
   }
-  return `${day.count} completions, matching the previous day.`;
+  return t('{{count}} completions — matching the exact pace of the prior day.', { count: day.count });
 };
 
 // ---------------------------------------------------------------------------
@@ -510,58 +577,63 @@ export interface CompletionTimeGroup {
   avgHours: number;
 }
 
-export const buildAvgCompletion = (tasks: Task[], ctx: DoneCtx): { overallHours: number; groups: CompletionTimeGroup[] } => {
+export const buildAvgCompletion = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): { overallHours: number; groups: CompletionTimeGroup[] } => {
   const withDates = tasks
-    .filter(t => isTaskDone(t, ctx) && t.createdAt && completedStamp(t))
-    .map(t => {
-      const start = safeDate(t.createdAt);
-      const end = safeDate(completedStamp(t) || '');
-      return { t, start, end };
+    .filter(task => isTaskDone(task, ctx) && task.createdAt && completedStamp(task))
+    .map(task => {
+      const start = safeDate(task.createdAt);
+      const end = safeDate(completedStamp(task) || '');
+      return { t: task, start, end };
     })
     .filter((x): x is { t: Task; start: Date; end: Date } => !!x.start && !!x.end && x.end.getTime() >= x.start.getTime());
 
   const groups: CompletionTimeGroup[] = PRIORITY_ORDER.map(priority => {
-    const items = withDates.filter(x => x.t.priority === priority).map(({ t, start, end }) => {
+    const items = withDates.filter(x => x.t.priority === priority).map(({ t: task, start, end }) => {
       const actualHours = (end.getTime() - start.getTime()) / 3600000;
-      const estimateMinutes = Number(t.duration) || undefined;
+      const estimateMinutes = Number(task.duration) || undefined;
       let verdict: CompletionTimeTask['verdict'];
       let deltaLabel: string;
       if (!estimateMinutes) {
         verdict = 'under';
-        deltaLabel = 'no estimate set';
+        deltaLabel = t('no estimate set');
       } else {
+        const est = formatDuration(estimateMinutes);
         const diff = actualHours * 60 - estimateMinutes;
         if (Math.abs(diff) < estimateMinutes * 0.25) {
           verdict = 'on';
-          deltaLabel = `within 25% of the ${formatDuration(estimateMinutes)} estimate`;
+          deltaLabel = t('within 25% of the {{est}} estimate', { est });
         } else if (diff > 0) {
           verdict = 'over';
-          deltaLabel = `${formatDuration(Math.round(diff))} over the ${formatDuration(estimateMinutes)} estimate`;
+          deltaLabel = t('{{diff}} over the {{est}} estimate', { diff: formatDuration(Math.round(diff)), est });
         } else {
           verdict = 'under';
-          deltaLabel = `${formatDuration(Math.round(-diff))} under the ${formatDuration(estimateMinutes)} estimate`;
+          deltaLabel = t('{{diff}} under the {{est}} estimate', { diff: formatDuration(Math.round(-diff)), est });
         }
       }
       return {
-        id: t.id,
-        title: t.title,
+        id: task.id,
+        title: task.title,
         actualHours,
         estimateMinutes,
         deltaLabel,
         verdict,
-        completedAt: completedStamp(t) || '',
+        completedAt: completedStamp(task) || '',
       };
     }).sort((a, b) => b.actualHours - a.actualHours);
 
     return {
       priority,
-      label: priority === 'none' ? 'Unprioritized' : PRIORITY_LABEL[priority],
+      label: priority === 'none' ? t('Unprioritized') : t(PRIORITY_LABEL[priority]),
       tasks: items,
       avgHours: items.length > 0 ? items.reduce((s, i) => s + i.actualHours, 0) / items.length : 0,
     };
   }).filter(g => g.tasks.length > 0);
 
-  const all = withDates.map(({ t, start, end }) => (end.getTime() - start.getTime()) / 3600000);
+  const all = withDates.map(({ start, end }) => (end.getTime() - start.getTime()) / 3600000);
   return {
     overallHours: all.length > 0 ? all.reduce((s, v) => s + v, 0) / all.length : 0,
     groups,
@@ -627,17 +699,22 @@ export interface ProjectComparison {
   verdict: string;
 }
 
-export const buildProjectComparison = (tasks: Task[], columns: Column[], ctx: DoneCtx): ProjectComparison[] => {
-  const infos = buildProjects(tasks, columns, ctx);
+export const buildProjectComparison = (
+  tasks: Task[],
+  columns: Column[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): ProjectComparison[] => {
+  const infos = buildProjects(tasks, columns, ctx, t);
   if (infos.length <= 1) return [];
 
   const avgPct = infos.reduce((s, p) => s + p.completionPct, 0) / infos.length;
   const completionHours = infos.map(p => {
-    const pTasks = tasks.filter(t => t.projectId === p.id && isTaskDone(t, ctx) && t.createdAt && completedStamp(t));
+    const pTasks = tasks.filter(task => task.projectId === p.id && isTaskDone(task, ctx) && task.createdAt && completedStamp(task));
     if (pTasks.length === 0) return null;
-    const totalMs = pTasks.reduce((s, t) => {
-      const start = safeDate(t.createdAt)?.getTime() || 0;
-      const end = safeDate(completedStamp(t) || '')?.getTime() || 0;
+    const totalMs = pTasks.reduce((s, task) => {
+      const start = safeDate(task.createdAt)?.getTime() || 0;
+      const end = safeDate(completedStamp(task) || '')?.getTime() || 0;
       return s + Math.max(0, end - start);
     }, 0);
     return totalMs / pTasks.length / 3600000;
@@ -649,14 +726,15 @@ export const buildProjectComparison = (tasks: Task[], columns: Column[], ctx: Do
     const pAvg = completionHours[i];
     const vsAvgPct = Math.round(p.completionPct - avgPct);
     const vsAvgHours = pAvg != null ? Math.round((pAvg - groupAvgHours) * 10) / 10 : 0;
-    let verdict: string;
-    if (vsAvgPct >= 10) verdict = `Completes ${vsAvgPct} points above the ${Math.round(avgPct)}% average across projects.`;
-    else if (vsAvgPct <= -10) verdict = `Sits ${Math.abs(vsAvgPct)} points below the ${Math.round(avgPct)}% project average — the weakest of the set.`;
-    else verdict = `Roughly in line with the ${Math.round(avgPct)}% project average.`;
-    if (pAvg != null && vsAvgHours > 2) verdict += ` Tasks also take ${formatHours(vsAvgHours)} longer on average than other projects.`;
-    else if (pAvg != null && vsAvgHours < -2) verdict += ` Tasks finish ${formatHours(-vsAvgHours)} faster than the project average.`;
-    if (p.overdue > 0) verdict += ` ${p.overdue} overdue task${p.overdue > 1 ? 's' : ''} are dragging it down.`;
-    return { ...p, avgHours: pAvg ?? 0, vsAvgPct, vsAvgHours, verdict };
+    const parts: string[] = [];
+    if (vsAvgPct >= 10) parts.push(t('Completes {{diff}} points above the {{avg}}% project average.', { diff: vsAvgPct, avg: Math.round(avgPct) }));
+    else if (vsAvgPct <= -10) parts.push(t('Sits {{diff}} points below the {{avg}}% project average — needs focus to catch up.', { diff: Math.abs(vsAvgPct), avg: Math.round(avgPct) }));
+    else parts.push(t('Roughly in line with the {{avg}}% project average.', { avg: Math.round(avgPct) }));
+
+    if (pAvg != null && vsAvgHours > 2) parts.push(t('Tasks also run {{delta}} slower than the cross-project pace.', { delta: formatHours(vsAvgHours) }));
+    else if (pAvg != null && vsAvgHours < -2) parts.push(t('Tasks finish {{delta}} faster than the cross-project pace.', { delta: formatHours(-vsAvgHours) }));
+    if (p.overdue > 0) parts.push(t('{{count}} overdue item(s) in this project are pulling down completion.', { count: p.overdue }));
+    return { ...p, avgHours: pAvg ?? 0, vsAvgPct, vsAvgHours, verdict: parts.join(' ') };
   }).sort((a, b) => a.completionPct - b.completionPct);
 };
 
@@ -681,46 +759,71 @@ export interface SubtaskHealthEntry {
   suggestion?: string;
 }
 
-const statusLabelOf = (t: Task): string => {
-  const s = t.status;
-  if (s === 'completed') return 'Completed';
-  if (s === 'in_progress') return 'In Progress';
-  if (s === 'review') return 'Review';
-  return 'To Do';
+const statusLabelOf = (task: Task, t: TranslateFn): string => {
+  const s = task.status;
+  if (s === 'completed') return t('Completed');
+  if (s === 'in_progress') return t('In Progress');
+  if (s === 'review') return t('Review');
+  return t('To Do');
 };
 
-export const buildSubtaskHealth = (tasks: Task[], ctx: DoneCtx): SubtaskHealthEntry[] =>
+export const buildSubtaskHealth = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+): SubtaskHealthEntry[] =>
   tasks
-    .filter(t => !isTaskDone(t, ctx))
-    .map(t => {
-      const { subtaskTotal, subDone, checklistTotal, checklistDone } = taskBreakdown(t);
+    .filter(task => !isTaskDone(task, ctx))
+    .map(task => {
+      const { subtaskTotal, subDone, checklistTotal, checklistDone } = taskBreakdown(task);
       const totalItems = subtaskTotal + checklistTotal;
       const doneItems = subDone + checklistDone;
       const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : null;
-      const lastTouchedDays = daysSince(t.updatedAt || t.createdAt);
+      const lastTouchedDays = daysSince(task.updatedAt || task.createdAt);
       const stalled = pct !== null && pct === 0 && lastTouchedDays !== null && lastTouchedDays >= 7;
+      const statusLabel = statusLabelOf(task, t);
 
-      let reasoning: string;
+      let reasoning = '';
       let suggestion: string | undefined;
       if (totalItems === 0) {
-        reasoning = `"${t.title}" has no sub-tasks or checklist items, so progress can only be tracked through its status (${statusLabelOf(t)}). Without a breakdown it is hard to tell "almost done" from "barely touched".`;
-        suggestion = 'Add checklist items so progress becomes measurable, or finish it.';
+        reasoning = t('"{{title}}" has no breakdown items yet ({{status}}).', { title: task.title, status: statusLabel });
+        suggestion = t('Start the first checklist item while context is fresh.');
       } else if (pct === 100) {
-        reasoning = `All ${doneItems}/${totalItems} breakdown items are done, yet the task still reads as ${statusLabelOf(t)}. Everything planned is finished — the only step left is marking it completed.`;
-        suggestion = 'Mark it completed — all breakdown work is done.';
+        reasoning = t('All {{done}}/{{total}} breakdown steps are completed while the task still reads {{status}}. Mark the task done cleanly.', {
+          done: doneItems,
+          total: totalItems,
+          status: statusLabel,
+        });
+        suggestion = t('Mark it completed — all breakdown work is done.');
       } else if (stalled) {
-        reasoning = `${doneItems}/${totalItems} items done (${pct}%) and nothing has changed in ${lastTouchedDays} days. On paper it is ${pct}% complete, but in practice it has been idle for over a week — not slow progress, but stalled.`;
-        suggestion = 'Restart it this week, or consciously cut it from the active set.';
+        reasoning = t('{{done}}/{{total}} steps done ({{pct}}%) and untouched for {{days}} days — stalled rather than progressing steadily.', {
+          done: doneItems,
+          total: totalItems,
+          pct: pct ?? 0,
+          days: lastTouchedDays ?? 0,
+        });
+        suggestion = t('Restart it this week or remove stale scope.');
       } else if (pct === 0) {
-        reasoning = `The breakdown is fully untouched (0/${totalItems} items) but it was worked on ${lastTouchedDays === null ? 'recently' : lastTouchedDays === 0 ? 'today' : `${lastTouchedDays} day${lastTouchedDays > 1 ? 's' : ''} ago`} — early motion without execution yet.`;
-        suggestion = lastTouchedDays !== null && lastTouchedDays <= 2 ? 'Start the first checklist item now, while the momentum exists.' : undefined;
+        reasoning = t('0/{{total}} steps completed despite recent edits — start the first 10-minute sub-item today.', {
+          total: totalItems,
+        });
+        suggestion = lastTouchedDays !== null && lastTouchedDays <= 2
+          ? t('Start the first checklist item while context is fresh.')
+          : undefined;
       } else {
-        reasoning = `${doneItems}/${totalItems} items done (${pct}%), last touched ${lastTouchedDays === null ? 'recently' : lastTouchedDays === 0 ? 'today' : `${lastTouchedDays} day${lastTouchedDays > 1 ? 's' : ''} ago`}. ${lastTouchedDays !== null && lastTouchedDays > 3 ? 'Work started, then paused — the remaining items still represent a real block of effort.' : 'This task is genuinely moving toward completion.'}`;
-        suggestion = lastTouchedDays !== null && lastTouchedDays > 3 ? 'Pick it up again within the next few days, or it will slip from half-done to abandoned.' : undefined;
+        reasoning = t('{{done}}/{{total}} steps finished ({{pct}}%), updated {{days}}d ago. Keep momentum by closing the next checklist block.', {
+          done: doneItems,
+          total: totalItems,
+          pct: pct ?? 0,
+          days: lastTouchedDays ?? 0,
+        });
+        suggestion = lastTouchedDays !== null && lastTouchedDays > 3
+          ? t('Schedule a concrete sprint before it slips further.')
+          : undefined;
       }
       return {
-        id: t.id,
-        title: t.title,
+        id: task.id,
+        title: task.title,
         subtaskTotal,
         subDone,
         checklistTotal,
@@ -730,7 +833,7 @@ export const buildSubtaskHealth = (tasks: Task[], ctx: DoneCtx): SubtaskHealthEn
         pct,
         lastTouchedDays,
         stalled,
-        statusLabel: statusLabelOf(t),
+        statusLabel,
         reasoning,
         suggestion,
       };
@@ -803,13 +906,18 @@ export const buildReport = (tasks: Task[], ctx: DoneCtx, metric: ReportMetric, r
 // AI helpers
 // ---------------------------------------------------------------------------
 
-export const buildAiScoreFallback = (tasks: Task[], ctx: DoneCtx) => {
+export const buildAiScoreFallback = (
+  tasks: Task[],
+  ctx: DoneCtx,
+  t: TranslateFn = defaultTranslate,
+) => {
   const today = new Date().toISOString().split('T')[0];
-  const openTasks = tasks.filter(t => !isTaskDone(t, ctx));
-  const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !isTaskDone(t, ctx));
-  const highOpen = openTasks.filter(t => t.priority === 'urgent' || t.priority === 'high');
-  const lowOpen = openTasks.filter(t => t.priority === 'low');
-  const completedCount = tasks.filter(t => isTaskDone(t, ctx)).length;
+  const openTasks = tasks.filter(task => !isTaskDone(task, ctx));
+  const overdueTasks = tasks.filter(task => task.dueDate && task.dueDate < today && !isTaskDone(task, ctx));
+  const unscheduledOpen = openTasks.filter(task => !task.dueDate).length;
+  const highOpen = openTasks.filter(task => task.priority === 'urgent' || task.priority === 'high');
+  const lowOpen = openTasks.filter(task => task.priority === 'low');
+  const completedCount = tasks.filter(task => isTaskDone(task, ctx)).length;
   const completionRate = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
   let score = 50
@@ -819,47 +927,103 @@ export const buildAiScoreFallback = (tasks: Task[], ctx: DoneCtx) => {
     - Math.min(15, lowOpen.length * 2);
   score = Math.max(1, Math.min(99, score));
 
-  const short = (t: Task) => t.title.length > 40 ? `${t.title.slice(0, 40)}…` : t.title;
+  const short = (task: Task) => task.title.length > 40 ? `${task.title.slice(0, 40)}…` : task.title;
 
   const contributors: Array<{ id: string; text: string }> = [];
   if (completedCount > 0) {
-    contributors.push({ id: 'completed', text: `${completedCount} task${completedCount !== 1 ? 's' : ''} completed (${completionRate}%) — each worth about 5 points.` });
-    const recentDone = tasks.filter(t => isTaskDone(t, ctx) && (t.priority === 'urgent' || t.priority === 'high')).slice(0, 3);
-    recentDone.forEach(t => contributors.push({ id: t.id, text: `"${short(t)}" was completed — high-priority wins matter more than lower-priority work.` }));
+    contributors.push({
+      id: 'completed',
+      text: t('{{count}} completed task(s) ({{pct}}% rate) contributed positively to momentum and lifted your baseline score.', {
+        count: completedCount,
+        pct: completionRate,
+      }),
+    });
+    const recentDone = tasks.filter(task => isTaskDone(task, ctx) && (task.priority === 'urgent' || task.priority === 'high')).slice(0, 3);
+    recentDone.forEach(task => contributors.push({
+      id: task.id,
+      text: t('"{{title}}" completed — closing urgent and high-priority items weighs heavily in your favor.', { title: short(task) }),
+    }));
   }
   if (overdueTasks.length === 0 && completedCount > 0) {
-    contributors.push({ id: 'clean', text: 'No overdue tasks — nothing is being dragged down by missed deadlines.' });
+    contributors.push({
+      id: 'clean',
+      text: t('Zero overdue tasks — every scheduled deadline is currently protected from timeline drift.'),
+    });
   }
 
   const penalties: Array<{ id: string; text: string }> = [];
-  overdueTasks.slice(0, 5).forEach(t => {
-    penalties.push({ id: t.id, text: `"${short(t)}" is overdue (was due ${t.dueDate}) — costing about 6 points.` });
+  overdueTasks.slice(0, 5).forEach(task => {
+    penalties.push({
+      id: task.id,
+      text: t('"{{title}}" is overdue ({{date}}) — missed deadlines reduce predictability and score weight.', {
+        title: short(task),
+        date: task.dueDate || '',
+      }),
+    });
   });
   if (overdueTasks.length > 5) {
-    penalties.push({ id: 'more-overdue', text: `${overdueTasks.length - 5} more overdue task${overdueTasks.length - 5 > 1 ? 's' : ''}, each costing about 6 points.` });
+    penalties.push({
+      id: 'more-overdue',
+      text: t('{{count}} more overdue task(s) require immediate triage or updated target dates.', {
+        count: overdueTasks.length - 5,
+      }),
+    });
   }
-  highOpen.slice(0, 4).forEach(t => {
-    penalties.push({ id: t.id, text: `"${short(t)}" is still open despite being ${t.priority} priority — about 4 points lost.` });
+  highOpen.slice(0, 4).forEach(task => {
+    penalties.push({
+      id: task.id,
+      text: t('"{{title}}" remains open at {{priority}} priority — resolve or break down its prerequisites.', {
+        title: short(task),
+        priority: t(PRIORITY_LABEL[task.priority]),
+      }),
+    });
   });
-  lowOpen.slice(0, 3).forEach(t => {
-    penalties.push({ id: t.id, text: `"${short(t)}" is a low-priority task left open — about 2 points lost.` });
+  lowOpen.slice(0, 3).forEach(task => {
+    penalties.push({
+      id: task.id,
+      text: t('"{{title}}" sits open at low priority — archive or consolidate aging low-impact items.', {
+        title: short(task),
+      }),
+    });
   });
   if (penalties.length === 0 && completedCount > 0) {
-    penalties.push({ id: 'none', text: 'Nothing critical is dragging the score down right now — keep the completion streak going.' });
+    penalties.push({
+      id: 'none',
+      text: t('No severe penalties detected right now — keep closing prioritized tasks consistently.'),
+    });
   }
 
   return {
     overallScore: score,
-    scoreRationale: `Starting from a neutral base of 50: ${completedCount} completions at +5 each${overdueTasks.length > 0 ? `, ${overdueTasks.length} overdue at −6 each` : ''}${highOpen.length > 0 ? `, ${highOpen.length} open urgent/high tasks at −4 each` : ''}${lowOpen.length > 0 ? `, ${lowOpen.length} open low-priority tasks at −2 each` : ''}. That lands the score at ${score}.`,
+    scoreRationale: t('Score {{score}}/100 reflects {{completed}} completion(s), {{overdue}} overdue item(s), and {{high}} open urgent/high priorities.', {
+      score,
+      completed: completedCount,
+      overdue: overdueTasks.length,
+      high: highOpen.length,
+    }),
     contributors,
     penalties,
     insights: [
-      `${tasks.length} total task${tasks.length !== 1 ? 's' : ''} with ${completedCount} completed (${completionRate}%).`,
-      `${highOpen.length} urgent/high-priority task${highOpen.length !== 1 ? 's' : ''} still open${overdueTasks.length > 0 ? `, and ${overdueTasks.length} overdue` : ''}.`,
+      t('Productivity score stands at {{score}}/100 with {{compRate}}% completion across {{total}} tasks ({{completed}} done, {{active}} active).', {
+        score,
+        compRate: completionRate,
+        total: tasks.length,
+        completed: completedCount,
+        active: openTasks.length,
+      }),
+      t('Schedule pressure: {{overdue}} overdue items and {{unscheduled}} unscheduled tasks are competing with {{highPri}} urgent/high active priorities.', {
+        overdue: overdueTasks.length,
+        unscheduled: unscheduledOpen,
+        highPri: highOpen.length,
+      }),
     ],
     recommendations: [
-      overdueTasks.length > 0 ? `Clear overdue tasks first — starting with "${short(overdueTasks[0])}".` : 'Review the list for anything that can be archived or consolidated.',
-      highOpen.length > 0 ? `Finish open ${highOpen[0].priority}-priority tasks before moving to medium or low ones.` : 'Break larger tasks into smaller subtasks for better progress tracking.',
+      overdueTasks.length > 0
+        ? t('Clear {{count}} overdue deliverable(s) first to eliminate schedule drag and unblock downstream goals.', { count: overdueTasks.length })
+        : t('Add target due dates to {{count}} unscheduled active task(s) so workload stays visible on the timeline.', { count: unscheduledOpen }),
+      highOpen.length > 0
+        ? t('Protect morning focus blocks for {{count}} urgent/high priority task(s) before handling routine messages.', { count: highOpen.length })
+        : t('Maintain steady daily closure cadence across {{count}} active task(s) and review completed milestones weekly.', { count: openTasks.length }),
     ],
   };
 };

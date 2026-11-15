@@ -452,7 +452,7 @@ const ChecklistSubtaskEditor: React.FC<ChecklistSubtaskEditorProps> = ({
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea
                                                     autoFocus
-                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                    className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}

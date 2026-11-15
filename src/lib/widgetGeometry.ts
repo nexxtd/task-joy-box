@@ -3,7 +3,7 @@ export const WIDGET_ROW_HEIGHT = 112;
 export const WIDGET_GAP = 16;
 export const WIDGET_ROW_PITCH = WIDGET_ROW_HEIGHT + WIDGET_GAP;
 export const MIN_WIDGET_COLUMNS = 6;
-export const MIN_WIDGET_ROWS = 3;
+export const MIN_WIDGET_ROWS = 5;
 export const MAX_WIDGET_ROWS = 30;
 
 export interface WidgetSizeLimits {
@@ -83,10 +83,10 @@ export function compactWidgets<T extends WidgetRect>(widgets: T[], anchoredId?: 
   const rest = normalized.filter(widget => widget !== anchored).sort((a, b) => a.row - b.row || a.col - b.col);
   for (const widget of rest) {
     const next = { ...widget, row: 1 };
-    while (true) {
-      const blocker = placed.find(other => widgetsIntersect(next, other));
-      if (!blocker) break;
+    let blocker = placed.find(other => widgetsIntersect(next, other));
+    while (blocker) {
       next.row = blocker.row + blocker.h;
+      blocker = placed.find(other => widgetsIntersect(next, other));
     }
     placed.push(next);
   }

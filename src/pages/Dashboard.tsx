@@ -22,6 +22,7 @@ const CreateTaskModal = lazy(() => import('@/components/CreateTaskModal'));
 const TagsModal = lazy(() => import('@/components/shared/TagsModal'));
 import { createTag, deleteTag, fetchTags, updateTag, type SharedTag } from '@/services/tagService';
 import { TagsOverviewBody } from '@/components/insights/InsightWidgets';
+import { WidgetInsightBlock } from '@/components/insights/WidgetInsightBlock';
 import { trackUsage, trackPageVisit } from '@/lib/usage';
 import { WidgetCatalog } from '@/components/shared/WidgetCatalog';
 import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
@@ -82,27 +83,27 @@ interface WidgetDef {
 }
 
 const WIDGET_DEFS: WidgetDef[] = [
-  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 12, h: 4, tier: 'free', minW: 8, minH: 4, maxW: 12, maxH: 6 },
-  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
-  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
-  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 8, h: 4, tier: 'premium', minW: 7, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 12, h: 4, tier: 'pro', minW: 8, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'stats', title: 'Stats Overview', desc: 'Tasks, completion and streak', icon: LayoutDashboard, accent: 'label-purple', w: 12, h: 5, tier: 'free', minW: 8, minH: 5, maxW: 12, maxH: 6 },
+  { type: 'tasks', title: 'Tasks', desc: 'Today\'s priority tasks & quick actions', icon: ListChecks, accent: 'label-blue', w: 8, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 9 },
+  { type: 'projects', title: 'Projects', desc: 'All your active projects at a glance', icon: FolderOpen, accent: 'label-pink', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'project-tasks', title: 'Tasks within a Project', desc: 'Lift one project\'s tasks onto the dashboard', icon: CheckSquare, accent: 'label-red', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'insights', title: 'Insights', desc: 'Completion, active & completed snapshot', icon: BarChart3, accent: 'label-purple', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 10, maxH: 7 },
+  { type: 'weekly', title: 'Weekly Activity', desc: 'Tasks completed across the last 7 days', icon: BarChart3, accent: 'label-blue', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 7 },
+  { type: 'overdue', title: 'Overdue Tasks', desc: 'Tasks past their due date, with days overdue', icon: AlertTriangle, accent: 'label-red', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'deadlines', title: 'Upcoming Deadlines', desc: 'Tasks due in the next 3-7 days, soonest first', icon: Flag, accent: 'label-orange', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'project-progress', title: 'Project Progress', desc: 'Completion % bar per active project', icon: TrendingUp, accent: 'label-green', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'recently-completed', title: 'Recently Completed', desc: 'Latest tasks & checklist items finished', icon: History, accent: 'label-blue', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'priority-breakdown', title: 'Priority Breakdown', desc: 'Active tasks by High / Medium / Low priority', icon: PieChart, accent: 'label-purple', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 10, maxH: 7 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Tasks grouped by tag with count per tag', icon: Tags, accent: 'label-pink', w: 6, h: 6, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent activity', icon: StickyNote, accent: 'label-yellow', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 10, maxH: 7 },
+  { type: 'recent-notes', title: 'Recent Notes', desc: 'Latest notes you created', icon: FileText, accent: 'label-orange', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'advanced-insights', title: 'Advanced Insights', desc: 'Avg completion time, busiest day, 30-day trend', icon: LineChart, accent: 'label-blue', w: 8, h: 6, tier: 'premium', minW: 7, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'custom-report', title: 'Custom Report Widget', desc: 'Pick a metric and date range to track', icon: SlidersHorizontal, accent: 'label-purple', w: 6, h: 6, tier: 'premium', minW: 6, minH: 5, maxW: 12, maxH: 9 },
+  { type: 'multi-project', title: 'Multi-Project Comparison', desc: 'Side-by-side progress bars across projects', icon: GitCompareArrows, accent: 'label-orange', w: 12, h: 6, tier: 'premium', minW: 8, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'AI-generated score and focus areas, live', icon: Gauge, accent: 'label-green', w: 6, h: 6, tier: 'pro', minW: 6, minH: 6, maxW: 12, maxH: 8 },
+  { type: 'ai-prioritize', title: 'AI Task Prioritizer', desc: 'AI-ranked "what to do next" with reasons', icon: ListOrdered, accent: 'label-blue', w: 6, h: 6, tier: 'pro', minW: 6, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks and why', icon: Siren, accent: 'label-red', w: 6, h: 6, tier: 'pro', minW: 6, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'ai-weekly', title: 'AI Weekly Summary', desc: 'Natural-language recap of your week', icon: MessageSquareText, accent: 'label-purple', w: 12, h: 6, tier: 'pro', minW: 8, minH: 6, maxW: 12, maxH: 8 },
 ];
 
 
@@ -205,24 +206,27 @@ const timeAgo = (ts: number) => {
   return tt('{{count}}d ago', { count: Math.floor(diff / 86400000) });
 };
 
-const AiWidgetStatus: React.FC<{ loading?: boolean; error?: string | null; onRetry: () => void }> = ({ loading, error, onRetry }) => (
-  <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-    {loading ? (
-      <>
-        <div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-        <p className="text-xs text-muted-foreground">AI is analysing your tasks…</p>
-      </>
-    ) : error ? (
-      <>
-        <div className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center">
-          <AlertTriangle className="w-4 h-4 text-destructive" />
-        </div>
-        <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">{error}</p>
-        <button onClick={onRetry} className="text-[11px] font-bold text-primary hover:underline">Try again</button>
-      </>
-    ) : null}
-  </div>
-);
+const AiWidgetStatus: React.FC<{ loading?: boolean; error?: string | null; onRetry: () => void }> = ({ loading, error, onRetry }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+      {loading ? (
+        <>
+          <div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+          <p className="text-xs text-muted-foreground">{t('AI is analysing your tasks…')}</p>
+        </>
+      ) : error ? (
+        <>
+          <div className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center">
+            <AlertTriangle className="w-4 h-4 text-destructive" />
+          </div>
+          <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">{error}</p>
+          <button onClick={onRetry} className="text-[11px] font-bold text-primary hover:underline">{t('Try again')}</button>
+        </>
+      ) : null}
+    </div>
+  );
+};
 
 const MiniBars: React.FC<{ values: number[]; accent: string; active?: number; containerClass?: string }> = ({ values, accent, active, containerClass }) => {
   const max = Math.max(...values, 1);
@@ -244,18 +248,21 @@ const MiniBars: React.FC<{ values: number[]; accent: string; active?: number; co
   );
 };
 
-const LockedWidget: React.FC<{ tierLabel: string; onUpgrade: () => void }> = ({ tierLabel, onUpgrade }) => (
-  <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-    <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
-      <Lock className="w-4 h-4 text-muted-foreground" />
+const LockedWidget: React.FC<{ tierLabel: string; onUpgrade: () => void }> = ({ tierLabel, onUpgrade }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+      <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+        <Lock className="w-4 h-4 text-muted-foreground" />
+      </div>
+      <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{t('{{tier}} widget', { tier: t(tierLabel) })}</p>
+      <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">{t('Upgrade your plan to unlock this widget on your dashboard.')}</p>
+      <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
+        {t('Upgrade')}
+      </button>
     </div>
-    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{tierLabel} widget</p>
-    <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">Upgrade your plan to unlock this widget on your dashboard.</p>
-    <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
-      Upgrade
-    </button>
-  </div>
-);
+  );
+};
 
 const Dashboard: React.FC = () => {
   const { board, updateTask } = useBoardContext();
@@ -547,14 +554,14 @@ const Dashboard: React.FC = () => {
       id: `${type}-${row}-${col}-${genKey()}`, type, title, col, row, w: wd, h: ht, projectId,
     });
     return [
-      w('stats', 'Stats Overview', 1, 1, 12, 4),
-      w('tasks', 'Tasks', 1, 5, 6, 4),
-      w('notes-overview', 'Notes Overview', 7, 5, 6, 4),
-      w('weekly', 'Weekly Activity', 1, 9, 6, 4),
-      w('tags-overview', 'Tags Overview', 7, 9, 6, 4),
-      w('insights', 'Insights', 1, 13, 6, 4),
-      w('projects', 'Projects', 7, 13, 6, 4),
-      w('recent-notes', 'Recent Notes', 1, 17, 6, 4),
+      w('stats', 'Stats Overview', 1, 1, 12, 5),
+      w('tasks', 'Tasks', 1, 6, 6, 5),
+      w('notes-overview', 'Notes Overview', 7, 6, 6, 5),
+      w('weekly', 'Weekly Activity', 1, 11, 6, 5),
+      w('tags-overview', 'Tags Overview', 7, 11, 6, 6),
+      w('insights', 'Insights', 1, 16, 6, 5),
+      w('projects', 'Projects', 7, 17, 6, 5),
+      w('recent-notes', 'Recent Notes', 1, 21, 6, 5),
     ];
   };
 
@@ -854,6 +861,7 @@ const Dashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          language,
           tasks: board.tasks.map(t => ({
             id: t.id,
             title: t.title,
@@ -872,27 +880,27 @@ const Dashboard: React.FC = () => {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || 'AI request failed');
+        throw new Error(body?.error || tr('AI request failed'));
       }
       setAiState({ data: await res.json(), loading: false, error: null });
     } catch (err) {
       setAiState(prev => ({
         ...prev,
         loading: false,
-        error: err instanceof Error ? err.message : 'AI request failed. Please try again.',
+        error: err instanceof Error ? err.message : tr('AI request failed. Please try again.'),
       }));
     }
-  }, [board.tasks, doneColIds, tier]);
+  }, [board.tasks, doneColIds, tier, language, tr]);
 
   useEffect(() => {
     if (hasAiWidget && firstPaintDone) loadAiWidgets();
   }, [hasAiWidget, firstPaintDone, loadAiWidgets]);
 
   const stats = [
-    { label: 'Tasks Active', value: activeTasks.length, icon: CheckSquare, accent: 'label-purple' },
-    { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, accent: 'label-green' },
-    { label: 'Deep Work', value: `${(deepFocusMinutes / 60).toFixed(1)}h`, icon: Clock, accent: 'label-blue' },
-    { label: 'Daily Streak', value: `${streakDays}d`, icon: Flame, accent: 'label-orange' },
+    { key: 'tasksActive', label: 'Tasks Active', value: activeTasks.length, icon: CheckSquare, accent: 'label-purple' },
+    { key: 'completion', label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, accent: 'label-green' },
+    { key: 'deepWork', label: 'Deep Work', value: `${(deepFocusMinutes / 60).toFixed(1)}h`, icon: Clock, accent: 'label-blue' },
+    { key: 'streak', label: 'Daily Streak', value: `${streakDays}d`, icon: Flame, accent: 'label-orange' },
   ];
 
   const handleAddTask = () => {
@@ -1106,71 +1114,101 @@ const Dashboard: React.FC = () => {
     switch (widget.type) {
       case 'stats': {
         const statsDetails: Record<string, { sub: string; trend: string; trendUp: boolean | null }> = {
-          'Tasks Active': {
-            sub: `${overdueTasks.length} overdue · ${upcomingDeadlines.length} due in 3-7 days`,
-            trend: overdueTasks.length > 0 ? `${overdueTasks.length} overdue dragging this number` : 'All active tasks are on time',
-            trendUp: overdueTasks.length === 0 ? true : false,
+          tasksActive: {
+            sub: tr('{{overdue}} overdue · {{upcoming}} due in 3–7d', { overdue: overdueTasks.length, upcoming: upcomingDeadlines.length }),
+            trend: overdueTasks.length > 0 ? tr('{{count}} overdue dragging this', { count: overdueTasks.length }) : tr('All active tasks on time'),
+            trendUp: overdueTasks.length === 0,
           },
-          'Completion': {
-            sub: `${completedTasks.length}/${board.tasks.length} · ${completionRate < 50 ? 'below' : 'above'} 50% mark`,
-            trend: completionRate < 40 ? `Trending down — ${overdueTasks.length} overdue are dragging this number` : completionRate >= 70 ? 'Strong — trending up week over week' : `Steady at ${completionRate}% — close the overdue gap to lift it`,
+          completion: {
+            sub: `${completedTasks.length}/${board.tasks.length} · ${tr(completionRate < 50 ? 'below 50% mark' : 'above 50% mark')}`,
+            trend: completionRate < 40
+              ? tr('Overdue backlog slowing velocity')
+              : completionRate >= 70
+                ? tr('Strong execution pace')
+                : tr('Steady at {{pct}}%', { pct: completionRate }),
             trendUp: completionRate >= 50,
           },
-          'Deep Work': {
-            sub: `${deepFocusMinutes} min today · ${(deepFocusMinutes / 60).toFixed(1)}h total`,
-            trend: deepFocusMinutes >= 30 ? 'On pace for deep-focus goal' : 'Log a session today to build momentum',
+          deepWork: {
+            sub: tr('{{min}}m today · {{hrs}}h total', { min: deepFocusMinutes, hrs: (deepFocusMinutes / 60).toFixed(1) }),
+            trend: deepFocusMinutes >= 30 ? tr('On pace for focus goal') : tr('Log a focus block today'),
             trendUp: deepFocusMinutes >= 30,
           },
-          'Daily Streak': {
-            sub: streakDays > 0 ? `${streakDays}d streak · best this week` : 'No streak yet — complete a task today',
-            trend: streakDays >= 3 ? `You're on a ${streakDays}-day roll` : streakDays > 0 ? 'Keep it going — one more day extends it' : 'Start today to build a streak',
+          streak: {
+            sub: streakDays > 0 ? tr('{{days}}d active streak', { days: streakDays }) : tr('No streak yet'),
+            trend: streakDays >= 3 ? tr('{{days}}-day closure roll', { days: streakDays }) : streakDays > 0 ? tr('One more day extends it') : tr('Finish one task today'),
             trendUp: streakDays > 0,
           },
         };
+        const highActive = activeTasks.filter(t => t.priority === 'urgent' || t.priority === 'high').length;
+        const unscheduledActive = activeTasks.filter(t => !t.dueDate).length;
         return (
           <div className="space-y-3">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-1">
               {stats.map((stat) => {
                 const Icon = stat.icon;
-                const det = statsDetails[stat.label] || { sub: '', trend: '', trendUp: null };
+                const det = statsDetails[stat.key] || { sub: '', trend: '', trendUp: null };
                 return (
-                  <div key={stat.label} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm flex flex-col">
+                  <div key={stat.key} className="rounded-xl p-3.5 bg-card border border-border transition-all duration-300 hover:shadow-sm flex flex-col">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5" style={{ background: `hsl(var(--${stat.accent}) / 0.12)` }}>
                       <Icon className="w-4 h-4" style={{ color: `hsl(var(--${stat.accent}))` }} />
                     </div>
                     <p className="text-2xl font-black text-foreground leading-none">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">{stat.label}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5 font-medium">{tr(stat.label)}</p>
                     <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{det.sub}</p>
                     <div className={`mt-2 flex items-center gap-1 text-[10px] font-bold ${det.trendUp === null ? 'text-muted-foreground' : det.trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {det.trendUp === true ? <TrendingUp className="w-3 h-3" /> : det.trendUp === false ? <TrendingDown className="w-3 h-3" /> : null}
-                      {det.trend}
+                      {det.trendUp === true ? <TrendingUp className="w-3 h-3 shrink-0" /> : det.trendUp === false ? <TrendingDown className="w-3 h-3 shrink-0" /> : null}
+                      <span>{det.trend}</span>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                <span className="font-bold text-foreground">Insight:</span> {completionRate < 50 ? `You're trending down from last week — ${overdueTasks.length} tasks overdue and ${activeTasks.length - overdueTasks.length} still open are dragging the ${completionRate}% completion. Clear one overdue today to lift it.` : `You're at ${completionRate}% completion with ${completedTasks.length} of ${board.tasks.length} done — ${streakDays >= 3 ? `your ${streakDays}-day streak is the driver` : 'keep the daily completions steady to hold it'}.`}
-              </p>
-            </div>
+            <WidgetInsightBlock
+              heading={tr('Key insights')}
+              summary={tr('{{completed}} of {{total}} tasks done ({{pct}}%), leaving {{active}} open across {{projects}} projects.', {
+                completed: completedTasks.length,
+                total: board.tasks.length,
+                pct: completionRate,
+                active: activeTasks.length,
+                projects: projectsInfo.length,
+              })}
+              detail={tr('{{overdue}} overdue and {{urgent}} urgent/high active deliverables require attention first; {{unscheduled}} active tasks have no due date yet.', {
+                overdue: overdueTasks.length,
+                urgent: highActive,
+                unscheduled: unscheduledActive,
+              })}
+              action={overdueTasks.length > 0
+                ? tr('Clear {{count}} overdue deliverable(s) first to eliminate schedule drag and unblock downstream goals.', { count: overdueTasks.length })
+                : tr('Protect morning focus blocks for {{count}} urgent/high priority task(s) before handling routine messages.', { count: highActive })}
+              actionLabel={tr('Next action')}
+              tone={overdueTasks.length > 0 ? 'warning' : 'primary'}
+            />
           </div>
         );
       }
       case 'tasks': {
         const urgentCount = activeTasks.filter(t => t.priority === 'urgent').length;
+        const highCount = activeTasks.filter(t => t.priority === 'high').length;
         const overduePri = priorityTasks.filter(t => t.dueDate && dueEnd(t) && dueEnd(t)!.getTime() < Date.now()).length;
         return (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] text-muted-foreground">{priorityTasks.length} prioritized · {urgentCount} urgent · {activeTasks.length - priorityTasks.length} without priority</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overduePri > 0 ? 'bg-red-500/15 text-red-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{overduePri > 0 ? `${overduePri} overdue` : 'On track'}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {tr('{{shown}} prioritized · {{urgent}} urgent · {{unpri}} unprioritized', {
+                  shown: priorityTasks.length,
+                  urgent: urgentCount,
+                  unpri: Math.max(0, activeTasks.length - priorityTasks.length),
+                })}
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overduePri > 0 ? 'bg-red-500/15 text-red-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
+                {overduePri > 0 ? tr('{{count}} overdue', { count: overduePri }) : tr('On track')}
+              </span>
             </div>
             {priorityTasks.length === 0 ? (
               <div className="text-center py-6">
                 <CheckSquare className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No priority tasks. Add some to get started!</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Assign a priority to any task and it appears here ranked urgent → low.</p>
+                <p className="text-sm text-muted-foreground">{tr('No priority tasks. Add some to get started!')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Assign a priority to any task and it appears here ranked urgent to low.')}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1184,7 +1222,7 @@ const Dashboard: React.FC = () => {
                     >
                       {config && (
                         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${config.className} text-primary-foreground`}>
-                          {config.label}
+                          {tr(config.label)}
                         </span>
                       )}
                       <div className="flex-1 min-w-0">
@@ -1199,23 +1237,29 @@ const Dashboard: React.FC = () => {
                 })}
               </div>
             )}
-            <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {overduePri > 0 ? `Pattern: ${overduePri} of your top priorities are already overdue — they should be your first deep-work block today.` : priorityTasks.length > 3 ? 'Good mix — you have enough prioritized work to fill the day, but none are overdue.' : 'Light load on prioritized tasks — pull one medium-priority up to keep momentum.'}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                <span className="font-bold text-foreground">{priorityTasks.length} shown</span>
-                <span>·</span>
-                <span>{activeTasks.length} active total</span>
-                <span className="ml-auto flex items-center gap-1">{overduePri > 0 ? <><AlertTriangle className="w-3 h-3 text-red-500" /> needs attention</> : <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> balanced</>}</span>
-              </div>
-            </div>
+            <WidgetInsightBlock
+              heading={tr('Workload mix')}
+              summary={tr('Showing top {{shown}} prioritized tasks out of {{active}} active ({{urgent}} urgent, {{high}} high).', {
+                shown: priorityTasks.length,
+                active: activeTasks.length,
+                urgent: urgentCount,
+                high: highCount,
+              })}
+              detail={overduePri > 0
+                ? tr('{{count}} priority item(s) already passed their due date and risk cascading delays.', { count: overduePri })
+                : tr('All listed top-priority deliverables remain inside their target schedule window.')}
+              action={overduePri > 0
+                ? tr('Launch a Deep Work block on the top overdue item right now before checking routine messages.')
+                : tr('Pick the #1 task above and start a focused timer session to keep queue velocity high.')}
+              actionLabel={tr('Next action')}
+              tone={overduePri > 0 ? 'danger' : 'neutral'}
+            />
             <button
               className="w-full mt-3 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 text-white transition-all duration-200 hover:scale-[1.01]"
               style={{ background: 'hsl(var(--primary))', boxShadow: '0 8px 18px -12px hsl(228 25% 25% / 0.4)' }}
               onClick={() => setShowTaskPicker(true)}
             >
-              <Zap className="w-4 h-4" /> Start Deep Work
+              <Zap className="w-4 h-4" /> {tr('Start Deep Work')}
             </button>
           </div>
         );
@@ -1223,20 +1267,24 @@ const Dashboard: React.FC = () => {
       case 'projects': {
         const avgProjPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? p.done / p.total : 0), 0) / projectsInfo.length * 100) : 0;
         const atRisk = projectsInfo.filter(p => p.total > 0 && p.done / p.total < 0.3).length;
+        const totalProjTasks = projectsInfo.reduce((s, p) => s + p.total, 0);
+        const totalProjDone = projectsInfo.reduce((s, p) => s + p.done, 0);
         return (
           <div>
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
                 <FolderOpen className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No projects yet</p>
-                <button onClick={() => navigate('/projects')} className="text-xs text-primary hover:underline mt-2">Create one</button>
-                <p className="text-[11px] text-muted-foreground mt-2">Create a project to group tasks and track completion as a cohort.</p>
+                <p className="text-sm text-muted-foreground">{tr('No projects yet')}</p>
+                <button onClick={() => navigate('/projects')} className="text-xs text-primary hover:underline mt-2">{tr('Create one')}</button>
+                <p className="text-[11px] text-muted-foreground mt-2">{tr('Create a project to group tasks and track completion as a cohort.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} active · avg {avgProjPct}%</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${atRisk > 0 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{atRisk > 0 ? `${atRisk} lagging` : 'All steady'}</span>
+                  <span className="text-[11px] text-muted-foreground">{tr('{{count}} active · avg {{pct}}%', { count: projectsInfo.length, pct: avgProjPct })}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${atRisk > 0 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
+                    {atRisk > 0 ? tr('{{count}} lagging', { count: atRisk }) : tr('On track')}
+                  </span>
                 </div>
                 <div className="space-y-1.5">
                   {projectsInfo.slice(0, 6).map(p => {
@@ -1252,17 +1300,29 @@ const Dashboard: React.FC = () => {
                           <span className="block text-[10px] text-muted-foreground">{p.done}/{p.total} · {pct}%</span>
                         </span>
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-border text-muted-foreground bg-muted/50">
-                          {p.active} active
+                          {tr('{{count}} active', { count: p.active })}
                         </span>
                       </button>
                     );
                   })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {atRisk > 0 ? `${atRisk} project${atRisk > 1 ? 's are' : ' is'} below 30% — they need a focused push this week.` : avgProjPct >= 70 ? `Portfolio is strong at ${avgProjPct}% avg completion — keep closing the small remainder.` : `Mixed progress — ${projectsInfo.length} projects averaging ${avgProjPct}% — the lowest will benefit from one deep-work session.`}
-                  </p>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Breakdown')}
+                  summary={tr('Across {{count}} active projects, {{done}}/{{total}} deliverables are done ({{avg}}% average project rate).', {
+                    count: projectsInfo.length,
+                    done: totalProjDone,
+                    total: totalProjTasks,
+                    avg: avgProjPct,
+                  })}
+                  detail={atRisk > 0
+                    ? tr('{{count}} project(s) sit below 30% completion and lag the rest of your portfolio.', { count: atRisk })
+                    : tr('No projects sit below the 30% threshold — portfolio execution is distributed evenly.')}
+                  action={atRisk > 0
+                    ? tr('Pick the lowest-completion lagging project and schedule two concrete task closures this week.')
+                    : tr('Advance active milestones across remaining projects so none drift behind.')}
+                  actionLabel={tr('Next action')}
+                  tone={atRisk > 0 ? 'warning' : 'neutral'}
+                />
               </>
             )}
           </div>
@@ -1281,7 +1341,7 @@ const Dashboard: React.FC = () => {
           <div>
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground">No projects to show</p>
+                <p className="text-sm text-muted-foreground">{tr('No projects yet')}</p>
               </div>
             ) : (
               <>
@@ -1302,7 +1362,7 @@ const Dashboard: React.FC = () => {
                   </Select>
                 </div>
                 {projTasks.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-5">No open tasks in this project</p>
+                  <p className="text-xs text-muted-foreground text-center py-5">{tr('No open tasks in this project')}</p>
                 ) : (
                   <div className="space-y-1.5">
                     {projTasks.map(t => {
@@ -1312,7 +1372,7 @@ const Dashboard: React.FC = () => {
                         <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg"
                           style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                           <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground`}>
-                            {cfg?.label || 'Open'}
+                            {cfg ? tr(cfg.label) : tr('Open')}
                           </span>
                           <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
                           {col && (
@@ -1325,20 +1385,33 @@ const Dashboard: React.FC = () => {
                     })}
                   </div>
                 )}
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-foreground">{doneInProj}/{totalInProj} done · {pctInProj}%</span>
+                <div className="mt-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-foreground">
+                      {tr('{{done}}/{{total}} done · {{pct}}%', { done: doneInProj, total: totalInProj, pct: pctInProj })}
+                    </span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overdueInProj > 0 ? 'bg-red-500/15 text-red-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
-                      {overdueInProj > 0 ? `${overdueInProj} overdue` : 'On track'}
+                      {overdueInProj > 0 ? tr('{{count}} overdue', { count: overdueInProj }) : tr('On track')}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
                     <div className="h-full rounded-full transition-all" style={{ width: `${pctInProj}%`, background: overdueInProj > 0 ? 'hsl(var(--label-red))' : 'hsl(var(--label-green))' }} />
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
-                    {overdueInProj > 0 ? `You're falling behind — ${overdueInProj} task${overdueInProj > 1 ? 's' : ''} overdue in this project are dragging its ${pctInProj}% completion.` : pctInProj >= 80 ? `${proj?.name} is nearly done at ${pctInProj}% — finish the last ${totalInProj - doneInProj} to close it out.` : pctInProj >= 50 ? `Mid-way at ${pctInProj}% — steady progress, keep the momentum on ${proj?.name}.` : `Early stage at ${pctInProj}% — ${totalInProj - doneInProj} tasks still open, prioritize the urgent ones.`}
-                  </p>
                 </div>
+                <WidgetInsightBlock
+                  heading={tr('Status')}
+                  summary={tr('{{name}} sits at {{pct}}% completion with {{open}} open deliverable(s) and {{overdue}} overdue.', {
+                    name: proj?.name || '',
+                    pct: pctInProj,
+                    open: Math.max(0, totalInProj - doneInProj),
+                    overdue: overdueInProj,
+                  })}
+                  action={overdueInProj > 0
+                    ? tr('Resolve {{count}} overdue item(s) inside {{name}} first so project milestones stay intact.', { count: overdueInProj, name: proj?.name || '' })
+                    : tr('Close the highest-priority open task in {{name}} to move completion above {{target}}%.', { name: proj?.name || '', target: Math.min(100, pctInProj + 15) })}
+                  actionLabel={tr('Next action')}
+                  tone={overdueInProj > 0 ? 'danger' : 'neutral'}
+                />
               </>
             )}
           </div>
@@ -1359,41 +1432,55 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="flex-1 space-y-1.5">
                 <p className="text-xs text-muted-foreground">
-                  <span className="font-bold text-foreground">{activeTasks.length}</span> active · <span className="font-bold text-foreground">{completedTasks.length}</span> completed
+                  {tr('{{active}} active · {{done}} completed', { active: activeTasks.length, done: completedTasks.length })}
                 </p>
-                <p className="text-xs text-muted-foreground">{projectsInfo.length} project{projectsInfo.length !== 1 ? 's' : ''} · {overdueTasks.length} overdue</p>
+                <p className="text-xs text-muted-foreground">
+                  {tr('{{projects}} projects · {{overdue}} overdue', { projects: projectsInfo.length, overdue: overdueTasks.length })}
+                </p>
                 <p className={`text-[11px] font-bold flex items-center gap-1 ${insightTrend === 'up' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {insightTrend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {insightTrend === 'up' ? 'Trending up — keep closing' : `Trending down — ${overdueTasks.length} overdue dragging it`}
+                  {insightTrend === 'up' ? <TrendingUp className="w-3 h-3 shrink-0" /> : <TrendingDown className="w-3 h-3 shrink-0" />}
+                  {insightTrend === 'up'
+                    ? tr('Trending up — keep closing')
+                    : tr('Trending down — {{count}} overdue dragging rate', { count: overdueTasks.length })}
                 </p>
               </div>
             </div>
-            <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                <span className="font-bold text-foreground">{completionRate}% completion</span> — {activeTasks.length} active, {completedTasks.length} completed, {overdueTasks.length} past due. {overdueTasks.length > 0 ? `Clear one overdue today to lift the rate above ${Math.min(100, completionRate + 5)}%.` : 'No overdue — you are holding a clean board.'}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                <span>{board.tasks.length} total tasks</span>
-                <span>·</span>
-                <span>{projectsInfo.length} projects tracked</span>
-              </div>
-            </div>
+            <WidgetInsightBlock
+              heading={tr('Key insights')}
+              summary={tr('{{completed}} of {{total}} tasks done ({{pct}}%), leaving {{active}} open across {{projects}} projects.', {
+                completed: completedTasks.length,
+                total: board.tasks.length,
+                pct: completionRate,
+                active: activeTasks.length,
+                projects: projectsInfo.length,
+              })}
+              action={overdueTasks.length > 0
+                ? tr('Clear one overdue deliverable today to lift completion above {{target}}%.', { target: Math.min(100, completionRate + 5) })
+                : tr('Open full Insights for deeper trend curves, bottleneck checks, and completion velocity.')}
+              actionLabel={tr('Next action')}
+              tone={overdueTasks.length > 0 ? 'warning' : 'primary'}
+            />
             <button onClick={() => navigate('/insights')}
               className="mt-3 w-full py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01]"
-style={{ background: 'hsl(var(--primary))' }}>
-              Open full Insights <ArrowRight className="w-3 h-3" />
+              style={{ background: 'hsl(var(--primary))' }}>
+              {tr('Open full Insights')} <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         );
       }
       case 'weekly': {
         const totalWeek = weeklyData.reduce((s, v) => s + v, 0);
-        const prevWeekAvg = totalWeek > 0 ? Math.round(totalWeek / 7 * 10) / 10 : 0;
+        const prevWeekAvg = totalWeek > 0 ? (totalWeek / 7).toFixed(1) : '0.0';
+        const activeWeekDays = weeklyData.filter(v => v > 0).length;
         return (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">{totalWeek} completed · peak {weekDays[peakDay]} ({weeklyData[peakDay]})</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalWeek > 3 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>{totalWeek > 3 ? 'Active week' : 'Quiet week'}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {tr('{{total}} completed · peak {{day}} ({{peakCount}})', { total: totalWeek, day: weekDays[peakDay], peakCount: weeklyData[peakDay] })}
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${totalWeek > 3 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
+                {totalWeek > 3 ? tr('Active week') : tr('Quiet week')}
+              </span>
             </div>
             <div className="flex items-end gap-2 h-24 mt-1">
               {weekDays.map((day, i) => {
@@ -1401,7 +1488,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full">
-                      <div className={`w-full rounded-t-md transition-all duration-500`}
+                      <div className="w-full rounded-t-md transition-all duration-500"
                         style={{
                           height: `${height}px`,
                           background: i === peakDay
@@ -1416,35 +1503,45 @@ style={{ background: 'hsl(var(--primary))' }}>
                 );
               })}
             </div>
-            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {totalWeek === 0 ? 'No completions yet this week — your first finish will set the bar.' : weeklyData[peakDay] >= 3 ? `${weekDays[peakDay]} is your peak (${weeklyData[peakDay]} of ${totalWeek}) — mid-week momentum is driving the week.` : `Even spread — avg ${prevWeekAvg}/day — steady pace, no single spike.`}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                <span>{totalWeek} total</span>
-                <span>·</span>
-                <span>avg {prevWeekAvg}/day</span>
-                {totalWeek > 0 && <span className="ml-auto font-bold text-foreground">{weekDays[peakDay]} peak</span>}
-              </div>
-            </div>
+            <WidgetInsightBlock
+              heading={tr('Velocity')}
+              summary={tr('Closed {{total}} task(s) across {{days}} active day(s) this week (avg {{avg}}/day).', {
+                total: totalWeek,
+                days: activeWeekDays,
+                avg: prevWeekAvg,
+              })}
+              detail={totalWeek > 0
+                ? tr('Peak output landed on {{day}} ({{peak}} completed).', { day: weekDays[peakDay], peak: weeklyData[peakDay] })
+                : tr('No completions logged yet this week — closing one task starts the trend line.')}
+              action={activeWeekDays < 4
+                ? tr('Aim for one steady daily closure so work is distributed evenly across the week.')
+                : tr('Keep locking a focus block during the same daily window as your peak day.')}
+              actionLabel={tr('Next action')}
+              tone="primary"
+            />
           </div>
         );
       }
       case 'overdue': {
         const worstOverdue = overdueTasks.length > 0 ? Math.max(...overdueTasks.map(t => Math.floor((Date.now() - dueEnd(t)!.getTime()) / DAY_MS))) : 0;
+        const overdueCritical = overdueTasks.filter(t => Math.floor((Date.now() - dueEnd(t)!.getTime()) / DAY_MS) >= 7).length;
         return (
           <div>
             {overdueTasks.length === 0 ? (
               <div className="text-center py-6">
                 <CheckCircle2 className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
-                <p className="text-sm text-muted-foreground">All caught up — no overdue tasks!</p>
-                <p className="text-[11px] text-muted-foreground mt-1">{completionRate}% completion is holding because nothing is past due — keep closing before dates slip.</p>
+                <p className="text-sm text-muted-foreground">{tr('All caught up — no overdue tasks!')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Zero overdue tasks — every scheduled deadline is currently protected from timeline drift.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{overdueTasks.length} overdue · oldest {worstOverdue}d late</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">{completionRate}% completion — dragged down</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {tr('{{count}} overdue · oldest {{days}}d late', { count: overdueTasks.length, days: worstOverdue })}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">
+                    {tr('{{pct}}% completion', { pct: completionRate })}
+                  </span>
                 </div>
                 <div className="space-y-1.5">
                   {overdueTasks.slice(0, 5).map(t => {
@@ -1456,46 +1553,49 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
                         <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: 'hsl(var(--label-red))' }}>
-                          {cfg ? cfg.label : 'Open'} · {overdueDays}d late
+                          {cfg ? tr(cfg.label) : tr('Open')} · {tr('{{days}}d late', { days: overdueDays })}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    You're trending down from last week — {overdueTasks.length} tasks overdue {worstOverdue >= 7 ? `with the oldest ${worstOverdue}d late` : ''} are dragging the {completionRate}% completion. Tackle the oldest today to lift it.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{overdueTasks.length} overdue</span>
-                    <span>·</span>
-                    <span>worst {worstOverdue}d</span>
-                    <span className="ml-auto flex items-center gap-1 text-red-600 font-bold"><TrendingDown className="w-3 h-3" /> needs action</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Schedule health')}
+                  summary={tr('{{count}} overdue task(s) need triage ({{critical}} stalled 7+ days, oldest slip {{maxDays}}d).', {
+                    count: overdueTasks.length,
+                    critical: overdueCritical,
+                    maxDays: worstOverdue,
+                  })}
+                  action={tr('Knock out the shortest overdue item first and set realistic target dates on blocked work.')}
+                  actionLabel={tr('Next action')}
+                  tone="danger"
+                />
               </>
             )}
             {overdueTasks.length > 5 && (
-              <p className="text-[10px] text-muted-foreground text-center mt-2">+{overdueTasks.length - 5} more overdue</p>
+              <p className="text-[10px] text-muted-foreground text-center mt-2">{tr('+{{count}} more overdue', { count: overdueTasks.length - 5 })}</p>
             )}
           </div>
         );
       }
       case 'deadlines': {
         const soonestDays = upcomingDeadlines.length > 0 ? Math.max(1, Math.ceil((dueEnd(upcomingDeadlines[0]).getTime() - Date.now()) / DAY_MS)) : 0;
+        const urgentUpcoming = upcomingDeadlines.filter(t => t.priority === 'urgent' || t.priority === 'high').length;
         return (
           <div>
             {upcomingDeadlines.length === 0 ? (
               <div className="text-center py-6">
                 <Flag className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No deadlines in the next 7 days</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Clear runway — use it to close overdue and get ahead.</p>
+                <p className="text-sm text-muted-foreground">{tr('No deadlines in the next 7 days')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Clear runway — use it to close overdue items or plan ahead.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{upcomingDeadlines.length} due in 3-7 days · soonest in {soonestDays}d</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">Upcoming</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {tr('{{count}} due in 3–7 days · soonest in {{days}}d', { count: upcomingDeadlines.length, days: soonestDays })}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600">{tr('Upcoming')}</span>
                 </div>
                 <div className="space-y-1.5">
                   {upcomingDeadlines.slice(0, 5).map(t => {
@@ -1507,23 +1607,22 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <Flag className="w-3.5 h-3.5 flex-shrink-0" style={{ color: `hsl(var(--${accent}))` }} />
                         <span className="flex-1 min-w-0 text-xs font-medium text-foreground truncate">{t.title}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg?.className || 'bg-muted'} text-primary-foreground shrink-0`}>
-                          {cfg?.label || ''} {days}d
+                          {cfg ? tr(cfg.label) : ''} {days}d
                         </span>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Next deadline in {soonestDays}d — {upcomingDeadlines.length} tasks cluster in the 3-7 day window. Flag the soonest today so it doesn't become overdue.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{upcomingDeadlines.length} upcoming</span>
-                    <span>·</span>
-                    <span>soonest {soonestDays}d</span>
-                    <span className="ml-auto font-bold text-amber-600">plan ahead</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Schedule health')}
+                  summary={tr('{{count}} tasks due in 3–7 days ({{urgent}} high/urgent priority). Front-load dependencies early so deadlines do not become overdue.', {
+                    count: upcomingDeadlines.length,
+                    urgent: urgentUpcoming,
+                  })}
+                  action={tr('Lock calendar time today for the item due in {{days}} day(s) before week-end crunch.', { days: soonestDays })}
+                  actionLabel={tr('Next action')}
+                  tone="warning"
+                />
               </>
             )}
           </div>
@@ -1531,20 +1630,23 @@ style={{ background: 'hsl(var(--primary))' }}>
       }
       case 'project-progress': {
         const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
-        const strongest = projectsInfo.length > 0 ? projectsInfo.reduce((a, b) => (a.done / a.total) > (b.done / b.total) ? a : b) : null;
+        const strongest = projectsInfo.length > 0 ? projectsInfo.reduce((a, b) => (a.done / Math.max(1, a.total)) > (b.done / Math.max(1, b.total)) ? a : b) : null;
+        const weakest = projectsInfo.length > 0 ? projectsInfo.reduce((a, b) => (a.done / Math.max(1, a.total)) < (b.done / Math.max(1, b.total)) ? a : b) : null;
         return (
           <div className="space-y-2.5 mt-1">
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
                 <FolderOpen className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No projects yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Add tasks to a project and this widget tracks each one's closure rate.</p>
+                <p className="text-sm text-muted-foreground">{tr('No projects yet')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Create a project and assign tasks to it to see its breakdown here.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Avg {avgPct}% · {projectsInfo.length} projects</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${avgPct >= 60 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>{avgPct >= 60 ? 'On track' : 'Needs push'}</span>
+                  <span className="text-[11px] text-muted-foreground">{tr('Avg {{pct}}% · {{count}} projects', { pct: avgPct, count: projectsInfo.length })}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${avgPct >= 60 ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>
+                    {avgPct >= 60 ? tr('On track') : tr('Lagging')}
+                  </span>
                 </div>
                 {projectsInfo.slice(0, 6).map(p => {
                   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
@@ -1563,15 +1665,21 @@ style={{ background: 'hsl(var(--primary))' }}>
                     </div>
                   );
                 })}
-                <div className="mt-2 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {strongest ? `${strongest.name} leads at ${Math.round((strongest.done / strongest.total) * 100)}% — average is ${avgPct}% across ${projectsInfo.length} projects. Pull the lowest project up by one completion this week.` : `Average completion is ${avgPct}% — focus on the lagging project to lift the portfolio.`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>Strongest: {strongest?.name || '—'}</span>
-                    <span className="ml-auto font-bold text-foreground">{avgPct}% avg</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Breakdown')}
+                  summary={strongest && weakest
+                    ? tr('Leading project: {{leader}} ({{leaderPct}}%) vs trailing: {{trailer}} ({{trailerPct}}%).', {
+                        leader: strongest.name,
+                        leaderPct: Math.round((strongest.done / Math.max(1, strongest.total)) * 100),
+                        trailer: weakest.name,
+                        trailerPct: Math.round((weakest.done / Math.max(1, weakest.total)) * 100),
+                      })
+                    : tr('Portfolio average stands at {{pct}}%.', { pct: avgPct })}
+                  action={weakest
+                    ? tr('Schedule one dedicated block for {{name}} to raise overall project parity.', { name: weakest.name })
+                    : tr('Keep closing open deliverables evenly across projects.')}
+                  actionLabel={tr('Next action')}
+                />
               </>
             )}
           </div>
@@ -1580,19 +1688,24 @@ style={{ background: 'hsl(var(--primary))' }}>
       case 'recently-completed': {
         const totalRC = recentlyCompleted.length;
         const withItems = recentlyCompleted.filter(r => r.items.length > 0).length;
+        const latest = recentlyCompleted[0];
         return (
           <div>
             {recentlyCompleted.length === 0 ? (
               <div className="text-center py-6">
                 <History className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No completed tasks yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Finish a task or checklist item and it shows here within seconds.</p>
+                <p className="text-sm text-muted-foreground">{tr('No completed tasks yet')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Finish a task or checklist item and it appears here.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{totalRC} recent · {withItems} with checklist</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">{totalRC > 3 ? 'Active' : 'Getting started'}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {tr('{{total}} recent · {{withItems}} with checklist', { total: totalRC, withItems })}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">
+                    {totalRC >= 3 ? tr('Strong') : tr('Active')}
+                  </span>
                 </div>
                 <div className="space-y-1.5">
                   {recentlyCompleted.map(r => (
@@ -1611,23 +1724,25 @@ style={{ background: 'hsl(var(--primary))' }}>
                             </span>
                           ))}
                           {r.items.length > 3 && (
-                            <span className="text-[9px] text-muted-foreground">+{r.items.length - 3} more</span>
+                            <span className="text-[9px] text-muted-foreground">{tr('+{{count}} more', { count: r.items.length - 3 })}</span>
                           )}
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {totalRC >= 4 ? `Momentum is real — ${totalRC} completions recently, with ${withItems} carrying checklist progress. Keep the streak alive by closing one more today.` : `Small sample — ${totalRC} completions shown. Each finished checklist item lifts the next task's progress.`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{totalRC} completed</span>
-                    <span>·</span>
-                    <span>{withItems} with breakdown</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Velocity')}
+                  summary={tr('Last {{count}} completed deliverable(s) finished ({{withItems}} including checklist closures); latest "{{title}}" {{when}}.', {
+                    count: totalRC,
+                    withItems,
+                    title: latest.title,
+                    when: timeAgo(latest.time),
+                  })}
+                  action={tr('Maintain daily momentum by breaking the next active task into small checkable milestones.')}
+                  actionLabel={tr('Next action')}
+                  tone="primary"
+                />
               </>
             )}
           </div>
@@ -1637,136 +1752,154 @@ style={{ background: 'hsl(var(--primary))' }}>
         const maxCount = Math.max(...priorityBreakdown.map(p => p.count), 1);
         const totalPri = priorityBreakdown.reduce((s, p) => s + p.count, 0);
         const dominant = priorityBreakdown.length > 0 ? priorityBreakdown.reduce((a, b) => a.count > b.count ? a : b) : null;
+        const dominantLabel = dominant ? tr(PRIORITY_CONFIG[dominant.priority].label) : '';
+        const dominantPct = dominant && totalPri > 0 ? Math.round((dominant.count / totalPri) * 100) : 0;
+        const unpriCount = activeTasks.filter(t => t.priority === 'none').length;
         return (
           <div className="mt-1">
             {priorityBreakdown.every(p => p.count === 0) ? (
               <div className="text-center py-6">
                 <PieChart className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No prioritized active tasks</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Set a priority on active tasks to see the mix here.</p>
+                <p className="text-sm text-muted-foreground">{tr('No prioritized active tasks')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Tag active tasks with priorities to see workload distribution here.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{totalPri} prioritized · {dominant?.priority || ''} dominates</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dominant ? `${Math.round(dominant.count / totalPri * 100)}% ${dominant.priority}` : ''}</span>
+                  <span className="text-[11px] text-muted-foreground">{tr('{{count}} active task(s) grouped by priority', { count: totalPri })}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {dominant ? `${dominantPct}% ${dominantLabel}` : ''}
+                  </span>
                 </div>
                 <div className="space-y-2">
-                  {priorityBreakdown.map(p => (
-                    <div key={p.priority}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground capitalize">
-                          <span className={`w-2 h-2 rounded-full ${p.className}`} />
-                          {p.priority}
-                        </span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">{p.count} · {Math.round(p.count / totalPri * 100)}%</span>
+                  {priorityBreakdown.map(p => {
+                    const pLabel = tr(PRIORITY_CONFIG[p.priority].label);
+                    return (
+                      <div key={p.priority}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                            <span className={`w-2 h-2 rounded-full ${p.className}`} />
+                            {pLabel}
+                          </span>
+                          <span className="text-[10px] font-semibold text-muted-foreground">{p.count} · {Math.round(p.count / totalPri * 100)}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${(p.count / maxCount) * 100}%`,
+                              background: `hsl(var(--${accent}))`,
+                              opacity: p.count === 0 ? 0.25 : 1,
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${(p.count / maxCount) * 100}%`,
-                            background: `hsl(var(--${accent}))`,
-                            opacity: p.count === 0 ? 0.25 : 1,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    {dominant && dominant.count / totalPri > 0.5 ? `${dominant.priority} dominates at ${Math.round(dominant.count / totalPri * 100)}% — risk of tunnel vision, pull a medium task forward to balance.` : `Balanced mix — no single priority exceeds 50%. Good for steady throughput.`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{totalPri} active with priority</span>
-                    <span>·</span>
-                    <span>{activeTasks.filter(t => t.priority === 'none').length} without</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Workload mix')}
+                  summary={tr('Priority skew: {{dominantPct}}% of prioritized active work sits in {{dominant}} ({{count}}/{{total}} tasks). Balance deep work with quick wins to maintain flow.', {
+                    dominantPct,
+                    dominant: dominantLabel,
+                    count: dominant?.count || 0,
+                    total: totalPri,
+                  })}
+                  detail={unpriCount > 0 ? tr('{{count}} additional active task(s) have no priority tag yet.', { count: unpriCount }) : undefined}
+                  action={tr('Close top {{dominant}} items first and triage unprioritized work during daily review.', { dominant: dominantLabel })}
+                  actionLabel={tr('Next action')}
+                />
               </>
             )}
           </div>
         );
       }
       case 'tags-overview': {
-        const tagSummary = board.tasks.flatMap(t => t.labels).length;
-        const distinctTags = new Set(board.tasks.flatMap(t => t.labels.map(l => l.id))).size;
-        const topCount = (() => {
-          const m: Record<string, number> = {};
-          board.tasks.flatMap(t => t.labels).forEach(l => { m[l.name] = (m[l.name] || 0) + 1; });
-          const vals = Object.values(m);
-          return vals.length ? Math.max(...vals) : 0;
-        })();
-        return (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">{distinctTags} tags · {tagSummary} assignments</span>
-              <span className="text-[10px] font-bold text-muted-foreground">{distinctTags > 5 ? 'Rich tagging' : 'Light tagging'}</span>
-            </div>
-            <TagsOverviewBody tasks={board.tasks} ctx={{ doneColIds }} />
-            <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {distinctTags === 0 ? 'No tags yet — add tags to surface cross-project themes.' : `Top tag carries ${topCount} uses — tags group work beyond project boundaries.`}
-              </p>
-            </div>
-          </div>
-        );
+        return <TagsOverviewBody tasks={board.tasks} ctx={{ doneColIds }} />;
       }
       case 'notes-overview': {
         const notes = notesBoard.tasks || [];
         const recentCount = notes.filter(n => { const d = n.createdAt ? new Date(n.createdAt) : null; return d && (Date.now() - d.getTime()) / DAY_MS <= 7; }).length;
+        const withMedia = notes.filter(n => (n.attachments?.length || 0) > 0 || (n.images?.length || 0) > 0).length;
+        const withChecklists = notes.filter(n => (n.checklists?.length || 0) > 0).length;
         return (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">{notes.length} notes · {recentCount} in last 7 days</span>
-              <button onClick={() => navigate('/notes')} className="text-[10px] font-bold text-primary hover:underline">Open Notes</button>
+              <span className="text-[11px] text-muted-foreground">
+                {tr('{{total}} notes · {{recent}} in last 7 days', { total: notes.length, recent: recentCount })}
+              </span>
+              <button onClick={() => navigate('/notes')} className="text-[10px] font-bold text-primary hover:underline">{tr('Open Notes')}</button>
             </div>
             {notes.length === 0 ? (
               <div className="text-center py-6">
                 <StickyNote className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No notes yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Create a note to capture ideas and keep them in sight.</p>
+                <p className="text-sm text-muted-foreground">{tr('No notes yet')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Create a note to capture ideas and keep them in sight.')}</p>
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Total Notes</p>
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Total Notes')}</p>
                     <p className="text-xl font-black text-foreground mt-0.5">{notes.length}</p>
                   </div>
                   <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">This Week</p>
+                    <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{tr('This Week')}</p>
                     <p className="text-xl font-black text-foreground mt-0.5">{recentCount}</p>
                   </div>
                 </div>
-                <div className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">{recentCount > 0 ? `${recentCount} notes added in the last 7 days — your knowledge base is growing.` : 'No new notes this week — capture one thing you learned today.'}</p>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Breakdown')}
+                  summary={tr('Notes library holds {{total}} notes ({{recent}} added this week, {{media}} with files/images, {{checklists}} with checklists). Convert actionable notes into tracked tasks.', {
+                    total: notes.length,
+                    recent: recentCount,
+                    media: withMedia,
+                    checklists: withChecklists,
+                  })}
+                  action={withChecklists > 0
+                    ? tr('Review checklist notes weekly and move unfinished action items onto your main task board.')
+                    : tr('Add checklists or file attachments to key notes so ideas turn into trackable work.')}
+                  actionLabel={tr('Next action')}
+                  tone="primary"
+                />
               </>
             )}
           </div>
         );
       }
       case 'recent-notes': {
-        const notes = [...(notesBoard.tasks || [])].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 6);
+        const allNotes = notesBoard.tasks || [];
+        const notes = [...allNotes].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 6);
+        const recentWeek = allNotes.filter(n => n.createdAt && (Date.now() - new Date(n.createdAt).getTime()) <= 7 * DAY_MS).length;
         return (
           <div>
             {notes.length === 0 ? (
               <div className="text-center py-6">
                 <FileText className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No recent notes</p>
+                <p className="text-sm text-muted-foreground">{tr('No recent notes')}</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {notes.map(n => (
-                  <button key={n.id} onClick={() => navigate('/notes')} className="w-full text-left p-2 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                    <p className="text-xs font-medium text-foreground truncate">{n.title || 'Untitled note'}</p>
-                    {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description}</p>}
-                    <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString(dateLocale()) : ''}</p>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  {notes.map(n => (
+                    <button key={n.id} onClick={() => navigate('/notes')} className="w-full text-left p-2 rounded-lg hover:bg-muted/40 transition-colors" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
+                      <p className="text-xs font-medium text-foreground truncate">{n.title || tr('Untitled note')}</p>
+                      {n.description && <p className="text-[11px] text-muted-foreground truncate mt-0.5">{n.description}</p>}
+                      <p className="text-[10px] text-muted-foreground mt-1">{n.createdAt ? new Date(n.createdAt).toLocaleDateString(dateLocale()) : ''}</p>
+                    </button>
+                  ))}
+                </div>
+                <WidgetInsightBlock
+                  heading={tr('Key insights')}
+                  summary={tr('Showing your {{shown}} newest note(s) out of {{total}} saved ({{week}} created in the last 7 days).', {
+                    shown: notes.length,
+                    total: allNotes.length,
+                    week: recentWeek,
+                  })}
+                  action={tr('Promote actionable reference notes into structured tasks with target due dates.')}
+                  actionLabel={tr('Next action')}
+                />
+              </>
             )}
           </div>
         );
@@ -1775,38 +1908,50 @@ style={{ background: 'hsl(var(--primary))' }}>
         const total30 = advancedInsights.trend30.reduce((s, v) => s + v, 0);
         const avg = advancedInsights.avgHours;
         const trendUp = total30 > 5 && avg != null && avg < 24;
+        const activeTrendDays = advancedInsights.trend30.filter(v => v > 0).length;
         return (
           <div className="space-y-2.5 mt-1">
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Avg completion</p>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Average completion')}</p>
                 <p className="text-base font-black text-foreground mt-0.5">
                   {avg != null ? `${avg.toFixed(1)}h` : '—'}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-1">{avg != null && avg < 10 ? 'Fast turnover' : avg != null && avg < 48 ? 'Moderate pace' : 'Slow cycle'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {avg == null ? tr('No logs') : avg < 10 ? tr('Fast turnover') : avg < 48 ? tr('Moderate pace') : tr('Long cycle')}
+                </p>
               </div>
               <div className="p-2.5 rounded-lg" style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Busiest day</p>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{tr('Busiest day')}</p>
                 <p className="text-base font-black text-foreground mt-0.5">{advancedInsights.busiestDay || '—'}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">{advancedInsights.busiestDay ? `${total30} in 30 days` : 'No data yet'}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {advancedInsights.busiestDay ? tr('{{count}} completed in the last 30 days', { count: total30 }) : tr('No data yet')}
+                </p>
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">30-day trend</p>
-                <p className="text-[10px] font-semibold text-muted-foreground">{total30} completed · avg {(total30 / 30).toFixed(1)}/day</p>
+                <p className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">{tr('30-day trend')}</p>
+                <p className="text-[10px] font-semibold text-muted-foreground">
+                  {tr('{{total}} completed · avg {{avg}}/day', { total: total30, avg: (total30 / 30).toFixed(1) })}
+                </p>
               </div>
               <MiniBars values={advancedInsights.trend30} accent={accent} containerClass="h-12" />
             </div>
-            <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                <span className="font-bold text-foreground">Premium insight:</span> {total30 === 0 ? 'No completions in 30 days — the trend will form once you close tasks.' : trendUp ? `Activity is building — ${total30} in 30 days with ${advancedInsights.busiestDay} as peak. Keep the daily close rate above 1.` : `Long cycle at ${avg?.toFixed(1) || '—'}h avg — break large tasks to shorten completion time.`}
-              </p>
-              <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">{trendUp ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{trendUp ? 'building' : 'needs lift'}</span>
-                <span className="ml-auto font-bold text-foreground">{total30} total</span>
-              </div>
-            </div>
+            <WidgetInsightBlock
+              heading={tr('Velocity')}
+              summary={tr('Completed {{total}} tasks in 30 days across {{days}} active days; peak on {{peakDate}} ({{peakCount}}).', {
+                total: total30,
+                days: activeTrendDays,
+                peakDate: advancedInsights.busiestDay || '—',
+                peakCount: Math.max(...advancedInsights.trend30, 0),
+              })}
+              action={trendUp
+                ? tr('Cycle speed stays healthy under 24h average — keep sizing multi-hour tasks into smaller milestones.')
+                : tr('Add smaller subtasks to reduce cycle time per deliverable and activate quieter weekdays.')}
+              actionLabel={tr('Next action')}
+              tone="primary"
+            />
           </div>
         );
       }
@@ -1817,7 +1962,8 @@ style={{ background: 'hsl(var(--primary))' }}>
         const total = series.reduce((s, v) => s + v, 0);
         const maxSeries = Math.max(...series, 1);
         const avgPerDay = range > 0 ? (total / range).toFixed(1) : '0';
-        const metricLabel = metric === 'created' ? 'Created' : metric === 'checklist' ? 'Checklist items done' : 'Completed';
+        const activeDays = series.filter(v => v > 0).length;
+        const metricLabel = metric === 'created' ? tr('Created') : metric === 'checklist' ? tr('Checklist items') : tr('Completed');
         const peakIdx = series.indexOf(maxSeries);
         return (
           <div className="mt-1">
@@ -1827,9 +1973,9 @@ style={{ background: 'hsl(var(--primary))' }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="created">Created</SelectItem>
-                  <SelectItem value="checklist">Checklist items</SelectItem>
+                  <SelectItem value="completed">{tr('Completed')}</SelectItem>
+                  <SelectItem value="created">{tr('Created')}</SelectItem>
+                  <SelectItem value="checklist">{tr('Checklist items')}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={String(range)} onValueChange={v => updateWidget(widget.id, { range: Number(v) })}>
@@ -1837,35 +1983,36 @@ style={{ background: 'hsl(var(--primary))' }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">7 days</SelectItem>
-                  <SelectItem value="14">14 days</SelectItem>
-                  <SelectItem value="30">30 days</SelectItem>
+                  <SelectItem value="7">{tr('{{days}} days', { days: 7 })}</SelectItem>
+                  <SelectItem value="14">{tr('{{days}} days', { days: 14 })}</SelectItem>
+                  <SelectItem value="30">{tr('{{days}} days', { days: 30 })}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {total === 0 ? (
               <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground">No {metricLabel.toLowerCase()} in this range yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Switch metric or extend the range to surface a pattern.</p>
+                <p className="text-sm text-muted-foreground">{tr('No entries in this range yet. Pick a different metric or timeframe to explore.')}</p>
               </div>
             ) : (
               <>
                 <MiniBars values={series} accent={accent} containerClass="h-14" />
-                <div className="flex items-center justify-between mt-2">
-                  <p className="text-[10px] font-bold text-foreground">{total} {metricLabel.toLowerCase()} · avg {avgPerDay}/day</p>
-                  <p className="text-[10px] text-muted-foreground">peak {maxSeries}/day on day {peakIdx + 1}</p>
-                </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Premium insight:</span> Peak of {maxSeries} on day {peakIdx + 1} represents {Math.round(maxSeries / total * 100)}% of the {range}-day {metricLabel.toLowerCase()}. {total / range > 1 ? `Above 1/day — keep the daily close rate.` : `Below 1/day — aim for one ${metricLabel.toLowerCase()} daily to lift the trend.`}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{total} total</span>
-                    <span>·</span>
-                    <span>peak {maxSeries}</span>
-                    <span className="ml-auto font-bold text-foreground">{avgPerDay}/day avg</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Breakdown')}
+                  summary={tr('Recorded {{total}} entries across {{active}} of {{range}} days (avg {{avg}}/day).', {
+                    total,
+                    active: activeDays,
+                    range,
+                    avg: avgPerDay,
+                  })}
+                  detail={tr('Peak volume of {{peak}} landed on day {{day}} for {{metric}}.', {
+                    peak: maxSeries,
+                    day: peakIdx + 1,
+                    metric: metricLabel,
+                  })}
+                  action={tr('Compare Completed vs Created over the same {{days}}-day window to spot scope creep early.', { days: range })}
+                  actionLabel={tr('Next action')}
+                  tone="primary"
+                />
               </>
             )}
           </div>
@@ -1874,19 +2021,26 @@ style={{ background: 'hsl(var(--primary))' }}>
       case 'multi-project': {
         const avgPct = projectsInfo.length > 0 ? Math.round(projectsInfo.reduce((s, p) => s + (p.total > 0 ? (p.done / p.total) * 100 : 0), 0) / projectsInfo.length) : 0;
         const spread = projectsInfo.length > 1 ? Math.max(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) - Math.min(...projectsInfo.map(p => p.total > 0 ? p.done / p.total : 0)) : 0;
+        const sortedProj = [...projectsInfo].sort((a, b) => (a.done / Math.max(1, a.total)) - (b.done / Math.max(1, b.total)));
+        const trailer = sortedProj[0];
+        const leader = sortedProj[sortedProj.length - 1];
         return (
           <div className="space-y-2.5 mt-1">
             {projectsInfo.length === 0 ? (
               <div className="text-center py-6">
                 <GitCompareArrows className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No projects yet</p>
-                <p className="text-[11px] text-muted-foreground mt-1">Create at least two projects — comparison appears once you have more than one.</p>
+                <p className="text-sm text-muted-foreground">{tr('No projects yet')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Need at least two projects to compare. Create more projects and assign tasks to them.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">{projectsInfo.length} projects · avg {avgPct}%</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${spread > 0.5 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>{spread > 0.5 ? 'Wide spread' : 'Tight range'}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {tr('{{count}} project(s) compared · average {{avg}}%', { count: projectsInfo.length, avg: avgPct })}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${spread > 0.5 ? 'bg-amber-500/15 text-amber-600' : 'bg-emerald-500/15 text-emerald-600'}`}>
+                    {spread > 0.5 ? tr('Wide spread') : tr('Balanced')}
+                  </span>
                 </div>
                 {projectsInfo.slice(0, 6).map(p => {
                   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
@@ -1898,7 +2052,9 @@ style={{ background: 'hsl(var(--primary))' }}>
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                           {p.name}
                         </span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">{p.done}/{p.total} · {pct}% <span className={vsAvg >= 0 ? 'text-emerald-600' : 'text-red-500'}>{vsAvg >= 0 ? `+${vsAvg}` : vsAvg}% vs avg</span></span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">
+                          {p.done}/{p.total} · {pct}% <span className={vsAvg >= 0 ? 'text-emerald-600' : 'text-red-500'}>{tr('{{delta}}% vs avg', { delta: `${vsAvg >= 0 ? '+' : ''}${vsAvg}` })}</span>
+                        </span>
                       </div>
                       <div className="flex gap-1 h-2 rounded-full overflow-hidden" style={{ background: 'hsl(var(--muted) / 0.6)' }}>
                         <div className="rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: vsAvg >= 0 ? 'hsl(var(--label-green))' : 'hsl(var(--label-orange))' }} />
@@ -1907,16 +2063,21 @@ style={{ background: 'hsl(var(--primary))' }}>
                     </div>
                   );
                 })}
-                <div className="mt-3 p-2.5 rounded-lg bg-muted/20 border border-border/40">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Premium comparison — avg {avgPct}% across {projectsInfo.length} projects{spread > 0.5 ? `, ${Math.round(spread * 100)}pt spread signals uneven progress — the lagging project needs the next deep-work block.` : ' with tight spread — progress is evenly distributed.'}
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>Spread {Math.round(spread * 100)}pt</span>
-                    <span>·</span>
-                    <span>{projectsInfo.length} compared</span>
-                  </div>
-                </div>
+                {leader && trailer && (
+                  <WidgetInsightBlock
+                    heading={tr('Breakdown')}
+                    summary={tr('Leading project: {{leader}} ({{leaderPct}}%) vs trailing: {{trailer}} ({{trailerPct}}%) — {{spread}}-point completion spread.', {
+                      leader: leader.name,
+                      leaderPct: Math.round((leader.done / Math.max(1, leader.total)) * 100),
+                      trailer: trailer.name,
+                      trailerPct: Math.round((trailer.done / Math.max(1, trailer.total)) * 100),
+                      spread: Math.round(spread * 100),
+                    })}
+                    action={tr('Rebalance upcoming task intake toward {{trailer}} to narrow the completion gap.', { trailer: trailer.name })}
+                    actionLabel={tr('Next action')}
+                    tone={spread > 0.5 ? 'warning' : 'neutral'}
+                  />
+                )}
               </>
             )}
           </div>
@@ -1940,7 +2101,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                     <span className="absolute inset-0 flex items-center justify-center text-lg font-black text-foreground">{score.score}</span>
                   </div>
                   <div className="flex-1 min-w-0 space-y-1.5">
-                    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">AI Productivity Score</p>
+                    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{tr('AI Productivity Score')}</p>
                     <p className="text-xs text-muted-foreground leading-snug">{score.summary}</p>
                     {score.focusAreas.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -1952,19 +2113,25 @@ style={{ background: 'hsl(var(--primary))' }}>
                       </div>
                     )}
                     <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors">
-                      <RefreshCw className="w-3 h-3" /> Refresh
+                      <RefreshCw className="w-3 h-3" /> {tr('Refresh')}
                     </button>
                   </div>
                 </div>
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> Score {score.score}/100 — {score.score >= 70 ? 'health is strong; keep the overdue count at zero to hold it' : score.score >= 40 ? 'mid-range — overdue and high-priority open tasks are the drag' : 'critical — overdue tasks and stalled breakdowns dominate the penalty'}.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span className="flex items-center gap-1">{score.score >= 70 ? <TrendingUp className="w-3 h-3 text-emerald-500" /> : <TrendingDown className="w-3 h-3 text-amber-500" />}{score.score >= 50 ? 'trending stable' : 'needs lift'}</span>
-                    <span className="ml-auto font-bold text-foreground">{score.focusAreas.length} focus areas</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Key insights')}
+                  summary={tr('Productivity score stands at {{score}}/100 with {{compRate}}% completion across {{total}} tasks ({{completed}} done, {{active}} active).', {
+                    score: score.score,
+                    compRate: completionRate,
+                    total: board.tasks.length,
+                    completed: completedTasks.length,
+                    active: activeTasks.length,
+                  })}
+                  action={overdueTasks.length > 0
+                    ? tr('Clear {{count}} overdue deliverable(s) first to eliminate schedule drag and unblock downstream goals.', { count: overdueTasks.length })
+                    : tr('Protect morning focus blocks for top priority tasks while holding overdue count at zero.')}
+                  actionLabel={tr('Next action')}
+                  tone="primary"
+                />
               </div>
             ) : (
               <AiWidgetStatus onRetry={loadAiWidgets} />
@@ -1983,14 +2150,16 @@ style={{ background: 'hsl(var(--primary))' }}>
             ) : nextTasks.length === 0 ? (
               <div className="text-center py-6">
                 <ListOrdered className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: `hsl(var(--${accent}))` }} />
-                <p className="text-sm text-muted-foreground">No tasks to prioritize right now</p>
-                <p className="text-[11px] text-muted-foreground mt-1">AI ranks by overdue, priority and project balance — add more tasks to get a ranked list.</p>
+                <p className="text-sm text-muted-foreground">{tr('No tasks to prioritize right now')}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{tr('Add tasks with priorities or due dates to generate an execution order.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{nextTasks.length} ranked · by urgency & impact</span>
-                  <span className="text-[10px] font-bold text-primary">Pro ranked</span>
+                  <span className="text-[11px] text-muted-foreground">{tr('{{count}} ranked · by urgency & impact', { count: nextTasks.length })}</span>
+                  <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline">
+                    <RefreshCw className="w-3 h-3" /> {tr('Refresh')}
+                  </button>
                 </div>
                 <div className="space-y-1.5">
                   {nextTasks.map((nt: { id: string; reason: string }, i: number) => {
@@ -2005,8 +2174,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
-                            {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>}
+                            <p className="text-xs font-semibold text-foreground truncate">{task?.title || tr('Task')}</p>
+                            {cfg && <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{tr(cfg.label)}</span>}
                           </div>
                           <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{nt.reason}</p>
                         </div>
@@ -2014,11 +2183,13 @@ style={{ background: 'hsl(var(--primary))' }}>
                     );
                   })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> Top 3 are chosen for deadline proximity and priority weight — {nextTasks.length > 1 ? `start with #1, then sequence through ${nextTasks.length} in order.` : 'clear it to lift the whole queue.'}
-                  </p>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Next action')}
+                  summary={tr('Ranked #1–#{{count}} by deadline urgency, priority weight, and project momentum.', { count: nextTasks.length })}
+                  action={tr('Finish #1 cleanly before context-switching to lower-ranked backlog items.')}
+                  actionLabel={tr('Pattern')}
+                  tone="primary"
+                />
               </>
             )}
           </div>
@@ -2035,14 +2206,15 @@ style={{ background: 'hsl(var(--primary))' }}>
             ) : bottlenecks.length === 0 ? (
               <div className="text-center py-6">
                 <Siren className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-green))' }} />
-                <p className="text-sm text-muted-foreground">No bottlenecks detected</p>
-                <p className="text-[11px] text-muted-foreground mt-1">AI sees no stalled work — your breakdowns are moving. Keep the daily close rate up.</p>
+                <p className="text-sm text-muted-foreground">{tr('No bottlenecks detected — the AI found no tasks that appear to be stalling.')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] text-muted-foreground">{bottlenecks.length} stalled · needs attention</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-600">Pro flagged</span>
+                  <span className="text-[11px] text-muted-foreground">{tr('{{count}} stalling task(s) flagged', { count: bottlenecks.length })}</span>
+                  <button onClick={loadAiWidgets} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline">
+                    <RefreshCw className="w-3 h-3" /> {tr('Refresh')}
+                  </button>
                 </div>
                 <div className="space-y-1.5">
                   {bottlenecks.map((bn: { id: string; reason: string }) => {
@@ -2052,19 +2224,21 @@ style={{ background: 'hsl(var(--primary))' }}>
                         style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}>
                         <div className="flex items-center gap-2">
                           <Siren className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'hsl(var(--label-red))' }} />
-                          <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || 'Task'}</p>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600">Stalled</span>
+                          <p className="flex-1 min-w-0 text-xs font-semibold text-foreground truncate">{task?.title || tr('Task')}</p>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600">{tr('Stalled')}</span>
                         </div>
                         <p className="text-[10px] text-muted-foreground leading-snug mt-1 pl-5">{bn.reason}</p>
                       </div>
                     );
                   })}
                 </div>
-                <div className="mt-3 p-2.5 rounded-lg bg-red-500/5 border border-red-500/15">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro insight:</span> {bottlenecks.length} tasks are stalled — they have breakdown items untouched for 7+ days. Restart one today or cut it to clear the drag on completion.
-                  </p>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Risk signal')}
+                  summary={tr('{{count}} flagged item(s) show overdue drift or stalled subtask activity.', { count: bottlenecks.length })}
+                  action={tr('Break the top stalled task into a 10-minute next step today or re-scope what is blocked.')}
+                  actionLabel={tr('Next action')}
+                  tone="danger"
+                />
               </>
             )}
           </div>
@@ -2085,16 +2259,22 @@ style={{ background: 'hsl(var(--primary))' }}>
                   <MessageSquareText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: `hsl(var(--${accent}))` }} />
                   <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{summary}</p>
                 </div>
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    <span className="font-bold text-foreground">Pro recap:</span> Week over week — {completedTasks.length} completed, {overdueTasks.length} still overdue, {streakDays}d streak. Next step: close the oldest overdue to tilt next week up.
-                  </p>
-                  <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                    <span>{weeklyData.reduce((s, v) => s + v, 0)} this week</span>
-                    <span>·</span>
-                    <span>{completionRate}% completion</span>
-                  </div>
-                </div>
+                <WidgetInsightBlock
+                  heading={tr('Key insights')}
+                  summary={tr('Weekly Executive Recap: Tracked {{total}} tasks overall with {{completed}} completed ({{compRate}}% completion rate) and {{active}} currently active.', {
+                    total: board.tasks.length,
+                    completed: completedTasks.length,
+                    compRate: completionRate,
+                    active: activeTasks.length,
+                  })}
+                  action={tr('Clear the oldest overdue deliverable early next week and protect peak focus blocks for high-leverage work.')}
+                  actionLabel={tr('Next action')}
+                  tone="primary"
+                  chips={[
+                    { label: `${weeklyData.reduce((s, v) => s + v, 0)} ${tr('This Week')}`, tone: 'ok' },
+                    { label: `${overdueTasks.length} ${tr('Overdue')}`, tone: overdueTasks.length > 0 ? 'bad' : 'ok' },
+                  ]}
+                />
               </div>
             )}
           </div>
@@ -2138,12 +2318,12 @@ style={{ background: 'hsl(var(--primary))' }}>
           style={{ borderColor: 'hsl(var(--border))' }}
         >
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-2 min-w-0 flex-1">
-            <h1 className="text-base font-bold text-foreground truncate animate-fade-in">{greeting}, {user?.name || 'there'}!</h1>
+            <h1 className="text-base font-bold text-foreground truncate animate-fade-in">{greeting}, {user?.name || tr('there')}!</h1>
             <p className="hidden sm:block text-xs text-muted-foreground truncate">
-              {dateStr} · You have <span className="text-primary font-medium">{activeTasks.length} tasks</span> active. Let's make it productive!
+              {tr('{{date}} · You have {{count}} tasks active.', { date: dateStr, count: activeTasks.length })}
             </p>
             <p className="sm:hidden text-[11px] text-muted-foreground truncate">
-              {dateStr} · <span className="text-primary font-medium">{activeTasks.length} active</span>
+              {tr('{{date}} · {{count}} active', { date: dateStr, count: activeTasks.length })}
             </p>
           </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -2151,11 +2331,11 @@ style={{ background: 'hsl(var(--primary))' }}>
                 onClick={() => setShowCustomize(true)}
                 className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
               >
-                <LayoutDashboard className="w-4 h-4" /> Customize Dashboard
+                <LayoutDashboard className="w-4 h-4" /> {tr('Customize Dashboard')}
               </button>
               <button
                 onClick={() => setShowCustomize(true)}
-                aria-label="Customize dashboard"
+                aria-label={tr('Customize Dashboard')}
                 className="sm:hidden p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl border border-border bg-muted/50 text-muted-foreground"
               >
                 <LayoutDashboard className="w-5 h-5" />
@@ -2211,7 +2391,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 onClick={() => { trackUsage('dashboard', 'add-task'); navigate('/tasks?create=1'); }}
                 className="flex items-center gap-2 px-3 sm:px-4 py-2.5 min-h-[44px] text-sm bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all"
               >
-                <Plus className="w-4 h-4" /> Add Task
+                <Plus className="w-4 h-4" /> {tr('Add Task')}
               </button>
             </div>
         </header>
@@ -2234,13 +2414,13 @@ style={{ background: 'hsl(var(--primary))' }}>
           ) : layout.length === 0 && !previewLayout ? (
             <div ref={gridRef} className="relative text-center py-20" style={{ height: Math.max(gridHeight, 320) }}>
               <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
-              <p className="text-base font-semibold text-foreground">Your dashboard is empty</p>
-              <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Dashboard to add widgets</p>
+              <p className="text-base font-semibold text-foreground">{tr('Your dashboard is empty')}</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">{tr('Open Customize Dashboard to add widgets')}</p>
               <button
                 {...getLimitButtonProps({
                   isLimitReached: isWidgetLimitReached,
                   tier: planTier,
-                  defaultLabel: 'Add widgets',
+                  defaultLabel: tr('Add widgets'),
                   onAction: () => { trackUsage('dashboard', 'customize'); setShowCustomize(true); },
                   onNavigatePricing: () => navigate('/pricing'),
                 })}
@@ -2284,8 +2464,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <button
                           onPointerDown={e => startGesture(e, widget, 'move')}
                           className="p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
-                          title="Move"
-                          aria-label="Move widget"
+                          title={tr('Move')}
+                          aria-label={tr('Move')}
                         >
                           <GripVertical className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
                         </button>
@@ -2293,8 +2473,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                           <button
                             onClick={() => setTagsModalOpen(true)}
                             className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"
-                            title="Edit tags"
-                            aria-label="Edit tags"
+                            title={tr('Edit tags')}
+                            aria-label={tr('Edit tags')}
                           >
                             <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
@@ -2310,8 +2490,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                         <button
                           onClick={() => removeWidget(widget.id)}
                           className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
-                          title="Remove"
-                          aria-label="Remove widget"
+                          title={tr('Remove')}
+                          aria-label={tr('Remove')}
                         >
                           <X className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
@@ -2338,7 +2518,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                       onPointerDown={e => startGesture(e, widget, 'resize')}
                       className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
                       style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
-                      title="Resize"
+                      title={tr('Resize')}
                     />
                   </div>
                 );
@@ -2353,7 +2533,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 return (
                   <section
                     key={widget.id}
-                    aria-label={widget.title}
+                    aria-label={tt(widget.title)}
                     className="rounded-2xl flex flex-col overflow-hidden"
                     style={{
                       background: cardStyle(accent).background,
@@ -2369,8 +2549,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                       <button
                         onClick={() => removeWidget(widget.id)}
                         className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
-                        title="Remove"
-                        aria-label={`Remove ${widget.title}`}
+                        title={tr('Remove')}
+                        aria-label={tr('Remove')}
                       >
                         <X className="w-4 h-4" aria-hidden="true" />
                       </button>
@@ -2420,7 +2600,7 @@ style={{ background: 'hsl(var(--primary))' }}>
           <TagsModal
             open={tagsModalOpen}
             onClose={() => setTagsModalOpen(false)}
-            title="Tags"
+            title={tr('Tags')}
             tags={allTags}
             selectedIds={[]}
             onToggle={() => {}}
@@ -2431,7 +2611,7 @@ style={{ background: 'hsl(var(--primary))' }}>
             onDelete={deleteTagEverywhere}
             onRename={renameTagEverywhere}
             onColorChange={changeTagColorEverywhere}
-            emptyText="No tags yet. Create one below."
+            emptyText={tr('No tags yet. Create one below.')}
           />
         </Suspense>
       )}
@@ -2443,11 +2623,11 @@ style={{ background: 'hsl(var(--primary))' }}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-primary" /> Start Deep Work
+                  <Zap className="w-4 h-4 text-primary" /> {tr('Start Deep Work')}
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Pick a task to focus on</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{tr('Pick a task to focus on')}</p>
               </div>
-              <button onClick={() => setShowTaskPicker(false)} aria-label="Close task picker" title="Close task picker" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0">
+              <button onClick={() => setShowTaskPicker(false)} aria-label={tr('Close task picker')} title={tr('Close task picker')} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors shrink-0">
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
@@ -2459,8 +2639,8 @@ style={{ background: 'hsl(var(--primary))' }}>
                 onKeyDown={e => {
                   if (e.key === 'Escape') setShowTaskPicker(false);
                 }}
-                placeholder="Search tasks…"
-                aria-label="Search tasks"
+                placeholder={tr('Search tasks…')}
+                aria-label={tr('Search tasks')}
                 className="w-full bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
@@ -2469,7 +2649,7 @@ style={{ background: 'hsl(var(--primary))' }}>
                 <div className="text-center py-10">
                   <CheckSquare className="w-8 h-8 opacity-40 mx-auto mb-2" style={{ color: 'hsl(var(--label-blue))' }} />
                   <p className="text-sm text-muted-foreground">
-                    {activeTasks.length === 0 ? 'No active tasks. Add some to get started!' : 'No tasks match your search'}
+                    {activeTasks.length === 0 ? tr('No active tasks. Add some to get started!') : tr('No tasks match your search')}
                   </p>
                 </div>
               ) : (
@@ -2488,9 +2668,9 @@ style={{ background: 'hsl(var(--primary))' }}>
                       style={{ background: 'hsl(var(--muted) / 0.35)', border: '1px solid hsl(var(--border))' }}
                     >
                       {cfg ? (
-                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{cfg.label}</span>
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.className} text-primary-foreground shrink-0`}>{tr(cfg.label)}</span>
                       ) : (
-                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">Open</span>
+                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{tr('Open')}</span>
                       )}
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm font-medium text-foreground truncate">{task.title}</span>

@@ -61,55 +61,59 @@ const sharedTagToLabel = (tag: SharedTag): Label => ({
 });
 
 const WIDGET_DEFS: GridWidgetDef<InsightWidgetType>[] = [
-  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
-  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
-  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 6 },
-  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 6, h: 4, tier: 'free', minW: 6, minH: 4, maxW: 10, maxH: 6 },
-  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 7 },
-  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 12, h: 4, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 6, h: 4, tier: 'premium', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 12, h: 5, tier: 'premium', minW: 8, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 8 },
-  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 6, h: 4, tier: 'pro', minW: 6, minH: 4, maxW: 12, maxH: 7 },
+  { type: 'completion-overview', title: 'Completion Overview', desc: 'Total, completed & active tasks with what drives the rate', icon: Target, accent: 'label-green', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 7 },
+  { type: 'active-vs-overdue', title: 'Active vs Overdue', desc: 'Every overdue task, how far past due, and why it matters', icon: AlertTriangle, accent: 'label-red', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'tasks-by-priority', title: 'Tasks by Priority', desc: 'Active tasks grouped by urgent, high, medium and low', icon: Layers, accent: 'label-orange', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 10, maxH: 7 },
+  { type: 'weekly-activity', title: 'Weekly Activity', desc: 'What you completed on each day of the current week', icon: CalendarDays, accent: 'label-blue', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 7 },
+  { type: 'project-breakdown', title: 'Project Breakdown', desc: 'Per-project completion, status and overdue items', icon: FolderOpen, accent: 'label-purple', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 9 },
+  { type: 'tags-overview', title: 'Tags Overview', desc: 'Every tag with the tasks carrying it', icon: Tag, accent: 'label-yellow', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'notes-overview', title: 'Notes Overview', desc: 'Total notes and recent notes activity', icon: FileText, accent: 'label-orange', w: 6, h: 5, tier: 'free', minW: 6, minH: 5, maxW: 10, maxH: 7 },
+  { type: 'completion-trend', title: 'Completion Trend', desc: '30-day trend with per-day explanations for every rise and dip', icon: TrendingUp, accent: 'label-green', w: 12, h: 6, tier: 'premium', minW: 8, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'avg-completion-time', title: 'Average Completion Time', desc: 'Actual vs estimated completion time grouped by priority', icon: Clock, accent: 'label-blue', w: 6, h: 5, tier: 'premium', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'busiest-days-times', title: 'Busiest Days & Times', desc: 'When you finish the most work, day by day', icon: CalendarClock, accent: 'label-orange', w: 6, h: 5, tier: 'premium', minW: 6, minH: 5, maxW: 12, maxH: 8 },
+  { type: 'multi-project-comparison', title: 'Multi-Project Comparison', desc: 'Completion %, speed and health across your projects', icon: GitCompare, accent: 'label-purple', w: 12, h: 6, tier: 'premium', minW: 8, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'subtask-checklist-health', title: 'Sub-task & Checklist Health', desc: 'Breakdown progress, stalled tasks and suggested next steps', icon: ListChecks, accent: 'label-yellow', w: 6, h: 6, tier: 'premium', minW: 6, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'custom-report', title: 'Custom Report Builder', desc: 'Build your own report from a metric and a date range', icon: FileText, accent: 'label-red', w: 6, h: 5, tier: 'premium', minW: 6, minH: 5, maxW: 12, maxH: 9 },
+  { type: 'energy-insights', title: 'Energy Insights', desc: 'Peak hours, consistency and what to change — analysed from your logged energy', icon: Battery, accent: 'label-orange', w: 12, h: 6, tier: 'premium', minW: 8, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'ai-bottlenecks', title: 'AI Bottleneck Detector', desc: 'AI-flagged stalling tasks with reasoning and next steps', icon: Bot, accent: 'label-purple', w: 6, h: 6, tier: 'pro', minW: 6, minH: 6, maxW: 12, maxH: 9 },
+  { type: 'ai-score', title: 'AI Productivity Score', desc: 'Live AI score with what is helping and what is dragging you down', icon: Gauge, accent: 'label-blue', w: 6, h: 6, tier: 'pro', minW: 6, minH: 6, maxW: 12, maxH: 8 },
 ];
 
 const w = (id: string, type: InsightWidgetType, title: string, col: number, row: number, ww: number, hh: number): InsightWidget =>
   ({ id, type, title, col, row, w: ww, h: hh });
 
 const defaultLayout = (): InsightWidget[] => [
-  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 6, 4),
-  w('w2', 'active-vs-overdue', 'Active vs Overdue', 7, 1, 6, 4),
-  w('w3', 'tasks-by-priority', 'Tasks by Priority', 1, 5, 6, 4),
-  w('w4', 'weekly-activity', 'Weekly Activity', 7, 5, 6, 4),
-  w('w5', 'project-breakdown', 'Project Breakdown', 1, 9, 6, 4),
-  w('w6', 'tags-overview', 'Tags Overview', 7, 9, 6, 4),
-  w('w7', 'notes-overview', 'Notes Overview', 1, 13, 6, 4),
+  w('w1', 'completion-overview', 'Completion Overview', 1, 1, 6, 5),
+  w('w2', 'active-vs-overdue', 'Active vs Overdue', 7, 1, 6, 5),
+  w('w3', 'tasks-by-priority', 'Tasks by Priority', 1, 6, 6, 5),
+  w('w4', 'weekly-activity', 'Weekly Activity', 7, 6, 6, 5),
+  w('w5', 'project-breakdown', 'Project Breakdown', 1, 11, 6, 5),
+  w('w6', 'tags-overview', 'Tags Overview', 7, 11, 6, 5),
+  w('w7', 'notes-overview', 'Notes Overview', 1, 16, 6, 5),
 ];
 
 
-const LockedAiWidget: React.FC<{ onUpgrade: () => void; label?: string }> = ({ onUpgrade, label = 'Pro' }) => (
-  <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
-    <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
-      <Lock className="w-4 h-4 text-muted-foreground" />
+const LockedAiWidget: React.FC<{ onUpgrade: () => void; label?: string }> = ({ onUpgrade, label = 'Pro' }) => {
+  const { t } = useLanguage();
+  return (
+    <div className="flex flex-col items-center justify-center py-6 text-center gap-2">
+      <div className="w-9 h-9 rounded-full bg-muted/60 flex items-center justify-center">
+        <Lock className="w-4 h-4 text-muted-foreground" />
+      </div>
+      <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{t('{{tier}} widget', { tier: label })}</p>
+      <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">{t('Upgrade your plan to unlock this widget on your insights board.')}</p>
+      <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
+        {t('Upgrade')}
+      </button>
     </div>
-    <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{label} widget</p>
-    <p className="text-xs text-muted-foreground max-w-[220px] leading-snug">Upgrade your plan to unlock this widget on your insights board.</p>
-    <button onClick={onUpgrade} className="mt-1 px-4 py-2 text-xs font-bold text-white rounded-lg bg-primary hover:bg-primary/90 transition-all">
-      Upgrade
-    </button>
-  </div>
-);
+  );
+};
 
 // Module-level cache so the analysis survives page navigation: the request keeps
 // running in the background and the result is restored if the user comes back.
 // Persisted to sessionStorage so a full page reload also restores the last result.
 type AnalysisCache = {
+  language: string;
   bottlenecks: Array<{ id: string; reason: string; suggestion?: string }> | null;
   scoreData: AiScoreData['data'];
   lastAnalysis: { text: string; time: string; error: boolean } | null;
@@ -120,7 +124,7 @@ try {
   const raw = sessionStorage.getItem(ANALYSIS_CACHE_KEY);
   if (raw) {
     const parsed = JSON.parse(raw) as AnalysisCache;
-    if (parsed && !parsed.lastAnalysis?.error && !parsed.lastAnalysis?.text?.toLowerCase().includes('unavailable')) {
+    if (parsed && parsed.language && !parsed.lastAnalysis?.error && !parsed.lastAnalysis?.text?.toLowerCase().includes('unavailable')) {
       analysisCache = parsed;
     } else {
       sessionStorage.removeItem(ANALYSIS_CACHE_KEY);
@@ -129,9 +133,26 @@ try {
 } catch { /* corrupt or unavailable storage */ }
 let analysisInFlight: Promise<void> | null = null;
 
+const normalizeScoreItems = (raw: unknown, prefix: string): Array<{ id: string; text: string }> => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item, idx) => {
+      if (typeof item === 'string') {
+        const text = item.trim();
+        return text ? { id: `${prefix}-${idx}`, text } : null;
+      }
+      if (item && typeof item === 'object' && 'text' in item) {
+        const obj = item as { id?: unknown; text?: unknown };
+        const text = String(obj.text ?? '').trim();
+        return text ? { id: String(obj.id ?? `${prefix}-${idx}`), text } : null;
+      }
+      return null;
+    })
+    .filter((v): v is { id: string; text: string } => v !== null);
+};
+
 const Insights: React.FC = () => {
-  // Subscribe to language changes so dates/numbers and auto-translated JSX update straight away with no refresh.
-  useLanguage();
+  const { language, t } = useLanguage();
   const navigate = useNavigate();
   const { board, updateTask } = useBoardContext();
   const { user } = useAuth();
@@ -165,23 +186,23 @@ const Insights: React.FC = () => {
     const overdueCount = tasks.filter(t => !doneColIds.includes(t.columnId) && t.dueDate && new Date(t.dueDate) < new Date()).length;
     const completionRate = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
     const rows = [
-      ['MyPlanner Insights Report'],
-      ['Generated', new Date().toLocaleString(dateLocale())],
-      ['Plan Tier', tier.toUpperCase()],
-      ['Productivity Score', `${scoreData?.overallScore ?? 0}/100`],
-      ['Total Tasks', tasks.length],
-      ['Completed Tasks', completedCount],
-      ['Active Overdue Tasks', overdueCount],
-      ['Completion Rate', `${completionRate}%`],
+      [t('MyPlanner Insights Report')],
+      [t('Generated'), new Date().toLocaleString(dateLocale())],
+      [t('Plan Tier'), tier.toUpperCase()],
+      [t('Productivity Score'), `${scoreData?.overallScore ?? 0}/100`],
+      [t('Total Tasks'), tasks.length],
+      [t('Completed Tasks'), completedCount],
+      [t('Active Overdue Tasks'), overdueCount],
+      [t('Completion Rate'), `${completionRate}%`],
       [],
-      ['Task ID', 'Title', 'Priority', 'Status', 'Due Date', 'Duration (min)'],
-      ...tasks.map(t => [
-        t.id,
-        `"${(t.title || '').replace(/"/g, '""')}"`,
-        t.priority || 'none',
-        doneColIds.includes(t.columnId) ? 'Completed' : 'Active',
-        t.dueDate || 'None',
-        t.duration || 0,
+      [t('Task ID'), t('Title'), t('Priority'), t('Status'), t('Due Date'), t('Duration (min)')],
+      ...tasks.map(task => [
+        task.id,
+        `"${(task.title || '').replace(/"/g, '""')}"`,
+        task.priority || t('None'),
+        doneColIds.includes(task.columnId) ? t('Completed') : t('Active'),
+        task.dueDate || t('None'),
+        task.duration || 0,
       ])
     ];
     const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.map(e => e.join(',')).join('\n'));
@@ -192,7 +213,7 @@ const Insights: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     setExportMenuOpen(false);
-    toast({ title: 'Report exported', description: 'CSV report downloaded successfully.' });
+    toast({ title: t('Report exported'), description: t('CSV report downloaded successfully.') });
   };
 
   const exportPdfReport = () => {
@@ -350,19 +371,19 @@ const Insights: React.FC = () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ tasks }),
+          body: JSON.stringify({ tasks, language }),
         });
-        const fallback = buildAiScoreFallback(tasks, ctx);
+        const fallback = buildAiScoreFallback(tasks, ctx, t);
         if (!res.ok) {
           setBottleneckError(null);
           setBottlenecks([]);
           setScoreData(fallback);
-          const parts: string[] = [`Score ${fallback.overallScore}/100`];
-          if (fallback.insights.length > 0) parts.push(`Focus: ${fallback.insights.slice(0, 2).join(', ')}`);
+          const parts: string[] = [t('Score {{score}}/100', { score: fallback.overallScore })];
+          if (fallback.insights.length > 0) parts.push(t('Focus: {{areas}}', { areas: fallback.insights.slice(0, 2).join(', ') }));
           if (fallback.scoreRationale) parts.push(fallback.scoreRationale);
           const info = markDone(parts.join(' · '), false);
-          commit({ bottlenecks: [], scoreData: fallback, lastAnalysis: info });
-          toast({ title: 'AI analysis ready', description: `Score ${fallback.overallScore}/100` });
+          commit({ language, bottlenecks: [], scoreData: fallback, lastAnalysis: info });
+          toast({ title: t('AI analysis ready'), description: t('Score {{score}}/100', { score: fallback.overallScore }) });
           return;
         }
         const data = await res.json();
@@ -371,31 +392,39 @@ const Insights: React.FC = () => {
         const ps = data.productivityScore || {};
         const s = Number(ps.score);
         const focusAreas = Array.isArray(ps.focusAreas) ? ps.focusAreas.map(String) : [];
+        const apiContributors = normalizeScoreItems(ps.contributors, 'ai-contrib');
+        const apiPenalties = normalizeScoreItems(ps.penalties, 'ai-penalty');
+        const apiRecommendations = Array.isArray(ps.recommendations) ? ps.recommendations.map(String).filter(Boolean) : [];
         const finalScore = Number.isFinite(s) ? Math.round(s) : fallback.overallScore;
         const scoreResult: AiScoreData['data'] = {
           overallScore: finalScore,
           scoreRationale: typeof ps.summary === 'string' && ps.summary ? ps.summary : fallback.scoreRationale,
-          contributors: fallback.contributors,
-          penalties: fallback.penalties,
+          contributors: apiContributors.length > 0 ? apiContributors : fallback.contributors,
+          penalties: apiPenalties.length > 0 ? apiPenalties : fallback.penalties,
           insights: focusAreas.length > 0 ? focusAreas : fallback.insights,
-          recommendations: fallback.recommendations,
+          recommendations: apiRecommendations.length > 0 ? apiRecommendations : fallback.recommendations,
         };
         setScoreData(scoreResult);
-        const parts: string[] = [`Score ${finalScore}/100`];
-        if (focusAreas.length > 0) parts.push(`Focus: ${focusAreas.slice(0, 3).join(', ')}`);
-        if (bns.length > 0) parts.push(`${bns.length} bottleneck${bns.length !== 1 ? 's' : ''} detected`);
+        const parts: string[] = [t('Score {{score}}/100', { score: finalScore })];
+        if (focusAreas.length > 0) parts.push(t('Focus: {{areas}}', { areas: focusAreas.slice(0, 3).join(', ') }));
+        if (bns.length > 0) parts.push(t('{{count}} bottleneck(s) detected', { count: bns.length }));
         if (typeof ps.summary === 'string' && ps.summary) parts.push(ps.summary);
         const info = markDone(parts.join(' · '), false);
-        commit({ bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
-        toast({ title: 'AI analysis ready', description: `Score ${finalScore}/100${bns.length > 0 ? ` · ${bns.length} bottleneck${bns.length !== 1 ? 's' : ''}` : ''}` });
+        commit({ language, bottlenecks: bns, scoreData: scoreResult, lastAnalysis: info });
+        toast({
+          title: t('AI analysis ready'),
+          description: bns.length > 0
+            ? t('Score {{score}}/100 · {{count}} bottleneck(s)', { score: finalScore, count: bns.length })
+            : t('Score {{score}}/100', { score: finalScore }),
+        });
       } catch (e) {
         console.error('AI dashboard-widgets fetch failed:', e);
-        const fb = buildAiScoreFallback(tasks, ctx);
+        const fb = buildAiScoreFallback(tasks, ctx, t);
         setScoreData(fb);
-        const activeCount = tasks.filter(t => !t.completed).length;
-        const info = markDone(`Score ${fb.overallScore}/100 · ${activeCount} active task${activeCount !== 1 ? 's' : ''} analyzed`, false);
-        commit({ bottlenecks: [], scoreData: fb, lastAnalysis: info });
-        toast({ title: 'Analysis ready', description: `Score ${fb.overallScore}/100` });
+        const activeCount = tasks.filter(task => !task.completed).length;
+        const info = markDone(t('Score {{score}}/100 · {{count}} active task(s) analyzed', { score: fb.overallScore, count: activeCount }), false);
+        commit({ language, bottlenecks: [], scoreData: fb, lastAnalysis: info });
+        toast({ title: t('Analysis ready'), description: t('Score {{score}}/100', { score: fb.overallScore }) });
       } finally {
         setAiLoading(false);
       }
@@ -406,20 +435,38 @@ const Insights: React.FC = () => {
     } finally {
       if (analysisInFlight === run) analysisInFlight = null;
     }
-  }, [tasks, ctx]);
+  }, [tasks, ctx, language, t]);
 
-  // Restore the last analysis if the user navigates back to this page — the
-  // request is never cancelled by navigation, it just keeps running.
+  // Restore the last analysis for the active language, or invalidate stale
+  // language results so AI summaries refresh cleanly when switching languages.
   const restoredCacheRef = useRef(false);
+  const prevLangRef = useRef(language);
   useEffect(() => {
-    if (analysisCache && !restoredCacheRef.current) {
+    if (prevLangRef.current !== language) {
+      prevLangRef.current = language;
+      restoredCacheRef.current = false;
+      aiFetchedRef.current = false;
+      if (analysisCache && analysisCache.language === language) {
+        restoredCacheRef.current = true;
+        aiFetchedRef.current = true;
+        setBottlenecks(analysisCache.bottlenecks);
+        setScoreData(analysisCache.scoreData);
+        setLastAnalysis(analysisCache.lastAnalysis);
+      } else {
+        setBottlenecks(null);
+        setScoreData(null);
+        setLastAnalysis(null);
+      }
+      return;
+    }
+    if (analysisCache && analysisCache.language === language && !restoredCacheRef.current) {
       restoredCacheRef.current = true;
       aiFetchedRef.current = true;
       setBottlenecks(analysisCache.bottlenecks);
       setScoreData(analysisCache.scoreData);
       setLastAnalysis(analysisCache.lastAnalysis);
     }
-  }, []);
+  }, [language]);
 
   const wantsAi = hasWidget('ai-bottlenecks') || hasWidget('ai-score');
   const canUseAi = canAccessTier('pro');
@@ -436,7 +483,7 @@ const Insights: React.FC = () => {
         setAiLoading(true);
         analysisInFlight.then(() => {
           setAiLoading(false);
-          if (analysisCache) {
+          if (analysisCache && analysisCache.language === language) {
             setBottlenecks(analysisCache.bottlenecks);
             setScoreData(analysisCache.scoreData);
             setLastAnalysis(analysisCache.lastAnalysis);
@@ -446,7 +493,7 @@ const Insights: React.FC = () => {
         runAi();
       }
     }
-  }, [wantsAi, runAi, canUseAi]);
+  }, [wantsAi, runAi, canUseAi, language]);
 
   const aiWidgetsData: AiWidgetsData = useMemo(() => ({
     loading: aiLoading,
@@ -466,7 +513,7 @@ const Insights: React.FC = () => {
   const renderBody = (widget: InsightWidget) => {
     const definition = WIDGET_DEFS.find(def => def.type === widget.type);
     if (definition && !canAccessTier(definition.tier)) {
-      return <LockedAiWidget label={definition.tier === 'pro' ? 'Pro' : 'Premium'} onUpgrade={() => navigate('/pricing')} />;
+      return <LockedAiWidget label={t(definition.tier === 'pro' ? 'Pro' : 'Premium')} onUpgrade={() => navigate('/pricing')} />;
     }
     switch (widget.type) {
       case 'completion-overview':
@@ -496,13 +543,13 @@ const Insights: React.FC = () => {
       case 'custom-report':
         return <Suspense fallback={<WidgetBodySkeleton />}><CustomReportBody widget={widget} tasks={tasks} ctx={ctx} onUpdate={patch => updateWidget(widget.id, patch)} /></Suspense>;
       case 'energy-insights':
-        if (!canAccessTier('premium')) return <LockedAiWidget label="Premium" onUpgrade={() => navigate('/pricing')} />;
+        if (!canAccessTier('premium')) return <LockedAiWidget label={t('Premium')} onUpgrade={() => navigate('/pricing')} />;
         return <Suspense fallback={<WidgetBodySkeleton />}><EnergyInsightsBody /></Suspense>;
       case 'ai-bottlenecks':
-        if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
+        if (!canAccessTier('pro')) return <LockedAiWidget label={t('Pro')} onUpgrade={() => navigate('/pricing')} />;
         return <Suspense fallback={<WidgetBodySkeleton />}><AiBottlenecksBody tasks={tasks} aiData={aiWidgetsData} /></Suspense>;
       case 'ai-score':
-        if (!canAccessTier('pro')) return <LockedAiWidget onUpgrade={() => navigate('/pricing')} />;
+        if (!canAccessTier('pro')) return <LockedAiWidget label={t('Pro')} onUpgrade={() => navigate('/pricing')} />;
         return <Suspense fallback={<WidgetBodySkeleton />}><AiScoreBody scoreData={aiScoreData} /></Suspense>;
     }
   };
@@ -511,8 +558,8 @@ const Insights: React.FC = () => {
     <div ref={scrollElRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto" style={{ background: 'hsl(var(--background))' }}>
       <header className="page-toolbar px-4 sm:px-6 py-2 min-h-16 border-b border-border bg-card/30 backdrop-blur-sm shrink-0 flex items-center justify-between gap-2">
         <div className="page-toolbar-title flex items-baseline gap-2 min-w-0 flex-1">
-          <h1 className="text-base font-bold text-foreground truncate">Insights &amp; Analytics</h1>
-          <p className="hidden lg:block text-xs text-muted-foreground truncate">Live analytics — recalculated on every change</p>
+          <h1 className="text-base font-bold text-foreground truncate">{t('Insights & Analytics')}</h1>
+          <p className="hidden lg:block text-xs text-muted-foreground truncate">{t('Live analytics — recalculated on every change')}</p>
         </div>
         <div className="page-toolbar-actions flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <div className="relative" ref={exportMenuRef}>
@@ -524,11 +571,11 @@ const Insights: React.FC = () => {
                   setExportMenuOpen(prev => !prev);
                 }
               }}
-              title={planTier === 'free' ? 'Export Report (Premium feature)' : 'Export Report'}
+              title={planTier === 'free' ? t('Export Report (Premium feature)') : t('Export Report')}
               className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
             >
               <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export Report</span>
+              <span className="hidden sm:inline">{t('Export Report')}</span>
               {planTier === 'free' && <Lock className="w-3 h-3 text-muted-foreground ml-0.5" />}
             </button>
             {exportMenuOpen && (
@@ -538,7 +585,7 @@ const Insights: React.FC = () => {
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg text-foreground hover:bg-muted transition-colors text-left"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  <span>Export CSV Report</span>
+                  <span>{t('Export CSV Report')}</span>
                 </button>
                 <button
                   onClick={exportPdfReport}
@@ -550,9 +597,9 @@ const Insights: React.FC = () => {
                 >
                   <div className="flex items-center gap-2">
                     <FileDown className="w-4 h-4 text-blue-600" />
-                    <span>Export PDF Report</span>
+                    <span>{t('Export PDF Report')}</span>
                   </div>
-                  {planTier !== 'pro' && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">PRO</span>}
+                  {planTier !== 'pro' && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">{t('PRO')}</span>}
                 </button>
               </div>
             )}
@@ -562,14 +609,14 @@ const Insights: React.FC = () => {
             disabled={aiLoading}
             className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Run AI Analysis</span><span className="sm:hidden">AI</span>
+            <RefreshCw className={`w-4 h-4 ${aiLoading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">{t('Run AI Analysis')}</span><span className="sm:hidden">{t('AI')}</span>
           </button>
           <button
             onClick={() => { trackUsage('insights', 'customize'); setShowCustomize(true); }}
-            aria-label="Customize insights"
+            aria-label={t('Customize insights')}
             className="flex items-center gap-2 px-2.5 sm:px-4 py-2.5 min-h-[44px] text-sm rounded-xl font-bold border border-border bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
           >
-            <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline">Customize Insights</span>
+            <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline">{t('Customize Insights')}</span>
           </button>
         </div>
       </header>
@@ -583,12 +630,12 @@ const Insights: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2 flex-wrap">
-                  AI Analysis · {lastAnalysis.time}
+                  {t('AI Analysis · {{time}}', { time: lastAnalysis.time })}
                   {aiLoading && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin shrink-0" />}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{lastAnalysis.text}</p>
                 <p className="text-[11px] text-muted-foreground/70 mt-1">
-                  Details are in the AI Productivity Score and AI Bottleneck Detector widgets — add them via Customize Insights.
+                  {t('Details are in the AI Productivity Score and AI Bottleneck Detector widgets — add them via Customize Insights.')}
                 </p>
               </div>
             </div>
@@ -603,13 +650,13 @@ const Insights: React.FC = () => {
         {layout.length === 0 && !previewLayout ? (
           <div ref={gridRef} className="relative text-center py-20" style={{ height: Math.max(gridHeight, 320) }}>
             <Sparkles className="w-10 h-10 mx-auto mb-3" style={{ color: 'hsl(var(--label-orange))' }} />
-            <p className="text-base font-semibold text-foreground">Your insights board is empty</p>
-            <p className="text-sm text-muted-foreground mt-1 mb-4">Open Customize Insights to add widgets</p>
+            <p className="text-base font-semibold text-foreground">{t('Your insights board is empty')}</p>
+            <p className="text-sm text-muted-foreground mt-1 mb-4">{t('Open Customize Insights to add widgets')}</p>
             <button
               {...getLimitButtonProps({
                 isLimitReached: isWidgetLimitReached,
                 tier: planTier,
-                defaultLabel: 'Add widgets',
+                defaultLabel: t('Add widgets'),
                 onAction: () => { trackUsage('insights', 'customize'); setShowCustomize(true); },
                 onNavigatePricing: () => navigate('/pricing'),
               })}
@@ -648,7 +695,7 @@ const Insights: React.FC = () => {
                       <button
                         onPointerDown={e => startGesture(e, widget, 'move')}
                         className="insights-widget-move p-1.5 rounded-md hover:bg-black/5 cursor-grab active:cursor-grabbing touch-none"
-                        title="Move"
+                        title={t('Move')}
                       >
                         <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
@@ -656,7 +703,7 @@ const Insights: React.FC = () => {
                         <button
                           onClick={() => setTagsModalOpen(true)}
                           className="p-1.5 rounded-md text-muted-foreground hover:bg-muted"
-                          title="Edit tags"
+                          title={t('Edit tags')}
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -672,7 +719,7 @@ const Insights: React.FC = () => {
                       <button
                         onClick={() => removeWidget(widget.id)}
                         className="p-1.5 rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
-                        title="Remove"
+                        title={t('Remove')}
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -699,7 +746,7 @@ const Insights: React.FC = () => {
                     onPointerDown={e => startGesture(e, widget, 'resize')}
                     className="insights-widget-resize absolute bottom-1 right-1 w-4 h-4 cursor-se-resize touch-none rounded-br-lg opacity-0 group-hover/widget:opacity-100"
                     style={{ background: 'linear-gradient(135deg, transparent 42%, hsl(0 0% 40% / 0.35))' }}
-                    title="Resize"
+                    title={t('Resize')}
                   />
                 </div>
               );
@@ -725,8 +772,8 @@ const Insights: React.FC = () => {
                     <button
                       onClick={() => removeWidget(widget.id)}
                       className="p-2 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-red-50 hover:text-red-500"
-                      title="Remove"
-                      aria-label={`Remove ${tt(widget.title)}`}
+                      title={t('Remove')}
+                      aria-label={`${t('Remove')} ${tt(widget.title)}`}
                     >
                       <X className="w-4 h-4" aria-hidden="true" />
                     </button>
@@ -770,7 +817,7 @@ const Insights: React.FC = () => {
         <TagsModal
           open={tagsModalOpen}
           onClose={() => setTagsModalOpen(false)}
-          title="Tags"
+          title={t('Tags')}
           tags={allTags}
           selectedIds={[]}
           onToggle={() => {}}
@@ -781,7 +828,7 @@ const Insights: React.FC = () => {
           onDelete={deleteTagEverywhere}
           onRename={renameTagEverywhere}
           onColorChange={changeTagColorEverywhere}
-          emptyText="No tags yet. Create one below."
+          emptyText={t('No tags yet. Create one below.')}
         />
       )}
     </div>

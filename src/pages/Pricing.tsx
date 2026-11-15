@@ -39,7 +39,7 @@ const Pricing: React.FC = () => {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'card'>('paypal');
 
-  const [pricing, setPricing] = useState<{ pro: number; premium: number }>({ pro: 9.99, premium: 4.99 });
+  const [pricing, setPricing] = useState<{ pro: number; premium: number; family: number }>({ pro: 9.99, premium: 4.99, family: 14.99 });
   const [pricingLoading, setPricingLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +51,11 @@ const Pricing: React.FC = () => {
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && data?.pro?.price != null && data?.premium?.price != null) {
-          setPricing({ pro: Number(data.pro.price), premium: Number(data.premium.price) });
+          setPricing({
+            pro: Number(data.pro.price),
+            premium: Number(data.premium.price),
+            family: data?.family?.price != null ? Number(data.family.price) : 14.99,
+          });
         }
       } catch {} finally { if (!cancelled) setPricingLoading(false); }
     })();
@@ -165,7 +169,12 @@ const Pricing: React.FC = () => {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: couponCode.trim(), plan: selectedPlan?.name }),
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          plan: selectedPlan?.name,
+          tier: selectedPlan?.tier,
+          planType: selectedPlan?.planType,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -307,7 +316,7 @@ const Pricing: React.FC = () => {
               <div
                 key={plan.name}
                 className={`relative flex flex-col bg-card border-2 rounded-[2.5rem] p-8 sm:p-10 transition-all duration-500 animate-fade-in hover:-translate-y-2 hover:shadow-2xl ${
-                  plan.popular ? 'border-emerald-500 shadow-2xl shadow-emerald-500/10 scale-105 z-10' : 'border-border hover:border-primary/30'
+                  plan.popular ? 'border-emerald-500 shadow-2xl shadow-emerald-500/10 md:scale-105 z-10' : 'border-border hover:border-primary/30'
                 }`}
                 style={{ animationDelay: `${i * 100}ms` }}
               >
@@ -375,7 +384,7 @@ const Pricing: React.FC = () => {
                 </div>
                 <div className="flex items-baseline gap-1 mb-4">
                   <span className="text-5xl font-black text-foreground">
-                    {convertPrice(billingPeriod === 'yearly' ? 11.99 : 14.99)}
+                    {convertPrice(billingPeriod === 'yearly' ? yearlyFromMonthly(pricing.family) : pricing.family)}
                   </span>
                   <span className="text-sm text-muted-foreground font-black uppercase tracking-tighter">/mo</span>
                 </div>
@@ -405,7 +414,7 @@ const Pricing: React.FC = () => {
               </div>
 
               <button
-                onClick={() => openCheckout('Family Plan', 'pro', billingPeriod === 'yearly' ? 11.99 : 14.99, 'family', 5)}
+                onClick={() => openCheckout('Family Plan', 'pro', billingPeriod === 'yearly' ? yearlyFromMonthly(pricing.family) : pricing.family, 'family', 5)}
                 className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider bg-primary text-primary-foreground shadow-xl shadow-primary/10 hover:bg-primary/90 active:scale-95 transition-all"
               >
                 Get Family Plan
@@ -670,7 +679,7 @@ const Pricing: React.FC = () => {
                       <div className="flex justify-between text-sm mb-1 text-emerald-600">
                         <span>{appliedCoupon.discountLabel}</span>
                         <span className="font-bold">
-                          -{appliedCoupon.discountType === 'percentage'
+                          {appliedCoupon.discountType === 'percentage'
                             ? `-${appliedCoupon.discountValue}%`
                             : `-${convertPrice(appliedCoupon.discountValue)}`}
                         </span>

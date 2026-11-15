@@ -249,6 +249,115 @@ router.post('/project-invite/:requestId/:action', async (req: AuthRequest, res: 
   }
 });
 
+router.post('/sync-alerts', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const rawAlerts = Array.isArray(req.body?.alerts) ? req.body.alerts.slice(0, 40) : [];
+    if (rawAlerts.length === 0) return res.json({ inserted: 0 });
+
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+    const allowNormal = settings?.normalAlerts !== false;
+    const allowSmart = settings?.smartAlerts !== false;
+    const plan = await resolveEffectiveUserPlan(userId);
+    const hasSmartTier = plan.tier !== 'free';
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const existingRows = await db
+      .select({
+        type: userNotifications.type,
+        data: userNotifications.data,
+        createdAt: userNotifications.createdAt,
+      })
+      .from(userNotifications)
+      .where(eq(userNotifications.userId, userId))
+      .orderBy(desc(userNotifications.createdAt))
+      .limit(100);
+
+    const existingKeys = new Set<string>();
+    for (const row of existingRows) {
+      if (row.createdAt && new Date(row.createdAt).getTime() < startOfDay.getTime()) continue;
+      try {
+        const parsed = row.data ? JSON.parse(row.data) : null;
+        if (parsed?.alertKey) existingKeys.add(`${row.type}:${parsed.alertKey}`);
+      } catch { /* ignore malformed notification data */ }
+    }
+
+    let inserted = 0;
+    for (const item of rawAlerts) {
+      if (!item || typeof item.key !== 'string' || typeof item.title !== 'string' || typeof item.message !== 'string') continue;
+      const isSmart = item.kind === 'smart_alert';
+      if (isSmart && (!allowSmart || !hasSmartTier)) continue;
+      if (!isSmart && !allowNormal) continue;
+
+      const notifType = isSmart ? 'smart_alert' : 'normal_alert';
+      const dedupeKey = `${notifType}:${item.key}`;
+      if (existingKeys.has(dedupeKey)) continue;
+      existingKeys.add(dedupeKey);
+
+      await db.insert(userNotifications).values({
+        userId,
+        type: notifType,
+        title: String(item.title).slice(0, 200),
+        message: String(item.message).slice(0, 1000),
+        data: JSON.stringify({ alertKey: item.key, kind: notifType }),
+        read: false,
+      });
+      inserted += 1;
+    }
+
+    res.json({ inserted });
+  } catch (e) {
+    console.error('Sync alerts failed:', e);
+    res.status(500).json({ error: 'Failed to sync alerts' });
+  }
+});
+
+router.post('/weekly-summary', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const plan = await resolveEffectiveUserPlan(userId);
+    if (plan.tier !== 'pro') {
+      return res.status(403).json({ error: 'Weekly AI summary emails require a Pro plan.' });
+    }
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1);
+    if (settings?.weeklyAiSummary === false) {
+      return res.status(400).json({ error: 'Weekly AI summary emails are turned off in Settings.' });
+    }
+    const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!user?.email) return res.status(404).json({ error: 'User not found' });
+
+    const { generateWeeklySummaryForUser } = await import('../lib/weeklyEmail.js');
+    const { sendEmail } = await import('../lib/email.js');
+    const generated = await generateWeeklySummaryForUser(userId);
+    if (!generated) return res.status(500).json({ error: 'Could not generate weekly summary.' });
+
+    const sent = await sendEmail({
+      to: user.email,
+      subject: generated.subject,
+      html: generated.html,
+      text: generated.text,
+    });
+    res.json({ ok: sent });
+  } catch (e) {
+    console.error('Weekly summary route failed:', e);
+    res.status(500).json({ error: 'Failed to send weekly summary' });
+  }
+});
+
+router.delete('/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Invalid notification ID' });
+    await db
+      .delete(userNotifications)
+      .where(and(eq(userNotifications.id, id), eq(userNotifications.userId, req.userId!)));
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
 router.post('/read-all', async (req: AuthRequest, res: Response) => {
   try {
     await db.update(userNotifications).set({ read: true } as any).where(eq(userNotifications.userId, req.userId!));

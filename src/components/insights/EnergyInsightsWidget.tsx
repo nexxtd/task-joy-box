@@ -1,7 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Battery, Sparkles, Clock, Target, ShieldAlert } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { Battery, Brain, RefreshCw, Sparkles, Clock, Target, ShieldAlert } from 'lucide-react';
 import { CollapsibleRow, CollapseAllToggle, EmptyState, useExpanded } from './InsightWidgets';
 import { ENERGY_UPDATED_EVENT } from '@/utils/energyStats';
+import { useLanguage } from '@/context/LanguageContext';
 
 type Slot = 'morning' | 'midday' | 'afternoon';
 type Level = 'low' | 'medium' | 'high';
@@ -29,9 +30,37 @@ interface EnergyEntry {
   evening?: Level;
 }
 
+interface DeepEnergyAnalysis {
+  headline: string;
+  patternSummary: string;
+  peakStrategy: string;
+  dipMitigation: string;
+  consistencyNote: string;
+  aiPowered?: boolean;
+}
+
 const STORAGE_KEY = 'energy_history';
 const SLOT_LABELS: Record<Slot, string> = { morning: 'Morning', midday: 'Midday', afternoon: 'Afternoon' };
 const SLOT_WINDOWS: Record<Slot, string> = { morning: '8am–12pm', midday: '12pm–4pm', afternoon: '4pm onward' };
+
+function mergeEnergyEntries(local: EnergyEntry[], remote: EnergyEntry[]): EnergyEntry[] {
+  const byDate = new Map<string, EnergyEntry>();
+  for (const item of local) {
+    if (item?.date) byDate.set(item.date, { ...item });
+  }
+  for (const item of remote) {
+    if (!item?.date) continue;
+    const prev = byDate.get(item.date);
+    byDate.set(item.date, {
+      date: item.date,
+      morning: item.morning ?? prev?.morning,
+      midday: item.midday ?? prev?.midday,
+      afternoon: item.afternoon ?? prev?.afternoon,
+      evening: item.evening ?? prev?.evening,
+    });
+  }
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 const numeric = (level?: Level): number => (level === 'high' ? 3 : level === 'medium' ? 2 : level === 'low' ? 1 : 0);
 const fmt = (v: number) => v.toFixed(1);
@@ -56,7 +85,13 @@ interface Analysis {
   recommendations: string[];
 }
 
-function buildAnalysis(entries: EnergyEntry[], timeRange: EnergyTimeRange = '1w'): Analysis | null {
+type TranslateFn = (phrase: string, vars?: Record<string, string | number>) => string;
+
+function buildAnalysis(
+  entries: EnergyEntry[],
+  timeRange: EnergyTimeRange = '1w',
+  t: TranslateFn = (s) => s,
+): Analysis | null {
   const windowDays = RANGE_DAYS[timeRange] || 7;
   const now = new Date();
   const currentCutoff = dayKey(new Date(now.getTime() - (windowDays - 1) * 86400000));
@@ -134,47 +169,106 @@ function buildAnalysis(entries: EnergyEntry[], timeRange: EnergyTimeRange = '1w'
 
   if (peak && slots[peak].avg >= 2.5) {
     contributors.push(
-      `${SLOT_LABELS[peak]} energy averages ${fmt(slots[peak].avg)}/3 — ${SLOT_LABELS[peak].toLowerCase()} is your strongest window for demanding work.`
+      t('{{slot}} energy averages {{avg}}/3 — {{slot}} is your strongest window for demanding work.', {
+        slot: t(SLOT_LABELS[peak]),
+        avg: fmt(slots[peak].avg),
+      })
     );
   }
   if (daysLogged >= Math.min(5, Math.ceil(windowDays * 0.7))) {
-    contributors.push(`You logged energy on ${daysLogged} of the last ${windowDays} days — the analysis is built on fresh, reliable data.`);
+    contributors.push(
+      t('You logged energy on {{days}} of the last {{window}} days — the analysis is built on fresh, reliable data.', {
+        days: daysLogged,
+        window: windowDays,
+      })
+    );
   }
   if (trend === 'improving') {
-    contributors.push(`Energy is trending up over the comparison window (+${fmt(delta)}/3) — whatever you changed is working.`);
+    contributors.push(
+      t('Energy is trending up over the comparison window (+{{delta}}/3) — whatever you changed is working.', {
+        delta: fmt(delta),
+      })
+    );
   }
   if (fullDays === daysLogged && daysLogged >= 3) {
-    contributors.push(`You completed all three daily checks on every logged day — the daily pattern is fully visible.`);
+    contributors.push(t('You completed all three daily checks on every logged day — the daily pattern is fully visible.'));
   }
 
   if (trough && slots[trough].avg <= 1.5) {
-    penalties.push(`${SLOT_LABELS[trough]} energy averages just ${fmt(slots[trough].avg)}/3 — expect a hard dip in that window.`);
+    penalties.push(
+      t('{{slot}} energy averages just {{avg}}/3 — expect a hard dip in that window.', {
+        slot: t(SLOT_LABELS[trough]),
+        avg: fmt(slots[trough].avg),
+      })
+    );
   }
   if (daysLogged >= 3 && fullDays < daysLogged) {
-    penalties.push(`Only ${fullDays} of ${daysLogged} logged days include all three checks — skipped slots leave blind spots in the analysis.`);
+    penalties.push(
+      t('Only {{full}} of {{days}} logged days include all three checks — skipped slots leave blind spots in the analysis.', {
+        full: fullDays,
+        days: daysLogged,
+      })
+    );
   }
   if (swing >= 1.2) {
-    penalties.push(`Energy swings ${fmt(swing)} points between your peak and your lowest slot — time-of-day planning is less predictable.`);
+    penalties.push(
+      t('Energy swings {{swing}} points between your peak and your lowest slot — time-of-day planning is less predictable.', {
+        swing: fmt(swing),
+      })
+    );
   }
   if (trend === 'declining') {
-    penalties.push(`Energy has dropped ${fmt(-delta)}/3 over the comparison window — review sleep, workload and recovery.`);
+    penalties.push(
+      t('Energy has dropped {{delta}}/3 over the comparison window — review sleep, workload and recovery.', {
+        delta: fmt(-delta),
+      })
+    );
   }
   if (avgAll > 0 && avgAll < 1.8) {
-    penalties.push(`Overall energy is running low (${fmt(avgAll)}/3) — consider rest and lighter scheduling.`);
+    penalties.push(
+      t('Overall energy is running low ({{avg}}/3) — consider rest and lighter scheduling.', {
+        avg: fmt(avgAll),
+      })
+    );
   }
 
   if (peak && slots[peak].logged >= 2) {
-    insights.push(`Your peak window is the ${SLOT_LABELS[peak].toLowerCase()} (avg ${fmt(slots[peak].avg)}/3, ${SLOT_WINDOWS[peak]}).`);
+    insights.push(
+      t('Your peak window is {{slot}} (avg {{avg}}/3, {{window}}).', {
+        slot: t(SLOT_LABELS[peak]),
+        avg: fmt(slots[peak].avg),
+        window: SLOT_WINDOWS[peak],
+      })
+    );
   }
   const mostConsistent = slotOrder
     .filter(s => slots[s].logged > 0)
     .reduce((best, s) => (slots[s].logged > slots[best].logged ? s : best), loggedSlots[0]);
   if (mostConsistent && daysLogged > 0 && slots[mostConsistent].logged >= 2) {
-    insights.push(`The ${SLOT_LABELS[mostConsistent].toLowerCase()} check is your most consistent — logged ${slots[mostConsistent].logged} of ${daysLogged} days.`);
+    insights.push(
+      t('Your {{slot}} check is your most consistent — logged {{logged}} of {{days}} days.', {
+        slot: t(SLOT_LABELS[mostConsistent]),
+        logged: slots[mostConsistent].logged,
+        days: daysLogged,
+      })
+    );
   }
   if (checksCount > 0) {
-    insights.push(`You logged ${checksCount} energy check${checksCount !== 1 ? 's' : ''} in the last ${windowDays} days.`);
+    insights.push(
+      t('You logged {{checks}} energy checks across the last {{window}} days.', {
+        checks: checksCount,
+        window: windowDays,
+      })
+    );
   }
+  insights.push(
+    t('Across the {{range}}, your average energy index is {{pct}}% across {{days}} logged days ({{checks}} checks).', {
+      range: t(timeRange === '1w' ? 'last week' : timeRange === '1m' ? 'last month' : timeRange === '6m' ? 'last 6 months' : 'last year'),
+      pct: Math.round(avgAll * (100 / 3)),
+      days: daysLogged,
+      checks: checksCount,
+    })
+  );
 
   if (peak) {
     if (peak === 'morning') {
@@ -220,6 +314,7 @@ const scoreTone = (score: number) =>
   score >= 70 ? 'hsl(var(--label-green))' : score >= 40 ? 'hsl(var(--label-yellow))' : 'hsl(var(--label-red))';
 
 export function EnergyInsightsBody() {
+  const { lang, t } = useLanguage();
   const [timeRange, setTimeRange] = useState<EnergyTimeRange>('1w');
   const [entries, setEntries] = useState<EnergyEntry[]>(() => {
     try {
@@ -229,15 +324,43 @@ export function EnergyInsightsBody() {
       return [];
     }
   });
+  const [aiByKey, setAiByKey] = useState<Record<string, DeepEnergyAnalysis>>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  const lastFetchedRef = useRef<string>('');
+
+  const readLocalEntries = useCallback((): EnergyEntry[] => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const syncRemoteEntries = useCallback(async () => {
+    const local = readLocalEntries();
+    try {
+      const res = await fetch('/api/energy', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data?.grouped)) {
+        const merged = mergeEnergyEntries(local, data.grouped);
+        setEntries(merged);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+      }
+    } catch {
+      // Fall back to local entries silently when offline or unauthenticated
+    }
+  }, [readLocalEntries]);
 
   useEffect(() => {
+    void syncRemoteEntries();
     const refresh = () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        setEntries(raw ? JSON.parse(raw) : []);
-      } catch {
-        setEntries([]);
-      }
+      setEntries(readLocalEntries());
+      void syncRemoteEntries();
     };
     window.addEventListener('storage', refresh);
     window.addEventListener(ENERGY_UPDATED_EVENT, refresh);
@@ -245,17 +368,48 @@ export function EnergyInsightsBody() {
       window.removeEventListener('storage', refresh);
       window.removeEventListener(ENERGY_UPDATED_EVENT, refresh);
     };
-  }, []);
+  }, [readLocalEntries, syncRemoteEntries]);
 
-  const analysis = useMemo(() => buildAnalysis(entries, timeRange), [entries, timeRange]);
-  const { expanded, toggle, expandAll, collapseAll } = useExpanded([]);
-  const sectionIds = ['contributors', 'penalties', 'insights', 'recommendations'];
+  const analysisKey = `${timeRange}:${lang}:${entries.length}:${entries[entries.length - 1]?.date || ''}`;
+
+  const fetchDeepAnalysis = useCallback(async (force = false) => {
+    if (entries.length === 0) return;
+    if (!force && lastFetchedRef.current === analysisKey) return;
+    lastFetchedRef.current = analysisKey;
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/energy/ai-analysis', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ range: timeRange, language: lang, entries }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.headline && data?.patternSummary) {
+        setAiByKey(prev => ({ ...prev, [analysisKey]: data }));
+      }
+    } catch {
+      // Keep deterministic local analysis if request fails
+    } finally {
+      setAiLoading(false);
+    }
+  }, [analysisKey, entries, lang, timeRange]);
+
+  useEffect(() => {
+    void fetchDeepAnalysis(false);
+  }, [fetchDeepAnalysis]);
+
+  const analysis = useMemo(() => buildAnalysis(entries, timeRange, t), [entries, timeRange, t]);
+  const deepAnalysis = aiByKey[analysisKey];
+  const { expanded, toggle, expandAll, collapseAll } = useExpanded(['ai-deep']);
+  const sectionIds = ['ai-deep', 'contributors', 'penalties', 'insights', 'recommendations'];
 
   if (!analysis) {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between pb-1">
-          <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
+          <div className="inline-flex flex-wrap rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
             {RANGES.map(r => (
               <button
                 key={r.id}
@@ -267,27 +421,27 @@ export function EnergyInsightsBody() {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {r.label}
+                {t(r.label)}
               </button>
             ))}
           </div>
         </div>
         <EmptyState
           icon={Battery}
-          text="Log your energy at the 8am, 12pm and 4pm checks — an analysis of your peak hours, consistency and what to change will build here from your logs."
+          text={t('Log your energy at the 8am, 12pm and 4pm checks — an analysis of your peak hours, consistency and what to change will build here from your logs.')}
         />
       </div>
     );
   }
 
   const score = analysis.overallScore;
-  const trendLabel = analysis.trend === 'improving' ? 'Improving' : analysis.trend === 'declining' ? 'Declining' : 'Steady';
+  const trendLabel = analysis.trend === 'improving' ? t('Improving') : analysis.trend === 'declining' ? t('Declining') : t('Steady');
   const trendTone = analysis.trend === 'improving' ? 'text-emerald-600' : analysis.trend === 'declining' ? 'text-red-600' : 'text-muted-foreground';
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between pb-1 border-b border-border/40">
-        <div className="inline-flex rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-border/40">
+        <div className="inline-flex flex-wrap rounded-lg border border-border/60 bg-muted/40 p-0.5 text-[10px] font-semibold">
           {RANGES.map(r => (
             <button
               key={r.id}
@@ -299,11 +453,23 @@ export function EnergyInsightsBody() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {r.label}
+              {t(r.label)}
             </button>
           ))}
         </div>
-        <CollapseAllToggle ids={sectionIds} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void fetchDeepAnalysis(true)}
+            disabled={aiLoading}
+            className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:underline disabled:opacity-50"
+            title={t('Refresh AI analysis')}
+          >
+            <RefreshCw className={`w-3 h-3 ${aiLoading ? 'animate-spin' : ''}`} />
+            {t('Refresh AI')}
+          </button>
+          <CollapseAllToggle ids={sectionIds} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -319,9 +485,13 @@ export function EnergyInsightsBody() {
           <span className="absolute inset-0 flex items-center justify-center text-sm font-black text-foreground">{score}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">Energy Analysis</p>
+          <p className="text-[11px] font-bold text-foreground uppercase tracking-wide">{t('Energy Analysis')}</p>
           <p className="text-xs text-muted-foreground leading-snug mt-1">
-            {analysis.daysLogged} of the last {analysis.windowDays} days logged · {analysis.checksCount} check{analysis.checksCount !== 1 ? 's' : ''}
+            {t('{{days}} of the last {{window}} days logged · {{checks}} check-ins', {
+              days: analysis.daysLogged,
+              window: analysis.windowDays,
+              checks: analysis.checksCount,
+            })}
           </p>
         </div>
       </div>
@@ -331,9 +501,9 @@ export function EnergyInsightsBody() {
           const s = analysis.slots[slot];
           return (
             <div key={slot} className="rounded-xl border border-border bg-muted/30 px-2 py-2 text-center">
-              <p className="text-[9px] font-black uppercase tracking-wide text-muted-foreground">{SLOT_LABELS[slot]}</p>
+              <p className="text-[9px] font-black uppercase tracking-wide text-muted-foreground">{t(SLOT_LABELS[slot])}</p>
               <p className="text-sm font-black text-foreground mt-0.5">{s.logged > 0 ? `${fmt(s.avg)}/3` : '—'}</p>
-              <p className="text-[9px] text-muted-foreground mt-0.5">{s.logged > 0 ? `${s.logged} logged` : 'No logs'}</p>
+              <p className="text-[9px] text-muted-foreground mt-0.5">{s.logged > 0 ? `${s.logged} ${t('logged')}` : t('No logs')}</p>
             </div>
           );
         })}
@@ -341,29 +511,66 @@ export function EnergyInsightsBody() {
 
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-muted-foreground">
-          {analysis.contributors.length} positive · {analysis.penalties.length} negative{' '}
-          · <span className={trendTone}>trend {trendLabel}</span>
+          {analysis.contributors.length} {t('positive')} · {analysis.penalties.length} {t('negative')}{' '}
+          · <span className={trendTone}>{t('trend')} {trendLabel}</span>
         </p>
         <CollapseAllToggle ids={sectionIds} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
       </div>
 
       <div className="space-y-1.5">
         <CollapsibleRow
+          id="ai-deep"
+          expanded={expanded.includes('ai-deep')}
+          onToggle={() => toggle('ai-deep')}
+          title={t('AI Deep Energy Analysis')}
+          subtitle={deepAnalysis ? t(RANGES.find(r => r.id === timeRange)?.label || '1 Week') : aiLoading ? t('Analyzing logs...') : t('Pattern & circadian breakdown')}
+          tone="neutral"
+          badge={
+            deepAnalysis?.aiPowered ? (
+              <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary uppercase">AI</span>
+            ) : undefined
+          }
+        >
+          {aiLoading && !deepAnalysis ? (
+            <p className="text-xs text-muted-foreground py-1 flex items-center gap-1.5">
+              <Brain className="w-3.5 h-3.5 text-primary animate-pulse" />
+              {t('Generating deep analysis for {{range}}...', {
+                range: t(RANGES.find(r => r.id === timeRange)?.label || '1 Week'),
+              })}
+            </p>
+          ) : deepAnalysis ? (
+            <div className="space-y-2 py-1 text-xs">
+              <p className="font-semibold text-foreground leading-relaxed">{deepAnalysis.headline}</p>
+              <div className="space-y-1.5 text-muted-foreground leading-relaxed">
+                <p><span className="font-semibold text-foreground">{t('Pattern')}:</span> {deepAnalysis.patternSummary}</p>
+                <p><span className="font-semibold text-foreground">{t('Peak strategy')}:</span> {deepAnalysis.peakStrategy}</p>
+                <p><span className="font-semibold text-foreground">{t('Dip mitigation')}:</span> {deepAnalysis.dipMitigation}</p>
+                <p><span className="font-semibold text-foreground">{t('Consistency')}:</span> {deepAnalysis.consistencyNote}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground py-1">
+              {t('Keep logging energy across days to unlock deeper timeframe pattern analysis.')}
+            </p>
+          )}
+        </CollapsibleRow>
+
+        <CollapsibleRow
           id="contributors"
           expanded={expanded.includes('contributors')}
           onToggle={() => toggle('contributors')}
-          title="What's helping"
-          subtitle={`${analysis.contributors.length} positive factor${analysis.contributors.length !== 1 ? 's' : ''}`}
+          title={t("What's helping")}
+          subtitle={`${analysis.contributors.length} ${analysis.contributors.length !== 1 ? t('positive factors') : t('positive factor')}`}
           tone="ok"
           badge={analysis.contributors.length > 0 ? <span className="shrink-0 text-[10px] font-bold text-emerald-600">{analysis.contributors.length}</span> : undefined}
         >
           {analysis.contributors.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-1">Nothing stands out as a strength yet — keep logging and a peak window will show up here.</p>
+            <p className="text-xs text-muted-foreground py-1">{t('Nothing stands out as a strength yet — keep logging and a peak window will show up here.')}</p>
           ) : (
             analysis.contributors.map((text, i) => (
               <div key={i} className="flex items-start gap-2 text-xs">
                 <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
-                <span className="text-foreground leading-relaxed">{text}</span>
+                <span className="text-foreground leading-relaxed">{t(text)}</span>
               </div>
             ))
           )}
@@ -373,18 +580,18 @@ export function EnergyInsightsBody() {
           id="penalties"
           expanded={expanded.includes('penalties')}
           onToggle={() => toggle('penalties')}
-          title="What's dragging it down"
-          subtitle={`${analysis.penalties.length} negative factor${analysis.penalties.length !== 1 ? 's' : ''}`}
+          title={t("What's dragging it down")}
+          subtitle={`${analysis.penalties.length} ${analysis.penalties.length !== 1 ? t('negative factors') : t('negative factor')}`}
           tone="bad"
           badge={analysis.penalties.length > 0 ? <span className="shrink-0 text-[10px] font-bold text-red-600">{analysis.penalties.length}</span> : undefined}
         >
           {analysis.penalties.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-1">No major energy issues detected — your pattern is stable and usable.</p>
+            <p className="text-xs text-muted-foreground py-1">{t('No major energy issues detected — your pattern is stable and usable.')}</p>
           ) : (
             analysis.penalties.map((text, i) => (
               <div key={i} className="flex items-start gap-2 text-xs">
                 <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 bg-red-500" />
-                <span className="text-foreground leading-relaxed">{text}</span>
+                <span className="text-foreground leading-relaxed">{t(text)}</span>
               </div>
             ))
           )}
@@ -394,14 +601,14 @@ export function EnergyInsightsBody() {
           id="insights"
           expanded={expanded.includes('insights')}
           onToggle={() => toggle('insights')}
-          title="Key insights"
-          subtitle={`${analysis.insights.length} insight${analysis.insights.length !== 1 ? 's' : ''}`}
+          title={t('Key insights')}
+          subtitle={`${analysis.insights.length} ${analysis.insights.length !== 1 ? t('insights') : t('insight')}`}
           tone="neutral"
         >
           {analysis.insights.map((text, i) => (
             <div key={i} className="flex items-start gap-2 text-xs">
               <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-              <span className="text-foreground leading-relaxed">{text}</span>
+              <span className="text-foreground leading-relaxed">{t(text)}</span>
             </div>
           ))}
         </CollapsibleRow>
@@ -410,14 +617,14 @@ export function EnergyInsightsBody() {
           id="recommendations"
           expanded={expanded.includes('recommendations')}
           onToggle={() => toggle('recommendations')}
-          title="Recommendations"
-          subtitle={`${analysis.recommendations.length} suggested action${analysis.recommendations.length !== 1 ? 's' : ''}`}
+          title={t('What to change')}
+          subtitle={`${analysis.recommendations.length} ${analysis.recommendations.length !== 1 ? t('suggestions') : t('suggestion')}`}
           tone="neutral"
         >
           {analysis.recommendations.map((text, i) => (
             <div key={i} className="flex items-start gap-2 text-xs">
               <span className="mt-1 text-primary font-bold">→</span>
-              <span className="text-foreground leading-relaxed">{text}</span>
+              <span className="text-foreground leading-relaxed">{t(text)}</span>
             </div>
           ))}
         </CollapsibleRow>

@@ -29,9 +29,15 @@ function calculateStreak(completedDays: string[]): number {
   }
   checkDate = new Date(now);
   if (!completedSet.has(todayStr)) checkDate.setUTCDate(checkDate.getUTCDate() - 1);
-  while (true) {
+  let hasMoreStreak = true;
+  while (hasMoreStreak) {
     const dateStr = `${checkDate.getUTCFullYear()}-${String(checkDate.getUTCMonth() + 1).padStart(2, '0')}-${String(checkDate.getUTCDate()).padStart(2, '0')}`;
-    if (completedSet.has(dateStr)) { streak++; checkDate.setUTCDate(checkDate.getUTCDate() - 1); } else { break; }
+    if (completedSet.has(dateStr)) {
+      streak++;
+      checkDate.setUTCDate(checkDate.getUTCDate() - 1);
+    } else {
+      hasMoreStreak = false;
+    }
   }
   return streak;
 }

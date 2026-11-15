@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Send, Loader2, Paperclip, Download, Image as ImageIcon, FileText, MoveDiagonal } from 'lucide-react';
+import { X, Send, Loader2, Paperclip, Download, Image as ImageIcon, FileText, Scaling } from 'lucide-react';
 import { format } from 'date-fns';
 
 export interface TicketMessage {
@@ -180,7 +180,7 @@ export const TicketConversation: React.FC<Props> = ({
         aria-label="Resize chat window"
         className="absolute top-1 left-1 z-10 p-1.5 rounded-lg hover:bg-muted cursor-nwse-resize text-muted-foreground hover:text-foreground transition-colors touch-none"
       >
-        <MoveDiagonal className="w-3.5 h-3.5" />
+        <Scaling className="w-3.5 h-3.5" />
       </button>
       <div className="flex items-center justify-between pl-8 pr-4 py-3 border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">

@@ -773,6 +773,7 @@ const Tasks: React.FC = () => {
   const [editingDraftChecklistTitle, setEditingDraftChecklistTitle] = useState('');
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newTaskImages, setNewTaskImages] = useState<Attachment[]>([]);
+  const { uploading: uploadingMainFiles, showUploading: showUploadingMainFiles, setUploading: setUploadingMainFiles } = useDelayedUploading();
   const { uploading: uploadingMainImages, showUploading: showUploadingMainImages, setUploading: setUploadingMainImages } = useDelayedUploading();
   const uploadingImages = uploadingMainImages;
   const showUploadingImages = showUploadingMainImages;
@@ -3267,14 +3268,14 @@ const Tasks: React.FC = () => {
                               {newChecklistItems.map((item, index) => (
                                 <Draggable key={item.id} draggableId={item.id} index={index}>
                                   {(provided) => (
-                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                      <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+                                    <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                      <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                         <GripVertical className="w-4 h-4" />
                                       </div>
                                       <ExpandableRowText textClassName=""
                                         text={item.text}
                                       />
-                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
+                                      <button onClick={() => setNewChecklistItems(prev => prev.filter(it => it.id !== item.id))} className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </button>
                                     </div>
@@ -3361,14 +3362,14 @@ const Tasks: React.FC = () => {
                                             {list.items.map((item, itemIndex) => (
                                               <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                    <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <ExpandableRowText textClassName="text-foreground"
                                                       text={item.text}
                                                     />
-                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
+                                                    <button onClick={() => setNewChecklistLists(prev => prev.map(l => l.id === list.id ? { ...l, items: l.items.filter(it => it.id !== item.id) } : l))} className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200">
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                   </div>
@@ -3427,6 +3428,11 @@ const Tasks: React.FC = () => {
                     {newFiles.length > 0 && (
                       <span className="text-xs text-muted-foreground">({newFiles.length})</span>
                     )}
+                    {(showUploadingMainFiles || uploadingMainFiles) && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                      </span>
+                    )}
                   </div>
                   {draftAttachmentsCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                 </button>
@@ -3442,20 +3448,30 @@ const Tasks: React.FC = () => {
                       </div>
                     ) : (
                       <>
-                        <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                        <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${uploadingMainFiles ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}>
                           <div className="flex flex-col items-center justify-center py-4">
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                              <Paperclip className="w-5 h-5 text-primary" />
+                              {showUploadingMainFiles || uploadingMainFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                             </div>
-                            <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                            <p className="text-sm font-medium text-foreground">{showUploadingMainFiles || uploadingMainFiles ? 'Uploading files…' : 'Click to upload or drag and drop'}</p>
                             <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                           </div>
                           <input
                             type="file"
                             multiple
-                            onChange={e => {
+                            disabled={uploadingMainFiles}
+                            onChange={async e => {
                               if (!e.target.files) return;
-                              setNewFiles(prev => [...prev, ...Array.from(e.target.files || [])]);
+                              const picked = Array.from(e.target.files || []);
+                              e.currentTarget.value = '';
+                              if (picked.length === 0) return;
+                              setUploadingMainFiles(true);
+                              try {
+                                await Promise.resolve();
+                                setNewFiles(prev => [...prev, ...picked]);
+                              } finally {
+                                setUploadingMainFiles(false);
+                              }
                             }}
                             className="hidden"
                           />
@@ -4307,20 +4323,43 @@ const Tasks: React.FC = () => {
                       <Paperclip className="w-4 h-4 text-muted-foreground" />
                       <h3 className="text-sm font-semibold text-foreground">Files</h3>
                       {aiBuilderFiles.length > 0 && <span className="text-xs text-muted-foreground">({aiBuilderFiles.length})</span>}
+                      {(showUploadingMainFiles || uploadingMainFiles) && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…
+                        </span>
+                      )}
                     </div>
                     {aiBuilderFilesCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
                   </button>
                   {!aiBuilderFilesCollapsed && (
                     <div className="border-t border-border/60 px-4 py-3 space-y-3">
-                      <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                      <label className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all ${uploadingMainFiles ? 'opacity-70 cursor-wait' : 'cursor-pointer'}`}>
                         <div className="flex flex-col items-center justify-center py-4">
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <Paperclip className="w-5 h-5 text-primary" />
+                            {showUploadingMainFiles || uploadingMainFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                           </div>
-                          <p className="text-sm font-medium text-foreground">Click to upload or drag and drop</p>
+                          <p className="text-sm font-medium text-foreground">{showUploadingMainFiles || uploadingMainFiles ? 'Uploading files…' : 'Click to upload or drag and drop'}</p>
                           <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB)</p>
                         </div>
-                        <input type="file" multiple onChange={e => { if (!e.target.files) return; setAiBuilderFiles(prev => [...prev, ...Array.from(e.target.files || [])]); e.target.value=''; }} className="hidden" />
+                        <input
+                          type="file"
+                          multiple
+                          disabled={uploadingMainFiles}
+                          onChange={async e => {
+                            if (!e.target.files) return;
+                            const picked = Array.from(e.target.files || []);
+                            e.target.value = '';
+                            if (picked.length === 0) return;
+                            setUploadingMainFiles(true);
+                            try {
+                              await Promise.resolve();
+                              setAiBuilderFiles(prev => [...prev, ...picked]);
+                            } finally {
+                              setUploadingMainFiles(false);
+                            }
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       {aiBuilderFiles.length > 0 && (
                         <DragDropContext onDragEnd={result => { if (!result.destination) return; const items = Array.from(aiBuilderFiles); const [r]=items.splice(result.source.index,1); items.splice(result.destination.index,0,r); setAiBuilderFiles(items); }}>
@@ -4993,19 +5032,20 @@ export const TaskDropdownExpanded: React.FC<{
                                         {list.items.map((item, index) => (
                                           <Draggable key={item.id} draggableId={item.id} index={index}>
                                             {(provided) => (
-                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+                                              <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
+                                                <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                   <GripVertical className="w-4 h-4" />
                                                 </div>
                                                 <SquareToggle
                                                   completed={item.completed}
                                                   onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                                  size="md"
+                                                  size="sm"
+                                                  className="self-start"
                                                 />
                                                 {editingChecklistItemId === item.id ? (
                                                   <AutoGrowTextarea
                                                     autoFocus
-                                                    className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                    className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                     value={editingChecklistText}
                                                     onChange={e => setEditingChecklistText(e.target.value)}
                                                     onBlur={() => saveChecklistItemEdit(list.id, item.id)}
@@ -5025,7 +5065,7 @@ export const TaskDropdownExpanded: React.FC<{
                                                 )}
                                                 <button
                                                   onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                  className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                                                  className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
                                                 >
                                                   <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
@@ -6182,19 +6222,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                             {list.items.map((item, index) => (
                                               <Draggable key={item.id} draggableId={item.id} index={index}>
                                                 {(provided) => (
-                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row flex items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg px-2 py-1.5">
-                                                    <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
+                                                  <div ref={provided.innerRef} {...provided.draggableProps} className="detail-item-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-start gap-2.5 text-sm group/item checklist-item min-w-0 rounded-lg border border-border/60 bg-card/50 px-3 py-2">
+                                                    <div {...provided.dragHandleProps} className="self-start cursor-grab active:cursor-grabbing py-0 px-0.5 text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors flex-shrink-0">
                                                       <GripVertical className="w-4 h-4" />
                                                     </div>
                                                     <SquareToggle
                                                       completed={item.completed}
                                                       onClick={() => onToggleChecklistItem(task.id, list.id, item.id)}
-                                                      size="md"
+                                                      size="sm"
+                                                      className="self-start"
                                                     />
                                                     {editingChecklistItemId === item.id ? (
                                                       <AutoGrowTextarea
                                                         autoFocus
-                                                        className="flex-1 text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
+                                                        className="min-w-0 w-full text-sm bg-muted/40 border border-primary/30 rounded px-2 py-0.5"
                                                         value={editingChecklistText}
                                                         onChange={e => setEditingChecklistText(e.target.value)}
                                                         onBlur={() => saveChecklistItemEdit(list.id, item.id)}
@@ -6214,7 +6255,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                                                     )}
                                                     <button
                                                       onClick={() => onDeleteChecklistItem(task.id, list.id, item.id)}
-                                                      className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
+                                                      className="shrink-0 self-start p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-opacity duration-200"
                                                     >
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>

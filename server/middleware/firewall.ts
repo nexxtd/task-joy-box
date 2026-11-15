@@ -202,10 +202,92 @@ export function firewall(req: Request, res: Response, next: NextFunction): void 
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   }
 
+  next();
+}
+
+const SKIP_BODY_KEYS = new Set([
+  'fileData',
+  'attachmentData',
+  'imageData',
+  'dataUrl',
+  'password',
+  'newPassword',
+  'confirmPassword',
+  'credential',
+  'token',
+  'code',
+]);
+const XSS_SCRIPT_PATTERNS = [
+  /<script\b[^>]*>[\s\S]*?<\/script>/i,
+  /<script\b[^>]*>/i,
+  /\bjavascript\s*:/i,
+  /\bvbscript\s*:/i,
+  /<\s*(?:iframe|object|embed|applet)\b[^>]*\bon\w+\s*=/i,
+];
+
+function containsHighConfidenceThreat(val: unknown, keyPath: string, strictSql: boolean, depth = 0): string | null {
+  if (depth > 8 || val == null) return null;
+  if (typeof val === 'string') {
+    if (SKIP_BODY_KEYS.has(keyPath) || val.startsWith('data:') || val.length > 25000) return null;
+    for (const pat of XSS_SCRIPT_PATTERNS) {
+      if (pat.test(val)) return 'XSS_PAYLOAD';
+    }
+    if (strictSql) {
+      for (const pat of SQLI_PATTERNS) {
+        if (pat.test(val)) return 'SQLI_DETECTED';
+      }
+      for (const pat of PATH_TRAVERSAL_PATTERNS) {
+        if (pat.test(val)) return 'PATH_TRAVERSAL';
+      }
+    }
+    return null;
+  }
+  if (Array.isArray(val)) {
+    for (let i = 0; i < Math.min(val.length, 200); i++) {
+      const hit = containsHighConfidenceThreat(val[i], keyPath, strictSql, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof val === 'object') {
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      const hit = containsHighConfidenceThreat(v, k, strictSql, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** Post-JSON body WAF inspection for SQLi/XSS/traversal in parsed payloads. */
+export function inspectRequestBody(req: Request, res: Response, next: NextFunction): void {
+  if (!req.body || typeof req.body !== 'object') {
+    next();
+    return;
+  }
+  const ip = getClientIp(req);
+  const p = req.path || '';
+  const strictSql =
+    p.startsWith('/api/auth') ||
+    p.startsWith('/api/payment') ||
+    p.startsWith('/api/organizations') ||
+    p.startsWith('/api/admin') ||
+    p.startsWith('/api/settings');
+  const threat = containsHighConfidenceThreat(req.body, '', strictSql);
+  if (threat) {
+    recordViolation(ip);
+    res.status(403).json({
+      error: 'Request payload rejected by security firewall.',
+      code: threat,
+    });
+    return;
+  }
   next();
 }
 

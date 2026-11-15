@@ -136,6 +136,16 @@ const EnergyPopup: React.FC = () => {
     pendingSlots.forEach(slot => { updated[slot] = levels[slot]; });
     const next = [...entries.filter(e => e.date !== today), updated].sort((a, b) => a.date.localeCompare(b.date));
     saveHistory(next);
+    pendingSlots.forEach(slot => {
+      const lvl = levels[slot];
+      if (!lvl) return;
+      fetch('/api/energy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ date: today, timeSlot: slot, energyLevel: lvl }),
+      }).catch(() => {});
+    });
     setPendingSlots([]);
   }, [pendingSlots, levels]);
 

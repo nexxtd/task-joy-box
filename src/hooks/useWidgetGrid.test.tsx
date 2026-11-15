@@ -7,8 +7,8 @@ import { useWidgetGrid, type GridWidget, type UseWidgetGridApi, type WidgetTier 
 
 type Kind = 'active' | 'below';
 const initial: GridWidget<Kind>[] = [
-  { id: 'active', type: 'active', title: 'Active', col: 1, row: 1, w: 6, h: 5 },
-  { id: 'below', type: 'below', title: 'Below', col: 1, row: 6, w: 6, h: 3 },
+  { id: 'active', type: 'active', title: 'Active', col: 1, row: 1, w: 6, h: 7 },
+  { id: 'below', type: 'below', title: 'Below', col: 1, row: 8, w: 6, h: 5 },
 ];
 let api: UseWidgetGridApi<Kind>;
 const definitions = initial.map(widget => ({ ...widget, desc: '', icon: () => null, accent: 'label-blue', tier: 'free' as const }));
@@ -56,8 +56,8 @@ describe('widget grid gesture commits', () => {
         bubbles: true, button: 0, clientX: 450, clientY: 590,
       })));
       act(() => window.dispatchEvent(new MouseEvent('pointermove', { clientX: 450, clientY: 334 })));
-      expect(api.previewLayout?.find(widget => widget.id === 'active')?.h).toBe(3);
-      expect(api.previewLayout?.find(widget => widget.id === 'below')?.row).toBe(4);
+      expect(api.previewLayout?.find(widget => widget.id === 'active')?.h).toBe(5);
+      expect(api.previewLayout?.find(widget => widget.id === 'below')?.row).toBe(6);
       const preview = api.previewLayout;
       act(() => window.dispatchEvent(new MouseEvent('pointerup')));
       expect(api.layout).toEqual(preview);

@@ -260,25 +260,39 @@ export const NotificationBell: React.FC = () => {
                                   <p className="text-[11px] text-muted-foreground mt-0.5 break-words">
                                     {data.ownerName ? `${data.ownerName} invited you to join this project.` : n.message}
                                   </p>
-                                  {(data.inviteCode || data.inviteLink) && (
-                                    <div className="mt-2 flex items-center gap-1.5 p-1.5 rounded-lg bg-muted/60 border border-border/60 text-[11px]">
-                                      <span className="text-muted-foreground truncate flex-1 font-mono text-[10px]">
-                                        {window.location.origin}/projects?join={data.inviteCode}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          navigator.clipboard.writeText(`${window.location.origin}/projects?join=${data.inviteCode}`);
-                                          toast({ title: 'Link copied', description: 'Invite link copied to clipboard.' });
-                                        }}
-                                        className="p-1 rounded hover:bg-muted text-primary font-medium flex items-center gap-1 flex-shrink-0 text-[10px]"
-                                        title="Copy invite link"
-                                      >
-                                        <Copy className="w-3 h-3" /> Copy
-                                      </button>
-                                    </div>
-                                  )}
+                                  {(() => {
+                                    const inviteUrl = data.inviteCode
+                                      ? `${window.location.origin}/projects?join=${data.inviteCode}`
+                                      : data.inviteLink
+                                        ? `${window.location.origin}${data.inviteLink}`
+                                        : '';
+                                    if (!inviteUrl) return null;
+                                    return (
+                                      <div className="mt-2 flex items-center gap-1.5 p-1.5 rounded-lg bg-muted/60 border border-border/60 text-[11px]">
+                                        <a
+                                          href={inviteUrl}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-primary hover:underline truncate flex-1 font-mono text-[10px] flex items-center gap-1"
+                                          title="Open project invite link"
+                                        >
+                                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                                          <span className="truncate">{inviteUrl}</span>
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(inviteUrl);
+                                            toast({ title: 'Link copied', description: 'Invite link copied to clipboard.' });
+                                          }}
+                                          className="p-1 rounded hover:bg-muted text-primary font-medium flex items-center gap-1 flex-shrink-0 text-[10px]"
+                                          title="Copy invite link"
+                                        >
+                                          <Copy className="w-3 h-3" /> Copy
+                                        </button>
+                                      </div>
+                                    );
+                                  })()}
                                   <p className="text-[10px] text-muted-foreground/70 mt-1">{relativeTime(n.createdAt)}</p>
                                 </div>
                               </div>

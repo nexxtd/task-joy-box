@@ -326,7 +326,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           e.dataTransfer.effectAllowed = 'copyLink';
         }}
         onClick={() => onTaskClick(task)}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer max-w-full ${
           isDraggingRow
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'
@@ -577,7 +577,7 @@ const BoardColumn: React.FC<BoardColumnProps> = ({ column, tasks, notes = [], in
           e.dataTransfer.effectAllowed = 'copyLink';
         }}
         onClick={() => { if (onNoteClick) onNoteClick(note); else onTaskClick(note); }}
-        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer select-text max-w-full ${
+        className={`group border rounded-xl bg-card transition-[opacity,box-shadow,border-color] duration-200 cursor-pointer max-w-full ${
           isDraggingRow
             ? 'border-primary/40 shadow-lg rotate-[2deg]'
             : 'border-border hover:border-border/80 hover:shadow-sm'

@@ -12,7 +12,8 @@ import { isAdmin } from '../lib/adminUtils.js'; // Import the new utility
 import { getSettingNumber, getSettingBoolean, getSetting } from '../lib/settings.js';
 import { sendEmail, verificationEmailHtml, resetEmailHtml } from '../lib/email.js';
 import { normalizeLanguageCode } from '../lib/language.js';
-import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
+import { resolveEffectiveUserPlan, type EffectiveUserPlan } from '../lib/orgLifecycle.js';
+import { normalizeTier } from '../lib/tier.js';
 
 export async function resolveEffectiveSubscriptionTier(userId: number, _ownTier?: string | null): Promise<string> {
   try {
@@ -20,6 +21,36 @@ export async function resolveEffectiveSubscriptionTier(userId: number, _ownTier?
     return plan.tier;
   } catch {
     return 'free';
+  }
+}
+
+async function safeResolveEffectiveUserPlan(user: any): Promise<EffectiveUserPlan> {
+  try {
+    return await resolveEffectiveUserPlan(user.id);
+  } catch (err) {
+    console.error('resolveEffectiveUserPlan fallback in auth:', err);
+    const personalTier = normalizeTier(user?.subscriptionTier);
+    const rawStatus = String(user?.subscriptionStatus || 'inactive');
+    const status: EffectiveUserPlan['status'] =
+      rawStatus === 'active' || rawStatus === 'paused' || rawStatus === 'trialing'
+        ? rawStatus
+        : 'inactive';
+    return {
+      tier: personalTier,
+      status,
+      source: personalTier !== 'free' && status === 'active' ? 'personal' : 'free',
+      personalTier,
+      personalStatus: rawStatus,
+      personalPlanPaused: false,
+      pausedPersonalTier: null,
+      pausedPersonalRemainingMs: null,
+      bestOrgTier: 'free',
+      bestOrgId: null,
+      bestOrgName: null,
+      reservedOrgTier: null,
+      archivedAttachmentCount: 0,
+      oldestArchiveExpiresAt: null,
+    };
   }
 }
 
@@ -38,6 +69,31 @@ function buildPlanUserFields(plan: Awaited<ReturnType<typeof resolveEffectiveUse
 }
 
 const router = Router();
+const IS_PROD = process.env.NODE_ENV === 'production';
+const MAX_2FA_ATTEMPTS = 5;
+const twoFactorFailureMap = new Map<number, { count: number; resetAt: number }>();
+
+function generateTwoFactorCode(): string {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+async function recordTwoFactorFailure(userId: number): Promise<boolean> {
+  const now = Date.now();
+  const entry = twoFactorFailureMap.get(userId);
+  const count = entry && entry.resetAt > now ? entry.count + 1 : 1;
+  twoFactorFailureMap.set(userId, { count, resetAt: now + 15 * 60 * 1000 });
+  if (count >= MAX_2FA_ATTEMPTS) {
+    try {
+      await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, userId), eq(twoFactorTokens.used, false)));
+    } catch {}
+    return true;
+  }
+  return false;
+}
+
+function clearTwoFactorFailures(userId: number) {
+  twoFactorFailureMap.delete(userId);
+}
 
 function getGoogleAllowedAudiences(): string[] {
   // Backend must accept the ID the frontend used to mint the token.
@@ -51,25 +107,34 @@ function getGoogleAllowedAudiences(): string[] {
   return [...new Set(raw)];
 }
 
-// Cookie options - make sure these are consistent
-const COOKIE_OPTS_BASE = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production', // Secure in production only
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const, // Important for cross-site requests in production
-  maxAge: 24 * 60 * 60 * 1000, // default 24h; overridden with session_timeout_hours
-};
+function isSecureRequest(req: Request): boolean {
+  if (req.secure) return true;
+  const proto = req.headers['x-forwarded-proto'];
+  if (typeof proto === 'string' && proto.split(',')[0].trim().toLowerCase() === 'https') {
+    return true;
+  }
+  return false;
+}
+
+function getCookieOpts(req: Request, maxAge = 24 * 60 * 60 * 1000) {
+  const isHttps = isSecureRequest(req);
+  const useCrossSiteNone = IS_PROD && isHttps;
+  return {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: useCrossSiteNone ? ('none' as const) : ('lax' as const),
+    path: '/',
+    maxAge,
+  };
+}
 
 // Function to issue JWT token
-async function issueToken(res: Response, userId: number, email: string) {
+async function issueToken(req: Request, res: Response, userId: number, email: string) {
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) throw new Error('JWT_SECRET is not configured');
   const sessionHours = await getSettingNumber('session_timeout_hours', 24);
   const token = jwt.sign({ userId, email }, jwtSecret, { expiresIn: `${sessionHours}h` });
-  
-  // In production, we need secure cookies with SameSite=None for cross-site requests
-  const cookieOpts = { ...COOKIE_OPTS_BASE, maxAge: sessionHours * 60 * 60 * 1000 };
-  
-  // Set the token as HTTP-only cookie
+  const cookieOpts = getCookieOpts(req, sessionHours * 60 * 60 * 1000);
   res.cookie('token', token, cookieOpts);
 }
 
@@ -151,31 +216,34 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     if ((user as any).twoFactorEnabled) {
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = generateTwoFactorCode();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       // Invalidate older unused codes so only the newest one works.
       try {
         await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
       } catch {}
       await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+      clearTwoFactorFailures(user.id);
       let emailSent = false;
       try {
         const { twoFactorEmailHtml } = await import('../lib/email.js');
         const { sendEmail: send2FA } = await import('../lib/email.js');
         emailSent = await send2FA({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(user.name, code), text: `Your code is ${code} (expires in 10 min)` });
       } catch (e) { console.error('2fa email failed', e); emailSent = false; }
-      console.log(`[2FA] code for ${user.email}: ${code} emailSent=${emailSent}`);
-      const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+      if (!IS_PROD) {
+        console.log(`[2FA] code for ${user.email}: ${code} emailSent=${emailSent}`);
+      }
+      const exposeCode = !IS_PROD || !emailSent;
       return res.json({
         requires2FA: true,
         email: user.email,
         emailSent,
-        // Exposed when email delivery failed (or in dev) so the user is never locked out.
-        // Remove in production once a verified EMAIL_FROM domain is configured.
         debugCode: exposeCode ? code : undefined,
         message: emailSent
           ? 'Two-factor code sent to your email. Please enter it to continue.'
-          : 'We could not deliver the email (check server email settings). Use the code shown here or click Resend. If you are the owner, verify a domain in Resend and set EMAIL_FROM.',
+          : IS_PROD
+            ? 'Unable to deliver verification email right now. Use the code shown below or click Resend.'
+            : 'Email delivery is not configured in dev. Use the dev code shown here or click Resend.',
       });
     }
 
@@ -189,8 +257,8 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
-    const effectivePlan = await resolveEffectiveUserPlan(user.id);
-    await issueToken(res, user.id, user.email);
+    const effectivePlan = await safeResolveEffectiveUserPlan(user);
+    await issueToken(req, res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
@@ -204,7 +272,7 @@ router.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (e: any) {
-    console.error('Login error');
+    console.error('Login error:', e?.message || e, e?.stack || '');
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -294,20 +362,23 @@ router.post('/google', async (req: Request, res: Response) => {
     try {
       const [fresh] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
       if ((fresh as any)?.twoFactorEnabled) {
-        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const code = generateTwoFactorCode();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
         try {
           await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
         } catch {}
         await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+        clearTwoFactorFailures(user.id);
         let emailSent = false;
         try {
           const { twoFactorEmailHtml } = await import('../lib/email.js');
           const { sendEmail: send2FA } = await import('../lib/email.js');
           emailSent = await send2FA({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(fresh.name || name, code), text: `Your code is ${code} (expires in 10 min)` });
         } catch (e) { console.error('2fa google email failed', e); emailSent = false; }
-        console.log(`[2FA google] code for ${user.email}: ${code} emailSent=${emailSent}`);
-        const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+        if (!IS_PROD) {
+          console.log(`[2FA google] code for ${user.email}: ${code} emailSent=${emailSent}`);
+        }
+        const exposeCode = !IS_PROD || !emailSent;
         return res.json({
           requires2FA: true,
           email: user.email,
@@ -315,15 +386,17 @@ router.post('/google', async (req: Request, res: Response) => {
           debugCode: exposeCode ? code : undefined,
           message: emailSent
             ? 'Two-factor code sent to your email. Please enter it to continue.'
-            : 'We could not deliver the email (check server email settings). Use the code shown here or click Resend.',
+            : IS_PROD
+              ? 'Unable to deliver verification email right now. Use the code shown below or click Resend.'
+              : 'Email delivery is not configured in dev. Use the dev code shown here or click Resend.',
         });
       }
     } catch (e) {
       console.error('2fa google check failed', e);
     }
 
-    const effectivePlan = await resolveEffectiveUserPlan(user.id);
-    await issueToken(res, user.id, user.email);
+    const effectivePlan = await safeResolveEffectiveUserPlan(user);
+    await issueToken(req, res, user.id, user.email);
     res.json({
       user: {
         id: user.id,
@@ -412,11 +485,11 @@ router.get('/me', async (req: Request, res: Response) => {
     if (!userId) return res.json({ user: null });
     const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
-      res.clearCookie('token');
+      res.clearCookie('token', getCookieOpts(req, 0));
       return res.json({ user: null });
     }
     
-    const effectivePlan = await resolveEffectiveUserPlan(user.id);
+    const effectivePlan = await safeResolveEffectiveUserPlan(user);
     res.json({
       user: {
         id: user.id,
@@ -537,11 +610,16 @@ router.post('/two-factor/verify', async (req: Request, res: Response) => {
       const match = recent.find((r) => r.code === code);
       if (match && match.used) return res.status(400).json({ error: 'Code already used. Please log in again to get a new code.' });
       if (match && new Date(match.expiresAt) <= new Date()) return res.status(400).json({ error: 'Code expired. Please log in again to get a new code.' });
+      const locked = await recordTwoFactorFailure(user.id);
+      if (locked) {
+        return res.status(429).json({ error: 'Too many invalid codes. Current codes were invalidated; please request a new code.' });
+      }
       return res.status(400).json({ error: 'Invalid code' });
     }
+    clearTwoFactorFailures(user.id);
     await db.update(twoFactorTokens).set({ used: true }).where(eq(twoFactorTokens.id, record.id));
-    const effectivePlan = await resolveEffectiveUserPlan(user.id);
-    await issueToken(res, user.id, user.email);
+    const effectivePlan = await safeResolveEffectiveUserPlan(user);
+    await issueToken(req, res, user.id, user.email);
     res.json({ user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, emailVerified: (user as any).emailVerified ?? true, twoFactorEnabled: true, ...buildPlanUserFields(effectivePlan), isAdmin: isAdmin(user.email) } });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
@@ -553,22 +631,29 @@ router.post('/two-factor/resend', async (req: Request, res: Response) => {
     const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (!user) return res.json({ message: 'If that email exists, a new code has been sent.' });
     if (!(user as any).twoFactorEnabled) return res.status(400).json({ error: 'Two-factor is not enabled for this account' });
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = generateTwoFactorCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     try {
       await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
     } catch {}
     await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+    clearTwoFactorFailures(user.id);
     let emailSent = false;
     try {
       const { twoFactorEmailHtml } = await import('../lib/email.js');
       const { sendEmail } = await import('../lib/email.js');
       emailSent = await sendEmail({ to: user.email, subject: 'Your login code — MyPlanner', html: twoFactorEmailHtml(user.name, code), text: `Your code is ${code} (expires in 10 min)` });
     } catch (e) { console.error('2fa resend email failed', e); emailSent = false; }
-    console.log(`[2FA resend] code for ${user.email}: ${code} emailSent=${emailSent}`);
-    const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+    if (!IS_PROD) {
+      console.log(`[2FA resend] code for ${user.email}: ${code} emailSent=${emailSent}`);
+    }
+    const exposeCode = !IS_PROD || !emailSent;
     return res.json({
-      message: emailSent ? 'New code sent. Check your inbox (and spam).' : 'Email delivery failed — use the code shown here.',
+      message: emailSent
+        ? 'New code sent. Check your inbox (and spam).'
+        : IS_PROD
+          ? 'Unable to deliver verification email right now. Use the code shown below or try again later.'
+          : 'Email delivery failed — use the dev code shown here.',
       emailSent,
       debugCode: exposeCode ? code : undefined,
     });
@@ -583,12 +668,13 @@ router.post('/two-factor/send-disable-code', requireAuth, async (req: AuthReques
       return res.status(400).json({ error: 'Two-factor authentication is not currently enabled.' });
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = generateTwoFactorCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     try {
       await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, user.id), eq(twoFactorTokens.used, false)));
     } catch {}
     await db.insert(twoFactorTokens).values({ userId: user.id, code, expiresAt });
+    clearTwoFactorFailures(user.id);
 
     let emailSent = false;
     try {
@@ -603,10 +689,14 @@ router.post('/two-factor/send-disable-code', requireAuth, async (req: AuthReques
       console.error('2FA disable code email failed:', e);
     }
 
-    const exposeCode = process.env.NODE_ENV !== 'production' || !emailSent;
+    const exposeCode = !IS_PROD || !emailSent;
     return res.json({
       success: true,
-      message: emailSent ? 'Verification code sent to your email.' : 'Code generated (email delivery simulated in dev).',
+      message: emailSent
+        ? 'Verification code sent to your email.'
+        : IS_PROD
+          ? 'Unable to deliver verification email right now. Use the code shown below or try again later.'
+          : 'Code generated (email delivery simulated in dev).',
       debugCode: exposeCode ? code : undefined,
     });
   } catch (e) {
@@ -632,8 +722,13 @@ router.post('/two-factor/disable', requireAuth, async (req: AuthRequest, res: Re
 
     const match = recent.find(r => r.code === String(code).trim());
     if (!match) {
+      const locked = await recordTwoFactorFailure(user.id);
+      if (locked) {
+        return res.status(429).json({ error: 'Too many invalid attempts. Existing verification codes have been invalidated — please request a new code.' });
+      }
       return res.status(400).json({ error: 'Invalid verification code. Please check and try again.' });
     }
+    clearTwoFactorFailures(user.id);
 
     if (new Date(match.expiresAt).getTime() < Date.now()) {
       return res.status(400).json({ error: 'Verification code has expired. Please request a new code.' });
@@ -652,22 +747,21 @@ router.post('/two-factor/disable', requireAuth, async (req: AuthRequest, res: Re
 router.post('/two-factor/enable', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const enabled = Boolean(req.body.enabled);
-    await db.update(users).set({ twoFactorEnabled: enabled } as any).where(eq(users.id, req.userId!));
-    // Do NOT send any email here. Exactly one email is sent per login attempt
-    // in POST /login (and Google 2FA path / resend). Sending a "test" code on
-    // enable caused two valid codes to coexist and was perceived as double-send.
-    // When disabling, invalidate any outstanding unused codes.
     if (!enabled) {
-      try {
-        await db.update(twoFactorTokens).set({ used: true }).where(and(eq(twoFactorTokens.userId, req.userId!), eq(twoFactorTokens.used, false)));
-      } catch {}
+      return res.status(400).json({
+        error: 'Verification required to disable two-factor authentication.',
+        requiresVerification: true,
+      });
     }
-    res.json({ enabled, emailSent: true });
+    await db.update(users).set({ twoFactorEnabled: true } as any).where(eq(users.id, req.userId!));
+    // Do NOT send any email here. Exactly one email is sent per login attempt
+    // in POST /login (and Google 2FA path / resend).
+    res.json({ enabled: true, emailSent: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
 
-router.post('/logout', (_req, res: Response) => {
-  res.clearCookie('token');
+router.post('/logout', (req, res: Response) => {
+  res.clearCookie('token', getCookieOpts(req, 0));
   res.json({ message: 'Logged out' });
 });
 
@@ -729,7 +823,7 @@ router.delete('/account', requireAuth, async (req: AuthRequest, res: Response) =
     await run(`DELETE FROM groups WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_id = $1)`, [userId]);
     await run(`DELETE FROM users WHERE id = $1`, [userId]);
     await client.query('COMMIT');
-    res.clearCookie('token');
+    res.clearCookie('token', getCookieOpts(req, 0));
     res.json({ message: 'Account deleted' });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}

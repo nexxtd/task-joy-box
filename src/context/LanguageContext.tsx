@@ -298,37 +298,43 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const detectedTz = detectTimezone();
       setCurrency(detectedCurrency);
 
-      try {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 5000);
-        const res = await fetch('/api/settings', { credentials: 'include', signal: ctrl.signal });
-        clearTimeout(tid);
-        if (!cancelled && res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (data && typeof data.language === 'string' && data.language.trim()) {
-            const serverCode = resolveLanguageCode(data.language);
-            if (serverCode === null) {
-              // Invalid saved value on the account: don't adopt it. Flag it
-              // for repair and fall through to the local pick / auto-detect
-              // so the user still lands in a working language.
-              serverLanguageInvalid = true;
-            } else {
-              // Server wins — adopt it locally so refresh/other devices match.
-              try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
-              try {
-                const raw = localStorage.getItem(LOCATION_KEY);
-                const loc = raw ? JSON.parse(raw) : {};
-                localStorage.setItem(LOCATION_KEY, JSON.stringify({ ...loc, lang: serverCode, currency: detectedCurrency, tz: detectedTz }));
-              } catch {
-                try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: serverCode, currency: detectedCurrency, tz: detectedTz })); } catch {}
+      const hasCachedSession = (() => {
+        try { return !!localStorage.getItem('auth_user_cache'); } catch { return false; }
+      })();
+
+      if (hasCachedSession) {
+        try {
+          const ctrl = new AbortController();
+          const tid = setTimeout(() => ctrl.abort(), 5000);
+          const res = await fetch('/api/settings', { credentials: 'include', signal: ctrl.signal });
+          clearTimeout(tid);
+          if (!cancelled && res.ok) {
+            const data = await res.json().catch(() => ({}));
+            if (data && typeof data.language === 'string' && data.language.trim()) {
+              const serverCode = resolveLanguageCode(data.language);
+              if (serverCode === null) {
+                // Invalid saved value on the account: don't adopt it. Flag it
+                // for repair and fall through to the local pick / auto-detect
+                // so the user still lands in a working language.
+                serverLanguageInvalid = true;
+              } else {
+                // Server wins — adopt it locally so refresh/other devices match.
+                try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
+                try {
+                  const raw = localStorage.getItem(LOCATION_KEY);
+                  const loc = raw ? JSON.parse(raw) : {};
+                  localStorage.setItem(LOCATION_KEY, JSON.stringify({ ...loc, lang: serverCode, currency: detectedCurrency, tz: detectedTz }));
+                } catch {
+                  try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: serverCode, currency: detectedCurrency, tz: detectedTz })); } catch {}
+                }
+                await finish(serverCode);
+                return;
               }
-              await finish(serverCode);
-              return;
             }
           }
+        } catch {
+          // Unauthenticated or offline — fall through to local/auto.
         }
-      } catch {
-        // Unauthenticated or offline — fall through to local/auto.
       }
       if (cancelled) return;
 
@@ -358,12 +364,14 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try { localStorage.setItem(FIRST_VISIT_KEY, 'true'); } catch {}
         try { localStorage.setItem(LOCATION_KEY, JSON.stringify({ lang: code, currency: detectedCurrency, tz: detectedTz })); } catch {}
         try { localStorage.setItem('language', code); } catch {}
-        fetch('/api/settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ language: code, currency: detectedCurrency }),
-        }).catch(() => {});
+        if (hasCachedSession) {
+          fetch('/api/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ language: code, currency: detectedCurrency }),
+          }).catch(() => {});
+        }
         await finish(code);
         return;
       }
@@ -386,12 +394,14 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const next = { ...loc, currency: detectedCurrency, tz: detectedTz };
         try { localStorage.setItem(LOCATION_KEY, JSON.stringify(next)); } catch {}
         setCurrency(detectedCurrency);
-        fetch('/api/settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ currency: detectedCurrency }),
-        }).catch(() => {});
+        if (localStorage.getItem('auth_user_cache')) {
+          fetch('/api/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ currency: detectedCurrency }),
+          }).catch(() => {});
+        }
       }
     } catch {}
   }, [ready]);

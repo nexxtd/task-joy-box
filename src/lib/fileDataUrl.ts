@@ -55,24 +55,41 @@ export const fileToDataUrl = async (file: File): Promise<string> => {
 
   if (!sourceWasHeic && file.size <= SMALL_IMAGE_BYTES) return readAsDataUrl(file);
 
-  const raw = await readAsDataUrl(blob);
+  // Skip re-encoding animated GIFs so animation frames stay intact
+  if (/^image\/gif$/i.test(blob.type) || /\.gif$/i.test(file.name)) {
+    return readAsDataUrl(blob);
+  }
+
+  // Decode via ObjectURL instead of double-allocating a multi-MB base64 string first
+  const objectUrl = URL.createObjectURL(blob);
   try {
-    const img = await loadImage(raw);
+    const img = await loadImage(objectUrl);
     const longest = Math.max(img.naturalWidth, img.naturalHeight);
-    const scale = Math.min(1, MAX_DIMENSION / longest);
-    if (scale >= 1) return raw;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return raw;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(1, longest));
     const keepPng = blob.type === 'image/png' || file.type === 'image/png' || /\.png$/i.test(file.name);
-    const out = keepPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-    return out.length < raw.length ? out : raw;
+
+    // Downscale oversized images OR compress heavy >300KB photos even if within MAX_DIMENSION
+    if (scale < 1 || (!keepPng && blob.size > SMALL_IMAGE_BYTES)) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = keepPng
+          ? canvas.toDataURL('image/png')
+          : canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+        // Only read raw blob if compressed PNG turned out larger than raw
+        const estimatedRawDataUrlLen = Math.ceil(blob.size * 1.37) + 32;
+        if (compressed.length < estimatedRawDataUrlLen) {
+          return compressed;
+        }
+      }
+    }
+    return readAsDataUrl(blob);
   } catch {
-    return raw;
+    return readAsDataUrl(blob);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
   }
 };

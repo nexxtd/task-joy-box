@@ -141,7 +141,7 @@ const SettingsPage: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<{ synced: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState('');
   const [syncSuccess, setSyncSuccess] = useState('');
-  const [historyTab, setHistoryTab] = useState<'energy' | 'deepfocus'>('deepfocus');
+  const [historyTab, setHistoryTab] = useState<'energy' | 'deepfocus'>('energy');
   const [deepFocusSessions, setDeepFocusSessions] = useState<any[]>([]);
   const [deepFocusLoading, setDeepFocusLoading] = useState(false);
   const navigate = useNavigate();
@@ -2005,9 +2005,9 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {/* Effective Plan / Pause / Reserve / 30-day Archive Status Banner (Rules 8-11) */}
-              {(user?.planSource === 'org' || user?.personalPlanPaused || user?.reservedOrgTier || (user?.archivedAttachmentCount || 0) > 0) && (
+              {(user?.planSource === 'organization' || user?.planSource === 'org' || user?.personalPlanPaused || user?.reservedOrgTier || (user?.archivedAttachmentCount || 0) > 0) && (
                 <div className="p-4 rounded-xl border border-primary/25 bg-primary/5 space-y-1.5 text-xs">
-                  {user?.planSource === 'org' && (
+                  {(user?.planSource === 'organization' || user?.planSource === 'org') && (
                     <p className="font-semibold text-foreground">
                       Active Plan: <span className="uppercase text-primary font-bold">{user.subscriptionTier}</span> via organization{user.bestOrgName ? ` (${user.bestOrgName})` : ''}.
                     </p>
@@ -2017,7 +2017,7 @@ const SettingsPage: React.FC = () => {
                       Your personal <span className="uppercase font-semibold text-foreground">{user.pausedPersonalTier}</span> plan is paused while you have an equal or higher organization plan, and will resume automatically with its remaining time if you leave.
                     </p>
                   )}
-                  {user?.reservedOrgTier && user?.planSource !== 'org' && (
+                  {user?.reservedOrgTier && !['organization', 'org'].includes(String(user?.planSource || '')) && (
                     <p className="text-muted-foreground">
                       Your personal <span className="uppercase font-semibold text-foreground">{user.subscriptionTier}</span> plan remains active. Your <span className="uppercase font-semibold text-foreground">{user.reservedOrgTier}</span> organization plan is held in reserve and will take over automatically if your personal plan ends.
                     </p>

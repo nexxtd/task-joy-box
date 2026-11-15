@@ -4,42 +4,42 @@ import {
   resizeWidget, widgetColumnPitch, widgetsIntersect, WIDGET_ROW_PITCH,
 } from './widgetGeometry';
 
-const widget = (id: string, col: number, row: number, w = 6, h = 3) => ({ id, col, row, w, h });
+const widget = (id: string, col: number, row: number, w = 6, h = 5) => ({ id, col, row, w, h });
 
 describe('widget layout compaction', () => {
   it('fills the gap left when a module is made shorter', () => {
-    const resized = widget('resized', 1, 1, 6, 3);
-    const result = compactWidgets([resized, widget('below', 1, 8), widget('adjacent', 7, 1)], resized.id);
-    expect(result.find(item => item.id === 'below')?.row).toBe(4);
+    const resized = widget('resized', 1, 1, 6, 5);
+    const result = compactWidgets([resized, widget('below', 1, 10), widget('adjacent', 7, 1)], resized.id);
+    expect(result.find(item => item.id === 'below')?.row).toBe(6);
     expect(result.find(item => item.id === 'adjacent')?.row).toBe(1);
     expect(result.find(item => item.id === 'resized')).toEqual(resized);
   });
 
   it('only pulls a module into a space that fits its full width and height', () => {
     const result = compactWidgets([
-      widget('resized', 1, 1, 6, 3), widget('beside', 7, 1, 6, 5),
-      widget('narrow-below', 1, 8, 6, 3), widget('wide-below', 1, 12, 12, 3),
+      widget('resized', 1, 1, 6, 5), widget('beside', 7, 1, 6, 7),
+      widget('narrow-below', 1, 10, 6, 5), widget('wide-below', 1, 16, 12, 5),
     ], 'resized');
-    expect(result.find(item => item.id === 'narrow-below')?.row).toBe(4);
-    expect(result.find(item => item.id === 'wide-below')?.row).toBe(7);
+    expect(result.find(item => item.id === 'narrow-below')?.row).toBe(6);
+    expect(result.find(item => item.id === 'wide-below')?.row).toBe(11);
     for (const left of result) for (const right of result) {
       if (left.id !== right.id) expect(widgetsIntersect(left, right)).toBe(false);
     }
   });
 
   it('does not move the actively resized module out from under the pointer', () => {
-    const active = widget('active', 5, 7, 6, 3);
-    const result = compactWidgets([active, widget('below', 5, 12)], active.id);
+    const active = widget('active', 5, 7, 6, 5);
+    const result = compactWidgets([active, widget('below', 5, 14)], active.id);
     expect(result.find(item => item.id === active.id)).toEqual(active);
     expect(result.find(item => item.id === 'below')?.row).toBe(1);
   });
 
   it('heals tiny legacy modules and overlapping saved positions without mutating input', () => {
-    const input = [widget('old', 12, 1, 1, 1), widget('other', 9, 1, 6, 3)];
+    const input = [widget('old', 12, 1, 1, 1), widget('other', 9, 1, 6, 5)];
     const before = structuredClone(input);
     const result = compactWidgets(input);
     expect(input).toEqual(before);
-    expect(result.every(item => item.w >= 6 && item.h >= 3)).toBe(true);
+    expect(result.every(item => item.w >= 6 && item.h >= 5)).toBe(true);
     expect(result.every(item => item.col + item.w <= 13)).toBe(true);
     expect(widgetsIntersect(result[0], result[1])).toBe(false);
   });
@@ -50,14 +50,14 @@ describe('widget pointer anchoring', () => {
   const pitch = widgetColumnPitch(bounds.width);
 
   it('keeps a grab near the left edge instead of centering the module', () => {
-    const current = widget('moving', 5, 3, 6, 3);
+    const current = widget('moving', 5, 3, 6, 5);
     const pointer = { x: bounds.left + 4 * pitch + 7, y: bounds.top + 2 * WIDGET_ROW_PITCH + 19 };
     const grab = getWidgetGrab(pointer.x, pointer.y, bounds, current);
     expect(grab.x).toBeCloseTo(7);
     expect(grab.y).toBe(19);
-    expect(moveWidgetFromGrab(pointer.x, pointer.y, bounds, grab, current)).toEqual({ col: 5, row: 3, w: 6, h: 3 });
+    expect(moveWidgetFromGrab(pointer.x, pointer.y, bounds, grab, current)).toEqual({ col: 5, row: 3, w: 6, h: 5 });
     expect(moveWidgetFromGrab(pointer.x + pitch, pointer.y + WIDGET_ROW_PITCH, bounds, grab, current))
-      .toEqual({ col: 6, row: 4, w: 6, h: 3 });
+      .toEqual({ col: 6, row: 4, w: 6, h: 5 });
   });
 
   it('uses the grid gutter when translating horizontal movement', () => {
@@ -76,36 +76,36 @@ describe('widget pointer anchoring', () => {
   });
 
   it('preserves the original picker-card grab point when adding a module', () => {
-    const dimensions = widget('new', 1, 1, 6, 3);
+    const dimensions = widget('new', 1, 1, 6, 5);
     const grab = { x: 9, y: 15 };
     const result = moveWidgetFromGrab(bounds.left + 2 * pitch + grab.x, bounds.top + WIDGET_ROW_PITCH + grab.y,
       bounds, grab, dimensions);
-    expect(result).toEqual({ col: 3, row: 2, w: 6, h: 3 });
+    expect(result).toEqual({ col: 3, row: 2, w: 6, h: 5 });
   });
 
   it('keeps a dragged module inside the grid at either horizontal edge', () => {
-    const current = widget('moving', 1, 1, 6, 3);
-    expect(moveWidgetFromGrab(-1000, -1000, bounds, { x: 10, y: 10 }, current)).toEqual({ col: 1, row: 1, w: 6, h: 3 });
+    const current = widget('moving', 1, 1, 6, 5);
+    expect(moveWidgetFromGrab(-1000, -1000, bounds, { x: 10, y: 10 }, current)).toEqual({ col: 1, row: 1, w: 6, h: 5 });
     expect(moveWidgetFromGrab(10000, 300, bounds, { x: 10, y: 10 }, current).col).toBe(7);
   });
 });
 
 describe('widget resize limits', () => {
   it('prevents unreadable small modules', () => {
-    expect(resizeWidget(widget('sizing', 1, 1, 8, 5), -10000, -10000, 1200))
-      .toEqual({ col: 1, row: 1, w: 6, h: 3 });
+    expect(resizeWidget(widget('sizing', 1, 1, 8, 6), -10000, -10000, 1200))
+      .toEqual({ col: 1, row: 1, w: 6, h: 5 });
   });
 
   it('respects custom size limits per module', () => {
-    const limits = { minW: 8, minH: 4, maxW: 10, maxH: 6 };
-    expect(resizeWidget(widget('custom', 1, 1, 8, 5), -10000, -10000, 1200, limits))
-      .toEqual({ col: 1, row: 1, w: 8, h: 4 });
-    expect(resizeWidget(widget('custom', 1, 1, 8, 5), 10000, 10000, 1200, limits))
-      .toEqual({ col: 1, row: 1, w: 10, h: 6 });
+    const limits = { minW: 8, minH: 6, maxW: 10, maxH: 8 };
+    expect(resizeWidget(widget('custom', 1, 1, 8, 6), -10000, -10000, 1200, limits))
+      .toEqual({ col: 1, row: 1, w: 8, h: 6 });
+    expect(resizeWidget(widget('custom', 1, 1, 8, 6), 10000, 10000, 1200, limits))
+      .toEqual({ col: 1, row: 1, w: 10, h: 8 });
   });
 
   it('keeps a resized module within the remaining grid columns', () => {
-    expect(resizeWidget(widget('sizing', 5, 1, 6, 3), 10000, 10000, 1200))
+    expect(resizeWidget(widget('sizing', 5, 1, 6, 5), 10000, 10000, 1200))
       .toEqual({ col: 5, row: 1, w: 8, h: 30 });
   });
 
@@ -120,8 +120,8 @@ describe('widget resize limits', () => {
       { id: 'w-id-override', type: 'notes', col: 7, row: 1, w: 6, h: 2 },
     ];
     const limitsMap = {
-      stats: { minW: 8, minH: 5, maxW: 12, maxH: 8 },
-      'w-id-override': { minW: 6, minH: 4, maxW: 8, maxH: 6 },
+      stats: { minW: 8, minH: 6, maxW: 12, maxH: 9 },
+      'w-id-override': { minW: 6, minH: 5, maxW: 8, maxH: 7 },
     };
 
     const compacted = compactWidgets(items, 'w-stats', limitsMap);
@@ -129,9 +129,9 @@ describe('widget resize limits', () => {
     const override = compacted.find((w) => w.id === 'w-id-override')!;
 
     expect(stats.w).toBe(8);
-    expect(stats.h).toBe(5);
+    expect(stats.h).toBe(6);
     expect(override.w).toBe(6);
-    expect(override.h).toBe(4);
+    expect(override.h).toBe(5);
     expect(widgetsIntersect(stats, override)).toBe(false);
   });
 });

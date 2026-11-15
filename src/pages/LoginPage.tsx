@@ -17,7 +17,10 @@ const BUILD_TIME_GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as st
 
 const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const { login, signup, loginWithGoogle, forgotPassword, resetPassword, verify2FA, resend2FA } = useAuth();
-  const [mode, setMode] = useState<Mode>(initialToken ? 'reset' : 'login');
+  const initialResetToken =
+    initialToken ||
+    (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') || '' : '');
+  const [mode, setMode] = useState<Mode>(initialResetToken ? 'reset' : 'login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +28,7 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resetToken, setResetToken] = useState(initialToken || '');
+  const [resetToken, setResetToken] = useState(initialResetToken);
   const [success, setSuccess] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
   const [debugLink, setDebugLink] = useState('');
@@ -62,14 +65,22 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
   }, []);
 
   useEffect(() => {
+    if (initialToken) {
+      setResetToken(initialToken);
+      setMode('reset');
+    }
+  }, [initialToken]);
+
+  useEffect(() => {
     const el = googleWrapRef.current;
     if (!el) return;
     const update = () => setGoogleWidth(Math.max(220, Math.floor(el.clientWidth)));
     update();
+    if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [googleClientId, mode, twoFARequired, verificationSent]);
 
   useEffect(() => {
     setError('');
@@ -126,7 +137,11 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
         if (password !== confirmPassword) throw new Error('Passwords do not match');
         await resetPassword(resetToken, password);
         setSuccess('Password reset successfully! You can now log in.');
-        setTimeout(() => setMode('login'), 2000);
+        setTimeout(() => {
+          setResetToken('');
+          try { window.history.replaceState({}, '', '/login'); } catch {}
+          setMode('login');
+        }, 2000);
       }
     } catch (err: any) {
       const msg = err.message || 'Something went wrong';
@@ -220,7 +235,14 @@ const LoginPage: React.FC<Props> = ({ initialToken }) => {
             {/* Back button for forgot/reset */}
             {(mode === 'forgot' || mode === 'reset') && (
               <button
-                onClick={() => setMode('login')}
+                type="button"
+                onClick={() => {
+                  if (mode === 'reset') {
+                    setResetToken('');
+                    try { window.history.replaceState({}, '', '/login'); } catch {}
+                  }
+                  setMode('login');
+                }}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-5 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Back to login
