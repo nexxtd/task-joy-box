@@ -1,19 +1,19 @@
-import { normalizeLanguageCode } from '../server/lib/language';
-import es from './analyticsLocales/es';
-import fr from './analyticsLocales/fr';
-import de from './analyticsLocales/de';
-import pt from './analyticsLocales/pt';
-import it from './analyticsLocales/it';
-import zh from './analyticsLocales/zh';
-import ja from './analyticsLocales/ja';
-import ko from './analyticsLocales/ko';
-import ar from './analyticsLocales/ar';
-import hi from './analyticsLocales/hi';
-import ru from './analyticsLocales/ru';
-import nl from './analyticsLocales/nl';
-import tr from './analyticsLocales/tr';
-import vi from './analyticsLocales/vi';
-import he from './analyticsLocales/he';
+import { normalizeLanguageCode } from '../server/lib/language.js';
+import es from './analyticsLocales/es.js';
+import fr from './analyticsLocales/fr.js';
+import de from './analyticsLocales/de.js';
+import pt from './analyticsLocales/pt.js';
+import it from './analyticsLocales/it.js';
+import zh from './analyticsLocales/zh.js';
+import ja from './analyticsLocales/ja.js';
+import ko from './analyticsLocales/ko.js';
+import ar from './analyticsLocales/ar.js';
+import hi from './analyticsLocales/hi.js';
+import ru from './analyticsLocales/ru.js';
+import nl from './analyticsLocales/nl.js';
+import tr from './analyticsLocales/tr.js';
+import vi from './analyticsLocales/vi.js';
+import he from './analyticsLocales/he.js';
 
 export type SupportedLang =
   | 'en' | 'es' | 'fr' | 'de' | 'pt' | 'it'
