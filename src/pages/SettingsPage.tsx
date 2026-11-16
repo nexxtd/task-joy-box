@@ -1,6 +1,6 @@
 import '@/styles/pagePanels.css';
 import { dateLocale } from '@/i18n/format';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PLAN_LIMITS, normalizePlanTier, getLimitButtonProps } from '@/lib/planLimits';
 import {
@@ -113,6 +113,8 @@ const SettingsPage: React.FC = () => {
   const [enablingNotif, setEnablingNotif] = useState(false);
   const [notifNotice, setNotifNotice] = useState('');
   const [savingSmart, setSavingSmart] = useState(false);
+  const prefsTouchedRef = useRef(false);
+  const [testNotifSent, setTestNotifSent] = useState(() => { try { return localStorage.getItem('testNotifSent') === 'true'; } catch { return false; } });
   const [savingEmail, setSavingEmail] = useState(false);
   const [savingNormal, setSavingNormal] = useState(false);
   const [savingWeeklyAi, setSavingWeeklyAi] = useState(false);
@@ -176,6 +178,11 @@ const SettingsPage: React.FC = () => {
   const [newShortcutTitle, setNewShortcutTitle] = useState('');
   const [newShortcutKeys, setNewShortcutKeys] = useState('');
   const [newShortcutAction, setNewShortcutAction] = useState(SHORTCUT_ACTIONS[0].id);
+  // Hide actions that already have a shortcut (split-screen can repeat with different pages).
+  const availableShortcutActions = useMemo(
+    () => SHORTCUT_ACTIONS.filter(a => a.id === CREATE_SPLIT_SCREEN_ACTION_ID || !shortcuts.some(s => s.action === a.id)),
+    [shortcuts],
+  );
   const [newShortcutSplitLeft, setNewShortcutSplitLeft] = useState('');
   const [newShortcutSplitRight, setNewShortcutSplitRight] = useState('');
   const [capturingNewKeys, setCapturingNewKeys] = useState(false);
@@ -269,7 +276,6 @@ const SettingsPage: React.FC = () => {
   const sections = [
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'integrations', label: 'Connected Accounts', icon: Link2 },
     { id: 'energy', label: 'Energy Levels', icon: Battery },
     { id: 'history', label: 'History', icon: History },
     { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
@@ -282,7 +288,8 @@ const SettingsPage: React.FC = () => {
   const location = useLocation();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const tab = params.get('tab');
+    const rawTab = params.get('tab');
+    const tab = rawTab === 'integrations' ? 'account' : rawTab;
     if (tab && sections.some(s => s.id === tab)) {
       setActiveSection(tab);
     }
@@ -407,7 +414,7 @@ const SettingsPage: React.FC = () => {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/settings', { credentials: 'include' });
+      const res = await fetch('/api/settings', { credentials: 'include', cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (data.theme) {
@@ -448,6 +455,8 @@ const SettingsPage: React.FC = () => {
             try { setLanguage(data.language); } catch {}
           }
         }
+        // Skip if the user already flipped a toggle while this request was in flight.
+        if (prefsTouchedRef.current) return;
         setNormalAlerts(data.normalAlerts !== false);
         setSmartAlerts(data.smartAlerts !== false);
         setEmailNotifs(data.emailNotifs !== false);
@@ -689,37 +698,26 @@ const SettingsPage: React.FC = () => {
 
   const persistNotificationPrefs = async (
     patch: { normalAlerts?: boolean; smartAlerts?: boolean; emailNotifs?: boolean; weeklyAiSummary?: boolean },
-    prev: { normalAlerts?: boolean; smartAlerts: boolean; emailNotifs: boolean; weeklyAiSummary?: boolean },
+    _prev?: unknown,
   ) => {
+    prefsTouchedRef.current = true;
     setNotifError('');
+    const send = () => fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      cache: 'no-store',
+      body: JSON.stringify(patch),
+    });
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(patch),
-      });
+      let res = await send();
+      if (!res.ok) res = await send();
       if (!res.ok) throw new Error(`save failed: ${res.status}`);
       showSaved();
-    } catch (error) {
-      // Revert the toggle and surface the error.
-      if (patch.normalAlerts !== undefined && prev.normalAlerts !== undefined) {
-        setNormalAlerts(prev.normalAlerts);
-        try { localStorage.setItem('normalAlerts', String(prev.normalAlerts)); } catch {}
-      }
-      if (patch.smartAlerts !== undefined) {
-        setSmartAlerts(prev.smartAlerts);
-        setSmartAlertsEnabled(prev.smartAlerts);
-      }
-      if (patch.emailNotifs !== undefined) {
-        setEmailNotifs(prev.emailNotifs);
-        try { localStorage.setItem('emailNotifs', String(prev.emailNotifs)); } catch {}
-      }
-      if (patch.weeklyAiSummary !== undefined && prev.weeklyAiSummary !== undefined) {
-        setWeeklyAiSummary(prev.weeklyAiSummary);
-        try { localStorage.setItem('weeklyAiSummary', String(prev.weeklyAiSummary)); } catch {}
-      }
-      setNotifError('Could not save. Please try again.');
+    } catch {
+      // Keep the user's choice on screen and in localStorage; just tell them
+      // the account copy didn't save so they can retry.
+      setNotifError('Could not save to your account. Please try again.');
     } finally {
       setSavingSmart(false);
       setSavingEmail(false);
@@ -761,6 +759,8 @@ const SettingsPage: React.FC = () => {
     setNotifError('');
     setNotifNotice('');
     if (sendTestNotification()) {
+      setTestNotifSent(true);
+      try { localStorage.setItem('testNotifSent', 'true'); } catch {}
       setNotifNotice('Test notification sent — check your notification center.');
     } else {
       setNotifError('Could not send a notification. Check that notifications are allowed for this site.');
@@ -1139,7 +1139,6 @@ const SettingsPage: React.FC = () => {
                   <div className="flex-1 min-w-0 pr-3">
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-foreground font-semibold">Normal Alerts</p>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">Free</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       In-app and standard alerts for overdue tasks, project invitations, and upcoming deadlines.
@@ -1162,9 +1161,7 @@ const SettingsPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
                         Smart Alerts
-                        <Sparkles className="w-3.5 h-3.5 text-primary" />
                       </p>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Premium</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Proactive AI momentum coaching (e.g., "Falling behind on 3 tasks, maybe prioritize these first") and scheduled energy checks delivered directly to your device.
@@ -1188,13 +1185,13 @@ const SettingsPage: React.FC = () => {
                         <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
                           <CheckCircle className="w-3.5 h-3.5" /> Device notifications are enabled
                         </span>
-                        <button
+                        {!testNotifSent && (<button
                           onClick={handleSendTestNotification}
                           data-testid="button-test-notification"
                           className="px-2.5 py-1.5 rounded-lg border border-border text-foreground hover:bg-muted transition-colors font-medium text-xs"
                         >
                           Send test notification
-                        </button>
+                        </button>)}
                       </div>
                     ) : notifPermission === 'denied' ? (
                       <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
@@ -1235,7 +1232,6 @@ const SettingsPage: React.FC = () => {
                       <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
                         Email Notifications
                       </p>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Premium</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Product updates, new feature announcements, and security notices delivered straight to your inbox.
@@ -1264,9 +1260,7 @@ const SettingsPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-foreground font-semibold flex items-center gap-1.5">
                         Weekly AI Summary Emails
-                        <Brain className="w-3.5 h-3.5 text-purple-500" />
                       </p>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">Pro</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       Comprehensive weekly AI productivity recap, bottleneck diagnosis, habit streaks, and goal roadmap delivered every Monday morning.
@@ -1493,7 +1487,7 @@ const SettingsPage: React.FC = () => {
                         if (!isTopTier) navigate('/pricing');
                         return;
                       }
-                      setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction(SHORTCUT_ACTIONS[0].id); setNewShortcutSplitLeft(''); setNewShortcutSplitRight(''); setAddShortcutOpen(true);
+                      setNewShortcutTitle(''); setNewShortcutKeys(''); setNewShortcutError(''); setNewShortcutAction((availableShortcutActions[0] || SHORTCUT_ACTIONS[0]).id); setNewShortcutSplitLeft(''); setNewShortcutSplitRight(''); setAddShortcutOpen(true);
                     }}
                     disabled={isShortcutLimitReached && isTopTier}
                     title={isShortcutLimitReached ? (isTopTier ? `Custom shortcuts limit reached (${maxCustomShortcuts} max on Pro)` : `Custom shortcuts limit reached (${maxCustomShortcuts} max). Click to upgrade.`) : undefined}
@@ -1593,7 +1587,7 @@ const SettingsPage: React.FC = () => {
                           <SelectValue placeholder="Choose action" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SHORTCUT_ACTIONS.map(a => (
+                          {availableShortcutActions.map(a => (
                             <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
                           ))}
                         </SelectContent>
@@ -1730,6 +1724,13 @@ const SettingsPage: React.FC = () => {
                   Delete Account
                 </button>
               </div>
+              <div className="pt-6 mt-2 border-t border-border space-y-3">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Connected Accounts</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Sign in to ClickUp or Trello and your work is imported automatically.</p>
+                </div>
+                <IntegrationsSection />
+              </div>
               {deleteDialogOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                   <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteDialogOpen(false)} />
@@ -1789,7 +1790,6 @@ const SettingsPage: React.FC = () => {
             return (
               <div className="space-y-4">
                 <h2 className="text-sm font-semibold text-foreground">Your Tickets</h2>
-                <DiscordCommunitySection className="mb-4" />
 
                 {/* Tab switcher */}
                 <div className="flex gap-2">
@@ -2136,10 +2136,6 @@ const SettingsPage: React.FC = () => {
                 );
               })()}
             </div>
-          )}
-
-          {activeSection === 'integrations' && (
-            <IntegrationsSection />
           )}
 
           {/* 2FA Disable Verification Modal */}

@@ -7,6 +7,9 @@ import { normalizeLanguageCode } from '../lib/language.js';
 
 const router = Router();
 
+// Booleans may arrive as true/false, 'true'/'false' or 0/1 — Boolean('false') would be true.
+const toBool = (v: unknown): boolean => v === true || v === 'true' || v === 1 || v === '1';
+
 // Get user settings
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -21,6 +24,7 @@ router.get('/', requireAuth, async (req, res) => {
       settings = newSettings;
     }
 
+    res.set('Cache-Control', 'no-store');
     res.json(settings);
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -62,10 +66,10 @@ router.patch('/', requireAuth, async (req, res) => {
         ...(accentHsl !== undefined ? { accentHsl } : {}),
         ...(languageCode !== undefined ? { language: languageCode } : {}),
         ...(withShortcut && cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
-        ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
-        ...(smartAlerts !== undefined ? { smartAlerts } : {}),
-        ...(emailNotifs !== undefined ? { emailNotifs } : {}),
-        ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
+        ...(normalAlerts !== undefined ? { normalAlerts: toBool(normalAlerts) } : {}),
+        ...(smartAlerts !== undefined ? { smartAlerts: toBool(smartAlerts) } : {}),
+        ...(emailNotifs !== undefined ? { emailNotifs: toBool(emailNotifs) } : {}),
+        ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: toBool(weeklyAiSummary) } : {}),
         ...(energyMorning !== undefined ? { energyMorning } : {}),
         ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
         ...(energyEvening !== undefined ? { energyEvening } : {}),
@@ -103,10 +107,10 @@ router.patch('/', requireAuth, async (req, res) => {
           ...(accentHsl !== undefined ? { accentHsl } : {}),
           ...(languageCode !== undefined ? { language: languageCode } : {}),
           ...(cleanShortcut !== undefined ? { dashboardShortcut: cleanShortcut } : {}),
-          ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
-          ...(smartAlerts !== undefined ? { smartAlerts } : {}),
-          ...(emailNotifs !== undefined ? { emailNotifs } : {}),
-          ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
+          ...(normalAlerts !== undefined ? { normalAlerts: toBool(normalAlerts) } : {}),
+          ...(smartAlerts !== undefined ? { smartAlerts: toBool(smartAlerts) } : {}),
+          ...(emailNotifs !== undefined ? { emailNotifs: toBool(emailNotifs) } : {}),
+          ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: toBool(weeklyAiSummary) } : {}),
           ...(energyMorning !== undefined ? { energyMorning } : {}),
           ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
           ...(energyEvening !== undefined ? { energyEvening } : {}),
@@ -123,10 +127,10 @@ router.patch('/', requireAuth, async (req, res) => {
             ...(accentColor !== undefined ? { accentColor } : {}),
             ...(accentHsl !== undefined ? { accentHsl } : {}),
             ...(languageCode !== undefined ? { language: languageCode } : {}),
-            ...(normalAlerts !== undefined ? { normalAlerts: Boolean(normalAlerts) } : {}),
-            ...(smartAlerts !== undefined ? { smartAlerts } : {}),
-            ...(emailNotifs !== undefined ? { emailNotifs } : {}),
-            ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: Boolean(weeklyAiSummary) } : {}),
+            ...(normalAlerts !== undefined ? { normalAlerts: toBool(normalAlerts) } : {}),
+            ...(smartAlerts !== undefined ? { smartAlerts: toBool(smartAlerts) } : {}),
+            ...(emailNotifs !== undefined ? { emailNotifs: toBool(emailNotifs) } : {}),
+            ...(weeklyAiSummary !== undefined ? { weeklyAiSummary: toBool(weeklyAiSummary) } : {}),
             ...(energyMorning !== undefined ? { energyMorning } : {}),
             ...(energyAfternoon !== undefined ? { energyAfternoon } : {}),
             ...(energyEvening !== undefined ? { energyEvening } : {}),

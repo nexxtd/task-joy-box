@@ -160,6 +160,79 @@ const RANGE_LABELS: Record<string, { days: number; label: string; key: string }>
 
 const LEVEL_SCORE: Record<string, number> = { low: 1, medium: 2, high: 3 };
 
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** Precise, verifiable stats computed from the user's logs; fed to the AI so it cites real numbers. */
+function computeEnergyStats(inWindow: GroupedEnergyEntry[], windowDays: number) {
+  const sorted = [...inWindow].sort((a, b) => a.date.localeCompare(b.date));
+  const slots = ['morning', 'midday', 'afternoon'] as const;
+  const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+  const pct = (n: number) => Math.round(((n - 1) / 2) * 100); // low=0%, medium=50%, high=100%
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const dayAvg = (e: GroupedEnergyEntry): number | null => {
+    const v = slots.map(s => e[s]).filter(Boolean).map(l => LEVEL_SCORE[l as string]);
+    return v.length ? mean(v) : null;
+  };
+
+  const slotStats = Object.fromEntries(slots.map(s => {
+    const levels = sorted.map(e => e[s]).filter(Boolean) as string[];
+    const scores = levels.map(l => LEVEL_SCORE[l]);
+    return [s, {
+      logged: scores.length,
+      energyPct: scores.length ? pct(mean(scores)) : null,
+      lowCount: levels.filter(l => l === 'low').length,
+      highCount: levels.filter(l => l === 'high').length,
+    }];
+  }));
+
+  const daily = sorted
+    .map(e => ({ date: e.date, avg: dayAvg(e) }))
+    .filter((d): d is { date: string; avg: number } => d.avg !== null);
+  const half = Math.floor(daily.length / 2);
+  const trendDelta = daily.length >= 4
+    ? r1((mean(daily.slice(half).map(d => d.avg)) - mean(daily.slice(0, half).map(d => d.avg))) * 50)
+    : 0;
+  const trend = daily.length < 4 ? 'not enough data' : trendDelta > 5 ? 'improving' : trendDelta < -5 ? 'declining' : 'steady';
+
+  const byWeekday: Record<string, number[]> = {};
+  for (const d of daily) {
+    const wd = WEEKDAY_NAMES[new Date(`${d.date}T12:00:00Z`).getUTCDay()];
+    (byWeekday[wd] ||= []).push(d.avg);
+  }
+  const weekdays = Object.entries(byWeekday)
+    .filter(([, v]) => v.length >= 2)
+    .map(([day, v]) => ({ day, energyPct: pct(mean(v)), samples: v.length }))
+    .sort((a, b) => b.energyPct - a.energyPct);
+
+  const withBoth = sorted.filter(e => e.morning && e.afternoon);
+  const drops = withBoth.filter(e => LEVEL_SCORE[e.afternoon!] < LEVEL_SCORE[e.morning!]).length;
+  const rises = withBoth.filter(e => LEVEL_SCORE[e.afternoon!] > LEVEL_SCORE[e.morning!]).length;
+
+  const m = mean(daily.map(d => d.avg));
+  const stdDev = daily.length > 1 ? Math.sqrt(mean(daily.map(d => (d.avg - m) ** 2))) : 0;
+  let run = 0, maxLowRun = 0;
+  for (const d of daily) { run = d.avg < 1.67 ? run + 1 : 0; maxLowRun = Math.max(maxLowRun, run); }
+  const last7 = daily.slice(-7);
+
+  return {
+    windowDays,
+    daysLogged: daily.length,
+    fullDays: sorted.filter(e => slots.every(s => e[s])).length,
+    overallEnergyPct: daily.length ? pct(m) : null,
+    last7LoggedDaysEnergyPct: last7.length ? pct(mean(last7.map(d => d.avg))) : null,
+    slots: slotStats,
+    trend,
+    trendDeltaPctPoints: trendDelta,
+    morningToAfternoon: { compared: withBoth.length, drops, rises, same: withBoth.length - drops - rises },
+    weekdays,
+    variability: stdDev < 0.35 ? 'stable' : stdDev < 0.7 ? 'moderate' : 'volatile',
+    longestLowEnergyStreakDays: maxLowRun,
+    lowDays: daily.filter(d => d.avg < 1.67).length,
+    highDays: daily.filter(d => d.avg > 2.33).length,
+  };
+}
+
 function buildLocalDeepEnergyAnalysis(
   range: string,
   entries: GroupedEnergyEntry[],
@@ -212,6 +285,24 @@ function buildLocalDeepEnergyAnalysis(
   const peakPct = peak ? Math.round(peak.avg * (100 / 3)) : 0;
   const troughPct = trough ? Math.round(trough.avg * (100 / 3)) : 0;
 
+  const stats = computeEnergyStats(inWindow, cfg.days);
+  const extra: string[] = [];
+  if (stats.trend === 'improving' || stats.trend === 'declining') {
+    extra.push(`Your daily energy is ${stats.trend} (${stats.trendDeltaPctPoints > 0 ? '+' : ''}${stats.trendDeltaPctPoints} points between the first and second half of this period).`);
+  }
+  if (stats.morningToAfternoon.compared >= 3) {
+    extra.push(`On ${stats.morningToAfternoon.drops} of ${stats.morningToAfternoon.compared} days your energy fell between morning and afternoon.`);
+  }
+  if (stats.weekdays.length >= 2) {
+    const best = stats.weekdays[0];
+    const worst = stats.weekdays[stats.weekdays.length - 1];
+    if (best.energyPct !== worst.energyPct) extra.push(`${best.day}s are your strongest day (${best.energyPct}%) and ${worst.day}s your weakest (${worst.energyPct}%).`);
+  }
+  if (stats.longestLowEnergyStreakDays >= 2) {
+    extra.push(`You had a ${stats.longestLowEnergyStreakDays}-day low-energy streak; check sleep, workload or stress around those dates.`);
+  }
+  const extraText = langCode === 'en' && extra.length ? ' ' + extra.join(' ') : '';
+
   return {
     aiPowered: false,
     headline: translateAnalytics(
@@ -219,7 +310,7 @@ function buildLocalDeepEnergyAnalysis(
       'Across the {{range}}, your average energy index is {{pct}}% across {{days}} logged days ({{checks}} checks).',
       { range: rangeLabel, pct: overallPct, days: inWindow.length, checks: allScores.length }
     ),
-    patternSummary: peak && trough && peak.slot !== trough.slot
+    patternSummary: (peak && trough && peak.slot !== trough.slot
       ? translateAnalytics(
           langCode,
           'Your energy follows a measurable daily curve with a {{swing}}-point spread between your strongest window ({{peak}} at {{peakPct}}%) and your lowest window ({{trough}} at {{troughPct}}%).',
@@ -229,7 +320,7 @@ function buildLocalDeepEnergyAnalysis(
           langCode,
           'Your energy stays fairly balanced across logged time slots with {{days}} recorded days in this window.',
           { days: inWindow.length }
-        ),
+        )) + extraText,
     peakStrategy: peak
       ? translateAnalytics(
           langCode,
@@ -302,29 +393,38 @@ router.post('/ai-analysis', requireAuth, async (req: AuthRequest, res: Response)
     try {
       const client = new OpenAI({ baseURL: 'https://openrouter.ai/api/v1', apiKey });
       const recentSample = inWindow.slice(-60);
-      const prompt = `You are a productivity & circadian-energy analyst.
-Analyze the user's energy check-in data for the ${cfg.label}.
+      const stats = computeEnergyStats(inWindow, cfg.days);
+      const prompt = `You are an expert circadian-rhythm and productivity analyst. Analyze the user's energy check-ins for the ${cfg.label}.
 Target language: ${langName} (${langCode}). EVERY string in your JSON response MUST be written naturally in ${langName}.
 
-Logged energy entries (${inWindow.length} days in window, up to 60 most recent shown):
+Scale: each check-in is low / medium / high (energyPct: low=0%, medium=50%, high=100%). Check-ins are at morning (~8am), midday (~12pm) and afternoon (~4pm).
+
+PRE-COMPUTED STATS (authoritative and exact; use these numbers, do not recompute or invent others):
+${JSON.stringify(stats, null, 2)}
+
+Raw entries (${inWindow.length} days in window, up to 60 most recent):
 ${JSON.stringify(recentSample)}
 
-Heuristic stats summary:
-${JSON.stringify({ headline: fallback.headline, patternSummary: fallback.patternSummary })}
+Rules:
+- Accuracy first: every number you mention MUST appear in the stats above or be directly countable from the raw entries. Never fabricate.
+- If daysLogged < 5, say plainly that data is limited and keep conclusions tentative.
+- Be insightful, not generic: explain WHY the pattern likely happens (post-lunch dip, sleep debt, weekly workload, weekend recovery) and give specific, actionable advice tied to their actual times and weekdays.
+- Cover the trend, weekday differences, the morning-to-afternoon pattern and any low-energy streaks when the stats show something meaningful.
+- 2-3 sentences per field. No platitudes.
 
-Return ONLY valid JSON with these exact keys (2-3 concrete, insightful sentences per field referencing real patterns/numbers from the user's logs — NEVER give vague 1-line platitudes):
+Return ONLY valid JSON with these exact keys:
 {
-  "headline": "...",
-  "patternSummary": "...",
-  "peakStrategy": "...",
-  "dipMitigation": "...",
-  "consistencyNote": "..."
+  "headline": "one-sentence key finding with the most important number",
+  "patternSummary": "daily curve + trend + weekday pattern, with likely reasons",
+  "peakStrategy": "when exactly to schedule deep work and why",
+  "dipMitigation": "when dips occur, likely cause, and concrete countermeasures",
+  "consistencyNote": "logging coverage, stability, and what more data would reveal"
 }`;
 
       const completion = await client.chat.completions.create({
         model: process.env.OPENROUTER_MODEL || 'openrouter/free',
-        temperature: 0.4,
-        max_tokens: 900,
+        temperature: 0.2,
+        max_tokens: 1200,
         messages: [
           { role: 'system', content: `Respond strictly with valid JSON in ${langName}. No markdown fences.` },
           { role: 'user', content: prompt },

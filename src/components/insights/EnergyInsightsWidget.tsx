@@ -468,7 +468,6 @@ export function EnergyInsightsBody() {
             <RefreshCw className={`w-3 h-3 ${aiLoading ? 'animate-spin' : ''}`} />
             {t('Refresh AI')}
           </button>
-          <CollapseAllToggle ids={sectionIds} expanded={expanded} expandAll={expandAll} collapseAll={collapseAll} />
         </div>
       </div>
 

@@ -204,14 +204,13 @@ export const NoteDropdownExpanded: React.FC<NoteDropdownExpandedProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Description */}
+      {/* Content */}
       <div>
         <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Content</h4>
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
           onBlur={saveDescription}
-          placeholder="Write your note..."
           rows={3}
           className="w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[80px]"
         />

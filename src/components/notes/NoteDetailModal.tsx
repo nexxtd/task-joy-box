@@ -173,7 +173,7 @@ const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Description</label>
+          <label className="text-xs font-semibold uppercase text-muted-foreground mb-1 block">Content</label>
           <textarea value={note.content} onChange={e => onContentChange(e.target.value)} rows={8}
             className="mt-1 w-full bg-muted/40 border border-border rounded-xl px-3 py-2.5 text-sm resize-y min-h-[120px]" />
         </div>

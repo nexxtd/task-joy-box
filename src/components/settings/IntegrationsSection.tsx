@@ -47,9 +47,7 @@ export default function IntegrationsSection() {
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
 
   // Connect form
-  const [tokenInput, setTokenInput] = useState('');
   const [connecting, setConnecting] = useState(false);
-  const [showConnectForm, setShowConnectForm] = useState(false);
 
   // Hierarchy & selection
   const [loadingHierarchy, setLoadingHierarchy] = useState(false);
@@ -95,45 +93,68 @@ export default function IntegrationsSection() {
     }
   };
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-
+  // One-click sign-in: the server builds the provider's OAuth URL and we
+  // redirect there. On return the server has already imported everything.
+  const startOAuth = async (provider: 'clickup' | 'trello') => {
     setConnecting(true);
     try {
-      const res = await fetch('/api/integrations/clickup/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token: tokenInput.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to connect ClickUp');
-      }
-
-      setConnected(true);
-      setUser(data.user);
-      setTeams(data.teams || []);
-      if (data.teams?.[0]?.id) {
-        setSelectedTeamId(data.teams[0].id);
-      }
-      setShowConnectForm(false);
-      setTokenInput('');
-      toast({
-        title: 'ClickUp Connected!',
-        description: `Signed in as ${data.user?.username || data.user?.email || 'ClickUp User'}. You can now copy your tasks over.`,
-      });
+      const res = await fetch(`/api/integrations/${provider}/auth`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.authUrl) throw new Error(data.error || 'Could not start sign-in');
+      window.location.href = data.authUrl;
     } catch (err: any) {
-      toast({
-        title: 'Connection Failed',
-        description: err.message,
-        variant: 'destructive',
-      });
-    } finally {
+      toast({ title: 'Sign-in unavailable', description: err.message, variant: 'destructive' });
       setConnecting(false);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const clean = () => {
+      ['connected', 'imported', 'integrationError', 'trelloCallback'].forEach(k => params.delete(k));
+      const qs = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+    };
+    if (params.get('connected') === 'clickup') {
+      toast({ title: 'ClickUp connected', description: `Imported ${params.get('imported') || 0} tasks from your ClickUp workspaces.` });
+      clean();
+    } else if (params.get('integrationError')) {
+      const code = params.get('integrationError') || '';
+      toast({
+        title: 'Connection failed',
+        description: code.endsWith('denied') || code.endsWith('access_denied') ? 'Sign-in was cancelled.' : code.endsWith('expired') ? 'Sign-in took too long. Please try again.' : 'Something went wrong while connecting. Please try again.',
+        variant: 'destructive',
+      });
+      clean();
+    } else if (params.get('trelloCallback')) {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const token = hash.get('token');
+      window.history.replaceState(null, '', window.location.pathname);
+      clean();
+      if (!token) {
+        toast({ title: 'Trello sign-in cancelled', variant: 'destructive' });
+        return;
+      }
+      (async () => {
+        toast({ title: 'Connecting Trello…', description: 'Importing your boards, lists and cards.' });
+        try {
+          const res = await fetch('/api/integrations/trello/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ token }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Could not connect Trello');
+          toast({ title: 'Trello connected', description: data.message });
+          window.dispatchEvent(new Event('trello-connected'));
+        } catch (err: any) {
+          toast({ title: 'Trello connection failed', description: err.message, variant: 'destructive' });
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDisconnect = async () => {
     if (!confirm('Disconnect your ClickUp account? Your already-imported tasks in Planora will remain.')) return;
@@ -328,13 +349,6 @@ export default function IntegrationsSection() {
 
   return (
     <div className="space-y-6 max-w-4xl pb-12">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-black text-foreground mb-1">Connected Accounts & Imports</h2>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Connect your existing productivity tools like ClickUp or upload task exports to seamlessly copy your tasks, subtasks, checklists, and projects into Planora.
-        </p>
-      </div>
 
       {/* 1. ClickUp Integration Card */}
       <div className="bg-card border-2 border-border/80 rounded-3xl p-6 sm:p-8 shadow-sm transition-all hover:border-primary/30">
@@ -372,10 +386,12 @@ export default function IntegrationsSection() {
               </button>
             ) : (
               <button
-                onClick={() => setShowConnectForm(v => !v)}
-                className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all"
+                onClick={() => startOAuth('clickup')}
+                disabled={connecting}
+                className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
               >
-                {showConnectForm ? 'Cancel' : 'Connect Account'}
+                {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                Sign in with ClickUp
               </button>
             )}
           </div>
@@ -384,7 +400,7 @@ export default function IntegrationsSection() {
         {/* Not connected state: Features explanation or Form */}
         {!connected && (
           <div className="pt-6">
-            {!showConnectForm ? (
+            {true ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
                   <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2.5">
@@ -414,48 +430,7 @@ export default function IntegrationsSection() {
                   </p>
                 </div>
               </div>
-            ) : (
-              <form onSubmit={handleConnect} className="p-5 rounded-2xl bg-muted/30 border border-primary/20 space-y-4 animate-in fade-in">
-                <div>
-                  <label className="block text-xs font-bold text-foreground mb-1.5">
-                    ClickUp Personal API Token
-                  </label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    In your ClickUp desktop or web app, go to{' '}
-                    <strong className="text-foreground">Settings &gt; Apps &gt; API Token</strong>, copy your token (starts with <code className="text-primary font-mono text-[11px]">pk_</code>), and paste it below.
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      placeholder="pk_12345678_ABCDEF..."
-                      value={tokenInput}
-                      onChange={e => setTokenInput(e.target.value)}
-                      className="flex-1 bg-background border border-input rounded-xl px-4 py-2.5 text-xs font-mono"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={connecting || !tokenInput.trim()}
-                      className="px-6 py-2.5 bg-primary text-primary-foreground font-black text-xs rounded-xl shadow-md shadow-primary/20 hover:bg-primary/90 disabled:opacity-50 transition-all flex items-center gap-2"
-                    >
-                      {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                      {connecting ? 'Connecting...' : 'Connect'}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
-                  <span>Your token is saved securely and used only to fetch your ClickUp tasks.</span>
-                  <a
-                    href="https://app.clickup.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline inline-flex items-center gap-1 font-semibold"
-                  >
-                    Open ClickUp <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </form>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -770,10 +745,11 @@ export default function IntegrationsSection() {
         )}
       </div>
 
+      <TrelloCard onSignIn={() => startOAuth('trello')} signingIn={connecting} />
+
       {/* 3. Other Tools Coming Soon */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
         {[
-          { name: 'Trello', desc: 'Sync boards, cards, and checklists' },
           { name: 'Asana', desc: 'Copy projects, sections, and tasks' },
           { name: 'Notion', desc: 'Import database pages and to-do lists' },
         ].map((tool, i) => (
@@ -792,3 +768,107 @@ export default function IntegrationsSection() {
   );
 }
 
+
+
+function TrelloCard({ onSignIn, signingIn }: { onSignIn: () => void; signingIn: boolean }) {
+  const { toast } = useToast();
+  const [status, setStatus] = useState<{ connected: boolean; accountName?: string; accountEmail?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      const res = await fetch('/api/integrations/trello/status', { credentials: 'include' });
+      setStatus(await res.json());
+    } catch {
+      setStatus({ connected: false });
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    const onConnected = () => void load();
+    window.addEventListener('trello-connected', onConnected);
+    return () => window.removeEventListener('trello-connected', onConnected);
+  }, []);
+
+  const sync = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/integrations/trello/import', { method: 'POST', credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      toast({ title: 'Trello synced', description: data.message });
+    } catch (err: any) {
+      toast({ title: 'Trello sync failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    if (!confirm('Disconnect your Trello account? Your already-imported tasks in Planora will remain.')) return;
+    await fetch('/api/integrations/trello/disconnect', { method: 'POST', credentials: 'include' }).catch(() => {});
+    setStatus({ connected: false });
+  };
+
+  const connected = !!status?.connected;
+  return (
+    <div className="bg-card border-2 border-border/80 rounded-3xl p-6 sm:p-8 shadow-sm transition-all hover:border-primary/30">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-[#0079bf]/10 border border-[#0079bf]/20 flex items-center justify-center flex-shrink-0 shadow-sm">
+            <span className="font-black text-xl text-[#0079bf]">T</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-black text-foreground">Trello</h3>
+              {connected ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <CheckCircle2 className="w-3 h-3" /> Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+                  Not Connected
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {connected
+                ? `Signed in as ${status?.accountName || status?.accountEmail || 'Trello user'}. Boards become projects, cards become tasks.`
+                : 'Sign in and every board, list, card and checklist is imported automatically.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {connected ? (
+            <>
+              <button
+                onClick={sync}
+                disabled={busy}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-border text-foreground hover:bg-muted transition-all inline-flex items-center gap-1.5 disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                Sync now
+              </button>
+              <button
+                onClick={disconnect}
+                className="px-4 py-2 text-xs font-bold rounded-xl border border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 hover:bg-destructive/5 transition-all"
+              >
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={onSignIn}
+              disabled={signingIn}
+              className="px-5 py-2.5 text-xs font-black rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20 active:scale-95 transition-all disabled:opacity-60 inline-flex items-center gap-2"
+            >
+              {signingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+              Sign in with Trello
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
