@@ -370,6 +370,21 @@ const Organizations: React.FC = () => {
       setDraggedSourceGroupId(null);
     }
     e.dataTransfer.effectAllowed = 'move';
+    // Use a detached, fully opaque copy as the drag image so the ghost isn't
+    // clipped by the scrolling column or see-through over drop-zone text.
+    const src = e.currentTarget as HTMLElement;
+    if (src && typeof e.dataTransfer.setDragImage === 'function') {
+      const rect = src.getBoundingClientRect();
+      const ghost = src.cloneNode(true) as HTMLElement;
+      const bg = getComputedStyle(document.body).backgroundColor;
+      Object.assign(ghost.style, {
+        position: 'fixed', top: '-1000px', left: '-1000px', width: `${rect.width}px`,
+        pointerEvents: 'none', opacity: '1', background: bg, boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+      });
+      document.body.appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, e.clientX - rect.left, e.clientY - rect.top);
+      requestAnimationFrame(() => ghost.remove());
+    }
     setDraggedUserId(userId);
   };
 
@@ -1777,7 +1792,7 @@ const Organizations: React.FC = () => {
                           </div>
 
                           {!isGroupCollapsed && (
-                            <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+                            <div className="flex gap-4 overflow-x-auto p-1.5 pb-4 items-start">
                               {/* Direct Group Members Column (Before Sub-groups) */}
                               <div
                                 onDragOver={e => handleDragOver(e, `board-direct-${group.id}`)}
@@ -1795,7 +1810,7 @@ const Organizations: React.FC = () => {
                                 </div>
                                 <div className="p-3 overflow-y-auto space-y-2 flex-1">
                                   {group.directMemberIds.length === 0 ? (
-                                    <div className="p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl">
+                                    <div className={`p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl transition-opacity ${isDirectOver ? 'opacity-0' : ''}`}>
                                       Drop here for direct group assignment
                                     </div>
                                   ) : (
@@ -1879,7 +1894,7 @@ const Organizations: React.FC = () => {
                                     {!isSubCollapsed && (
                                       <div className="p-3 overflow-y-auto space-y-2 flex-1">
                                         {subGroup.memberIds.length === 0 ? (
-                                          <div className="p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl">
+                                          <div className={`p-6 text-center text-xs text-muted-foreground italic border border-dashed border-border rounded-xl transition-opacity ${isOver ? 'opacity-0' : ''}`}>
                                             Drop users here
                                           </div>
                                         ) : (
