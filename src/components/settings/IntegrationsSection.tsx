@@ -115,8 +115,10 @@ export default function IntegrationsSection() {
       const qs = params.toString();
       window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
     };
-    if (params.get('connected') === 'clickup') {
-      toast({ title: 'ClickUp connected', description: `Imported ${params.get('imported') || 0} tasks from your ClickUp workspaces.` });
+    const provider = params.get('connected');
+    if (provider === 'clickup' || provider === 'trello') {
+      const name = provider === 'clickup' ? 'ClickUp' : 'Trello';
+      toast({ title: `${name} connected`, description: `Imported ${params.get('imported') || 0} tasks from ${name}.` });
       clean();
     } else if (params.get('integrationError')) {
       const code = params.get('integrationError') || '';
@@ -126,32 +128,6 @@ export default function IntegrationsSection() {
         variant: 'destructive',
       });
       clean();
-    } else if (params.get('trelloCallback')) {
-      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-      const token = hash.get('token');
-      window.history.replaceState(null, '', window.location.pathname);
-      clean();
-      if (!token) {
-        toast({ title: 'Trello sign-in cancelled', variant: 'destructive' });
-        return;
-      }
-      (async () => {
-        toast({ title: 'Connecting Trello…', description: 'Importing your boards, lists and cards.' });
-        try {
-          const res = await fetch('/api/integrations/trello/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ token }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(data.error || 'Could not connect Trello');
-          toast({ title: 'Trello connected', description: data.message });
-          window.dispatchEvent(new Event('trello-connected'));
-        } catch (err: any) {
-          toast({ title: 'Trello connection failed', description: err.message, variant: 'destructive' });
-        }
-      })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

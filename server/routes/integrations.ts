@@ -204,23 +204,107 @@ router.get('/clickup/callback', async (req: AuthRequest, res: Response) => {
 });
 
 // ---- Trello ----
-const TRELLO_API = 'https://api.trello.com/1';
-async function trelloFetch(path: string, token: string) {
-  const key = process.env.TRELLO_API_KEY || '';
-  const sep = path.includes('?') ? '&' : '?';
-  const r = await fetch(`${TRELLO_API}${path}${sep}key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`);
+// Trello OAuth 2.0 (Atlassian 3LO + PKCE). REST calls go to trello.com with a Bearer token.
+// Env: TRELLO_CLIENT_ID (falls back to TRELLO_API_KEY), TRELLO_CLIENT_SECRET.
+const TRELLO_API = 'https://trello.com/1';
+const ATLASSIAN_TOKEN_URL = 'https://auth.atlassian.com/oauth/token';
+const TRELLO_SCOPES = 'read:member:trello read:board:trello read:organization:trello offline_access';
+const trelloClientId = () => process.env.TRELLO_CLIENT_ID || process.env.TRELLO_API_KEY || '';
+const trelloRedirectUri = (req: AuthRequest) => `${backendBase(req)}/api/integrations/trello/callback`;
+
+async function trelloFetch(path: string, accessToken: string) {
+  const r = await fetch(`${TRELLO_API}${path}`, { headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`Trello API error (${r.status}): ${await r.text().catch(() => r.statusText)}`);
   return r.json();
 }
 
-// Trello: start sign-in. Trello returns the token in the URL fragment of return_url;
-// the Settings page picks it up and POSTs it to /trello/connect.
+async function trelloTokenRequest(body: Record<string, string>) {
+  const r = await fetch(ATLASSIAN_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ client_id: trelloClientId(), client_secret: process.env.TRELLO_CLIENT_SECRET || '', ...body }),
+  });
+  const data: any = await r.json().catch(() => ({}));
+  if (!r.ok || !data.access_token) throw new Error(data.error_description || data.error || `Token request failed (${r.status})`);
+  return data as { access_token: string; refresh_token?: string; expires_in?: number };
+}
+
+/** Returns a valid access token for the user's Trello connection, refreshing (and persisting) it when expired. */
+async function getTrelloAccessToken(conn: typeof connectedAccounts.$inferSelect): Promise<string> {
+  let meta: any = {};
+  try { meta = JSON.parse(conn.metadata || '{}'); } catch {}
+  if (!meta.refreshToken || Date.now() < Number(meta.expiresAt || 0) - 60_000) return conn.accessToken;
+  const t = await trelloTokenRequest({ grant_type: 'refresh_token', refresh_token: meta.refreshToken });
+  // Refresh tokens are single-use: always store the new one.
+  const nextMeta = { ...meta, refreshToken: t.refresh_token || meta.refreshToken, expiresAt: Date.now() + (t.expires_in || 3600) * 1000 };
+  await db.update(connectedAccounts)
+    .set({ accessToken: t.access_token, metadata: JSON.stringify(nextMeta), updatedAt: new Date().toISOString() })
+    .where(eq(connectedAccounts.id, conn.id));
+  return t.access_token;
+}
+
+const b64url = (buf: Buffer) => buf.toString('base64url');
+
+// Trello: start sign-in (PKCE verifier kept in an httpOnly cookie, never in the URL)
 router.get('/trello/auth', requireAuth, (req: AuthRequest, res: Response) => {
-  const key = process.env.TRELLO_API_KEY;
-  if (!key) return res.status(503).json({ error: 'Trello sign-in is not configured on the server yet (TRELLO_API_KEY).' });
-  const returnUrl = `${frontendBase()}/settings?tab=account&trelloCallback=1`;
-  const authUrl = `https://trello.com/1/authorize?expiration=never&name=${encodeURIComponent('Planora')}&scope=read&response_type=token&callback_method=fragment&key=${encodeURIComponent(key)}&return_url=${encodeURIComponent(returnUrl)}`;
-  res.json({ authUrl });
+  if (!trelloClientId() || !process.env.TRELLO_CLIENT_SECRET) {
+    return res.status(503).json({ error: 'Trello sign-in is not configured on the server yet (TRELLO_CLIENT_ID / TRELLO_CLIENT_SECRET).' });
+  }
+  const verifier = b64url(crypto.randomBytes(32));
+  const challenge = b64url(crypto.createHash('sha256').update(verifier).digest());
+  const nonce = b64url(crypto.randomBytes(16));
+  const state = signOAuthState({ userId: req.userId, ts: Date.now(), nonce });
+  res.cookie('trello_pkce', `${nonce}.${verifier}`, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 15 * 60 * 1000,
+    path: '/api/integrations/trello',
+  });
+  const params = new URLSearchParams({
+    audience: 'api.atlassian.com',
+    client_id: trelloClientId(),
+    scope: TRELLO_SCOPES,
+    redirect_uri: trelloRedirectUri(req),
+    state,
+    response_type: 'code',
+    prompt: 'consent',
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+  });
+  res.json({ authUrl: `https://auth.atlassian.com/authorize?${params.toString()}` });
+});
+
+// Trello: OAuth callback — exchange code, save, import everything, return to Settings
+router.get('/trello/callback', async (req: AuthRequest, res: Response) => {
+  const back = (q: string) => res.redirect(`${frontendBase()}/settings?tab=account&${q}`);
+  const { code, state, error } = req.query as Record<string, string>;
+  if (error || !code) return back(`integrationError=trello_${encodeURIComponent(error || 'denied')}`);
+  const st = verifyOAuthState(state || '');
+  const cookie = String(req.headers.cookie || '').split(/;\s*/).find(c => c.startsWith('trello_pkce='))?.slice('trello_pkce='.length) || '';
+  const [nonce, verifier] = decodeURIComponent(cookie).split('.');
+  res.clearCookie('trello_pkce', { path: '/api/integrations/trello' });
+  if (!st || !verifier || nonce !== st.nonce) return back('integrationError=trello_expired');
+  try {
+    const t = await trelloTokenRequest({ grant_type: 'authorization_code', code, redirect_uri: trelloRedirectUri(req), code_verifier: verifier });
+    const me: any = await trelloFetch('/members/me?fields=username,fullName,email,avatarUrl', t.access_token);
+    await saveConnection(st.userId, 'trello', {
+      accountName: me.fullName || me.username || 'Trello User',
+      accountEmail: me.email || '',
+      accessToken: t.access_token,
+      metadata: { username: me.username || '', avatarUrl: me.avatarUrl || '', refreshToken: t.refresh_token || '', expiresAt: Date.now() + (t.expires_in || 3600) * 1000, auth: 'oauth2' },
+    });
+    let imported = 0;
+    try {
+      imported = (await runTrelloImport(st.userId, t.access_token)).tasks;
+    } catch (e) {
+      console.warn('Trello auto-import failed:', (e as any)?.message || e);
+    }
+    back(`connected=trello&imported=${imported}`);
+  } catch (e: any) {
+    console.error('Trello OAuth callback failed:', e?.message || e);
+    back('integrationError=trello_failed');
+  }
 });
 
 async function runTrelloImport(userId: number, token: string) {
@@ -327,31 +411,12 @@ async function runTrelloImport(userId: number, token: string) {
   return { tasks: importedTasks.length, checklists: checklistsCount, projects: projectNames.length, projectNames };
 }
 
-router.post('/trello/connect', requireAuth, async (req: AuthRequest, res: Response) => {
-  try {
-    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
-    if (!/^[A-Za-z0-9]{32,128}$/.test(token)) return res.status(400).json({ error: 'Trello sign-in did not return a valid authorization.' });
-    const me: any = await trelloFetch('/members/me?fields=username,fullName,email,avatarUrl', token);
-    await saveConnection(req.userId!, 'trello', {
-      accountName: me.fullName || me.username || 'Trello User',
-      accountEmail: me.email || '',
-      accessToken: token,
-      metadata: { username: me.username || '', avatarUrl: me.avatarUrl || '' },
-    });
-    const imported = await runTrelloImport(req.userId!, token);
-    res.json({ success: true, imported, message: `Imported ${imported.tasks} cards from ${imported.projects} Trello boards.` });
-  } catch (e: any) {
-    console.error('Trello connect failed:', e?.message || e);
-    res.status(400).json({ error: 'Could not connect Trello. Please try again.' });
-  }
-});
-
 router.post('/trello/import', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const [conn] = await db.select().from(connectedAccounts)
       .where(and(eq(connectedAccounts.userId, req.userId!), eq(connectedAccounts.provider, 'trello'))).limit(1);
     if (!conn) return res.status(401).json({ error: 'Trello is not connected.' });
-    const imported = await runTrelloImport(req.userId!, conn.accessToken);
+    const imported = await runTrelloImport(req.userId!, await getTrelloAccessToken(conn));
     res.json({ success: true, imported, message: imported.tasks ? `Imported ${imported.tasks} new cards.` : 'Everything from Trello is already imported.' });
   } catch (e: any) {
     console.error('Trello import failed:', e?.message || e);
@@ -363,7 +428,7 @@ router.get('/trello/status', requireAuth, async (req: AuthRequest, res: Response
   try {
     const [conn] = await db.select().from(connectedAccounts)
       .where(and(eq(connectedAccounts.userId, req.userId!), eq(connectedAccounts.provider, 'trello'))).limit(1);
-    if (!conn) return res.json({ connected: false, configured: !!process.env.TRELLO_API_KEY });
+    if (!conn) return res.json({ connected: false, configured: !!(trelloClientId() && process.env.TRELLO_CLIENT_SECRET) });
     res.json({ connected: true, configured: true, accountName: conn.accountName, accountEmail: conn.accountEmail, connectedAt: conn.createdAt });
   } catch {
     res.json({ connected: false });
