@@ -54,6 +54,14 @@ function ensureDatabase(): Promise<void> {
         await pool.query(`CREATE INDEX IF NOT EXISTS org_members_org_id_idx ON organization_members(organization_id)`);
         await pool.query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS normal_alerts BOOLEAN DEFAULT TRUE`);
         await pool.query(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS weekly_ai_summary BOOLEAN DEFAULT TRUE`);
+        // Org group admins, admin settings and member notes.
+        await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS settings TEXT DEFAULT '{}'`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS organization_group_admins (id SERIAL PRIMARY KEY, organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, group_id INTEGER NOT NULL REFERENCES organization_groups(id) ON DELETE CASCADE, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS org_group_admins_unique_idx ON organization_group_admins(group_id, user_id)`);
+        await pool.query(`CREATE TABLE IF NOT EXISTS organization_member_notes (id SERIAL PRIMARY KEY, organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE, target_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, content TEXT NOT NULL, created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS org_member_notes_target_idx ON organization_member_notes(organization_id, target_user_id)`);
+        await pool.query(`ALTER TABLE task_templates ADD COLUMN IF NOT EXISTS template_tags TEXT DEFAULT '[]'`);
+        await pool.query(`ALTER TABLE note_templates ADD COLUMN IF NOT EXISTS template_tags TEXT DEFAULT '[]'`);
       } catch (e) {
         console.error('ensureDatabase (Vercel) migration error:', e);
         vercelInit = null;

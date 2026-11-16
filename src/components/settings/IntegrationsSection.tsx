@@ -328,7 +328,7 @@ export default function IntegrationsSection() {
 
       {/* 1. ClickUp Integration Card */}
       <div className="bg-card border-2 border-border/80 rounded-3xl p-6 sm:p-8 shadow-sm transition-all hover:border-primary/30">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-border">
+        <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${connected ? 'pb-6 border-b border-border' : ''}`}>
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-[#7b68ee]/10 border border-[#7b68ee]/20 flex items-center justify-center flex-shrink-0 shadow-sm">
               <span className="font-black text-xl text-[#7b68ee]">CU</span>
@@ -372,43 +372,6 @@ export default function IntegrationsSection() {
             )}
           </div>
         </div>
-
-        {/* Not connected state: Features explanation or Form */}
-        {!connected && (
-          <div className="pt-6">
-            {true ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2.5">
-                    <CheckSquare className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-xs font-bold text-foreground mb-1">Full Hierarchy</h4>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Imports tasks, nested subtasks, checklists, and labels seamlessly into Planora.
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2.5">
-                    <FolderKanban className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-xs font-bold text-foreground mb-1">Project Mapping</h4>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    ClickUp Spaces and Lists automatically become dedicated Planora Projects.
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-muted/30 border border-border/50">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-2.5">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-xs font-bold text-foreground mb-1">Preserve Status</h4>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Maintains status mapping (To Do, In Progress, Complete), due dates, and priorities.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
 
         {/* Connected state: Account info & Copy actions */}
         {connected && (
@@ -660,6 +623,8 @@ export default function IntegrationsSection() {
         )}
       </div>
 
+      <TrelloCard onSignIn={() => startOAuth('trello')} signingIn={connecting} />
+
       {/* 2. Universal File Import Card (ClickUp CSV / JSON) */}
       <div className="bg-card border-2 border-border/80 rounded-3xl p-6 sm:p-8 shadow-sm">
         <div className="flex items-center gap-4 mb-4">
@@ -720,8 +685,6 @@ export default function IntegrationsSection() {
           </div>
         )}
       </div>
-
-      <TrelloCard onSignIn={() => startOAuth('trello')} signingIn={connecting} />
 
       {/* 3. Other Tools Coming Soon */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">

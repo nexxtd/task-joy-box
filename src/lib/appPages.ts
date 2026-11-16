@@ -14,6 +14,7 @@ import {
   StickyNote,
   Users,
   Wand2,
+  LayoutTemplate,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -92,6 +93,14 @@ export const APP_PAGES: AppPageDef[] = [
     label: 'Notes',
     icon: StickyNote,
     component: lazy(() => import('@/pages/Notes')),
+    minSplitWidth: 560,
+    inSplitPicker: true,
+  },
+  {
+    path: '/templates',
+    label: 'Templates',
+    icon: LayoutTemplate,
+    component: lazy(() => import('@/pages/Templates')),
     minSplitWidth: 560,
     inSplitPicker: true,
   },

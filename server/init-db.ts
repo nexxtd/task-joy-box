@@ -123,6 +123,29 @@ export async function initDatabase() {
       CREATE INDEX IF NOT EXISTS org_group_members_user_idx ON organization_group_members(user_id);
       CREATE INDEX IF NOT EXISTS org_group_members_group_idx ON organization_group_members(group_id);
 
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS settings TEXT DEFAULT '{}';
+
+      CREATE TABLE IF NOT EXISTS organization_group_admins (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        group_id INTEGER NOT NULL REFERENCES organization_groups(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS org_group_admins_unique_idx ON organization_group_admins(group_id, user_id);
+      CREATE INDEX IF NOT EXISTS org_group_admins_org_idx ON organization_group_admins(organization_id);
+
+      CREATE TABLE IF NOT EXISTS organization_member_notes (
+        id SERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        target_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS org_member_notes_target_idx ON organization_member_notes(organization_id, target_user_id);
+
       CREATE TABLE IF NOT EXISTS board_snapshots (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -742,6 +765,7 @@ export async function initDatabase() {
     await pool.query(`CREATE INDEX IF NOT EXISTS task_templates_user_id_idx ON task_templates(user_id);`);
     await addColumnIfNotExists('task_templates', 'images', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('task_templates', 'attachments', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('task_templates', 'template_tags', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('task_templates', 'is_public', "BOOLEAN DEFAULT false NOT NULL");
     await addColumnIfNotExists('task_templates', 'share_code', "TEXT");
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS task_templates_share_code_idx ON task_templates(share_code) WHERE share_code IS NOT NULL;`);
@@ -775,6 +799,7 @@ export async function initDatabase() {
     await addColumnIfNotExists('note_templates', 'checklists', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('note_templates', 'images', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('note_templates', 'attachments', "TEXT DEFAULT '[]'");
+    await addColumnIfNotExists('note_templates', 'template_tags', "TEXT DEFAULT '[]'");
     await addColumnIfNotExists('note_templates', 'is_public', "BOOLEAN DEFAULT false NOT NULL");
     await addColumnIfNotExists('note_templates', 'share_code', "TEXT");
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS note_templates_share_code_idx ON note_templates(share_code) WHERE share_code IS NOT NULL;`);

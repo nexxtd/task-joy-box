@@ -105,13 +105,17 @@ function invokeRouter(
     let settled = false;
     let statusCode = 200;
 
+    const parsedUrl = new URL(opts.url, 'http://localhost');
+    const parsedQuery: Record<string, string> = {};
+    parsedUrl.searchParams.forEach((v, k) => { parsedQuery[k] = v; });
+
     const req = {
       method: opts.method.toUpperCase(),
       url: opts.url,
       originalUrl: opts.url,
       headers: opts.userId ? { 'x-test-user-id': String(opts.userId) } : {},
       body: opts.body ?? {},
-      query: {},
+      query: parsedQuery,
       params: {},
       userId: opts.userId ?? 101,
       protocol: 'http',
@@ -416,5 +420,84 @@ describe('multi-organization plan reconciliation cascading', () => {
     });
     expect(withEqualPersonalPro.personalPlanPaused).toBe(true);
     expect(withEqualPersonalPro.action).toBe('pause_personal');
+  });
+});
+
+describe('organization seat capacity billing quotes & policy enforcement', () => {
+  it('quotes higher total when adding seats and lower total when reducing seats', async () => {
+    const schoolOrg = {
+      id: 10,
+      name: 'Springfield High',
+      type: 'school',
+      ownerId: 1,
+      maxSeats: 10,
+      currentSeats: 4,
+      tier: 'pro',
+      status: 'active',
+    };
+
+    // Upgrade 10 -> 15 seats ($40 -> $60, +$20)
+    selectQueue.push([schoolOrg]);
+    const upgradeQuote = await invokeRouter(paymentRouter, {
+      method: 'GET',
+      url: '/org-seat-quote?orgId=10&seats=15&tier=pro&billingPeriod=monthly',
+      userId: 1,
+    });
+    expect(upgradeQuote.status).toBe(200);
+    expect(upgradeQuote.json.currentSeats).toBe(10);
+    expect(upgradeQuote.json.newSeats).toBe(15);
+    expect(upgradeQuote.json.seatDelta).toBe(5);
+    expect(upgradeQuote.json.currentTotal).toBe(40);
+    expect(upgradeQuote.json.newTotal).toBe(60);
+    expect(upgradeQuote.json.difference).toBe(20);
+
+    // Shrink 10 -> 6 seats ($40 -> $24, -$16)
+    selectQueue.push([schoolOrg]);
+    const shrinkQuote = await invokeRouter(paymentRouter, {
+      method: 'GET',
+      url: '/org-seat-quote?orgId=10&seats=6&tier=pro&billingPeriod=monthly',
+      userId: 1,
+    });
+    expect(shrinkQuote.status).toBe(200);
+    expect(shrinkQuote.json.newSeats).toBe(6);
+    expect(shrinkQuote.json.seatDelta).toBe(-4);
+    expect(shrinkQuote.json.currentTotal).toBe(40);
+    expect(shrinkQuote.json.newTotal).toBe(24);
+    expect(shrinkQuote.json.difference).toBe(-16);
+  });
+
+  it('rejects non-equal seat capacity changes via PUT /api/organizations/:id with 402 checkout required', async () => {
+    selectQueue.push(
+      [{ id: 10, name: 'Springfield High', type: 'school', ownerId: 1, maxSeats: 10, currentSeats: 4, tier: 'pro', status: 'active' }],
+      [{ id: 1, organizationId: 10, userId: 1, role: 'owner' }],
+      [{ cnt: 4 }],
+    );
+
+    const res = await invokeRouter(organizationsRouter, {
+      method: 'PUT',
+      url: '/10',
+      userId: 1,
+      body: { maxSeats: 15 },
+    });
+
+    expect(res.status).toBe(402);
+    expect(res.json.requiresCheckout).toBe(true);
+  });
+
+  it('blocks joining via group code when allowJoinViaGroupCode is false in org settings', async () => {
+    selectQueue.push(
+      [{ id: 55, organizationId: 10, name: 'Year 9', joinCode: 'Y9CODE', codeActive: true }],
+      [{ id: 10, name: 'Springfield High', status: 'active', settings: JSON.stringify({ allowJoinViaGroupCode: false }) }],
+    );
+
+    const res = await invokeRouter(organizationsRouter, {
+      method: 'POST',
+      url: '/join',
+      userId: 88,
+      body: { code: 'Y9CODE' },
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.json.error).toMatch(/group codes is disabled/i);
   });
 });

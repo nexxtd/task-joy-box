@@ -1,11 +1,12 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { taskTemplates } from '../../shared/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { taskTemplates, users } from '../../shared/schema.js';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { generateShareCode, normalizeShareCode } from '../lib/shareCode.js';
 import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
 import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
+import { sanitizeTemplateTags } from '../../shared/defaultTemplates.js';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ const parseRow = (t: TaskTemplateRow) => ({
   checklists: JSON.parse(t.checklists || '[]'),
   images: JSON.parse(t.images || '[]'),
   attachments: JSON.parse(t.attachments || '[]'),
+  templateTags: sanitizeTemplateTags((() => { try { return JSON.parse((t as any).templateTags || '[]'); } catch { return []; } })()),
 });
 
 async function allocateShareCode(): Promise<string | null> {
@@ -28,6 +30,32 @@ async function allocateShareCode(): Promise<string | null> {
   }
   return null;
 }
+
+// List all public task templates for the Templates browse gallery
+router.get('/public', requireAuth, async (_req: AuthRequest, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        template: taskTemplates,
+        authorName: users.name,
+        authorEmail: users.email,
+      })
+      .from(taskTemplates)
+      .leftJoin(users, eq(users.id, taskTemplates.userId))
+      .where(eq(taskTemplates.isPublic, true))
+      .orderBy(desc(taskTemplates.updatedAt));
+    res.json({
+      templates: rows.map(r => ({
+        ...parseRow(r.template),
+        kind: 'task' as const,
+        authorName: r.authorName || r.authorEmail?.split('@')[0] || 'Community User',
+      })),
+    });
+  } catch (error) {
+    console.error('Failed to fetch public task templates:', error);
+    res.status(500).json({ error: 'Failed to fetch public templates' });
+  }
+});
 
 // Redeem a public share code: returns the template to copy into a task.
 // Task codes never resolve note templates and vice versa (type scoping).
@@ -56,7 +84,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
+    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments, templateTags, isPublic } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Template name is required' });
 
     const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
@@ -93,9 +121,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       checklists: JSON.stringify(checklists || []),
       images: JSON.stringify(images || []),
       attachments: JSON.stringify(attachments || []),
+      templateTags: JSON.stringify(sanitizeTemplateTags(templateTags)),
       isPublic: wantsPublic,
       shareCode,
-    }).returning();
+    } as any).returning();
     res.json(parseRow(template));
   } catch (error) {
     console.error('Failed to create template:', error);
@@ -108,7 +137,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const id = parseInt(req.params.id, 10);
     const existing = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id)).limit(1);
     if (!existing.length || existing[0].userId !== req.userId) return res.status(404).json({ error: 'Template not found' });
-    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
+    const { name, title, description, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, labels, subtasks, checklists, images, attachments, templateTags, isPublic } = req.body;
     let shareCodeUpdate: string | null | undefined;
     if (isPublic !== undefined) {
       if (isPublic === true) {
@@ -126,18 +155,19 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       title: title !== undefined ? title : undefined,
       description: description !== undefined ? description : undefined,
       priority: priority !== undefined ? priority : undefined,
-      duration: duration !== undefined ? duration : null,
-      startDate: startDate !== undefined ? startDate : null,
-      startTime: startTime !== undefined ? startTime : null,
-      dueDate: dueDate !== undefined ? dueDate : null,
-      dueTime: dueTime !== undefined ? dueTime : null,
-      projectId: projectId !== undefined ? projectId : null,
-      columnId: columnId !== undefined ? columnId : null,
+      duration: duration !== undefined ? duration : undefined,
+      startDate: startDate !== undefined ? startDate : undefined,
+      startTime: startTime !== undefined ? startTime : undefined,
+      dueDate: dueDate !== undefined ? dueDate : undefined,
+      dueTime: dueTime !== undefined ? dueTime : undefined,
+      projectId: projectId !== undefined ? projectId : undefined,
+      columnId: columnId !== undefined ? columnId : undefined,
       labels: labels !== undefined ? JSON.stringify(labels) : undefined,
       subtasks: subtasks !== undefined ? JSON.stringify(subtasks) : undefined,
       checklists: checklists !== undefined ? JSON.stringify(checklists) : undefined,
       images: images !== undefined ? JSON.stringify(images) : undefined,
       attachments: attachments !== undefined ? JSON.stringify(attachments) : undefined,
+      templateTags: templateTags !== undefined ? JSON.stringify(sanitizeTemplateTags(templateTags)) : undefined,
       isPublic: isPublic !== undefined ? isPublic === true : undefined,
       shareCode: shareCodeUpdate,
       updatedAt: new Date().toISOString(),

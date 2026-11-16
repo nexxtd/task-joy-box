@@ -24,6 +24,8 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
   const [imagesCollapsed, setImagesCollapsed] = useState(() => readTaskSections(task.id).images ?? false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [dragOverFiles, setDragOverFiles] = useState(false);
+  const [dragOverImages, setDragOverImages] = useState(false);
   const [previewDisabled] = useState(false);
 
   React.useEffect(() => {
@@ -64,9 +66,7 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     }
   }, [attachmentsCollapsed, imagesCollapsed, syncAttachments]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files ? Array.from(e.target.files) : [];
-    e.currentTarget.value = '';
+  const processFileList = async (picked: File[]) => {
     if (picked.length === 0) return;
     const current = taskRef.current.attachments?.length || 0;
     const remaining = mediaLimit - current;
@@ -83,10 +83,13 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    const picked = Array.from(e.target.files);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files ? Array.from(e.target.files) : [];
     e.currentTarget.value = '';
+    await processFileList(picked);
+  };
+
+  const processImageList = async (picked: File[]) => {
     if (picked.length === 0) return;
     const current = taskRef.current.images?.length || 0;
     const remaining = mediaLimit - current;
@@ -101,6 +104,13 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
     } finally {
       setUploadingImages(false);
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const picked = Array.from(e.target.files);
+    e.currentTarget.value = '';
+    await processImageList(picked);
   };
 
   const deleteAttachment = async (attachmentId: string) => {
@@ -155,12 +165,24 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
                 {filesLimitReached ? (
                   <p className="text-xs text-muted-foreground text-center py-2">{maxPlan ? `Limit reached (${mediaLimit} max)` : 'Limit reached — upgrade for more'}</p>
                 ) : (
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                  <label
+                    onDragOver={e => { e.preventDefault(); setDragOverFiles(true); }}
+                    onDragLeave={() => setDragOverFiles(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragOverFiles(false);
+                      const files = Array.from(e.dataTransfer.files || []);
+                      if (files.length > 0) void processFileList(files);
+                    }}
+                    className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                      dragOverFiles ? 'border-primary bg-primary/10' : 'border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/50'
+                    }`}
+                  >
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                         {uploadingFiles ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Paperclip className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading files…' : 'Click to upload or drag and drop'}</p>
+                      <p className="text-sm font-medium text-foreground">{uploadingFiles ? 'Uploading files…' : dragOverFiles ? 'Drop files to upload' : 'Click to upload or drag and drop'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PDF, Images, Documents (max 10MB) · {filesCount}/{mediaLimit}</p>
                     </div>
                     <input type="file" multiple onChange={handleFileUpload} disabled={uploadingFiles} className="hidden" />
@@ -211,12 +233,24 @@ export const TaskMediaSections: React.FC<TaskMediaSectionsProps> = ({ task, onUp
                 {imagesLimitReached ? (
                   <p className="text-xs text-muted-foreground text-center py-2">{maxPlan ? `Limit reached (${mediaLimit} max)` : 'Limit reached — upgrade for more'}</p>
                 ) : (
-                  <label className="flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed border-border rounded-xl bg-muted/20 hover:bg-muted/40 hover:border-primary/50 transition-all cursor-pointer">
+                  <label
+                    onDragOver={e => { e.preventDefault(); setDragOverImages(true); }}
+                    onDragLeave={() => setDragOverImages(false)}
+                    onDrop={e => {
+                      e.preventDefault();
+                      setDragOverImages(false);
+                      const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/') || /\.(heic|heif|png|jpe?g|gif|webp)$/i.test(f.name));
+                      if (files.length > 0) void processImageList(files);
+                    }}
+                    className={`flex flex-col items-center justify-center w-full min-h-[100px] border-2 border-dashed rounded-xl transition-all cursor-pointer ${
+                      dragOverImages ? 'border-primary bg-primary/10' : 'border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/50'
+                    }`}
+                  >
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                         {uploadingImages ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <ImageIcon className="w-5 h-5 text-primary" />}
                       </div>
-                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading images…' : 'Click to upload'}</p>
+                      <p className="text-sm font-medium text-foreground">{uploadingImages ? 'Uploading images…' : dragOverImages ? 'Drop images to upload' : 'Click to upload or drag & drop'}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, GIF (max 10MB) · {imagesCount}/{mediaLimit}</p>
                     </div>
                     <input type="file" multiple accept="image/*,.heic,.heif" onChange={handleImageUpload} disabled={uploadingImages || previewDisabled} className="hidden" />

@@ -2,7 +2,7 @@ import { tt } from '@/i18n/translations';
 import { useLanguage } from '@/context/LanguageContext';
 import { dateLocale } from '@/i18n/format';
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { createPortal, flushSync } from 'react-dom';
 import { useBoardContext } from '@/context/BoardContext';
 import { useAuth } from '@/context/AuthContext';
@@ -17,6 +17,8 @@ import DraggableImageGrid from '@/components/shared/DraggableImageGrid';
 import FreeAttachmentList from '@/components/shared/FreeAttachmentList';
 import AutoGrowTextarea from '@/components/shared/AutoGrowTextarea';
 import ExpandableRowText from '@/components/shared/ExpandableRowText';
+import TaskSideViewPanel from '@/components/shared/TaskSideViewPanel';
+import { DEFAULT_TEMPLATE_TAGS } from '../../shared/defaultTemplates';
 import {
   ArrowDown,
   ArrowUp,
@@ -29,6 +31,7 @@ import {
   ChevronUp,
   Clock,
   Clock3,
+  Compass,
   Edit3,
   Globe,
   GripVertical,
@@ -37,6 +40,7 @@ import {
   KeyRound,
   Loader2,
   Lock,
+  PanelRightOpen,
   Paperclip,
   Plus,
   Save,
@@ -722,8 +726,18 @@ const Tasks: React.FC = () => {
   // ?create=1 and open the same flow.
   useEffect(() => { trackPageVisit('tasks'); }, []);
   const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const openId = params.get('open');
+    if (openId) {
+      setOpenTaskId(openId);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('open');
+        window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams.toString()}` : ''));
+      } catch {}
+    }
     if (params.get('new') === '1' || params.get('create') === '1') {
       const pid = params.get('project');
       setCreateModalProjectId(pid ? Number(pid) : undefined);
@@ -871,6 +885,7 @@ const Tasks: React.FC = () => {
   const [templateError, setTemplateError] = useState('');
   // Save-as-template: Public templates get a redeemable share code; Private do not.
   const [templateVisibility, setTemplateVisibility] = useState<'public' | 'private'>('private');
+  const [templateTags, setTemplateTags] = useState<string[]>([]);
   const [savedShareCode, setSavedShareCode] = useState<string | null>(null);
   // Load-template: redeem someone else's public share code.
   const [templateCode, setTemplateCode] = useState('');
@@ -1118,6 +1133,19 @@ const Tasks: React.FC = () => {
   const handleUpdateTemplateVisibility = useCallback(async (isPublic: boolean): Promise<TaskTemplate | void> => {
     if (!editingTemplateMeta) return;
     const saved = await updateTemplate(editingTemplateMeta.id, { isPublic });
+    setEditingTemplateMeta(prev => prev ? { ...prev, template: saved } : prev);
+    try {
+      setTemplates((prev: any[]) => prev.map(tm => tm.id === saved.id ? saved : tm));
+    } catch {}
+    try {
+      setMainTemplates((prev: any[]) => prev.map(tm => (tm as any).id === saved.id ? saved : tm));
+    } catch {}
+    return saved;
+  }, [editingTemplateMeta]);
+
+  const handleUpdateTemplateTags = useCallback(async (nextTags: string[]): Promise<TaskTemplate | void> => {
+    if (!editingTemplateMeta) return;
+    const saved = await updateTemplate(editingTemplateMeta.id, { templateTags: nextTags });
     setEditingTemplateMeta(prev => prev ? { ...prev, template: saved } : prev);
     try {
       setTemplates((prev: any[]) => prev.map(tm => tm.id === saved.id ? saved : tm));
@@ -2491,11 +2519,11 @@ const Tasks: React.FC = () => {
                   </button>
                 </div>
                 {mainTemplates.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                     <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center mb-2">
                       <Star className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <p className="text-sm text-foreground">No templates yet</p>
+                    <p className="text-sm text-foreground">No personal templates yet</p>
                   </div>
                 ) : (
                   <div className="max-h-72 overflow-y-auto divide-y divide-border">
@@ -2541,6 +2569,22 @@ const Tasks: React.FC = () => {
                     ))}
                   </div>
                 )}
+                <div className="p-2 border-t border-border bg-muted/20">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMainTmplPopupOpen(false);
+                      navigate('/templates?type=task');
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Compass className="w-4 h-4" />
+                      Browse Templates Library
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
                 </div>
               </>
             )}
@@ -3614,6 +3658,16 @@ const Tasks: React.FC = () => {
                         </div>
                         Load template
                       </button>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setTemplateMenuOpen(false); navigate('/templates?type=task'); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-primary font-semibold rounded-lg hover:bg-primary/10 transition-all"
+                      >
+                        <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                          <Compass className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        Browse templates
+                      </button>
                     </div>
                   </>
                 )}
@@ -3655,8 +3709,7 @@ const Tasks: React.FC = () => {
                     <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                   </div>
                   <p className="text-xs text-muted-foreground max-w-[280px]">Anyone who enters this code in <span className="font-medium text-foreground">Load template</span> can load a copy of your template.</p>
-                  <span className="font-mono text-xl font-semibold tracking-[0.18em] text-foreground select-all px-5 py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 mt-1">{savedShareCode}</span>
-                  <CopyShareCode code={savedShareCode} />
+                  <CopyShareCode code={savedShareCode} size="lg" />
                 </div>
                 <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
                   <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Done</button>
@@ -3704,13 +3757,35 @@ const Tasks: React.FC = () => {
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1.5">
                       {templateVisibility === 'public'
-                        ? 'Anyone with the generated code can load this template.'
+                        ? 'Gets a share code and publishes to the Templates gallery page.'
                         : 'Only you can see this template. No code needed.'}
                     </p>
                   </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Category Tags</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DEFAULT_TEMPLATE_TAGS.map(tag => {
+                        const active = templateTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setTemplateTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                              active
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-muted/40 text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
-                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setSavedShareCode(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
+                  <button onClick={() => { setSaveTemplateOpen(false); setTemplateName(''); setTemplateVisibility('private'); setTemplateTags([]); setSavedShareCode(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-all">Cancel</button>
                   <button
                     id="save-template-btn"
                     onClick={async () => {
@@ -3732,6 +3807,7 @@ const Tasks: React.FC = () => {
                           labels: newTaskLabels || [],
                           subtasks: (newTaskSubtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes })),
                           checklists: newChecklistItems.map(item => ({ id: crypto.randomUUID(), title: 'Checklist', items: [{ id: crypto.randomUUID(), text: item.text, checked: false }] })),
+                          templateTags,
                           isPublic: templateVisibility === 'public',
                         });
                         if (templateVisibility === 'public' && created?.shareCode) {
@@ -3769,9 +3845,22 @@ const Tasks: React.FC = () => {
                 </div>
                 <h2 className="text-sm font-semibold text-foreground">Load template</h2>
               </div>
-              <button onClick={() => setLoadTemplateOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoadTemplateOpen(false);
+                    navigate('/templates?type=task');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  Browse
+                </button>
+                <button onClick={() => setLoadTemplateOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
             {templateError && (
               <div className="flex items-center gap-2 px-5 py-2 text-xs text-destructive bg-destructive/10">
@@ -4151,11 +4240,13 @@ const Tasks: React.FC = () => {
             checklists: editingTemplateMeta.template.checklists,
             images: editingTemplateMeta.template.images,
             attachments: editingTemplateMeta.template.attachments,
+            templateTags: editingTemplateMeta.template.templateTags,
             isPublic: editingTemplateMeta.template.isPublic,
             shareCode: editingTemplateMeta.template.shareCode,
           }}
           onUpdateTemplate={handleUpdateTemplateFromModal}
           onUpdateTemplateVisibility={handleUpdateTemplateVisibility}
+          onUpdateTemplateTags={handleUpdateTemplateTags}
         />
       )}
 
@@ -5331,6 +5422,8 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   templateEditName,
   onTemplateEditNameChange,
 }) => {
+  const navigate = useNavigate();
+  const [sideViewOpen, setSideViewOpen] = useState(true);
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDuration, setNewSubtaskDuration] = useState(10);
   const [newChecklistText, setNewChecklistText] = useState('');
@@ -5368,6 +5461,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
   const [fullViewLoadTemplatesLoading, setFullViewLoadTemplatesLoading] = useState(false);
   // Save-as-template: Public templates get a redeemable share code; Private do not.
   const [fullViewTmplVisibility, setFullViewTmplVisibility] = useState<'public' | 'private'>('private');
+  const [fullViewTmplTags, setFullViewTmplTags] = useState<string[]>([]);
   const [fullViewSavedShareCode, setFullViewSavedShareCode] = useState<string | null>(null);
   // Load-template: redeem someone else's public share code.
   const [fullViewTmplCode, setFullViewTmplCode] = useState('');
@@ -5738,6 +5832,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     setFullViewSaveTmplOpen(false);
     setFullViewTmplName('');
     setFullViewTmplVisibility('private');
+    setFullViewTmplTags([]);
     setFullViewSavedShareCode(null);
   };
 
@@ -5759,6 +5854,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
         labels: task.labels || [],
         subtasks: (task.subtasks || []).map(st => ({ text: st.text, durationMinutes: st.durationMinutes || 0 })),
         checklists: task.checklists || [],
+        templateTags: fullViewTmplTags,
         isPublic: fullViewTmplVisibility === 'public',
       });
       if (fullViewTmplVisibility === 'public' && created?.shareCode) {
@@ -5800,9 +5896,10 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
       <div
-        className="relative bg-card border border-border rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-5 space-y-6"
+        className="relative z-10 flex flex-col lg:flex-row items-start justify-center gap-4 w-full max-w-6xl transition-all duration-300"
         onClick={e => e.stopPropagation()}
       >
+        <div className="relative flex-1 min-w-0 w-full bg-card border border-border rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto p-5 space-y-6 transition-all duration-300">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0 pt-1">
             {editingTemplateMeta && (
@@ -5833,9 +5930,22 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
               />
             )}
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground flex-shrink-0 mt-1">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+            {!sideViewOpen && (
+              <button
+                type="button"
+                onClick={() => setSideViewOpen(true)}
+                title="Expand side panel"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-muted/40 hover:bg-muted text-xs font-semibold text-foreground transition-colors"
+              >
+                <PanelRightOpen className="w-3.5 h-3.5 text-primary" />
+                <span className="hidden sm:inline">Side view</span>
+              </button>
+            )}
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -6491,85 +6601,6 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-muted/20">
-          <button
-            onClick={() => setActivityCollapsed(prev => !prev)}
-            className="w-full flex items-center justify-between px-4 py-3"
-          >
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold text-foreground">Activity</h3>
-            </div>
-            {activityCollapsed ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronUp className="w-4 h-4 text-muted-foreground" />}
-          </button>
-          {!activityCollapsed && (
-            <div className="border-t border-border/60 px-4 py-3 space-y-2 max-h-56 overflow-y-auto">
-              {activityEntries.map(entry => (
-                <div key={entry.id} className="rounded-xl border border-border/50 bg-background/70 px-3 py-2">
-                  <p className="text-sm text-foreground">{entry.text}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {entry.actor && <><span className="font-semibold">{entry.actor}</span> · </>}
-                    {new Date(entry.createdAt).toLocaleString(dateLocale())}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-foreground">Comments</h3>
-          <div className="space-y-2">
-            {(task.comments || []).map(comment => (
-              <div key={comment.id} className="border border-border rounded-lg px-3 py-2 group">
-                <div className="flex items-start justify-between gap-2">
-                  {editingCommentId === comment.id ? (
-                    <textarea
-                      autoFocus
-                      className="flex-1 bg-muted/40 border border-primary/30 rounded px-2 py-1 text-sm resize-none"
-                      value={editingCommentText}
-                      onChange={e => setEditingCommentText(e.target.value)}
-                      onBlur={() => { updateComment(comment.id, editingCommentText); setEditingCommentId(null); }}
-                    />
-                  ) : (
-                    <p
-                      onClick={() => { setEditingCommentId(comment.id); setEditingCommentText(comment.text); }}
-                      className="text-sm text-foreground whitespace-pre-wrap flex-1 cursor-text"
-                    >
-                      {comment.text}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => deleteComment(comment.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-1">{new Date(comment.createdAt).toLocaleString(dateLocale())}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Removed status + due from comments header area */}
-
-          <div className="flex gap-2">
-            <input
-              value={newCommentText}
-              onChange={e => setNewCommentText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && addComment()}
-              placeholder="Add a comment..."
-              className="flex-1 bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm"
-            />
-            <button
-              onClick={addComment}
-              className="px-4 py-2 text-xs bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all font-medium"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-
         <div className="flex items-center justify-between pt-2 border-t border-border">
           <div className="flex items-center gap-2">
             {task.priority !== 'none' && (
@@ -6628,6 +6659,20 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                       </div>
                       Load template
                     </button>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      onClick={() => {
+                        setTemplatePopupOpen(false);
+                        onClose();
+                        navigate(`/templates?type=task&applyTo=${encodeURIComponent(task.id)}`);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-primary font-semibold rounded-lg hover:bg-primary/10 transition-all"
+                    >
+                      <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                        <Compass className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                      Browse templates
+                    </button>
                   </div>
                 </>
               )}
@@ -6654,6 +6699,16 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
             </button>
           )}
         </div>
+        </div>
+        <TaskSideViewPanel
+          kind="task"
+          task={task}
+          open={sideViewOpen}
+          onHide={() => setSideViewOpen(false)}
+          onCloseSide={() => setSideViewOpen(false)}
+          onUpdateTask={onUpdateTask}
+          activityEntries={activityEntries}
+        />
       </div>
 
       {fullViewSaveTmplOpen && (
@@ -6678,8 +6733,7 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                   </div>
                   <p className="text-xs text-muted-foreground max-w-[280px]">Anyone who enters this code in <span className="font-medium text-foreground">Load template</span> can load a copy of your template.</p>
-                  <span className="font-mono text-xl font-semibold tracking-[0.18em] text-foreground select-all px-5 py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 mt-1">{fullViewSavedShareCode}</span>
-                  <CopyShareCode code={fullViewSavedShareCode} />
+                  <CopyShareCode code={fullViewSavedShareCode} size="lg" />
                 </div>
                 <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
                   <button onClick={closeFullViewSaveTmpl} className="px-5 py-2 text-sm font-bold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all">Done</button>
@@ -6721,9 +6775,31 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-1.5">
                       {fullViewTmplVisibility === 'public'
-                        ? 'Anyone with the generated code can load this template.'
+                        ? 'Gets a share code and publishes to the Templates gallery page.'
                         : 'Only you can see this template. No code needed.'}
                     </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Category Tags</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DEFAULT_TEMPLATE_TAGS.map(tag => {
+                        const active = fullViewTmplTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => setFullViewTmplTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                              active
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-muted/40 text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
@@ -6753,9 +6829,23 @@ export const TaskFullView: React.FC<TaskFullViewProps> = ({
                 </div>
                 <h2 className="text-sm font-semibold text-foreground">Load template</h2>
               </div>
-              <button onClick={() => setFullViewLoadTmplOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
-                <X className="w-4 h-4 text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFullViewLoadTmplOpen(false);
+                    onClose();
+                    navigate(`/templates?type=task&applyTo=${encodeURIComponent(task.id)}`);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  Browse
+                </button>
+                <button onClick={() => setFullViewLoadTmplOpen(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
             <div className="max-h-80 overflow-y-auto p-2">
               {fullViewLoadTemplatesLoading ? (

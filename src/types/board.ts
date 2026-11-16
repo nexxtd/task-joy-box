@@ -130,6 +130,12 @@ export interface TaskTemplate {
   checklists: Checklist[];
   images?: Attachment[];
   attachments?: Attachment[];
+  /** Curated default category tags for discovering templates in the gallery. */
+  templateTags?: string[];
+  /** Author display name for public templates in the browse gallery. */
+  authorName?: string;
+  kind?: 'task' | 'note';
+  isDefault?: boolean;
   /** True when the template was published with a share code. */
   isPublic?: boolean;
   /** Code others can redeem to copy this template (public templates only). */

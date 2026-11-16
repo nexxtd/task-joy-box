@@ -11,7 +11,6 @@ import {
   ChevronRight,
   CircleDotDashed,
   Clock3,
-  Copy,
   EyeOff,
   FolderKanban,
   GripVertical,
@@ -2557,19 +2556,17 @@ const conversationProps = {
 
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Join link</label>
-                <div className="flex gap-2">
-                  <input readOnly value={`${window.location.origin}/projects?join=${selectedProject.inviteCode}`} className="flex-1 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground outline-none" />
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(`${window.location.origin}/projects?join=${selectedProject.inviteCode}`);
-                      toast({ title: 'Copied', description: 'Join link copied to clipboard.' });
-                    }}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground"
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  title="Click to copy"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`${window.location.origin}/projects?join=${selectedProject.inviteCode}`);
+                    toast({ title: 'Copied', description: 'Join link copied to clipboard.' });
+                  }}
+                  className="w-full text-left rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground font-mono truncate cursor-copy hover:border-primary/60 hover:bg-primary/5 active:scale-[0.99] transition-all"
+                >
+                  {`${window.location.origin}/projects?join=${selectedProject.inviteCode}`}
+                </button>
               </div>
             </div>
           </div>

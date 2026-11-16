@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, FolderKanban, CheckSquare, CalendarDays,
   BarChart3, StickyNote, FileText, Users, CreditCard, Settings,
-  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck, Building2
+  ChevronLeft, ChevronRight, Sparkles, Sun, Moon, LogOut, Wand2, LifeBuoy, ShieldCheck, Building2, LayoutTemplate
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -50,6 +50,7 @@ const AppSidebar: React.FC = () => {
     { icon: BarChart3, label: T.nav_insights, path: '/insights' },
     { icon: Wand2, label: t('AI Assistant'), path: '/ai-chat' },
     { icon: StickyNote, label: T.nav_notes, path: '/notes' },
+    { icon: LayoutTemplate, label: t('Templates'), path: '/templates' },
     { icon: FileText, label: t('Documents'), path: '/documents' },
     { icon: Users, label: T.nav_collaboration, path: '/collaboration' },
     { icon: LifeBuoy, label: t('Support'), path: '/support' },

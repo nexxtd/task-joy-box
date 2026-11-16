@@ -1,10 +1,17 @@
 import type { Attachment, TaskTemplate } from '@/types/board';
 
-export type TemplatePayload = { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; isPublic?: boolean };
+export type TemplatePayload = { name: string; title: string; description: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; templateTags?: string[]; isPublic?: boolean };
 
 export async function fetchTemplates(): Promise<TaskTemplate[]> {
   const res = await fetch('/api/task-templates', { credentials: 'include' });
   if (!res.ok) throw new Error('Failed to fetch templates');
+  const data = await res.json();
+  return data.templates || [];
+}
+
+export async function fetchPublicTemplates(): Promise<TaskTemplate[]> {
+  const res = await fetch('/api/task-templates/public', { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to fetch public templates');
   const data = await res.json();
   return data.templates || [];
 }

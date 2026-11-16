@@ -268,6 +268,8 @@ export const organizations = pgTable('organizations', {
   tier: text('tier').notNull().default('premium'),
   status: text('status').notNull().default('pending'),
   joinCode: text('join_code'),
+  // JSON blob of org admin settings (group-admin permissions etc.), see server/lib/orgAccess.ts
+  settings: text('settings').default('{}'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
@@ -305,6 +307,26 @@ export const organizationGroupMembers = pgTable('organization_group_members', {
   subGroupId: integer('sub_group_id'),
   userId: integer('user_id').references(() => users.id).notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+// Admins scoped to a single group or sub-group (groupId may point at either).
+export const organizationGroupAdmins = pgTable('organization_group_admins', {
+  id: serial('id').primaryKey(),
+  organizationId: integer('organization_id').references(() => organizations.id).notNull(),
+  groupId: integer('group_id').references(() => organizationGroups.id).notNull(),
+  userId: integer('user_id').references(() => users.id).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+});
+
+// Private notes admins leave about an organization member.
+export const organizationMemberNotes = pgTable('organization_member_notes', {
+  id: serial('id').primaryKey(),
+  organizationId: integer('organization_id').references(() => organizations.id).notNull(),
+  targetUserId: integer('target_user_id').references(() => users.id).notNull(),
+  authorId: integer('author_id').references(() => users.id).notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().notNull(),
 });
 
 export const notes = pgTable('notes', {
@@ -765,6 +787,7 @@ export const taskTemplates = pgTable('task_templates', {
   checklists: text('checklists').default('[]'),
   images: text('images').default('[]'),
   attachments: text('attachments').default('[]'),
+  templateTags: text('template_tags').default('[]'),
   isPublic: boolean('is_public').default(false).notNull(),
   shareCode: text('share_code'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),
@@ -793,6 +816,7 @@ export const noteTemplates = pgTable('note_templates', {
   checklists: text('checklists').default('[]'),
   images: text('images').default('[]'),
   attachments: text('attachments').default('[]'),
+  templateTags: text('template_tags').default('[]'),
   isPublic: boolean('is_public').default(false).notNull(),
   shareCode: text('share_code'),
   createdAt: timestamp('created_at', { mode: 'string' }).defaultNow().notNull(),

@@ -417,7 +417,7 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
       amount: total,
       returnUrl: `${appBaseUrl}/api/payment/execute-org-payment`,
       cancelUrl: `${appBaseUrl}/organizations?id=${parsedOrgId}&org_payment=cancelled`,
-      description: `${org.name} — ${pricingCalc.tier.toUpperCase()} (${pricingCalc.seats} seats, ${pricingCalc.billingPeriod})`,
+      description: `${org.name} — ${pricingCalc.tier.toUpperCase()} (${org.maxSeats} → ${pricingCalc.seats} seats, ${pricingCalc.billingPeriod})`,
     });
 
     const storedPlanType = `${org.type}|${pricingCalc.billingPeriod}`;
@@ -438,6 +438,52 @@ router.post('/create-org-checkout-session', requireAuth, async (req: AuthRequest
   } catch (error) {
     console.error('Error creating org checkout session:', error);
     res.status(500).json({ error: 'Failed to create checkout session', details: error instanceof Error ? error.message : 'Unknown PayPal error' });
+  }
+});
+
+// Quote a seat/tier change for an existing organization. The org pays the full price of the
+// new capacity (current seats plus any added seats, or the reduced total when shrinking);
+// nothing changes until that checkout is captured in /execute-org-payment.
+router.get('/org-seat-quote', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const parsedOrgId = safeParseInt(req.query.orgId);
+    const parsedSeats = safeParseInt(req.query.seats);
+    const tier = String(req.query.tier || '');
+    const billingPeriod = normalizeBillingPeriod(req.query.billingPeriod);
+    if (!parsedOrgId) return res.status(400).json({ error: 'Invalid organization' });
+
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, parsedOrgId)).limit(1);
+    if (!org || org.ownerId !== req.userId) {
+      return res.status(403).json({ error: 'Not authorized to manage this organization' });
+    }
+
+    const familyMonthly = await getSettingNumber('price_family_monthly', FAMILY_MONTHLY_PRICE);
+    const proUnit = await getSettingNumber('price_pro_monthly', PRICING_TIERS.pro.price);
+    const planType = org.type === 'family' ? 'family' : 'school';
+    const nextTier = org.type === 'family' ? 'pro' : (['premium', 'pro'].includes(tier) ? tier : org.tier) as 'premium' | 'pro';
+    const current = calculateCheckoutPricing({
+      tier: (org.tier === 'premium' ? 'premium' : 'pro'), planType, billingPeriod, seats: org.maxSeats, personalUnitMonthly: proUnit, familyMonthly,
+    });
+    const next = calculateCheckoutPricing({
+      tier: nextTier, planType, billingPeriod, seats: parsedSeats || org.maxSeats, personalUnitMonthly: proUnit, familyMonthly,
+    });
+    res.json({
+      currentSeats: org.maxSeats,
+      memberCount: org.currentSeats,
+      currentTier: org.tier,
+      newSeats: next.seats,
+      newTier: next.tier,
+      seatDelta: next.seats - org.maxSeats,
+      minSeats: Math.max(planType === 'school' ? 5 : 1, org.currentSeats),
+      billingPeriod,
+      currentTotal: current.totalDueNow,
+      newTotal: next.totalDueNow,
+      perSeatMonthly: next.perSeatMonthly,
+      difference: Math.round((next.totalDueNow - current.totalDueNow) * 100) / 100,
+    });
+  } catch (error) {
+    console.error('Org seat quote error:', error);
+    res.status(500).json({ error: 'Failed to quote seat change' });
   }
 });
 

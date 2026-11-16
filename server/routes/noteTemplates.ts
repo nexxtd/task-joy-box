@@ -1,11 +1,12 @@
 import { Router, Response } from 'express';
 import { db } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { noteTemplates } from '../../shared/schema.js';
-import { eq, and, sql } from 'drizzle-orm';
+import { noteTemplates, users } from '../../shared/schema.js';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { generateShareCode, normalizeShareCode } from '../lib/shareCode.js';
 import { SERVER_PLAN_LIMITS } from '../lib/tier.js';
 import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
+import { sanitizeTemplateTags } from '../../shared/defaultTemplates.js';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ const parseRow = (t: any) => ({
   checklists: JSON.parse((t as any).checklists || '[]'),
   images: JSON.parse((t as any).images || '[]'),
   attachments: JSON.parse((t as any).attachments || '[]'),
+  templateTags: sanitizeTemplateTags((() => { try { return JSON.parse((t as any).templateTags || '[]'); } catch { return []; } })()),
   description: (t as any).description || (t as any).content || '',
   content: (t as any).content || (t as any).description || '',
   columnId: (t as any).columnId || null,
@@ -30,6 +32,32 @@ async function allocateShareCode(): Promise<string | null> {
   }
   return null;
 }
+
+// List all public note templates for the Templates browse gallery
+router.get('/public', requireAuth, async (_req: AuthRequest, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        template: noteTemplates,
+        authorName: users.name,
+        authorEmail: users.email,
+      })
+      .from(noteTemplates)
+      .leftJoin(users, eq(users.id, noteTemplates.userId))
+      .where(eq(noteTemplates.isPublic, true))
+      .orderBy(desc(noteTemplates.updatedAt));
+    res.json({
+      templates: rows.map(r => ({
+        ...parseRow(r.template),
+        kind: 'note' as const,
+        authorName: r.authorName || r.authorEmail?.split('@')[0] || 'Community User',
+      })),
+    });
+  } catch (error) {
+    console.error('Failed to fetch public note templates:', error);
+    res.status(500).json({ error: 'Failed to fetch public templates' });
+  }
+});
 
 // Redeem a public share code: returns the template to copy into a note.
 // Note codes never resolve task templates and vice versa (type scoping).
@@ -58,7 +86,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
+    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, templateTags, isPublic } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Template name is required' });
 
     const effectivePlan = await resolveEffectiveUserPlan(req.userId!);
@@ -102,6 +130,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       checklists: JSON.stringify(checklists || []),
       images: JSON.stringify(images || []),
       attachments: JSON.stringify(attachments || []),
+      templateTags: JSON.stringify(sanitizeTemplateTags(templateTags)),
       isPublic: wantsPublic,
       shareCode,
     } as any).returning();
@@ -117,7 +146,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     const id = parseInt(req.params.id, 10);
     const existing = await db.select().from(noteTemplates).where(eq(noteTemplates.id, id)).limit(1);
     if (!existing.length || existing[0].userId !== req.userId) return res.status(404).json({ error: 'Template not found' });
-    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, isPublic } = req.body;
+    const { name, title, content, description, color, priority, duration, startDate, startTime, dueDate, dueTime, projectId, columnId, tags, labels, subtasks, checklists, images, attachments, templateTags, isPublic } = req.body;
     let shareCodeUpdate: string | null | undefined;
     if (isPublic !== undefined) {
       if (isPublic === true) {
@@ -150,6 +179,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       checklists: checklists !== undefined ? JSON.stringify(checklists) : undefined,
       images: images !== undefined ? JSON.stringify(images) : undefined,
       attachments: attachments !== undefined ? JSON.stringify(attachments) : undefined,
+      templateTags: templateTags !== undefined ? JSON.stringify(sanitizeTemplateTags(templateTags)) : undefined,
       isPublic: isPublic !== undefined ? isPublic === true : undefined,
       shareCode: shareCodeUpdate,
       updatedAt: new Date().toISOString(),

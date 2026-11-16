@@ -2057,7 +2057,7 @@ const SettingsPage: React.FC = () => {
                 return (
                   <div className="space-y-3">
                     {unifiedOrgs.map((org: any) => {
-                      const canManage = Boolean(org.isOwner || org.isAdmin);
+                      const canManage = Boolean(org.isOwner || org.isAdmin || org.isGroupAdmin);
                       return (
                         <div key={org.id} className="p-4 bg-card border border-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-center gap-3 min-w-0">
@@ -2080,9 +2080,11 @@ const SettingsPage: React.FC = () => {
                                     ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                                     : org.isAdmin
                                     ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                                    : org.isGroupAdmin
+                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                                     : 'bg-muted text-muted-foreground border-border'
                                 }`}>
-                                  {org.isOwner ? 'Owner' : org.isAdmin ? 'Admin' : 'Member'}
+                                  {org.isOwner ? 'Owner' : org.isAdmin ? 'Admin' : org.isGroupAdmin ? 'Group Admin' : 'Member'}
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">

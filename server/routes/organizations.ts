@@ -6,8 +6,10 @@ import {
   organizationMembers,
   organizationGroups,
   organizationGroupMembers,
+  organizationGroupAdmins,
 } from '../../shared/schema.js';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { getOrgAccess, isUserInManagedGroups, parseOrgSettings } from '../lib/orgAccess.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { reconcileUserOrgState, reconcileOrgMembers } from '../lib/orgLifecycle.js';
 
@@ -42,6 +44,24 @@ function checkJoinRateLimit(key: string): boolean {
   if (entry.count >= 10) return false;
   entry.count += 1;
   return true;
+}
+
+/** Replace the admins of a group/sub-group with the given org members. Returns the ids saved. */
+async function setGroupAdmins(orgId: number, groupId: number, rawIds: unknown[]): Promise<number[]> {
+  const requested = Array.from(new Set(rawIds.map(v => parseInt(String(v))).filter(n => Number.isFinite(n))));
+  let valid: number[] = [];
+  if (requested.length > 0) {
+    const rows = await db
+      .select({ userId: organizationMembers.userId })
+      .from(organizationMembers)
+      .where(and(eq(organizationMembers.organizationId, orgId), inArray(organizationMembers.userId, requested)));
+    valid = rows.map(r => r.userId);
+  }
+  await db.delete(organizationGroupAdmins).where(eq(organizationGroupAdmins.groupId, groupId));
+  if (valid.length > 0) {
+    await db.insert(organizationGroupAdmins).values(valid.map(uid => ({ organizationId: orgId, groupId, userId: uid })));
+  }
+  return valid;
 }
 
 function generateJoinCode(): string {
@@ -81,10 +101,19 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const ownedOrAdmin: any[] = [];
     const joined: any[] = [];
+    const groupAdminRows = memberships.length
+      ? await db.select().from(organizationGroupAdmins).where(eq(organizationGroupAdmins.userId, userId))
+      : [];
+    const settingsRows = memberships.length
+      ? await db.select({ id: organizations.id, settings: organizations.settings }).from(organizations)
+          .where(inArray(organizations.id, memberships.map(m => m.orgId)))
+      : [];
 
     for (const m of memberships) {
       const isOwner = m.ownerId === userId;
       const isAdmin = m.role === 'admin' || isOwner;
+      const orgSettings = parseOrgSettings(settingsRows.find(r => r.id === m.orgId)?.settings);
+      const isGroupAdmin = !isAdmin && orgSettings.groupAdminsEnabled && groupAdminRows.some(r => r.organizationId === m.orgId);
 
       const orgItem = {
         id: m.orgId,
@@ -99,11 +128,12 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
         role: isOwner ? 'owner' : m.role,
         isOwner,
         isAdmin,
+        isGroupAdmin,
         createdAt: m.createdAt,
         joinedAt: m.joinedAt,
       };
 
-      if (isOwner || isAdmin) {
+      if (isOwner || isAdmin || isGroupAdmin) {
         ownedOrAdmin.push(orgItem);
       }
       if (!isOwner) {
@@ -150,10 +180,23 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const isOwner = org.ownerId === userId;
     const isAdmin = membership[0].role === 'admin' || isOwner;
-    if (!isAdmin) {
+    const access = await getOrgAccess(orgId, userId);
+    const isGroupAdmin = Boolean(access?.isGroupAdmin);
+    if (!isAdmin && !isGroupAdmin) {
       return res.status(403).json({ error: 'Only organization owners and administrators can view organization management details' });
     }
-    const userRole = isOwner ? 'owner' : membership[0].role;
+    const managedGroupIds = access ? Array.from(access.managedGroupIds) : [];
+    const userRole = isOwner ? 'owner' : (isAdmin ? membership[0].role : 'group_admin');
+    const groupAdminRows = await db
+      .select()
+      .from(organizationGroupAdmins)
+      .where(eq(organizationGroupAdmins.organizationId, orgId));
+    const adminIdsByGroup = new Map<number, number[]>();
+    groupAdminRows.forEach(r => {
+      const list = adminIdsByGroup.get(r.groupId) || [];
+      if (!list.includes(r.userId)) list.push(r.userId);
+      adminIdsByGroup.set(r.groupId, list);
+    });
 
     // Get all members
     const membersData = await db
@@ -234,27 +277,50 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     });
 
     // Transform groups back to array with member lists
-    const formattedGroups = mainGroups.map(g => {
+    const allFormattedGroups = mainGroups.map(g => {
       const mapped = groupMap.get(g.id);
       return {
         ...g,
         memberCount: mapped.allMemberIds.size,
         directMemberCount: mapped.directMemberIds.length,
         directMemberIds: mapped.directMemberIds,
+        adminIds: adminIdsByGroup.get(g.id) || [],
         subGroups: mapped.subGroups.map((sg: any) => ({
           ...sg,
           memberCount: sg.memberIds.length,
           memberIds: sg.memberIds,
+          adminIds: adminIdsByGroup.get(sg.id) || [],
         })),
       };
     });
 
+    // Group admins only see the groups (and sub-groups) they manage, and the people in them.
+    const managedSet = new Set(managedGroupIds);
+    const formattedGroups = isAdmin
+      ? allFormattedGroups
+      : allFormattedGroups
+          .filter(g => managedSet.has(g.id) || g.subGroups.some((sg: any) => managedSet.has(sg.id)))
+          .map(g => managedSet.has(g.id) ? g : { ...g, subGroups: g.subGroups.filter((sg: any) => managedSet.has(sg.id)) });
+    const visibleUserIds = new Set<number>();
+    if (!isAdmin) {
+      groupMembersData.forEach(gm => {
+        if (managedSet.has(gm.groupId) || (gm.subGroupId != null && managedSet.has(gm.subGroupId))) visibleUserIds.add(gm.userId);
+      });
+      visibleUserIds.add(userId);
+    }
+
     // Unassigned members: members not in any group
     const assignedUserIds = new Set(groupMembersData.map(gm => gm.userId));
     const unassignedMembers = membersData.filter(m => !assignedUserIds.has(m.id));
+    const orgSettings = parseOrgSettings((org as any).settings);
+    const canSeeAllMembers = isAdmin || orgSettings.groupAdminsCanViewAllMembers;
+    const canSeeUnassigned = isAdmin || orgSettings.groupAdminsCanMoveMembers || orgSettings.groupAdminsCanViewAllMembers;
 
     // Map each member's groups for the users table
-    const members = membersData.map(m => {
+    const visibleMembersData = canSeeAllMembers
+      ? membersData
+      : membersData.filter(m => visibleUserIds.has(m.id) || (orgSettings.groupAdminsCanMoveMembers && !assignedUserIds.has(m.id)));
+    const members = visibleMembersData.map(m => {
       const assignments = userAssignments.get(m.id) || [];
       const assignedGroupNames: string[] = [];
       const assignedSubGroupNames: string[] = [];
@@ -275,14 +341,16 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       return {
         id: m.id,
         name: m.name || m.email.split('@')[0],
-        email: m.email,
+        email: isAdmin || orgSettings.showMemberEmailsToGroupAdmins ? m.email : 'Hidden by org policy',
         role: m.id === org.ownerId ? 'owner' : m.role,
         joinedAt: m.joinedAt,
-        lastActiveAt: m.lastActiveAt || null,
+        lastActiveAt: orgSettings.showMemberLastActive || isAdmin ? m.lastActiveAt || null : null,
         groups: assignedGroupNames,
         subGroups: assignedSubGroupNames,
         isOwner: m.id === org.ownerId,
         isAdmin: m.role === 'admin' || m.id === org.ownerId,
+        assignments,
+        adminOfGroupIds: groupAdminRows.filter(r => r.userId === m.id).map(r => r.groupId),
       };
     });
 
@@ -296,18 +364,22 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
         currentSeats: org.currentSeats,
         tier: org.tier,
         status: org.status,
-        joinCode: org.joinCode,
+        joinCode: isAdmin ? org.joinCode : undefined,
         createdAt: org.createdAt,
       },
       userRole,
       isOwner,
       isAdmin,
+      isGroupAdmin,
+      managedGroupIds,
+      adminGroupIds: access ? Array.from(access.adminGroupIds) : [],
+      settings: orgSettings,
       members,
       groups: formattedGroups,
-      unassignedMembers: unassignedMembers.map(m => ({
+      unassignedMembers: (canSeeUnassigned ? unassignedMembers : []).map(m => ({
         id: m.id,
         name: m.name || m.email.split('@')[0],
-        email: m.email,
+        email: isAdmin || orgSettings.showMemberEmailsToGroupAdmins ? m.email : 'Hidden by org policy',
         role: m.id === org.ownerId ? 'owner' : m.role,
         joinedAt: m.joinedAt,
       })),
@@ -398,25 +470,31 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       updates.name = name.trim();
     }
 
+    // Seat capacity and plan tier are billed. They can only change through the paid
+    // org checkout (/api/payment/create-org-checkout-session), never for free here.
     if (maxSeats !== undefined) {
-      if (org.type === 'family') {
-        return res.status(400).json({ error: 'Family plans are fixed at 5 seats' });
+      const requestedSeats = parseInt(String(maxSeats), 10);
+      if (!Number.isFinite(requestedSeats) || requestedSeats < 1) {
+        return res.status(400).json({ error: 'maxSeats must be at least 1' });
       }
-      const newMaxSeats = parseInt(maxSeats);
-      if (isNaN(newMaxSeats) || newMaxSeats < 1) {
-        return res.status(400).json({ error: 'Seats must be at least 1' });
-      }
-      const liveMemberCount = Math.max(1, await countOrganizationMembers(orgId));
-      if (newMaxSeats < liveMemberCount) {
-        return res.status(400).json({
-          error: `Cannot reduce seats below current usage (${liveMemberCount}). Remove members first.`,
+      if (requestedSeats !== org.maxSeats) {
+        const liveMemberCount = await countOrganizationMembers(orgId);
+        if (requestedSeats < liveMemberCount) {
+          return res.status(400).json({
+            error: `Cannot reduce seat capacity below current member count (${liveMemberCount})`,
+          });
+        }
+        return res.status(402).json({
+          error: 'Changing seat capacity requires checkout. Use "Pay & apply" in Billing.',
+          requiresCheckout: true,
         });
       }
-      updates.maxSeats = newMaxSeats;
-      updates.currentSeats = liveMemberCount;
     }
-    if (tier && ['premium', 'pro'].includes(tier)) {
-      updates.tier = tier;
+    if (tier !== undefined && tier !== org.tier) {
+      return res.status(402).json({
+        error: 'Changing plan tier requires checkout. Use "Pay & apply" in Billing.',
+        requiresCheckout: true,
+      });
     }
     if (regenerateCode === true) {
       updates.joinCode = generateJoinCode();
@@ -427,10 +505,6 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       .set(updates)
       .where(eq(organizations.id, orgId))
       .returning();
-
-    if (tier && tier !== org.tier) {
-      await reconcileOrgMembers(orgId);
-    }
 
     res.json({ organization: updated, message: 'Organization updated' });
   } catch (error) {
@@ -477,7 +551,7 @@ router.post('/:id/groups', requireAuth, async (req: AuthRequest, res: Response) 
   try {
     const orgId = parseInt(req.params.id);
     const userId = req.userId!;
-    const { name, color, icon, parentId, codeExpiresAt, codeMaxUses } = req.body;
+    const { name, color, icon, parentId, codeExpiresAt, codeMaxUses, adminIds } = req.body;
 
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ error: 'Group name is required' });
@@ -497,8 +571,19 @@ router.post('/:id/groups', requireAuth, async (req: AuthRequest, res: Response) 
 
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
-    if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can create groups' });
+    const access = await getOrgAccess(orgId, userId);
+    const parsedParentId = parentId ? parseInt(parentId) : null;
+    const groupAdminMayCreate = Boolean(
+      access &&
+        parsedParentId != null &&
+        access.settings.groupAdminsCanCreateSubgroups &&
+        access.adminGroupIds.has(parsedParentId)
+    );
+    if (!isAdmin && !groupAdminMayCreate) {
+      return res.status(403).json({ error: parsedParentId ? 'You cannot add sub-groups to this group' : 'Only administrators can create groups' });
+    }
+    if (parsedParentId != null && !access?.groups.some(g => g.id === parsedParentId && g.parentId == null)) {
+      return res.status(400).json({ error: 'Parent group not found in this organization' });
     }
 
     const joinCode = generateJoinCode();
@@ -507,7 +592,7 @@ router.post('/:id/groups', requireAuth, async (req: AuthRequest, res: Response) 
       .insert(organizationGroups)
       .values({
         organizationId: orgId,
-        parentId: parentId ? parseInt(parentId) : null,
+        parentId: parsedParentId,
         name: name.trim(),
         color: color || '#3b82f6',
         icon: icon || 'Folder',
@@ -519,7 +604,16 @@ router.post('/:id/groups', requireAuth, async (req: AuthRequest, res: Response) 
       })
       .returning();
 
-    res.json({ group: newGroup, message: 'Group created successfully' });
+    // Optional group admins chosen in the create dialog.
+    const mayAssignAdmins = isAdmin || Boolean(
+      access && parsedParentId != null && access.adminGroupIds.has(parsedParentId) && access.settings.groupAdminsCanManageSubgroupAdmins
+    );
+    let assignedAdminIds: number[] = [];
+    if (mayAssignAdmins && Array.isArray(adminIds) && adminIds.length > 0) {
+      assignedAdminIds = await setGroupAdmins(orgId, newGroup.id, adminIds);
+    }
+
+    res.json({ group: { ...newGroup, adminIds: assignedAdminIds }, message: 'Group created successfully' });
   } catch (error) {
     console.error('Create group error:', error);
     res.status(500).json({ error: 'Failed to create group' });
@@ -532,7 +626,7 @@ router.put('/:id/groups/:groupId', requireAuth, async (req: AuthRequest, res: Re
     const orgId = parseInt(req.params.id);
     const groupId = parseInt(req.params.groupId);
     const userId = req.userId!;
-    const { name, color, icon, regenerateCode, codeActive, codeExpiresAt, codeMaxUses } = req.body;
+    const { name, color, icon, regenerateCode, codeActive, codeExpiresAt, codeMaxUses, adminIds } = req.body;
 
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     if (!org) return res.status(404).json({ error: 'Organization not found' });
@@ -545,8 +639,29 @@ router.put('/:id/groups/:groupId', requireAuth, async (req: AuthRequest, res: Re
 
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
+    const access = await getOrgAccess(orgId, userId);
+    const mayChangeAdmins = Boolean(access && access.canSetGroupAdmins(groupId));
+    const hasMetaChange = [name, color, icon].some(v => v !== undefined);
+    const hasCodeChange = [regenerateCode, codeActive, codeExpiresAt, codeMaxUses].some(v => v !== undefined);
+    const hasAdminChange = adminIds !== undefined;
+    const inManagedGroup = Boolean(access && access.canManageGroup(groupId));
+
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can update groups' });
+      if (!access?.isGroupAdmin || !inManagedGroup) {
+        return res.status(403).json({ error: 'Only administrators can update groups' });
+      }
+      if (hasMetaChange && !access.settings.groupAdminsCanEditGroups) {
+        return res.status(403).json({ error: 'Group admins cannot edit group details under current organization settings' });
+      }
+      if (hasCodeChange && !access.settings.groupAdminsCanRegenerateCodes) {
+        return res.status(403).json({ error: 'Group admins cannot manage join codes under current organization settings' });
+      }
+      if (hasAdminChange && !access.canSetGroupAdmins(groupId)) {
+        return res.status(403).json({ error: 'You do not have permission to change admins for this group' });
+      }
+      if (!hasMetaChange && !hasCodeChange && !hasAdminChange) {
+        return res.status(403).json({ error: 'No permitted changes specified' });
+      }
     }
 
     const [existing] = await db
@@ -575,7 +690,12 @@ router.put('/:id/groups/:groupId', requireAuth, async (req: AuthRequest, res: Re
       .where(eq(organizationGroups.id, groupId))
       .returning();
 
-    res.json({ group: updated, message: 'Group updated successfully' });
+    let nextAdminIds: number[] | undefined;
+    if (Array.isArray(adminIds) && mayChangeAdmins) {
+      nextAdminIds = await setGroupAdmins(orgId, groupId, adminIds);
+    }
+
+    res.json({ group: { ...updated, ...(nextAdminIds ? { adminIds: nextAdminIds } : {}) }, message: 'Group updated successfully' });
   } catch (error) {
     console.error('Update group error:', error);
     res.status(500).json({ error: 'Failed to update group' });
@@ -601,7 +721,18 @@ router.delete('/:id/groups/:groupId', requireAuth, async (req: AuthRequest, res:
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can delete groups' });
+      const access = await getOrgAccess(orgId, userId);
+      const target = access?.groups.find(g => g.id === groupId);
+      const groupAdminMayDelete = Boolean(
+        access &&
+          target &&
+          target.parentId != null &&
+          (access.settings.groupAdminsCanEditGroups || access.settings.groupAdminsCanCreateSubgroups) &&
+          access.adminGroupIds.has(target.parentId)
+      );
+      if (!groupAdminMayDelete) {
+        return res.status(403).json({ error: 'Only administrators can delete groups' });
+      }
     }
 
     // Delete sub-groups if this is a parent group
@@ -644,7 +775,19 @@ router.post('/:id/kick-member/:targetUserId', requireAuth, async (req: AuthReque
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can kick members' });
+      const access = await getOrgAccess(orgId, userId);
+      const [targetRow] = await db
+        .select()
+        .from(organizationMembers)
+        .where(and(eq(organizationMembers.organizationId, orgId), eq(organizationMembers.userId, targetUserId)))
+        .limit(1);
+      const groupAdminMayKick = Boolean(
+        access && access.isGroupAdmin && access.settings.groupAdminsCanKick && targetRow && targetRow.role !== 'admin'
+        && targetUserId !== userId && await isUserInManagedGroups(access, targetUserId)
+      );
+      if (!groupAdminMayKick) {
+        return res.status(403).json({ error: 'Only administrators can kick members' });
+      }
     }
 
     if (targetUserId === org.ownerId) {
@@ -665,6 +808,10 @@ router.post('/:id/kick-member/:targetUserId', requireAuth, async (req: AuthReque
     await db
       .delete(organizationGroupMembers)
       .where(and(eq(organizationGroupMembers.organizationId, orgId), eq(organizationGroupMembers.userId, targetUserId)));
+
+    await db
+      .delete(organizationGroupAdmins)
+      .where(and(eq(organizationGroupAdmins.organizationId, orgId), eq(organizationGroupAdmins.userId, targetUserId)));
 
     // Remove from organization members
     await db
@@ -700,7 +847,8 @@ router.post('/:id/assign-member', requireAuth, async (req: AuthRequest, res: Res
 
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
-    if (!isAdmin) {
+    const moveAccess = isAdmin ? null : await getOrgAccess(orgId, userId);
+    if (!isAdmin && !(moveAccess?.isGroupAdmin && moveAccess.settings.groupAdminsCanMoveMembers)) {
       return res.status(403).json({ error: 'Only administrators can assign members' });
     }
 
@@ -746,6 +894,10 @@ router.post('/:id/assign-member', requireAuth, async (req: AuthRequest, res: Res
       if (!subGroup || subGroup.parentId !== pGroupId) {
         return res.status(400).json({ error: 'Sub-group does not belong to the specified parent group in this organization' });
       }
+    }
+
+    if (moveAccess && !moveAccess.canManageGroup(sGroupId ?? pGroupId)) {
+      return res.status(403).json({ error: 'You can only move members into groups you manage' });
     }
 
     // Rule: "A person can be in several groups, but in only one sub-group per group."
@@ -794,7 +946,10 @@ router.post('/:id/remove-from-group', requireAuth, async (req: AuthRequest, res:
     const isOwner = org.ownerId === userId;
     const isAdmin = membership?.role === 'admin' || isOwner;
     if (!isAdmin) {
-      return res.status(403).json({ error: 'Only administrators can modify group members' });
+      const access = await getOrgAccess(orgId, userId);
+      if (!(access?.isGroupAdmin && access.settings.groupAdminsCanMoveMembers && access.canManageGroup(parseInt(groupId)))) {
+        return res.status(403).json({ error: 'Only administrators can modify group members' });
+      }
     }
 
     await db
@@ -953,6 +1108,10 @@ router.post('/join', requireAuth, async (req: AuthRequest, res: Response) => {
 
     // Validate group code status if joined via group
     if (targetGroup) {
+      const joinOrgSettings = parseOrgSettings((org as any).settings);
+      if (!joinOrgSettings.allowJoinViaGroupCode) {
+        return res.status(403).json({ error: 'Joining via group codes is disabled by organization settings. Use the main organization join code instead.' });
+      }
       if (targetGroup.codeActive === false) {
         return res.status(400).json({ error: 'This join code has been deactivated.' });
       }

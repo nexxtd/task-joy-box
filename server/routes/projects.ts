@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import crypto from 'crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -8,7 +8,15 @@ import { db, pool } from '../db.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getSettingNumber } from '../lib/settings.js';
 import { resolveEffectiveUserPlan } from '../lib/orgLifecycle.js';
-import { projectJoinRequests, projectMembers, projects, users, userNotifications } from '../../shared/schema.js';
+import {
+  boardSnapshots,
+  noteSnapshots,
+  projectJoinRequests,
+  projectMembers,
+  projects,
+  users,
+  userNotifications,
+} from '../../shared/schema.js';
 
 const router = Router();
 
@@ -914,6 +922,189 @@ router.post('/:projectId/chat', requireAuth, uploadChatFile.single('file'), asyn
   } catch (error) {
     console.error('Send project chat error:', error);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Apply (push/copy) a project task or note onto selected other project members' boards
+router.post('/:projectId/apply-item', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.projectId, 10);
+    if (!Number.isFinite(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+
+    const membership = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, req.userId!)));
+    if (membership.length === 0) {
+      return res.status(403).json({ error: 'Only members of this project can apply items to project users' });
+    }
+
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const kind = req.body?.kind === 'note' ? 'note' : 'task';
+    const rawItem = req.body?.item;
+    if (!rawItem || !String(rawItem.title || '').trim()) {
+      return res.status(400).json({ error: 'Item details and title are required' });
+    }
+
+    const requestedIds: number[] = Array.isArray(req.body?.targetUserIds)
+      ? Array.from(
+          new Set<number>(
+            req.body.targetUserIds
+              .map((v: unknown) => parseInt(String(v), 10))
+              .filter((n: number) => Number.isFinite(n) && n !== req.userId!),
+          ),
+        )
+      : [];
+    if (requestedIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one other project member' });
+    }
+
+    const validMemberRows = await db
+      .select({ userId: projectMembers.userId })
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), inArray(projectMembers.userId, requestedIds)));
+    const validRecipientIds = validMemberRows.map(r => r.userId);
+    if (validRecipientIds.length === 0) {
+      return res.status(400).json({ error: 'Selected recipients are not members of this project' });
+    }
+
+    const [sender] = await db.select().from(users).where(eq(users.id, req.userId!)).limit(1);
+    const senderName = sender?.name || sender?.email?.split('@')[0] || 'Teammate';
+    const now = new Date().toISOString();
+    const defaultProjTodoCol = `col-proj-${projectId}-to-do`;
+
+    const buildRecipientBoard = (rawSnapshot: string | undefined) => {
+      let parsed: any = null;
+      if (rawSnapshot) {
+        try { parsed = JSON.parse(rawSnapshot); } catch { parsed = null; }
+      }
+      const columns: any[] = Array.isArray(parsed?.columns) ? [...parsed.columns] : [
+        { id: 'col-1', title: 'To Do', order: 0, color: '#ef4444', projectId: null },
+        { id: 'col-2', title: 'In Progress', order: 1, color: '#eab308', projectId: null },
+        { id: 'col-3', title: 'Done', order: 2, color: '#22c55e', projectId: null },
+      ];
+      const hasProjCols = columns.some(c => c.projectId === projectId);
+      if (!hasProjCols) {
+        columns.push(
+          { id: `col-proj-${projectId}-to-do`, title: 'To Do', order: columns.length, color: '#ef4444', projectId },
+          { id: `col-proj-${projectId}-in-progress`, title: 'In Progress', order: columns.length + 1, color: '#eab308', projectId },
+          { id: `col-proj-${projectId}-done`, title: 'Done', order: columns.length + 2, color: '#22c55e', projectId },
+        );
+      }
+      const targetCol =
+        (rawItem.columnId && columns.some(c => c.id === rawItem.columnId) ? rawItem.columnId : null) ||
+        columns.find(c => c.projectId === projectId)?.id ||
+        defaultProjTodoCol;
+      const tasks: any[] = Array.isArray(parsed?.tasks) ? [...parsed.tasks] : [];
+      const clonedItem = {
+        id: crypto.randomUUID(),
+        title: String(rawItem.title || '').trim(),
+        description: String(rawItem.description || ''),
+        status: rawItem.status || 'to_do',
+        priority: rawItem.priority || 'medium',
+        labels: Array.isArray(rawItem.labels) ? rawItem.labels : [],
+        subtasks: Array.isArray(rawItem.subtasks)
+          ? rawItem.subtasks.map((st: any) => ({ ...st, id: crypto.randomUUID() }))
+          : [],
+        checklists: Array.isArray(rawItem.checklists)
+          ? rawItem.checklists.map((cl: any) => ({
+              ...cl,
+              id: crypto.randomUUID(),
+              items: Array.isArray(cl.items)
+                ? cl.items.map((it: any) => ({ ...it, id: crypto.randomUUID() }))
+                : [],
+            }))
+          : [],
+        duration: Number(rawItem.duration) || 0,
+        startDate: rawItem.startDate || undefined,
+        startTime: rawItem.startTime || undefined,
+        dueDate: rawItem.dueDate || undefined,
+        dueTime: rawItem.dueTime || undefined,
+        projectId,
+        projectName: project.name,
+        columnId: targetCol,
+        order: tasks.filter(t => t.columnId === targetCol).length,
+        createdAt: now,
+        updatedAt: now,
+        attachments: [],
+        images: [],
+        comments: Array.isArray(rawItem.comments)
+          ? rawItem.comments.map((c: any) => ({ ...c, id: crypto.randomUUID() }))
+          : [],
+        activityLog: [
+          ...(Array.isArray(rawItem.activityLog) ? rawItem.activityLog : []),
+          {
+            id: crypto.randomUUID(),
+            text: `Applied to your ${kind}s by ${senderName} in "${project.name}"`,
+            createdAt: now,
+            actor: senderName,
+          },
+        ],
+      };
+      tasks.push(clonedItem);
+      return {
+        board: { id: parsed?.id || 'default', title: parsed?.title || (kind === 'note' ? 'My Notes' : 'My Tasks'), columns, tasks },
+        itemId: clonedItem.id,
+      };
+    };
+
+    for (const recipientId of validRecipientIds) {
+      if (kind === 'note') {
+        const [latest] = await db
+          .select()
+          .from(noteSnapshots)
+          .where(eq(noteSnapshots.userId, recipientId))
+          .orderBy(desc(noteSnapshots.updatedAt))
+          .limit(1);
+        const { board, itemId } = buildRecipientBoard(latest?.snapshot);
+        await db.insert(noteSnapshots).values({
+          userId: recipientId,
+          snapshot: JSON.stringify(board),
+        });
+        await db.insert(userNotifications).values({
+          userId: recipientId,
+          type: 'project_item_applied',
+          title: 'Shared project note',
+          message: `${senderName} applied note "${rawItem.title}" to you in "${project.name}".`,
+          data: JSON.stringify({ projectId, projectName: project.name, kind: 'note', itemId }),
+          read: false,
+        } as any);
+      } else {
+        const [latest] = await db
+          .select()
+          .from(boardSnapshots)
+          .where(eq(boardSnapshots.userId, recipientId))
+          .orderBy(desc(boardSnapshots.updatedAt))
+          .limit(1);
+        const { board, itemId } = buildRecipientBoard(latest?.snapshot);
+        await db.delete(boardSnapshots).where(eq(boardSnapshots.userId, recipientId));
+        await db.insert(boardSnapshots).values({
+          userId: recipientId,
+          snapshot: JSON.stringify(board),
+        });
+        await db.insert(userNotifications).values({
+          userId: recipientId,
+          type: 'project_item_applied',
+          title: 'Shared project task',
+          message: `${senderName} applied task "${rawItem.title}" to you in "${project.name}".`,
+          data: JSON.stringify({ projectId, projectName: project.name, kind: 'task', itemId }),
+          read: false,
+        } as any);
+      }
+    }
+
+    res.json({
+      appliedCount: validRecipientIds.length,
+      recipients: validRecipientIds,
+      message: `Applied ${kind} to ${validRecipientIds.length} project member(s).`,
+    });
+  } catch (error) {
+    console.error('Apply project item error:', error);
+    res.status(500).json({ error: 'Failed to apply item to project users' });
   }
 });
 

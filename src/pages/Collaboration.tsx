@@ -749,17 +749,16 @@ const Collaboration: React.FC = () => {
 
             {/* Invite Link */}
             <div className="bg-card border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-foreground mb-3">Share Invite Link</h3>
-              <div className="flex items-center gap-2">
-                <input
-                  readOnly
-                  value={inviteLink}
-                  className="flex-1 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-muted-foreground"
-                />
-                <button onClick={handleCopyInviteLink} className="p-2 bg-muted hover:bg-muted/80 rounded-lg transition-colors">
-                  <Copy className="w-4 h-4 text-foreground" />
-                </button>
-              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">Share Invite Link</h3>
+              <p className="text-xs text-muted-foreground mb-3">Click the link to copy it to your clipboard.</p>
+              <button
+                type="button"
+                onClick={handleCopyInviteLink}
+                title="Click to copy invite link"
+                className="w-full text-left bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono truncate cursor-copy hover:border-primary/50 hover:bg-primary/5 transition-colors"
+              >
+                {inviteLink}
+              </button>
             </div>
           </div>
         )}

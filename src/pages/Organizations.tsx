@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
@@ -7,7 +7,6 @@ import {
   Settings,
   Plus,
   Search,
-  Copy,
   Check,
   RefreshCw,
   Trash2,
@@ -16,6 +15,7 @@ import {
   ChevronRight,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Crown,
   Sparkles,
   ArrowLeft,
@@ -40,10 +40,20 @@ import {
   Award,
   Layers,
   CreditCard,
+  Sliders,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
 import { toast } from '@/hooks/use-toast';
+import CopyShareCode from '@/components/CopyShareCode';
+import { MemberDetailModal } from '@/components/organizations/MemberDetailModal';
+import {
+  DEFAULT_ORG_ADMIN_SETTINGS,
+  OrgAdminSettings,
+  OrgGroupItem,
+  OrgMemberItem,
+  OrgSubGroupItem,
+} from '@/components/organizations/orgTypes';
 
 const COLUMN_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
@@ -122,51 +132,27 @@ interface OrgSummary {
   role: 'owner' | 'admin' | 'member';
   isOwner: boolean;
   isAdmin: boolean;
+  isGroupAdmin?: boolean;
   createdAt: string;
 }
 
-interface Member {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  joinedAt: string;
-  lastActiveAt?: string | null;
-  groups?: string[];
-  subGroups?: string[];
-  isOwner?: boolean;
-  isAdmin?: boolean;
-}
+type Member = OrgMemberItem;
+type SubGroup = OrgSubGroupItem;
+type Group = OrgGroupItem;
 
-interface SubGroup {
-  id: number;
-  parentId: number;
-  name: string;
-  color: string;
-  icon: string;
-  joinCode: string;
-  codeActive: boolean;
-  codeExpiresAt?: string | null;
-  codeMaxUses?: number | null;
-  codeUses: number;
+interface SeatQuote {
+  currentSeats: number;
   memberCount: number;
-  memberIds: number[];
-}
-
-interface Group {
-  id: number;
-  name: string;
-  color: string;
-  icon: string;
-  joinCode: string;
-  codeActive: boolean;
-  codeExpiresAt?: string | null;
-  codeMaxUses?: number | null;
-  codeUses: number;
-  memberCount: number;
-  directMemberCount: number;
-  directMemberIds: number[];
-  subGroups: SubGroup[];
+  currentTier: string;
+  newSeats: number;
+  newTier: string;
+  seatDelta: number;
+  minSeats: number;
+  billingPeriod: 'monthly' | 'yearly';
+  currentTotal: number;
+  newTotal: number;
+  perSeatMonthly: number;
+  difference: number;
 }
 
 interface OrgDetail {
@@ -204,6 +190,13 @@ const Organizations: React.FC = () => {
   const [userRole, setUserRole] = useState<string>('member');
   const [isOwner, setIsOwner] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isGroupAdmin, setIsGroupAdmin] = useState(false);
+  const [managedGroupIds, setManagedGroupIds] = useState<number[]>([]);
+  const [adminGroupIds, setAdminGroupIds] = useState<number[]>([]);
+  const [orgSettings, setOrgSettings] = useState<OrgAdminSettings>(DEFAULT_ORG_ADMIN_SETTINGS);
+  const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const draggingRef = useRef(false);
 
   // Active Tab: Users, Groups, Both, Settings
   const [activeTab, setActiveTab] = useState<'users' | 'groups' | 'both' | 'settings'>('users');
@@ -235,6 +228,7 @@ const Organizations: React.FC = () => {
   const [groupEditCodeActive, setGroupEditCodeActive] = useState(true);
   const [groupEditCodeExpiresAt, setGroupEditCodeExpiresAt] = useState('');
   const [groupEditCodeMaxUses, setGroupEditCodeMaxUses] = useState('');
+  const [groupEditAdminIds, setGroupEditAdminIds] = useState<number[]>([]);
   const [groupModalLoading, setGroupModalLoading] = useState(false);
 
   // Drag and Drop State
@@ -247,15 +241,14 @@ const Organizations: React.FC = () => {
   const [settingsSeats, setSettingsSeats] = useState(1);
   const [settingsTier, setSettingsTier] = useState<'premium' | 'pro'>('pro');
   const [settingsBillingPeriod, setSettingsBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [seatQuote, setSeatQuote] = useState<SeatQuote | null>(null);
+  const [seatQuoteLoading, setSeatQuoteLoading] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [newAdminUserId, setNewAdminUserId] = useState<number | ''>('');
   const [transferOwnerUserId, setTransferOwnerUserId] = useState<number | ''>('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-
-  // Feedback for copied codes
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const fetchOrganizationsList = async () => {
     setLoading(true);
@@ -296,6 +289,10 @@ const Organizations: React.FC = () => {
         const ownerFlag = Boolean(data.isOwner);
         setIsOwner(ownerFlag);
         setIsAdmin(Boolean(data.isAdmin));
+        setIsGroupAdmin(Boolean(data.isGroupAdmin));
+        setManagedGroupIds(data.managedGroupIds || []);
+        setAdminGroupIds(data.adminGroupIds || []);
+        setOrgSettings({ ...DEFAULT_ORG_ADMIN_SETTINGS, ...(data.settings || {}) });
         setSettingsName(data.organization?.name || '');
         setSettingsSeats(data.organization?.maxSeats || 1);
         setSettingsTier(data.organization?.tier === 'premium' ? 'premium' : 'pro');
@@ -338,12 +335,26 @@ const Organizations: React.FC = () => {
     }
   }, [selectedOrgId]);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(text);
-    toast({ title: 'Copied code!', description: `${text} copied to clipboard` });
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
+  useEffect(() => {
+    if (!isOwner || !selectedOrgId || !orgDetail || activeTab !== 'settings') return;
+    const controller = new AbortController();
+    const targetSeats =
+      orgDetail.type === 'family' ? 5 : Math.max(5, settingsSeats || orgDetail.currentSeats || 5);
+    setSeatQuoteLoading(true);
+    fetch(
+      `/api/payment/org-seat-quote?orgId=${selectedOrgId}&seats=${targetSeats}&tier=${
+        orgDetail.type === 'family' ? 'pro' : settingsTier
+      }&billingPeriod=${settingsBillingPeriod}`,
+      { credentials: 'include', signal: controller.signal },
+    )
+      .then(async res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data) setSeatQuote(data);
+      })
+      .catch(() => {})
+      .finally(() => setSeatQuoteLoading(false));
+    return () => controller.abort();
+  }, [selectedOrgId, isOwner, orgDetail?.id, orgDetail?.type, activeTab, settingsSeats, settingsTier, settingsBillingPeriod]);
 
   // Filtered members for Users tab (searchable by name, email, group, sub-group, and last active)
   const filteredMembers = useMemo(() => {
@@ -362,6 +373,7 @@ const Organizations: React.FC = () => {
 
   // Handle Drag & Drop of users between sub-groups, direct groups, and unassigned
   const handleDragStart = (e: React.DragEvent, userId: number, sourceGroupId?: number | null) => {
+    draggingRef.current = true;
     e.dataTransfer.setData('application/x-org-member', String(userId));
     if (sourceGroupId != null) {
       e.dataTransfer.setData('application/x-org-source-group', String(sourceGroupId));
@@ -386,6 +398,18 @@ const Organizations: React.FC = () => {
       requestAnimationFrame(() => ghost.remove());
     }
     setDraggedUserId(userId);
+  };
+
+  const handleDragEnd = () => {
+    setTimeout(() => {
+      draggingRef.current = false;
+    }, 80);
+    setDragOverTargetId(null);
+  };
+
+  const openMemberModal = (memberId: number) => {
+    if (draggingRef.current) return;
+    setSelectedMemberId(memberId);
   };
 
   const handleDragOver = (e: React.DragEvent, targetKey: string) => {
@@ -507,6 +531,7 @@ const Organizations: React.FC = () => {
     setGroupEditCodeActive(true);
     setGroupEditCodeExpiresAt('');
     setGroupEditCodeMaxUses('');
+    setGroupEditAdminIds([]);
     setGroupModalOpen(true);
   };
 
@@ -520,6 +545,7 @@ const Organizations: React.FC = () => {
     setGroupEditCodeActive(true);
     setGroupEditCodeExpiresAt('');
     setGroupEditCodeMaxUses('');
+    setGroupEditAdminIds([]);
     setGroupModalOpen(true);
   };
 
@@ -533,8 +559,20 @@ const Organizations: React.FC = () => {
     setGroupEditCodeActive(item.codeActive !== false);
     setGroupEditCodeExpiresAt(toDatetimeLocalInput(item.codeExpiresAt));
     setGroupEditCodeMaxUses(item.codeMaxUses != null ? String(item.codeMaxUses) : '');
+    setGroupEditAdminIds(item.adminIds || []);
     setGroupModalOpen(true);
   };
+
+  const canSetModalAdmins = (() => {
+    if (isAdmin) return true;
+    if (!isGroupAdmin || !orgSettings.groupAdminsEnabled || !orgSettings.groupAdminsCanManageSubgroupAdmins) {
+      return false;
+    }
+    if ((groupModalMode === 'create-subgroup' || groupModalMode === 'edit-subgroup') && targetParentGroupId != null) {
+      return adminGroupIds.includes(targetParentGroupId);
+    }
+    return false;
+  })();
 
   const handleSaveGroupModal = async () => {
     if (!selectedOrgId || !groupEditName.trim()) return;
@@ -553,6 +591,7 @@ const Organizations: React.FC = () => {
             icon: groupEditIcon,
             codeExpiresAt: expiresIso,
             codeMaxUses: parsedMaxUses,
+            ...(canSetModalAdmins ? { adminIds: groupEditAdminIds } : {}),
           }),
         });
         const data = await res.json();
@@ -575,6 +614,7 @@ const Organizations: React.FC = () => {
             icon: groupEditIcon,
             codeExpiresAt: expiresIso,
             codeMaxUses: parsedMaxUses,
+            ...(canSetModalAdmins ? { adminIds: groupEditAdminIds } : {}),
           }),
         });
         const data = await res.json();
@@ -587,18 +627,27 @@ const Organizations: React.FC = () => {
         }
       } else if (groupModalMode === 'edit-group' || groupModalMode === 'edit-subgroup') {
         if (!targetEditGroupId) return;
+        const canEditMeta = isAdmin || orgSettings.groupAdminsCanEditGroups;
+        const canEditCode = isAdmin || orgSettings.groupAdminsCanRegenerateCodes;
+        const payload: Record<string, any> = {};
+        if (canEditMeta) {
+          payload.name = groupEditName.trim();
+          payload.color = groupEditColor;
+          payload.icon = groupEditIcon;
+        }
+        if (canEditCode) {
+          payload.codeActive = groupEditCodeActive;
+          payload.codeExpiresAt = expiresIso;
+          payload.codeMaxUses = parsedMaxUses;
+        }
+        if (canSetModalAdmins) {
+          payload.adminIds = groupEditAdminIds;
+        }
         const res = await fetch(`/api/organizations/${selectedOrgId}/groups/${targetEditGroupId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            name: groupEditName.trim(),
-            color: groupEditColor,
-            icon: groupEditIcon,
-            codeActive: groupEditCodeActive,
-            codeExpiresAt: expiresIso,
-            codeMaxUses: parsedMaxUses,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (res.ok) {
@@ -683,21 +732,13 @@ const Organizations: React.FC = () => {
   // Save Settings
   const handleSaveSettings = async () => {
     if (!selectedOrgId) return;
-    const activeMembers = orgDetail?.currentSeats || 1;
-    if (orgDetail?.type !== 'family' && settingsSeats < activeMembers) {
-      setSettingsError(`Cannot reduce seats below current member count (${activeMembers}). Remove members first.`);
-      return;
-    }
     setSettingsSaving(true);
     setSettingsError('');
     try {
+      // Seats and tier are billed: they only change through "Checkout Plan & Seats" below.
       const payload: Record<string, any> = {
         name: settingsName.trim(),
       };
-      if (orgDetail?.type !== 'family') {
-        payload.maxSeats = settingsSeats;
-        payload.tier = settingsTier;
-      }
       const res = await fetch(`/api/organizations/${selectedOrgId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -743,9 +784,44 @@ const Organizations: React.FC = () => {
     }
   };
 
+  const handleSaveAdminSettingToggle = async (key: keyof OrgAdminSettings, value: boolean) => {
+    if (!selectedOrgId) return;
+    const prev = orgSettings;
+    const next = { ...orgSettings, [key]: value };
+    setOrgSettings(next);
+    setAdminSettingsSaving(true);
+    try {
+      const res = await fetch(`/api/organizations/${selectedOrgId}/admin-settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ settings: next }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (data.settings) setOrgSettings({ ...DEFAULT_ORG_ADMIN_SETTINGS, ...data.settings });
+        toast({ title: 'Policy updated', description: 'Organization policy saved.' });
+      } else {
+        setOrgSettings(prev);
+        toast({ title: 'Error', description: data.error || 'Failed to save policy', variant: 'destructive' });
+      }
+    } catch {
+      setOrgSettings(prev);
+      toast({ title: 'Error', description: 'Failed to save policy', variant: 'destructive' });
+    } finally {
+      setAdminSettingsSaving(false);
+    }
+  };
+
   // Start PayPal Billing Upgrade / Seat Checkout for Organization
   const handleUpgradeBilling = async () => {
     if (!selectedOrgId || !orgDetail) return;
+    const targetSeats = orgDetail.type === 'family' ? 5 : settingsSeats;
+    const minAllowedSeats = orgDetail.type === 'family' ? 5 : Math.max(5, orgDetail.currentSeats || 1);
+    if (orgDetail.type !== 'family' && targetSeats < minAllowedSeats) {
+      setSettingsError(`School capacity must be at least ${minAllowedSeats} seats (minimum 5 seats and at least active members).`);
+      return;
+    }
     setBillingLoading(true);
     setSettingsError('');
     try {
@@ -756,7 +832,7 @@ const Organizations: React.FC = () => {
         body: JSON.stringify({
           orgId: selectedOrgId,
           tier: orgDetail.type === 'family' ? 'pro' : settingsTier,
-          seats: orgDetail.type === 'family' ? 5 : settingsSeats,
+          seats: targetSeats,
           billingPeriod: settingsBillingPeriod,
         }),
       });
@@ -1038,6 +1114,40 @@ const Organizations: React.FC = () => {
   // "Family organizations only show Users and Settings."
   // "Administrators can do everything except billing and settings."
   const isFamily = orgDetail?.type === 'family';
+  const managedGroupSet = useMemo(() => new Set(managedGroupIds), [managedGroupIds]);
+  const directAdminGroupSet = useMemo(() => new Set(adminGroupIds), [adminGroupIds]);
+  const canMoveMembers = isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanMoveMembers);
+  const canEditGroupMeta = (groupId: number) =>
+    isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanEditGroups && managedGroupSet.has(groupId));
+  const canManageCodes = (groupId: number) =>
+    isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanRegenerateCodes && managedGroupSet.has(groupId));
+  const canCreateSubgroupIn = (parentGroupId: number) =>
+    isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanCreateSubgroups && directAdminGroupSet.has(parentGroupId));
+  const canDeleteSubgroupIn = (parentGroupId: number) =>
+    isAdmin ||
+    (isGroupAdmin &&
+      (orgSettings.groupAdminsCanCreateSubgroups || orgSettings.groupAdminsCanEditGroups) &&
+      directAdminGroupSet.has(parentGroupId));
+  const canManageSubgroupAdminsIn = (parentGroupId: number | null | undefined) =>
+    isAdmin ||
+    (isGroupAdmin &&
+      orgSettings.groupAdminsEnabled &&
+      orgSettings.groupAdminsCanManageSubgroupAdmins &&
+      parentGroupId != null &&
+      directAdminGroupSet.has(parentGroupId));
+  const canKickTarget = (member: Member) =>
+    !member.isOwner &&
+    member.id !== user?.id &&
+    (isAdmin || (isGroupAdmin && orgSettings.groupAdminsCanKick && !member.isAdmin));
+  const selectedMember = useMemo(
+    () => members.find(m => m.id === selectedMemberId) || null,
+    [members, selectedMemberId],
+  );
+  const memberNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    members.forEach(m => map.set(m.id, m.name));
+    return map;
+  }, [members]);
   const tabs: Array<{ id: 'users' | 'groups' | 'both' | 'settings'; label: string; icon: any }> = isFamily
     ? [
         { id: 'users', label: 'Users', icon: Users },
@@ -1179,21 +1289,11 @@ const Organizations: React.FC = () => {
                         Organization Join Code ({orgDetail.currentSeats} / {orgDetail.maxSeats} seats)
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Share this code so members can join via Settings → Organization.
+                        Click the code to copy and share so members can join via Settings → Organization.
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <code className="px-3 py-1.5 rounded-lg bg-muted font-mono text-sm font-bold tracking-wider text-foreground border border-border">
-                        {orgDetail.joinCode}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(orgDetail.joinCode)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-colors"
-                      >
-                        {copiedCode === orgDetail.joinCode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        {copiedCode === orgDetail.joinCode ? 'Copied' : 'Copy'}
-                      </button>
+                      <CopyShareCode code={orgDetail.joinCode} size="md" />
                       <button
                         type="button"
                         onClick={handleRegenerateOrgCode}
@@ -1217,22 +1317,50 @@ const Organizations: React.FC = () => {
                           <th className="py-3 px-4">Email</th>
                           {!isFamily && <th className="py-3 px-4">Group</th>}
                           {!isFamily && <th className="py-3 px-4">Sub-group</th>}
-                          <th className="py-3 px-4">Last Active</th>
-                          {isAdmin && <th className="py-3 px-4 text-right">Actions</th>}
+                          {(orgSettings.showMemberLastActive || isAdmin) && <th className="py-3 px-4">Last Active</th>}
+                          <th className="py-3 px-4 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border text-xs">
                         {filteredMembers.length === 0 ? (
                           <tr>
-                            <td colSpan={isFamily ? (isAdmin ? 4 : 3) : (isAdmin ? 6 : 5)} className="py-8 text-center text-muted-foreground">
+                            <td
+                              colSpan={
+                                3 +
+                                (!isFamily ? 2 : 0) +
+                                (orgSettings.showMemberLastActive || isAdmin ? 1 : 0)
+                              }
+                              className="py-8 text-center text-muted-foreground"
+                            >
                               No members match your search.
                             </td>
                           </tr>
                         ) : (
                           filteredMembers.map(member => (
-                            <tr key={member.id} className="hover:bg-muted/20 transition-colors">
+                            <tr
+                              key={member.id}
+                              onClick={() => openMemberModal(member.id)}
+                              className="hover:bg-muted/30 transition-colors cursor-pointer"
+                            >
                               <td className="py-3.5 px-4 font-bold text-foreground whitespace-nowrap">
-                                {member.name}
+                                <div className="flex items-center gap-2">
+                                  <span>{member.name}</span>
+                                  {member.isOwner && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                      Owner
+                                    </span>
+                                  )}
+                                  {!member.isOwner && member.isAdmin && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                                      Admin
+                                    </span>
+                                  )}
+                                  {!member.isAdmin && (member.adminOfGroupIds?.length || 0) > 0 && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      Group Admin ({member.adminOfGroupIds!.length})
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
                                 {member.email}
@@ -1267,12 +1395,21 @@ const Organizations: React.FC = () => {
                                   </div>
                                 </td>
                               )}
-                              <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
-                                {formatLastActive(member.lastActiveAt)}
-                              </td>
-                              {isAdmin && (
-                                <td className="py-3.5 px-4 text-right">
-                                  {!member.isOwner && (
+                              {(orgSettings.showMemberLastActive || isAdmin) && (
+                                <td className="py-3.5 px-4 text-muted-foreground whitespace-nowrap">
+                                  {formatLastActive(member.lastActiveAt)}
+                                </td>
+                              )}
+                              <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                                <div className="inline-flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => openMemberModal(member.id)}
+                                    className="px-2 py-1 rounded-lg border border-border text-[11px] font-semibold text-foreground hover:bg-muted transition-colors"
+                                  >
+                                    Manage
+                                  </button>
+                                  {canKickTarget(member) && (
                                     <button
                                       onClick={() => handleKickMember(member.id, member.name)}
                                       title="Kick member"
@@ -1281,8 +1418,8 @@ const Organizations: React.FC = () => {
                                       <UserX className="w-4 h-4" />
                                     </button>
                                   )}
-                                </td>
-                              )}
+                                </div>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -1350,24 +1487,20 @@ const Organizations: React.FC = () => {
                                   Expires {new Date(group.codeExpiresAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               )}
+                              {(group.adminIds?.length || 0) > 0 && (
+                                <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  Admins: {group.adminIds!.map(id => memberNameById.get(id) || `User #${id}`).join(', ')}
+                                </span>
+                              )}
                             </div>
                           </div>
 
                           {/* Group Join Code & Controls */}
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs">
-                              <span className="text-[10px] font-bold text-muted-foreground uppercase">Code:</span>
-                              <span className="font-mono font-bold tracking-wider text-foreground">{group.joinCode}</span>
-                              <button
-                                onClick={() => copyToClipboard(group.joinCode)}
-                                className="p-1 hover:text-primary transition-colors"
-                                title="Copy code"
-                              >
-                                {copiedCode === group.joinCode ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
+                            <CopyShareCode code={group.joinCode} label="Code:" size="sm" />
 
-                            {isAdmin && (
+                            {canManageCodes(group.id) && (
                               <>
                                 <button
                                   onClick={() => handleToggleCodeActive(group.id, group.codeActive)}
@@ -1387,21 +1520,25 @@ const Organizations: React.FC = () => {
                                 >
                                   <RefreshCw className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  onClick={() => openEditGroupModal(group, 'edit-group')}
-                                  className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
-                                  title="Edit group"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteGroup(group.id, group.name)}
-                                  className="p-1.5 rounded-lg border border-destructive/20 hover:bg-destructive/10 text-destructive"
-                                  title="Delete group"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
                               </>
+                            )}
+                            {canEditGroupMeta(group.id) && (
+                              <button
+                                onClick={() => openEditGroupModal(group, 'edit-group')}
+                                className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title="Edit group"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteGroup(group.id, group.name)}
+                                className="p-1.5 rounded-lg border border-destructive/20 hover:bg-destructive/10 text-destructive"
+                                title="Delete group"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
                         </div>
@@ -1410,7 +1547,7 @@ const Organizations: React.FC = () => {
                         <div className="p-4 sm:p-5 space-y-3">
                           <div className="flex items-center justify-between">
                             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sub-groups</p>
-                            {isAdmin && (
+                            {canCreateSubgroupIn(group.id) && (
                               <button
                                 onClick={() => openCreateSubGroupModal(group)}
                                 className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
@@ -1448,16 +1585,9 @@ const Organizations: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                      <button
-                                        onClick={() => copyToClipboard(subGroup.joinCode)}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-card text-[11px] font-mono font-bold hover:text-primary transition-colors"
-                                        title="Copy sub-group code (auto-assigns to both sub-group and parent)"
-                                      >
-                                        {copiedCode === subGroup.joinCode ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                                        {subGroup.joinCode}
-                                      </button>
+                                      <CopyShareCode code={subGroup.joinCode} size="xs" />
 
-                                      {isAdmin && (
+                                      {canManageCodes(subGroup.id) && (
                                         <>
                                           <button
                                             onClick={() => handleToggleCodeActive(subGroup.id, subGroup.codeActive)}
@@ -1476,24 +1606,34 @@ const Organizations: React.FC = () => {
                                           >
                                             <RefreshCw className="w-3 h-3" />
                                           </button>
-                                          <button
-                                            onClick={() => openEditGroupModal(subGroup, 'edit-subgroup')}
-                                            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
-                                            title="Edit sub-group"
-                                          >
-                                            <Edit2 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleDeleteGroup(subGroup.id, subGroup.name)}
-                                            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                            title="Delete sub-group"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
                                         </>
+                                      )}
+                                      {(canEditGroupMeta(subGroup.id) || canManageSubgroupAdminsIn(group.id)) && (
+                                        <button
+                                          onClick={() => openEditGroupModal(subGroup, 'edit-subgroup')}
+                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                                          title="Edit sub-group"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                      {canDeleteSubgroupIn(group.id) && (
+                                        <button
+                                          onClick={() => handleDeleteGroup(subGroup.id, subGroup.name)}
+                                          className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                          title="Delete sub-group"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
                                       )}
                                     </div>
                                   </div>
+                                  {(subGroup.adminIds?.length || 0) > 0 && (
+                                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 pl-5">
+                                      <ShieldCheck className="w-3 h-3" />
+                                      Admins: {subGroup.adminIds!.map(id => memberNameById.get(id) || `User #${id}`).join(', ')}
+                                    </p>
+                                  )}
                                   {subGroup.codeExpiresAt && (
                                     <p className="text-[10px] text-muted-foreground flex items-center gap-1 pl-5">
                                       <Clock className="w-3 h-3" />
@@ -1576,11 +1716,14 @@ const Organizations: React.FC = () => {
                       {unassignedMembers.map(m => (
                         <div
                           key={m.id}
-                          draggable={isAdmin}
+                          draggable={canMoveMembers}
                           onDragStart={e => handleDragStart(e, m.id, null)}
-                          className="px-3 py-2 rounded-xl border border-border bg-card flex items-center gap-2 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-all shadow-xs"
+                          onDragEnd={handleDragEnd}
+                          onClick={() => openMemberModal(m.id)}
+                          title="Click to view details & notes, or drag to a group"
+                          className="px-3 py-2 rounded-xl border border-border bg-card flex items-center gap-2 cursor-pointer active:cursor-grabbing hover:border-primary/50 transition-all shadow-xs"
                         >
-                          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                          {canMoveMembers && <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />}
                           <div className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
                             {m.name.slice(0, 1).toUpperCase()}
                           </div>
@@ -1617,8 +1760,8 @@ const Organizations: React.FC = () => {
                               </span>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-[11px] text-muted-foreground font-mono font-bold hidden sm:inline">Code: {group.joinCode}</span>
-                              {isAdmin && (
+                              <CopyShareCode code={group.joinCode} label="Code:" size="xs" />
+                              {canEditGroupMeta(group.id) && (
                                 <button
                                   onClick={() => openEditGroupModal(group, 'edit-group')}
                                   className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1654,15 +1797,24 @@ const Organizations: React.FC = () => {
                                     {group.directMemberIds.map(uid => {
                                       const m = members.find(u => u.id === uid);
                                       if (!m) return null;
+                                      const isThisGroupAdmin = group.adminIds?.includes(m.id);
                                       return (
                                         <div
                                           key={m.id}
-                                          draggable={isAdmin}
+                                          draggable={canMoveMembers}
                                           onDragStart={e => handleDragStart(e, m.id, group.id)}
-                                          className="px-2.5 py-1.5 rounded-lg border border-border bg-card flex items-center gap-1.5 text-xs cursor-grab hover:border-primary/50"
+                                          onDragEnd={handleDragEnd}
+                                          onClick={() => openMemberModal(m.id)}
+                                          title="Click to inspect user or drag to move"
+                                          className="px-2.5 py-1.5 rounded-lg border border-border bg-card flex items-center gap-1.5 text-xs cursor-pointer hover:border-primary/50"
                                         >
-                                          <GripVertical className="w-3 h-3 text-muted-foreground" />
+                                          {canMoveMembers && <GripVertical className="w-3 h-3 text-muted-foreground" />}
                                           <span className="font-medium text-foreground">{m.name}</span>
+                                          {isThisGroupAdmin && (
+                                            <span title="Group Admin" className="inline-flex">
+                                              <ShieldCheck className="w-3 h-3 text-blue-500" />
+                                            </span>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -1700,7 +1852,7 @@ const Organizations: React.FC = () => {
                                           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: subGroup.color }} />
                                           {renderGroupIcon(subGroup.icon, 'layers')}
                                           <button
-                                            onClick={() => isAdmin && openEditGroupModal(subGroup, 'edit-subgroup')}
+                                            onClick={() => (canEditGroupMeta(subGroup.id) || canManageSubgroupAdminsIn(group.id)) && openEditGroupModal(subGroup, 'edit-subgroup')}
                                             className="text-xs font-bold text-foreground hover:underline text-left truncate"
                                           >
                                             {subGroup.name}
@@ -1709,7 +1861,7 @@ const Organizations: React.FC = () => {
                                             ({subGroup.memberCount} users)
                                           </span>
                                         </div>
-                                        <span className="text-[10px] text-muted-foreground font-mono">Code: {subGroup.joinCode}</span>
+                                        <CopyShareCode code={subGroup.joinCode} label="Code:" size="xs" />
                                       </div>
 
                                       {/* Expanded Users inside Sub-group */}
@@ -1722,20 +1874,27 @@ const Organizations: React.FC = () => {
                                               {subGroup.memberIds.map(uid => {
                                                 const userItem = members.find(m => m.id === uid);
                                                 if (!userItem) return null;
+                                                const isSubAdmin = subGroup.adminIds?.includes(userItem.id);
                                                 return (
                                                   <div
                                                     key={userItem.id}
-                                                    draggable={isAdmin}
+                                                    draggable={canMoveMembers}
                                                     onDragStart={e => handleDragStart(e, userItem.id, group.id)}
-                                                    className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between gap-2 shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all"
+                                                    onDragEnd={handleDragEnd}
+                                                    onClick={() => openMemberModal(userItem.id)}
+                                                    title="Click to inspect user, actions & notes"
+                                                    className="p-2.5 rounded-xl border border-border bg-card flex items-center justify-between gap-2 shadow-2xs hover:border-primary/50 cursor-pointer active:cursor-grabbing transition-all"
                                                   >
                                                     <div className="flex items-center gap-2 min-w-0">
-                                                      <GripVertical className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                                      {canMoveMembers && <GripVertical className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
                                                       <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center flex-shrink-0">
                                                         {userItem.name.slice(0, 1).toUpperCase()}
                                                       </div>
                                                       <div className="min-w-0">
-                                                        <p className="text-xs font-bold text-foreground truncate">{userItem.name}</p>
+                                                        <p className="text-xs font-bold text-foreground truncate flex items-center gap-1">
+                                                          <span className="truncate">{userItem.name}</span>
+                                                          {isSubAdmin && <ShieldCheck className="w-3 h-3 text-blue-500 flex-shrink-0" />}
+                                                        </p>
                                                         <p className="text-[10px] text-muted-foreground truncate">{userItem.email}</p>
                                                       </div>
                                                     </div>
@@ -1780,7 +1939,7 @@ const Organizations: React.FC = () => {
                               <h3 className="text-sm font-bold text-foreground truncate">{group.name}</h3>
                               <span className="text-xs text-muted-foreground">({group.memberCount} members)</span>
                             </div>
-                            {isAdmin && (
+                            {canEditGroupMeta(group.id) && (
                               <button
                                 onClick={() => openEditGroupModal(group, 'edit-group')}
                                 className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1817,12 +1976,16 @@ const Organizations: React.FC = () => {
                                     group.directMemberIds.map(uid => {
                                       const u = members.find(m => m.id === uid);
                                       if (!u) return null;
+                                      const isGroupAdminHere = group.adminIds?.includes(u.id);
                                       return (
                                         <div
                                           key={u.id}
-                                          draggable={isAdmin}
+                                          draggable={canMoveMembers}
                                           onDragStart={e => handleDragStart(e, u.id, group.id)}
-                                          className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all space-y-1"
+                                          onDragEnd={handleDragEnd}
+                                          onClick={() => openMemberModal(u.id)}
+                                          title="Click to inspect user, actions & notes"
+                                          className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-pointer active:cursor-grabbing transition-all space-y-1"
                                         >
                                           <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-2 min-w-0">
@@ -1830,8 +1993,9 @@ const Organizations: React.FC = () => {
                                                 {u.name.slice(0, 1).toUpperCase()}
                                               </div>
                                               <p className="text-xs font-bold text-foreground truncate">{u.name}</p>
+                                              {isGroupAdminHere && <ShieldCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />}
                                             </div>
-                                            <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                                            {canMoveMembers && <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />}
                                           </div>
                                           <p className="text-[11px] text-muted-foreground truncate pl-8">{u.email}</p>
                                         </div>
@@ -1878,7 +2042,7 @@ const Organizations: React.FC = () => {
                                         <span className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
                                           {subGroup.memberCount}
                                         </span>
-                                        {isAdmin && (
+                                        {(canEditGroupMeta(subGroup.id) || canManageSubgroupAdminsIn(group.id)) && (
                                           <button
                                             onClick={() => openEditGroupModal(subGroup, 'edit-subgroup')}
                                             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1901,12 +2065,16 @@ const Organizations: React.FC = () => {
                                           subGroup.memberIds.map(uid => {
                                             const u = members.find(m => m.id === uid);
                                             if (!u) return null;
+                                            const isSubAdminHere = subGroup.adminIds?.includes(u.id);
                                             return (
                                               <div
                                                 key={u.id}
-                                                draggable={isAdmin}
+                                                draggable={canMoveMembers}
                                                 onDragStart={e => handleDragStart(e, u.id, group.id)}
-                                                className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-grab active:cursor-grabbing transition-all space-y-1"
+                                                onDragEnd={handleDragEnd}
+                                                onClick={() => openMemberModal(u.id)}
+                                                title="Click to inspect user, actions & notes"
+                                                className="p-3 rounded-xl border border-border bg-card shadow-2xs hover:border-primary/50 cursor-pointer active:cursor-grabbing transition-all space-y-1"
                                               >
                                                 <div className="flex items-center justify-between">
                                                   <div className="flex items-center gap-2 min-w-0">
@@ -1914,8 +2082,9 @@ const Organizations: React.FC = () => {
                                                       {u.name.slice(0, 1).toUpperCase()}
                                                     </div>
                                                     <p className="text-xs font-bold text-foreground truncate">{u.name}</p>
+                                                    {isSubAdminHere && <ShieldCheck className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />}
                                                   </div>
-                                                  <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                                                  {canMoveMembers && <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />}
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground truncate pl-8">{u.email}</p>
                                               </div>
@@ -1947,7 +2116,7 @@ const Organizations: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Organization Details & Seats Form */}
+                {/* Organization Details Form */}
                 <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
                   <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">General Information</h3>
 
@@ -1959,6 +2128,35 @@ const Organizations: React.FC = () => {
                       onChange={e => setSettingsName(e.target.value)}
                       className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
+                  </div>
+
+                  {settingsError && (
+                    <p className="text-xs text-destructive font-medium">{settingsError}</p>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button
+                      onClick={handleSaveSettings}
+                      disabled={settingsSaving}
+                      className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all disabled:opacity-50"
+                    >
+                      {settingsSaving ? 'Saving…' : 'Save Name'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Plan Tier, Seat Capacity & Billing Checkout */}
+                <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-primary" />
+                      <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                        Plan Tier, Seat Capacity & Billing
+                      </h3>
+                    </div>
+                    <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      {orgDetail?.status || 'active'}
+                    </span>
                   </div>
 
                   {!isFamily && (
@@ -1993,7 +2191,7 @@ const Organizations: React.FC = () => {
                     <label className="text-xs font-bold text-muted-foreground uppercase">Seat Capacity</label>
                     <input
                       type="number"
-                      min={1}
+                      min={isFamily ? 5 : Math.max(5, orgDetail?.currentSeats || 1)}
                       disabled={isFamily}
                       value={isFamily ? 5 : settingsSeats}
                       onChange={e => {
@@ -2004,69 +2202,75 @@ const Organizations: React.FC = () => {
                       className="w-full mt-1.5 px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Current active members: <span className="font-bold text-foreground">{orgDetail?.currentSeats}</span>.
-                      {isFamily ? ' Family organizations are fixed at 5 seats.' : ' You cannot reduce seats below the current member count.'}
+                      Current capacity: <span className="font-bold text-foreground">{orgDetail?.maxSeats} seats</span> · Active members:{' '}
+                      <span className="font-bold text-foreground">{orgDetail?.currentSeats}</span>.{' '}
+                      {isFamily
+                        ? 'Family organizations are fixed at 5 seats.'
+                        : 'Adding or reducing seats is applied through PayPal checkout for the new total seat capacity (current seats + changes).'}
                     </p>
-                    {!isFamily && settingsSeats < (orgDetail?.currentSeats || 1) && (
+                    {!isFamily && settingsSeats < Math.max(5, orgDetail?.currentSeats || 1) && (
                       <p className="text-xs text-destructive font-semibold mt-1">
-                        Cannot reduce seats below current member count ({orgDetail?.currentSeats}). Remove members first.
+                        {settingsSeats < (orgDetail?.currentSeats || 1)
+                          ? `Cannot reduce seats below current member count (${orgDetail?.currentSeats}). Kick members first.`
+                          : 'School plans require at least 5 seats.'}
                       </p>
                     )}
-                  </div>
-
-                  {settingsError && (
-                    <p className="text-xs text-destructive font-medium">{settingsError}</p>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <button
-                      onClick={handleSaveSettings}
-                      disabled={settingsSaving || (!isFamily && settingsSeats < (orgDetail?.currentSeats || 1))}
-                      className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all disabled:opacity-50"
-                    >
-                      {settingsSaving ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Billing & Plan Upgrade */}
-                <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-primary" />
-                      <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">Billing & Plan Renewal</h3>
-                    </div>
-                    <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                      {orgDetail?.status || 'active'}
-                    </span>
                   </div>
 
                   {isFamily ? (
                     <p className="text-xs text-muted-foreground">
                       Family Pro Plan (5 seats fixed): <span className="font-bold text-foreground">$14.99/month</span> or <span className="font-bold text-foreground">$143.90/year (20% off)</span>.
                     </p>
-                  ) : (() => {
-                    const effectiveSeats = Math.max(1, settingsSeats);
-                    const perSeatMonthly = getSchoolPerSeatMonthlyRate(effectiveSeats) * (settingsTier === 'premium' ? 0.6 : 1);
-                    const monthlyTotal = Math.round(effectiveSeats * perSeatMonthly * 100) / 100;
-                    const yearlyTotal = Math.round(monthlyTotal * 12 * 0.8 * 100) / 100;
-                    return (
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <p>
-                          School Volume Rate ({settingsTier === 'premium' ? 'Premium' : 'Pro'}) for <span className="font-bold text-foreground">{effectiveSeats} seats</span>:{' '}
-                          <span className="font-bold text-foreground">${perSeatMonthly.toFixed(2)}/seat/mo</span>
-                        </p>
-                        <p>
-                          Total:{' '}
-                          <span className="font-bold text-foreground">
-                            {settingsBillingPeriod === 'yearly'
-                              ? `$${yearlyTotal.toFixed(2)}/year (20% off)`
-                              : `$${monthlyTotal.toFixed(2)}/month`}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })()}
+                  ) : (
+                    (() => {
+                      const effectiveSeats = Math.max(5, settingsSeats);
+                      const perSeatMonthly = getSchoolPerSeatMonthlyRate(effectiveSeats) * (settingsTier === 'premium' ? 0.6 : 1);
+                      const monthlyTotal = Math.round(effectiveSeats * perSeatMonthly * 100) / 100;
+                      const yearlyTotal = Math.round(monthlyTotal * 12 * 0.8 * 100) / 100;
+                      const displayNewTotal = seatQuote ? seatQuote.newTotal : (settingsBillingPeriod === 'yearly' ? yearlyTotal : monthlyTotal);
+                      const displayCurrentTotal = seatQuote?.currentTotal;
+                      const seatDelta = seatQuote ? seatQuote.seatDelta : effectiveSeats - (orgDetail?.maxSeats || 0);
+                      const priceDelta = seatQuote ? seatQuote.difference : 0;
+                      return (
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/30 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">
+                              Volume rate ({settingsTier === 'premium' ? 'Premium' : 'Pro'}, {effectiveSeats} seats)
+                            </span>
+                            <span className="font-bold text-foreground">
+                              ${(seatQuote ? seatQuote.perSeatMonthly : perSeatMonthly).toFixed(2)}/seat/mo
+                            </span>
+                          </div>
+                          {displayCurrentTotal != null && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">
+                                Current ({orgDetail?.maxSeats} seats · {orgDetail?.tier})
+                              </span>
+                              <span className="font-semibold text-foreground">
+                                ${displayCurrentTotal.toFixed(2)}/{settingsBillingPeriod === 'yearly' ? 'yr' : 'mo'}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between pt-1 border-t border-border/60">
+                            <span className="font-bold text-foreground">
+                              New checkout total ({effectiveSeats} seats · {seatDelta === 0 ? 'no seat change' : seatDelta > 0 ? `+${seatDelta} added` : `${seatDelta} removed`})
+                            </span>
+                            <span className="font-black text-primary text-sm">
+                              ${displayNewTotal.toFixed(2)}/{settingsBillingPeriod === 'yearly' ? 'yr' : 'mo'}
+                              {priceDelta !== 0 && (
+                                <span className={`ml-1.5 text-[11px] font-bold ${priceDelta > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                  ({priceDelta > 0 ? '+' : '-'}${Math.abs(priceDelta).toFixed(2)})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          {seatQuoteLoading && (
+                            <p className="text-[10px] text-muted-foreground">Updating live quote…</p>
+                          )}
+                        </div>
+                      );
+                    })()
+                  )}
 
                   <div className="flex items-center gap-2">
                     <button
@@ -2091,11 +2295,145 @@ const Organizations: React.FC = () => {
 
                   <button
                     onClick={handleUpgradeBilling}
-                    disabled={billingLoading || (!isFamily && settingsSeats < (orgDetail?.currentSeats || 1))}
+                    disabled={
+                      billingLoading ||
+                      (!isFamily && settingsSeats < Math.max(5, orgDetail?.currentSeats || 1))
+                    }
                     className="px-4 py-2 rounded-xl bg-foreground text-background font-bold text-xs hover:opacity-90 transition-all disabled:opacity-50"
                   >
-                    {billingLoading ? 'Redirecting to PayPal…' : 'Checkout Plan & Seats via PayPal'}
+                    {billingLoading
+                      ? 'Redirecting to PayPal…'
+                      : !isFamily && (settingsSeats !== orgDetail?.maxSeats || settingsTier !== orgDetail?.tier)
+                      ? `Pay & Apply (${settingsSeats} seats · ${settingsTier.toUpperCase()})`
+                      : 'Checkout Plan & Seats via PayPal'}
                   </button>
+                </div>
+
+                {/* Group Admin Permissions & Organization Policies */}
+                <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-primary" />
+                      <div>
+                        <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
+                          Group Admin Permissions & Organization Policies
+                        </h3>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Control what group/sub-group admins can do and customize privacy and join policies.
+                        </p>
+                      </div>
+                    </div>
+                    {adminSettingsSaving && (
+                      <span className="text-[11px] text-muted-foreground">Saving…</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {(
+                      [
+                        {
+                          key: 'groupAdminsEnabled',
+                          label: 'Enable group & sub-group admins',
+                          desc: 'Allow designated members to administer individual groups and sub-groups without full org admin access.',
+                        },
+                        {
+                          key: 'groupAdminsCanManageSubgroupAdmins',
+                          label: 'Group admins can edit sub-group admins',
+                          desc: 'Let parent group admins assign or remove admins on sub-groups under groups they manage.',
+                        },
+                        {
+                          key: 'groupAdminsCanCreateSubgroups',
+                          label: 'Group admins can create & delete sub-groups',
+                          desc: 'Allow group admins to add new sub-groups or delete existing ones under their groups.',
+                        },
+                        {
+                          key: 'groupAdminsCanEditGroups',
+                          label: 'Group admins can edit group details',
+                          desc: 'Allow editing name, color, and icon of groups and sub-groups they administer.',
+                        },
+                        {
+                          key: 'groupAdminsCanRegenerateCodes',
+                          label: 'Group admins can manage join codes',
+                          desc: 'Allow regenerating, pausing, and setting expiry or usage caps on join codes for managed groups.',
+                        },
+                        {
+                          key: 'groupAdminsCanMoveMembers',
+                          label: 'Group admins can move & assign members',
+                          desc: 'Allow moving members across sub-groups and parent groups they manage in the Both view and User modal.',
+                        },
+                        {
+                          key: 'groupAdminsCanKick',
+                          label: 'Group admins can kick members',
+                          desc: 'Allow group admins to remove non-admin members belonging to their managed groups from the organization.',
+                        },
+                        {
+                          key: 'groupAdminsCanUseNotes',
+                          label: 'Group admins can view & write member notes',
+                          desc: 'Let group admins leave private administrative notes on users in their managed groups.',
+                        },
+                        {
+                          key: 'groupAdminsCanEditAnyNote',
+                          label: 'Group admins can edit/delete other admins’ notes',
+                          desc: 'When off, group admins can only edit or delete notes they authored themselves.',
+                        },
+                        {
+                          key: 'groupAdminsCanViewAllMembers',
+                          label: 'Group admins can view full member directory',
+                          desc: 'Show all organization members instead of only members inside their managed groups.',
+                        },
+                        {
+                          key: 'allowJoinViaGroupCode',
+                          label: 'Allow joining directly via group & sub-group codes',
+                          desc: 'When off, new members must join with the main organization code before being assigned.',
+                        },
+                        {
+                          key: 'showMemberLastActive',
+                          label: 'Display member Last Active timestamps',
+                          desc: 'Show last active timestamps in the Users table and member inspection modal.',
+                        },
+                        {
+                          key: 'showMemberEmailsToGroupAdmins',
+                          label: 'Show member emails to group admins',
+                          desc: 'When off, email addresses are hidden from group admins (still visible to org admins & owner).',
+                        },
+                      ] as Array<{ key: keyof OrgAdminSettings; label: string; desc: string }>
+                    ).map(item => {
+                      const enabled = orgSettings[item.key];
+                      const disabledByMaster =
+                        item.key !== 'groupAdminsEnabled' &&
+                        item.key.startsWith('groupAdmins') &&
+                        !orgSettings.groupAdminsEnabled;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          disabled={disabledByMaster}
+                          onClick={() => handleSaveAdminSettingToggle(item.key, !enabled)}
+                          className={`w-full flex items-center justify-between gap-4 p-3 rounded-xl border text-left transition-all ${
+                            enabled
+                              ? 'border-primary/25 bg-primary/5'
+                              : 'border-border bg-muted/20'
+                          } ${disabledByMaster ? 'opacity-45 cursor-not-allowed' : 'hover:border-primary/40'}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-foreground">{item.label}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
+                          </div>
+                          <div
+                            className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex-shrink-0 ${
+                              enabled ? 'bg-primary' : 'bg-muted-foreground/30'
+                            }`}
+                          >
+                            <div
+                              className={`w-4.5 h-4.5 rounded-full bg-white shadow-xs transition-transform ${
+                                enabled ? 'translate-x-4.5' : 'translate-x-0'
+                              }`}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Administrators Management */}
@@ -2302,7 +2640,58 @@ const Organizations: React.FC = () => {
                 />
               </div>
 
+              {/* Optional Group / Sub-group Administrators Picker */}
+              {canSetModalAdmins && (
+                <div className="pt-2 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                      {groupModalMode.includes('subgroup') ? 'Sub-group Administrators' : 'Group Administrators'}
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">
+                      {groupEditAdminIds.length} selected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Selected members can manage this {groupModalMode.includes('subgroup') ? 'sub-group' : 'group'} without org-wide admin rights.
+                  </p>
+                  <div className="max-h-36 overflow-y-auto flex flex-wrap gap-1.5 p-2 rounded-xl border border-border bg-muted/20">
+                    {members.filter(m => !m.isOwner && !m.isAdmin).length === 0 ? (
+                      <span className="text-[11px] text-muted-foreground italic px-1">
+                        No regular members available (owner and org admins already have access).
+                      </span>
+                    ) : (
+                      members
+                        .filter(m => !m.isOwner && !m.isAdmin)
+                        .map(m => {
+                          const selected = groupEditAdminIds.includes(m.id);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() =>
+                                setGroupEditAdminIds(prev =>
+                                  prev.includes(m.id) ? prev.filter(id => id !== m.id) : [...prev, m.id],
+                                )
+                              }
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                                selected
+                                  ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                  : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              <span>{m.name}</span>
+                              {selected && <Check className="w-3 h-3" />}
+                            </button>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Optional Join Code Expiry, Max Uses & Status Controls */}
+              {(isAdmin || orgSettings.groupAdminsCanRegenerateCodes) && (
               <div className="pt-2 border-t border-border space-y-3">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase block">Join Code Controls</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2352,6 +2741,7 @@ const Organizations: React.FC = () => {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -2372,6 +2762,24 @@ const Organizations: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {selectedOrgId != null && (
+        <MemberDetailModal
+          open={Boolean(selectedMember)}
+          onClose={() => setSelectedMemberId(null)}
+          orgId={selectedOrgId}
+          currentUserId={user?.id}
+          isFamily={Boolean(isFamily)}
+          isOwner={isOwner}
+          isAdmin={isAdmin}
+          isGroupAdmin={isGroupAdmin}
+          managedGroupIds={managedGroupIds}
+          adminGroupIds={adminGroupIds}
+          orgSettings={orgSettings}
+          member={selectedMember}
+          groups={groups}
+          onUpdated={() => fetchOrgDetails(selectedOrgId)}
+        />
       )}
       {renderCreateOrgModal()}
     </div>

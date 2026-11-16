@@ -3,7 +3,7 @@ import { Attachment } from '@/types/board';
 
 export interface NoteTemplate extends TaskTemplate {}
 
-export type TemplatePayload = { name: string; title: string; description: string; content?: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; tags?: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; color?: string; isPublic?: boolean };
+export type TemplatePayload = { name: string; title: string; description: string; content?: string; priority: string; duration: number; startDate?: string; startTime?: string; dueDate?: string; dueTime?: string; projectId?: number | null; columnId?: string; labels: any[]; tags?: any[]; subtasks: any[]; checklists: any[]; images?: Attachment[]; attachments?: Attachment[]; templateTags?: string[]; color?: string; isPublic?: boolean };
 
 const normalizeNoteTemplate = (t: any): TaskTemplate => ({
   ...t,
@@ -15,6 +15,7 @@ const normalizeNoteTemplate = (t: any): TaskTemplate => ({
   checklists: t.checklists || [],
   images: t.images || [],
   attachments: t.attachments || [],
+  templateTags: t.templateTags || [],
   priority: t.priority || 'medium',
   duration: t.duration || 0,
 } as TaskTemplate);
@@ -22,6 +23,13 @@ const normalizeNoteTemplate = (t: any): TaskTemplate => ({
 export async function fetchNoteTemplates(): Promise<TaskTemplate[]> {
   const res = await fetch('/api/note-templates', { credentials: 'include' });
   if (!res.ok) throw new Error('Failed to fetch note templates');
+  const data = await res.json();
+  return (data.templates || []).map(normalizeNoteTemplate);
+}
+
+export async function fetchPublicNoteTemplates(): Promise<TaskTemplate[]> {
+  const res = await fetch('/api/note-templates/public', { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to fetch public note templates');
   const data = await res.json();
   return (data.templates || []).map(normalizeNoteTemplate);
 }
